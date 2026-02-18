@@ -1,0 +1,45 @@
+# Runtime bus (fast temp)
+bus_fallback/
+.codex/
+# Persistent artifacts may be large; keep if you want versioning
+lake/artifacts/
+lake/datasets/
+lake/evidence/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Rust
+target/
+
+# Java
+**/target/
+**/.gradle/
+**/.idea/
+
+# Node / Electron
+**/node_modules/
+apps/dify-desktop/dist/
+apps/dify-desktop/dist-lite/
+apps/dify-desktop/test-results/
+
+# Local runtime/build artifacts
+tmp/
+apps/tmp/
+bus/
+offline-jobs/
+release/
+ops/config/dev.env
+
+# Python virtualenv
+apps/glue-python/.venv/
+
+# Logs
+ops/logs/
+
+# Local SQL Server instance files
+infra/sqlserver/data/
+infra/sqlserver/backup/
+infra/sqlserver/logs/

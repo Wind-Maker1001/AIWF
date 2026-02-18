@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  windows-check:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install glue-python dependencies
+        shell: pwsh
+        run: |
+          Set-Location .\apps\glue-python
+          python -m pip install --upgrade pip
+          if (Test-Path .\requirements.txt) {
+            python -m pip install -r .\requirements.txt
+          }
+
+      - name: Run local CI checks (without smoke)
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipSmoke
+
+  cross-platform-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install desktop deps
+        working-directory: ./apps/dify-desktop
+        run: npm ci
+
+      - name: Install glue-python deps
+        working-directory: ./apps/glue-python
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run Rust tests
+        working-directory: ./apps/accel-rust
+        run: cargo test -q
+
+      - name: Run Java tests
+        working-directory: ./apps/base-java
+        run: mvn -q test
+
+      - name: Run Python tests
+        working-directory: ./apps/glue-python
+        run: python -m unittest discover -s tests -v
+
+      - name: Run routing benchmark
+        working-directory: ./apps/dify-desktop
+        run: npm run bench:routing

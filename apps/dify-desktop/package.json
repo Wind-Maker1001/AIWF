@@ -1,0 +1,102 @@
+{
+  "name": "aiwf-dify-desktop",
+  "version": "1.1.0",
+  "private": true,
+  "author": "AIWF",
+  "description": "AIWF Dify standalone desktop app",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "smoke": "node smoke.js",
+    "test:unit": "node --test tests-node/*.test.js",
+    "test:workflow-ui": "playwright test -c playwright.workflow.config.js",
+    "bench:routing": "node scripts/benchmark_routing.js",
+    "build:win:dir": "electron-builder --win --dir",
+    "build:win": "electron-builder --win portable",
+    "build:win:installer": "electron-builder --win nsis",
+    "build:win:installer:lite": "electron-builder --config build/electron-builder.lite.json --win nsis",
+    "build:win:installer:release": "set AIWF_RELEASE=1&& electron-builder --win nsis",
+    "build:win:release": "set AIWF_RELEASE=1&& electron-builder --win portable",
+    "stress:chiplet-pool": "node scripts/stress_chiplet_pool.js",
+    "stress:chiplet-pool:long": "set AIWF_CHIPLET_STRESS_SECONDS=1800&& set AIWF_CHIPLET_STRESS_CONCURRENCY=4&& node scripts/stress_chiplet_pool.js"
+  },
+  "build": {
+    "appId": "com.aiwf.difydesktop",
+    "productName": "AIWF Dify Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "main_config_support.js",
+      "main_runtime_support.js",
+      "main_runtime_encoding.js",
+      "main_runtime_fonts.js",
+      "main_runtime_tools.js",
+      "main_runtime_bridge.js",
+      "main_window_support.js",
+      "workflow_engine.js",
+      "workflow_graph.js",
+      "workflow_utils.js",
+      "workflow_services.js",
+      "workflow_chiplets/registry.js",
+      "workflow_chiplets/runner.js",
+      "workflow_chiplets/executor.js",
+      "workflow_chiplets/contract.js",
+      "workflow_chiplets/builtin_chiplets.js",
+      "workflow_chiplets/isolated_worker_host.js",
+      "workflow_chiplets/isolated_worker_process.js",
+      "offline_engine.js",
+      "offline_runtime.js",
+      "offline_paper.js",
+      "offline_outputs.js",
+      "offline_ingest.js",
+      "offline_ingest_parsers.js",
+      "offline_text.js",
+      "offline_worker.js",
+      "main_ipc.js",
+      "main_ipc_metrics.js",
+      "main_ipc_workflow.js",
+      "main_ipc_runtime.js",
+      "preload.js",
+      "renderer/**",
+      "package.json",
+      "assets/icon.ico"
+    ],
+    "extraResources": [
+      {
+        "from": "tools",
+        "to": "tools",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "electron": "^40.4.1",
+    "electron-builder": "^26.7.0"
+  },
+  "dependencies": {
+    "docx": "^9.5.3",
+    "exceljs": "^4.4.0",
+    "image-size": "^2.0.2",
+    "iconv-lite": "^0.6.3",
+    "mammoth": "^1.11.0",
+    "pdf-parse": "^2.4.5",
+    "pptxgenjs": "^4.0.1",
+    "uuid": "^13.0.0"
+  }
+}

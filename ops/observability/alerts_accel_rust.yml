@@ -1,0 +1,48 @@
+groups:
+  - name: aiwf-accel-rust
+    interval: 30s
+    rules:
+      - alert: AIWFTransformErrorSpike
+        expr: rate(aiwf_transform_rows_v2_errors_total[5m]) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AIWF transform_rows_v2 error spike"
+          description: "Error rate > 0.05/s in last 5 minutes."
+
+      - alert: AIWFTransformLatencyHigh
+        expr: (aiwf_transform_rows_v2_latency_ms_sum / clamp_min(aiwf_transform_rows_v2_success_total, 1)) > 800
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AIWF transform latency high"
+          description: "Average transform latency > 800ms."
+
+      - alert: AIWFQuotaRejectSpike
+        expr: increase(aiwf_quota_reject_total[10m]) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AIWF quota reject spike"
+          description: "Quota rejects increased by >20 in 10 minutes."
+
+      - alert: AIWFTaskStoreRemoteDown
+        expr: aiwf_task_store_remote_enabled == 1 and aiwf_task_store_remote_ok == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AIWF remote task store down"
+          description: "Remote task store is enabled but unhealthy."
+
+      - alert: AIWFRouteFallbackRatioHigh
+        expr: aiwf_route_fallback_ratio > 0.55
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AIWF workflow routing fallback ratio high"
+          description: "Workflow canvas fallback ratio exceeds 0.55."

@@ -1,0 +1,27 @@
+syntax = "proto3";
+package aiwf.v1;
+
+// Control-plane calls should only pass job_id/step_id/paths/params.
+// NEVER send large datasets through RPC.
+
+message StepSpec {
+  string job_id = 1;
+  string step_id = 2;
+  string input_uri = 3;
+  string output_uri = 4;
+  string ruleset_version = 5;
+  map<string,string> params = 6;
+}
+
+message StepResult {
+  string job_id = 1;
+  string step_id = 2;
+  bool ok = 3;
+  string summary = 4;
+  repeated string artifacts = 5;
+  string output_hash = 6;
+}
+
+service OperatorService {
+  rpc RunStep (StepSpec) returns (StepResult);
+}

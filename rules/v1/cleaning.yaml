@@ -1,0 +1,11 @@
+required_columns: ["id", "amount"]
+
+rename: {}  # 例：{"Amt": "amount", "ID": "id"}
+
+type_cast:
+  id: Int64
+  amount: Float64
+
+trim_strings: true
+drop_nulls: ["id", "amount"]
+drop_duplicates: true

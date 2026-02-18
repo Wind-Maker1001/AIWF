@@ -1,0 +1,29 @@
+{
+  "rules": {
+    "platform_mode": "generic",
+    "rename_map": {
+      "CustomerName": "customer_name",
+      "Phone": "phone",
+      "City": "city",
+      "Amount": "amount"
+    },
+    "casts": {
+      "customer_name": "string",
+      "phone": "string",
+      "city": "string",
+      "amount": "float"
+    },
+    "trim_strings": true,
+    "lowercase_fields": ["city"],
+    "required_fields": ["customer_name", "phone"],
+    "include_fields": ["customer_name", "phone", "city", "amount"],
+    "filters": [
+      { "field": "phone", "op": "regex", "value": "^[0-9+\\-\\s]{6,20}$" }
+    ],
+    "deduplicate_by": ["phone"],
+    "deduplicate_keep": "first",
+    "sort_by": [
+      { "field": "customer_name", "order": "asc" }
+    ]
+  }
+}

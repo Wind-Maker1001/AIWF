@@ -1,0 +1,26 @@
+﻿server:
+  port: ${AIWF_BASE_JAVA_PORT:18080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info"
+
+aiwf:
+  root: ${AIWF_ROOT:.}
+  bus: ${AIWF_BUS:.\bus}
+  lake: ${AIWF_LAKE:.\lake}
+  glueUrl: ${AIWF_GLUE_URL:http://127.0.0.1:18081}
+  apiKey: ${AIWF_API_KEY:} # optional; when configured requests must carry X-API-Key
+
+spring:
+  datasource:
+    url: jdbc:sqlserver://${AIWF_SQL_HOST:127.0.0.1}:${AIWF_SQL_PORT:1433};databaseName=${AIWF_SQL_DB:AIWF};encrypt=false;trustServerCertificate=true
+    username: ${AIWF_SQL_USER:aiwf_app}
+    password: ${AIWF_SQL_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      pool-name: AIWF-Hikari
+

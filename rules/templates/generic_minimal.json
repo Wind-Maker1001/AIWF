@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "platform_mode": "generic",
+    "casts": {
+      "id": "int",
+      "amount": "float"
+    },
+    "required_fields": ["id", "amount"],
+    "deduplicate_by": ["id"],
+    "deduplicate_keep": "last",
+    "sort_by": [
+      { "field": "id", "order": "asc" }
+    ]
+  }
+}

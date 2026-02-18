@@ -1,0 +1,33 @@
+{
+  "version": "1.1.0",
+  "frozen_at": "2026-02-18",
+  "scope": {
+    "workflow_studio": [
+      "drag_drop_nodes",
+      "manual_link_unlink",
+      "save_load_graph",
+      "chiplet_diagnostics_panel"
+    ],
+    "preprocess": [
+      "declarative_single_stage",
+      "pipeline_extract_clean_structure_audit"
+    ],
+    "release": [
+      "installer_bundle",
+      "portable_bundle",
+      "manifest_release_notes_sha256"
+    ]
+  },
+  "acceptance_gates": {
+    "python_unit_tests_pass": true,
+    "desktop_unit_tests_pass": true,
+    "workflow_ui_tests_pass": true,
+    "regression_quality_report_pass": true
+  },
+  "quality_thresholds": {
+    "cleaning_min_output_rows": 2,
+    "cleaning_max_invalid_rows": 2,
+    "preprocess_min_output_rows": 3,
+    "preprocess_required_missing_ratio_max": 0.0
+  }
+}

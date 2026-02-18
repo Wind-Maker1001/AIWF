@@ -1,0 +1,35 @@
+{
+  "rules": {
+    "platform_mode": "generic",
+    "rename_map": {
+      "Amt": "amount",
+      "ID": "id"
+    },
+    "casts": {
+      "id": "int",
+      "amount": "float",
+      "currency": "string"
+    },
+    "required_fields": ["id", "amount"],
+    "default_values": {
+      "currency": "CNY"
+    },
+    "trim_strings": true,
+    "uppercase_fields": ["currency"],
+    "filters": [
+      { "field": "amount", "op": "gte", "value": 0 },
+      { "field": "amount", "op": "lte", "value": 100000000 }
+    ],
+    "deduplicate_by": ["id"],
+    "deduplicate_keep": "last",
+    "sort_by": [
+      { "field": "id", "order": "asc" }
+    ],
+    "max_invalid_rows": 0,
+    "max_invalid_ratio": 0.01,
+    "max_filtered_rows": 100,
+    "min_output_rows": 1,
+    "allow_empty_output": false,
+    "local_parquet_strict": true
+  }
+}

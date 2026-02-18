@@ -1,0 +1,50 @@
+{
+  "preprocess": {
+    "input_format": "jsonl",
+    "output_format": "jsonl",
+    "header_map": {
+      "Speaker": "speaker",
+      "ClaimText": "claim_text",
+      "text": "claim_text",
+      "SourceUrl": "source_url",
+      "PublishedAt": "published_at",
+      "Score": "score"
+    },
+    "trim_strings": true,
+    "null_values": ["null", "none", "na", "n/a", "unknown"],
+    "field_transforms": [
+      { "field": "speaker", "op": "trim" },
+      { "field": "speaker", "op": "lower" },
+      { "field": "claim_text", "op": "remove_urls" },
+      { "field": "claim_text", "op": "remove_emails" },
+      { "field": "claim_text", "op": "collapse_whitespace" },
+      { "field": "score", "op": "parse_number" },
+      { "field": "score", "op": "round_number", "digits": 2 },
+      {
+        "field": "published_at",
+        "op": "parse_date",
+        "output_format": "%Y-%m-%d",
+        "input_formats": ["%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%Y-%m-%dT%H:%M:%S"]
+      }
+    ],
+    "row_filters": [
+      { "field": "claim_text", "op": "exists" }
+    ],
+    "deduplicate_by": ["source_path", "chunk_index", "claim_text"],
+    "deduplicate_keep": "first",
+    "drop_empty_rows": true,
+    "xlsx_all_sheets": true,
+    "ocr_lang": "chi_sim+eng",
+    "ocr_config": "--oem 1 --psm 6",
+    "ocr_preprocess": "adaptive",
+    "chunk_mode": "sentence",
+    "chunk_field": "claim_text",
+    "chunk_max_chars": 500,
+    "standardize_evidence": true,
+    "detect_conflicts": true,
+    "conflict_text_field": "claim_text",
+    "conflict_positive_words": ["support", "agree", "approve", "true", "yes", "支持", "赞成", "正确"],
+    "conflict_negative_words": ["oppose", "disagree", "reject", "false", "no", "反对", "错误", "不支持"],
+    "generate_quality_report": true
+  }
+}

@@ -1,0 +1,25 @@
+[package]
+name = "accel-rust"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+parquet = { version = "53", features = ["json"] }
+regex = "1"
+ureq = { version = "2", features = ["json"] }
+odbc-api = "7"
+rusqlite = { version = "0.32", features = ["bundled"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tracing-opentelemetry = "0.28"
+opentelemetry = "0.27"
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", features = ["grpc-tonic"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

@@ -1,0 +1,28 @@
+{
+  "stop_section_titles": [
+    "references",
+    "bibliography",
+    "works cited",
+    "acknowledgments",
+    "appendix",
+    "notes",
+    "参考文献",
+    "引用文献",
+    "文献目录",
+    "致谢",
+    "附录",
+    "注释",
+    "脚注"
+  ],
+  "noise_prefixes": [
+    "doi:",
+    "收稿日期",
+    "基金项目",
+    "通讯作者"
+  ],
+  "inline_citation_patterns": [
+    "\\[\\s*\\d+(?:\\s*[-,，]\\s*\\d+)*\\s*\\]",
+    "（[^（）]{0,48}\\d{4}[a-z]?(?:[;；，,][^（）]{0,48})?）",
+    "\\([^()]{0,48}\\d{4}[a-z]?(?:[;,][^()]{0,48})?\\)"
+  ]
+}

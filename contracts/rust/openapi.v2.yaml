@@ -1,0 +1,1118 @@
+openapi: 3.1.0
+info:
+  title: AIWF Accel Rust API
+  version: 0.3.0
+servers:
+  - url: http://127.0.0.1:18082
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: service health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResp"
+  /metrics:
+    get:
+      summary: Prometheus-like metrics
+      operationId: getMetrics
+      responses:
+        "200":
+          description: plain text metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+  /admin/reload_runtime_config:
+    post:
+      summary: Reload runtime task-store config from environment variables
+      operationId: reloadRuntimeConfig
+      responses:
+        "200":
+          description: reloaded config snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReloadRuntimeConfigResp"
+  /operators/compute_metrics:
+    post:
+      summary: Compute text metrics
+      operationId: computeMetrics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComputeReq"
+      responses:
+        "200":
+          description: metrics result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComputeResp"
+        "500":
+          description: server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrResp"
+  /operators/text_preprocess_v2:
+    post:
+      summary: Text preprocessing for markdown-ready corpus
+      operationId: textPreprocessV2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TextPreprocessReq"
+      responses:
+        "200":
+          description: preprocessed markdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TextPreprocessResp"
+        "500":
+          description: server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrResp"
+  /operators/transform_rows_v2:
+    post:
+      summary: Generic row transform v2
+      operationId: transformRowsV2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransformRowsReq"
+      responses:
+        "200":
+          description: transformed rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformRowsResp"
+        "500":
+          description: server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrResp"
+  /operators/transform_rows_v2/submit:
+    post:
+      summary: Submit async transform task
+      operationId: submitTransformRowsV2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransformRowsReq"
+      responses:
+        "200":
+          description: task accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskSubmitResp"
+  /operators/transform_rows_v2/stream:
+    post:
+      summary: Stream transform rows by chunk
+      operationId: transformRowsV2Stream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransformRowsStreamReq"
+      responses:
+        "200":
+          description: stream transformed rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformRowsStreamResp"
+  /operators/quality_check_v1:
+    post:
+      summary: Run data quality checks on rows
+      operationId: qualityCheckV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QualityCheckReq"
+      responses:
+        "200":
+          description: quality check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualityCheckResp"
+  /operators/aggregate_pushdown_v1:
+    post:
+      summary: Pushdown aggregate query to sqlite/sqlserver
+      operationId: aggregatePushdownV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AggregatePushdownReq"
+      responses:
+        "200":
+          description: pushdown aggregate result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AggregatePushdownResp"
+  /operators/plugin_exec_v1:
+    post:
+      summary: Execute external plugin process with JSON payload
+      operationId: pluginExecV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginExecReq"
+      responses:
+        "200":
+          description: plugin execution result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginExecResp"
+  /operators/join_rows_v1:
+    post:
+      summary: Join two row sets
+      operationId: joinRowsV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinRowsReq"
+      responses:
+        "200":
+          description: join result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /operators/normalize_schema_v1:
+    post:
+      summary: Normalize row schema
+      operationId: normalizeSchemaV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NormalizeSchemaReq"
+      responses:
+        "200":
+          description: normalize result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /operators/entity_extract_v1:
+    post:
+      summary: Extract simple entities from text
+      operationId: entityExtractV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityExtractReq"
+      responses:
+        "200":
+          description: entity extraction result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /operators/aggregate_rows_v1:
+    post:
+      summary: Aggregate rows by group keys
+      operationId: aggregateRowsV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AggregateRowsReq"
+      responses:
+        "200":
+          description: aggregation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AggregateRowsResp"
+  /operators/rules_compile_v1:
+    post:
+      summary: Compile DSL rules to transform rules JSON
+      operationId: rulesCompileV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulesCompileReq"
+      responses:
+        "200":
+          description: compiled rules
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /operators/rules_package_v1/publish:
+    post:
+      summary: Publish a versioned rules package
+      operationId: rulesPackagePublishV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulesPackagePublishReq"
+      responses:
+        "200":
+          description: package published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesPackageResp"
+  /operators/rules_package_v1/get:
+    post:
+      summary: Get a versioned rules package
+      operationId: rulesPackageGetV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulesPackageGetReq"
+      responses:
+        "200":
+          description: package loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulesPackageResp"
+  /operators/load_rows_v1:
+    post:
+      summary: Load rows from jsonl/csv/parquet/sqlite/sqlserver
+      operationId: loadRowsV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoadRowsReq"
+      responses:
+        "200":
+          description: loaded rows
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /operators/save_rows_v1:
+    post:
+      summary: Save rows to jsonl/csv/parquet/sqlite/sqlserver
+      operationId: saveRowsV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveRowsReq"
+      responses:
+        "200":
+          description: save result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /workflow/run:
+    post:
+      summary: Run workflow steps with built-in operators
+      operationId: workflowRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkflowRunReq"
+      responses:
+        "200":
+          description: workflow result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowRunResp"
+  /tasks/{task_id}:
+    get:
+      summary: Query async task
+      operationId: getTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: task state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskState"
+        "404":
+          description: task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskNotFoundResp"
+  /tasks/{task_id}/cancel:
+    post:
+      summary: Cancel async task if queued/running
+      operationId: cancelTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: cancel result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskCancelResp"
+        "404":
+          description: task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskNotFoundResp"
+
+components:
+  schemas:
+    HealthResp:
+      type: object
+      additionalProperties: false
+      required: [ok, service]
+      properties:
+        ok:
+          type: boolean
+        service:
+          type: string
+    ReloadRuntimeConfigResp:
+      type: object
+      additionalProperties: false
+      required: [ok, task_store_remote, task_store_backend, ttl_sec, max_tasks]
+      properties:
+        ok:
+          type: boolean
+        task_store_remote:
+          type: boolean
+        task_store_backend:
+          type: string
+          enum: [base_api, sqlcmd, odbc]
+        ttl_sec:
+          type: integer
+          minimum: 0
+        max_tasks:
+          type: integer
+          minimum: 1
+    ComputeReq:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        run_id:
+          type: string
+        text:
+          type: string
+    ComputeMetrics:
+      type: object
+      additionalProperties: false
+      required: [sections, bullets, chars, lines, cjk, latin, digits, reference_hits, note_hits, sha256]
+      properties:
+        sections:
+          type: integer
+          minimum: 0
+        bullets:
+          type: integer
+          minimum: 0
+        chars:
+          type: integer
+          minimum: 0
+        lines:
+          type: integer
+          minimum: 0
+        cjk:
+          type: integer
+          minimum: 0
+        latin:
+          type: integer
+          minimum: 0
+        digits:
+          type: integer
+          minimum: 0
+        reference_hits:
+          type: integer
+          minimum: 0
+        note_hits:
+          type: integer
+          minimum: 0
+        sha256:
+          type: string
+    ComputeResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, metrics]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        run_id:
+          type: string
+        metrics:
+          $ref: "#/components/schemas/ComputeMetrics"
+    TextPreprocessReq:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        run_id:
+          type: string
+        title:
+          type: string
+        text:
+          type: string
+        remove_references:
+          type: boolean
+        remove_notes:
+          type: boolean
+        normalize_whitespace:
+          type: boolean
+    TextPreprocessResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, markdown, removed_references_lines, removed_notes_lines, sha256]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        run_id:
+          type: string
+        markdown:
+          type: string
+        removed_references_lines:
+          type: integer
+          minimum: 0
+        removed_notes_lines:
+          type: integer
+          minimum: 0
+        sha256:
+          type: string
+    TransformRowsReq:
+      type: object
+      additionalProperties: false
+      properties:
+        run_id:
+          type: string
+        tenant_id:
+          type: string
+        trace_id:
+          type: string
+        traceparent:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        rules:
+          type: object
+          additionalProperties: true
+        rules_dsl:
+          type: string
+        quality_gates:
+          type: object
+          additionalProperties: true
+        schema_hint:
+          type: object
+          additionalProperties: true
+        input_uri:
+          type: string
+        output_uri:
+          type: string
+        request_signature:
+          type: string
+        idempotency_key:
+          type: string
+    TransformRowsStreamReq:
+      type: object
+      additionalProperties: false
+      properties:
+        run_id:
+          type: string
+        tenant_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        input_uri:
+          type: string
+        output_uri:
+          type: string
+        chunk_size:
+          type: integer
+          minimum: 1
+        rules:
+          type: object
+          additionalProperties: true
+        rules_dsl:
+          type: string
+        quality_gates:
+          type: object
+          additionalProperties: true
+        checkpoint_key:
+          type: string
+        resume:
+          type: boolean
+    TransformRowsStreamResp:
+      type: object
+      additionalProperties: true
+    JoinRowsReq:
+      type: object
+      additionalProperties: false
+      required: [left_rows, right_rows, left_on, right_on]
+      properties:
+        run_id:
+          type: string
+        left_rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        right_rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        left_on:
+          type: string
+        right_on:
+          type: string
+        join_type:
+          type: string
+    NormalizeSchemaReq:
+      type: object
+      additionalProperties: false
+      required: [rows, schema]
+      properties:
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        schema:
+          type: object
+          additionalProperties: true
+    EntityExtractReq:
+      type: object
+      additionalProperties: false
+      properties:
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        text:
+          type: string
+        text_field:
+          type: string
+    RulesCompileReq:
+      type: object
+      additionalProperties: false
+      required: [dsl]
+      properties:
+        dsl:
+          type: string
+    RulesPackagePublishReq:
+      type: object
+      additionalProperties: false
+      required: [name, version]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        dsl:
+          type: string
+        rules:
+          type: object
+          additionalProperties: true
+    RulesPackageGetReq:
+      type: object
+      additionalProperties: false
+      required: [name, version]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+    RulesPackageResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, name, version, rules, fingerprint]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        rules:
+          type: object
+          additionalProperties: true
+        fingerprint:
+          type: string
+    LoadRowsReq:
+      type: object
+      additionalProperties: false
+      required: [source_type, source]
+      properties:
+        source_type:
+          type: string
+        source:
+          type: string
+        query:
+          type: string
+        limit:
+          type: integer
+    SaveRowsReq:
+      type: object
+      additionalProperties: false
+      required: [sink_type, sink, rows]
+      properties:
+        sink_type:
+          type: string
+        sink:
+          type: string
+        table:
+          type: string
+        parquet_mode:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    AggregateRowsReq:
+      type: object
+      additionalProperties: false
+      required: [rows, group_by, aggregates]
+      properties:
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        group_by:
+          type: array
+          items:
+            type: string
+        aggregates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    AggregateRowsResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, rows, stats]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        stats:
+          type: object
+          additionalProperties: true
+    QualityCheckReq:
+      type: object
+      additionalProperties: false
+      required: [rows, rules]
+      properties:
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        rules:
+          type: object
+          additionalProperties: true
+    QualityCheckResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, passed, report]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        run_id:
+          type: string
+        passed:
+          type: boolean
+        report:
+          type: object
+          additionalProperties: true
+    AggregatePushdownReq:
+      type: object
+      additionalProperties: false
+      required: [source_type, source, group_by, aggregates]
+      properties:
+        run_id:
+          type: string
+        source_type:
+          type: string
+        source:
+          type: string
+        from:
+          type: string
+        group_by:
+          type: array
+          items:
+            type: string
+        aggregates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        where_sql:
+          type: string
+        limit:
+          type: integer
+    AggregatePushdownResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, sql, rows, stats]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        run_id:
+          type: string
+        sql:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        stats:
+          type: object
+          additionalProperties: true
+    PluginExecReq:
+      type: object
+      additionalProperties: false
+      required: [plugin, input]
+      properties:
+        run_id:
+          type: string
+        tenant_id:
+          type: string
+        trace_id:
+          type: string
+        plugin:
+          type: string
+        input:
+          type: object
+          additionalProperties: true
+    PluginExecResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, trace_id, plugin, output, stderr]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        run_id:
+          type: string
+        trace_id:
+          type: string
+        plugin:
+          type: string
+        output:
+          type: object
+          additionalProperties: true
+        stderr:
+          type: string
+    WorkflowRunReq:
+      type: object
+      additionalProperties: false
+      required: [steps]
+      properties:
+        run_id:
+          type: string
+        trace_id:
+          type: string
+        traceparent:
+          type: string
+        tenant_id:
+          type: string
+        context:
+          type: object
+          additionalProperties: true
+        steps:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    WorkflowStepReplay:
+      type: object
+      additionalProperties: false
+      required: [id, operator, status, started_at, finished_at, duration_ms, input_summary]
+      properties:
+        id:
+          type: string
+        operator:
+          type: string
+        status:
+          type: string
+        started_at:
+          type: string
+        finished_at:
+          type: string
+        duration_ms:
+          type: integer
+          minimum: 0
+        input_summary:
+          type: object
+          additionalProperties: true
+        output_summary:
+          type: object
+          additionalProperties: true
+        error:
+          type: string
+    WorkflowRunResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, trace_id, context, steps]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        trace_id:
+          type: string
+        run_id:
+          type: string
+        context:
+          type: object
+          additionalProperties: true
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowStepReplay"
+        failed_step:
+          type: string
+        error:
+          type: string
+    TransformRowsStats:
+      type: object
+      additionalProperties: false
+      required: [input_rows, output_rows, invalid_rows, filtered_rows, duplicate_rows_removed, latency_ms]
+      properties:
+        input_rows:
+          type: integer
+          minimum: 0
+        output_rows:
+          type: integer
+          minimum: 0
+        invalid_rows:
+          type: integer
+          minimum: 0
+        filtered_rows:
+          type: integer
+          minimum: 0
+        duplicate_rows_removed:
+          type: integer
+          minimum: 0
+        latency_ms:
+          type: integer
+          minimum: 0
+    TransformRowsResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, trace_id, rows, quality, gate_result, stats, rust_v2_used, audit]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        run_id:
+          type: string
+        trace_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        quality:
+          type: object
+          additionalProperties: true
+        gate_result:
+          type: object
+          additionalProperties: true
+        stats:
+          $ref: "#/components/schemas/TransformRowsStats"
+        rust_v2_used:
+          type: boolean
+        schema_hint:
+          type: object
+          additionalProperties: true
+        aggregate:
+          type: object
+          additionalProperties: true
+        audit:
+          type: object
+          additionalProperties: true
+    TaskSubmitResp:
+      type: object
+      additionalProperties: false
+      required: [ok, task_id, status]
+      properties:
+        ok:
+          type: boolean
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [queued]
+    TaskState:
+      type: object
+      additionalProperties: false
+      required: [task_id, tenant_id, operator, status, created_at, updated_at]
+      properties:
+        task_id:
+          type: string
+        tenant_id:
+          type: string
+        operator:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, done, failed, cancelled]
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        result:
+          type: object
+          additionalProperties: true
+        error:
+          type: string
+    TaskCancelResp:
+      type: object
+      additionalProperties: false
+      required: [ok, task_id, status, cancelled]
+      properties:
+        ok:
+          type: boolean
+        task_id:
+          type: string
+        status:
+          type: string
+        cancelled:
+          type: boolean
+    TaskNotFoundResp:
+      type: object
+      additionalProperties: false
+      required: [ok, error, task_id]
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+        task_id:
+          type: string
+    ErrResp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, error]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        error:
+          type: string

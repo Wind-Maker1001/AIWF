@@ -1,0 +1,8 @@
+{
+  "assignment": { "title": "作业风", "primary": "245C73", "secondary": "2F7C94", "bg": "EEF8FB" },
+  "debate_plus": { "title": "辩论增强", "primary": "5E1B4F", "secondary": "7C2868", "bg": "FAF1F8" },
+  "academic": { "title": "学术风", "primary": "2F3E63", "secondary": "445A8D", "bg": "F1F3FA" },
+  "professional": { "title": "专业风", "primary": "1F4E78", "secondary": "2C6A9D", "bg": "EEF5FC" },
+  "business": { "title": "商务风", "primary": "1B4D3E", "secondary": "2D7561", "bg": "ECF7F2" },
+  "debate": { "title": "辩论风（经典）", "primary": "7A1F1F", "secondary": "9C2F2F", "bg": "FDF4F4" }
+}

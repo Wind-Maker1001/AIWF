@@ -1,0 +1,16 @@
+{
+  "preprocess": {
+    "header_map": {
+      "ID": "id",
+      "Amt": "amount",
+      "Date": "biz_date"
+    },
+    "amount_fields": ["amount"],
+    "date_fields": ["biz_date"],
+    "date_input_formats": ["%Y/%m/%d", "%Y-%m-%d", "%m/%d/%Y"],
+    "date_output_format": "%Y-%m-%d",
+    "trim_strings": true,
+    "drop_empty_rows": true,
+    "amount_round_digits": 2
+  }
+}

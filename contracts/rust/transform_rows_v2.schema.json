@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiwf.local/contracts/rust/transform_rows_v2.schema.json",
+  "title": "AIWF Rust Transform Rows v2",
+  "type": "object",
+  "required": ["rows", "rules"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "rows": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "rename_map": { "type": "object", "additionalProperties": { "type": "string" } },
+        "casts": { "type": "object", "additionalProperties": { "type": "string" } },
+        "filters": { "type": "array", "items": { "type": "object" } },
+        "required_fields": { "type": "array", "items": { "type": "string" } },
+        "default_values": { "type": "object" },
+        "include_fields": { "type": "array", "items": { "type": "string" } },
+        "exclude_fields": { "type": "array", "items": { "type": "string" } },
+        "deduplicate_by": { "type": "array", "items": { "type": "string" } },
+        "deduplicate_keep": { "type": "string", "enum": ["first", "last"] },
+        "sort_by": { "type": "array", "items": { "type": ["string", "object"] } },
+        "aggregate": {
+          "type": "object",
+          "properties": {
+            "group_by": { "type": "array", "items": { "type": "string" } },
+            "metrics": { "type": "array", "items": { "type": "object" } }
+          },
+          "additionalProperties": true
+        },
+        "null_values": { "type": "array", "items": { "type": "string" } },
+        "trim_strings": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "quality_gates": {
+      "type": "object",
+      "properties": {
+        "max_invalid_rows": { "type": "integer", "minimum": 0 },
+        "min_output_rows": { "type": "integer", "minimum": 0 },
+        "max_invalid_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "required_fields": { "type": "array", "items": { "type": "string" } },
+        "max_required_missing_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "schema_hint": { "type": "object" }
+  },
+  "additionalProperties": true
+}

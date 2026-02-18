@@ -1,0 +1,65 @@
+﻿{
+  "appId": "com.aiwf.difydesktop",
+  "productName": "AIWF Dify Desktop Lite",
+  "directories": {
+    "output": "dist-lite"
+  },
+  "files": [
+    "main.js",
+    "main_config_support.js",
+    "main_runtime_support.js",
+    "main_runtime_encoding.js",
+    "main_runtime_fonts.js",
+    "main_runtime_tools.js",
+    "main_runtime_bridge.js",
+    "main_window_support.js",
+    "workflow_engine.js",
+    "workflow_graph.js",
+    "workflow_utils.js",
+    "workflow_services.js",
+    "workflow_chiplets/registry.js",
+    "workflow_chiplets/runner.js",
+    "workflow_chiplets/executor.js",
+    "workflow_chiplets/contract.js",
+    "workflow_chiplets/builtin_chiplets.js",
+    "workflow_chiplets/isolated_worker_host.js",
+    "workflow_chiplets/isolated_worker_process.js",
+    "offline_engine.js",
+    "offline_runtime.js",
+    "offline_paper.js",
+    "offline_outputs.js",
+    "offline_ingest.js",
+    "offline_ingest_parsers.js",
+    "offline_text.js",
+    "offline_worker.js",
+    "main_ipc.js",
+    "main_ipc_metrics.js",
+    "main_ipc_workflow.js",
+    "main_ipc_runtime.js",
+    "preload.js",
+    "renderer/**",
+    "package.json",
+    "assets/icon.ico"
+  ],
+  "extraResources": [
+    {
+      "from": "tools",
+      "to": "tools",
+      "filter": [
+        "README.md",
+        "**/manifest*.json"
+      ]
+    }
+  ],
+  "win": {
+    "icon": "assets/icon.ico",
+    "target": [
+      "nsis"
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "perMachine": false
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "title": "AIWF Accel Rust",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "title": "Transform Success / Error",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "rate(aiwf_transform_rows_v2_success_total[5m])", "legendFormat": "success/s" },
+        { "expr": "rate(aiwf_transform_rows_v2_errors_total[5m])", "legendFormat": "error/s" }
+      ]
+    },
+    {
+      "title": "Avg Transform Latency (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "aiwf_transform_rows_v2_latency_ms_sum / clamp_min(aiwf_transform_rows_v2_success_total, 1)",
+          "legendFormat": "avg latency"
+        }
+      ]
+    },
+    {
+      "title": "Task Store Health",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "aiwf_task_store_remote_ok", "legendFormat": "remote_ok" },
+        { "expr": "aiwf_task_store_remote_enabled", "legendFormat": "remote_enabled" }
+      ]
+    },
+    {
+      "title": "Quota Reject Total",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "targets": [
+        { "expr": "aiwf_quota_reject_total", "legendFormat": "quota_reject_total" }
+      ]
+    },
+    {
+      "title": "Active Tasks",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        { "expr": "aiwf_tasks_active", "legendFormat": "active" }
+      ]
+    }
+  ]
+}

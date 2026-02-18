@@ -1,0 +1,28 @@
+{
+  "zh": {
+    "default": {
+      "docx_max_table_rows": 20,
+      "pptx_max_items": 6
+    },
+    "assignment": {
+      "docx_max_table_rows": 24,
+      "pptx_max_items": 8
+    },
+    "debate_plus": {
+      "pptx_max_items": 10
+    }
+  },
+  "en": {
+    "default": {
+      "docx_max_table_rows": 20,
+      "pptx_max_items": 6
+    },
+    "assignment": {
+      "docx_max_table_rows": 24,
+      "pptx_max_items": 8
+    },
+    "debate_plus": {
+      "pptx_max_items": 10
+    }
+  }
+}

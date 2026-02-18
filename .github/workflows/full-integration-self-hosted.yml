@@ -1,0 +1,65 @@
+name: Full Integration (Self-Hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: "owner value for create_job"
+        required: false
+        default: "ci"
+      env_file:
+        description: "env file path (optional, defaults inside script)"
+        required: false
+        default: ""
+      run_full_integration:
+        description: "run smoke + fallback integration checks (requires SQL Server and local services prerequisites)"
+        required: false
+        default: "false"
+
+jobs:
+  full-check:
+    runs-on:
+      - self-hosted
+      - windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tools
+        shell: pwsh
+        run: |
+          foreach ($cmd in @("powershell","python","cargo")) {
+            if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
+              throw "$cmd not found in PATH"
+            }
+          }
+
+      - name: Install glue-python dependencies
+        shell: pwsh
+        run: |
+          Set-Location .\apps\glue-python
+          python -m pip install --upgrade pip
+          if (Test-Path .\requirements.txt) {
+            python -m pip install -r .\requirements.txt
+          }
+
+      - name: Run full local CI checks (includes smoke + fallback integration)
+        shell: pwsh
+        run: |
+          $owner = "${{ github.event.inputs.owner }}"
+          $envFile = "${{ github.event.inputs.env_file }}"
+          $full = "${{ github.event.inputs.run_full_integration }}"
+
+          if ($envFile -and $envFile.Trim().Length -gt 0) {
+            if ($full -eq "true") {
+              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -EnvFile $envFile
+            } else {
+              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -EnvFile $envFile -SkipSmoke
+            }
+          } else {
+            if ($full -eq "true") {
+              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner
+            } else {
+              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -SkipSmoke
+            }
+          }

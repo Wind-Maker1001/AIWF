@@ -1,0 +1,176 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIWF Workflow Studio</title>
+  <style>
+    :root { --bg:#f2f5fa; --card:#fff; --line:#d8e1ec; --txt:#1f2d3d; --muted:#617486; --brand:#0b5ea8; --ok:#087443; --bad:#b42318; }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+    .wrap{padding:12px;display:grid;gap:10px}
+    .hero{background:linear-gradient(120deg,#103660,#0b5ea8,#0b7d67);color:#fff;padding:12px 14px;border-radius:10px}
+    .main{display:grid;grid-template-columns:300px 1fr 380px;gap:10px} @media(max-width:1380px){.main{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+    .hd{padding:9px 10px;border-bottom:1px solid #e9eef6;font-weight:700}
+    .bd{padding:10px}
+    .palette-item{border:1px solid #d9e4f1;background:#f6faff;border-radius:8px;padding:7px;margin-bottom:7px;cursor:grab}
+    .palette-item:active{cursor:grabbing}
+    .btn{border:0;border-radius:8px;padding:8px 10px;color:#fff;background:var(--brand);cursor:pointer}
+    .btn.secondary{background:#5e748d}
+    .btn.danger{background:#9f2f2a}
+    .btns{display:flex;gap:7px;flex-wrap:wrap}
+    label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
+    input,textarea{width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px}
+    textarea{min-height:80px}
+    .status{font-size:13px;min-height:18px;margin-top:6px}.ok{color:var(--ok)}.bad{color:var(--bad)}
+    .canvas-wrap{
+      position:relative;height:680px;border:1px dashed #c7d5e5;border-radius:10px;overflow:auto;
+      background:#f8fbff;
+    }
+    .canvas-surface{
+      position:relative;
+      min-width:100%;
+      min-height:100%;
+      background-color:#f8fbff;
+      background-image:
+        linear-gradient(to right, rgba(126,154,184,0.18) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(126,154,184,0.18) 1px, transparent 1px);
+      background-size:24px 24px;
+    }
+    .edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto;overflow:visible;z-index:1}
+    #guideLayer{position:absolute;inset:0;z-index:3;pointer-events:none}
+    .guide-line{position:absolute;background:#f59e0b;opacity:.75}
+    .guide-line.v{width:1px;height:100%}
+    .guide-line.h{height:1px;width:100%}
+    .marquee-box{position:absolute;border:1px dashed #0b5ea8;background:rgba(11,94,168,.08)}
+    .edge-hit{cursor:pointer;pointer-events:stroke}
+    #nodesLayer{position:absolute;inset:0;z-index:2}
+    .minimap-wrap{
+      position:absolute;right:10px;bottom:10px;z-index:4;background:rgba(255,255,255,0.9);
+      border:1px solid #d3dfec;border-radius:8px;padding:6px;box-shadow:0 2px 8px rgba(31,45,61,.12)
+    }
+    .route-debug{
+      position:absolute;left:10px;bottom:10px;z-index:4;
+      background:rgba(15,23,32,0.82);color:#d9e6f6;border:1px solid #2c4057;
+      border-radius:8px;padding:6px 8px;font-size:12px;font-family:Consolas, "Courier New", monospace;
+      pointer-events:none
+    }
+    #minimap{display:block;width:180px;height:120px;border-radius:4px;background:#eef4fb;cursor:pointer}
+    .node{position:absolute;width:210px;border:1px solid #cfe0f3;background:#fff;border-radius:10px;box-shadow:0 4px 10px rgba(31,45,61,0.08);user-select:none}
+    .node.selected{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.28),0 6px 14px rgba(31,45,61,0.12)}
+    .node-hd{padding:6px 8px;background:#eef5ff;border-bottom:1px solid #dbe8f7;display:flex;justify-content:space-between;align-items:center;cursor:move}
+    .node-hd strong{font-size:13px}
+    .node-bd{padding:6px 8px;font-size:12px;color:#4f6378}
+    .node-actions{display:flex;gap:5px}
+    .mini{font-size:11px;padding:4px 6px;border-radius:6px;border:0;color:#fff;background:#466f99;cursor:pointer}
+    .mini.del{background:#a63d35}
+    .port{position:absolute;width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(31,45,61,0.22);cursor:crosshair}
+    .port.in{left:-8px;top:50%;transform:translateY(-50%);background:#2f7db7}
+    .port.out{right:-8px;top:50%;transform:translateY(-50%);background:#0b7d67}
+    .port.in.target{box-shadow:0 0 0 3px rgba(47,125,183,0.25)}
+    .edge-line{pointer-events:none;transition:stroke .14s ease, stroke-width .14s ease}
+    .edge-line.active{stroke:#e67e22 !important;stroke-width:3}
+    .edge-ghost{pointer-events:none}
+    .hint{font-size:12px;color:#5e7389;margin-bottom:8px}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th,td{border-bottom:1px solid #edf2f7;padding:6px;text-align:left}
+    th{background:#f3f7fd;color:#53687e}
+    pre{margin:0;white-space:pre-wrap;word-break:break-word;background:#0f1720;color:#d9e6f6;border-radius:8px;padding:9px;min-height:160px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h2 style="margin:0">Workflow Studio</h2>
+      <div style="margin-top:4px">可自由拖拽节点、连线、运行。数据计算节点默认走 Rust。</div>
+    </section>
+    <section class="main">
+      <article class="card">
+        <div class="hd">节点库</div>
+        <div class="bd">
+          <div id="palette"></div>
+          <div class="btns">
+            <button id="btnAdd" class="btn">添加所选节点</button>
+            <button id="btnReset" class="btn secondary">重置默认流程</button>
+            <button id="btnClear" class="btn danger">清空画布</button>
+          </div>
+          <label>节点类型</label>
+          <input id="nodeType" value="ingest_files" />
+          <label>工作流名称</label>
+          <input id="workflowName" value="自由编排流程" />
+          <label>输入文件（每行一个）</label>
+          <textarea id="inputFiles"></textarea>
+          <label>报告标题</label>
+          <input id="reportTitle" value="Workflow 任务" />
+          <label>外部 AI Endpoint</label>
+          <input id="aiEndpoint" placeholder="https://api.xxx.com/v1/chat/completions" />
+          <label>外部 AI Key</label>
+          <input id="aiKey" />
+          <label>外部 AI Model</label>
+          <input id="aiModel" placeholder="deepseek-chat" />
+          <label>Rust Endpoint</label>
+          <input id="rustEndpoint" value="http://127.0.0.1:18082" />
+          <label><input id="rustRequired" type="checkbox" checked style="width:auto;margin-right:6px" />Rust 不可用时阻断</label>
+          <label><input id="snapGrid" type="checkbox" checked style="width:auto;margin-right:6px" />拖拽吸附网格</label>
+          <div class="btns" style="margin-top:8px">
+            <button id="btnRun" class="btn">运行</button>
+            <button id="btnExport" class="btn secondary">导出流程 JSON</button>
+            <button id="btnSaveFlow" class="btn secondary">保存流程</button>
+            <button id="btnLoadFlow" class="btn secondary">加载流程</button>
+          </div>
+          <div id="status" class="status"></div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="hd">流程画布</div>
+        <div class="bd">
+          <div class="btns" style="margin-bottom:8px">
+            <button id="btnZoomOut" class="btn secondary">缩小</button>
+            <button id="btnZoomIn" class="btn secondary">放大</button>
+            <button id="btnZoomReset" class="btn secondary">100%</button>
+            <span id="zoomText" style="display:inline-flex;align-items:center;color:#4f6378;font-size:12px;padding:0 4px">100%</span>
+          </div>
+          <div class="btns" style="margin-bottom:8px">
+            <button id="btnAlignLeft" class="btn secondary">左对齐</button>
+            <button id="btnAlignTop" class="btn secondary">上对齐</button>
+            <button id="btnDistributeH" class="btn secondary">水平分布</button>
+            <button id="btnDistributeV" class="btn secondary">垂直分布</button>
+            <button id="btnUnlinkSelected" class="btn danger">取消框选节点连线</button>
+          </div>
+          <div class="hint">连接方式：按住节点右侧绿色输出点，拖到目标节点左侧蓝色输入点。多选可用框选或 Shift/Ctrl 点击。点击连线可取消该连线。</div>
+          <div id="canvasWrap" class="canvas-wrap">
+            <div id="canvasSurface" class="canvas-surface">
+              <svg id="edges" class="edges"></svg>
+              <div id="nodesLayer"></div>
+              <div id="guideLayer"></div>
+              <div class="minimap-wrap">
+                <canvas id="minimap" width="180" height="120"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="hd">运行状态</div>
+        <div class="bd">
+          <div class="btns" style="margin-bottom:8px">
+            <button id="btnDiagRefresh" class="btn secondary">刷新诊断</button>
+          </div>
+          <table>
+            <thead><tr><th>节点</th><th>状态</th><th>耗时</th></tr></thead>
+            <tbody id="nodeRuns"><tr><td colspan="3" style="color:#74879b">未运行</td></tr></tbody>
+          </table>
+          <div style="height:8px"></div>
+          <table>
+            <thead><tr><th>Chiplet</th><th>失败率</th><th>平均耗时</th></tr></thead>
+            <tbody id="diagRuns"><tr><td colspan="3" style="color:#74879b">暂无诊断</td></tr></tbody>
+          </table>
+          <div style="height:8px"></div>
+          <pre id="log">{}</pre>
+        </div>
+      </article>
+    </section>
+  </div>
+  <script type="module" src="./workflow/app.js"></script>
+</body>
+</html>

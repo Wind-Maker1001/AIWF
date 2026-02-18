@@ -1,0 +1,22 @@
+{
+  "workflow_id": "minimal_v1",
+  "version": "1.0.0",
+  "name": "生肉到AI备用语料 (MVP)",
+  "description": "ingest -> clean_md -> compute -> ai_refine -> ai_audit -> md_output",
+  "nodes": [
+    { "id": "n1_ingest", "type": "ingest_files", "name": "Ingest Files" },
+    { "id": "n2_clean", "type": "clean_md", "name": "Clean Markdown" },
+    { "id": "n3_compute", "type": "compute_rust_placeholder", "name": "Compute (Rust Placeholder)" },
+    { "id": "n4_refine", "type": "ai_refine", "name": "AI Refine" },
+    { "id": "n5_audit", "type": "ai_audit", "name": "AI Audit Gate" },
+    { "id": "n6_output", "type": "md_output", "name": "Markdown Output" }
+  ],
+  "edges": [
+    { "from": "n1_ingest", "to": "n2_clean" },
+    { "from": "n2_clean", "to": "n3_compute" },
+    { "from": "n3_compute", "to": "n4_refine" },
+    { "from": "n4_refine", "to": "n5_audit" },
+    { "from": "n5_audit", "to": "n6_output" }
+  ]
+}
+

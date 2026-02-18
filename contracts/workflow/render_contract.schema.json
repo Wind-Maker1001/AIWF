@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aiwf/render_contract.schema.json",
+  "title": "AIWF Render Contract",
+  "type": "object",
+  "required": ["meta", "data", "narrative"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["run_id", "workflow_id", "generated_at"],
+      "properties": {
+        "run_id": { "type": "string" },
+        "workflow_id": { "type": "string" },
+        "generated_at": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "data": {
+      "type": "object",
+      "required": ["metrics", "tables"],
+      "properties": {
+        "metrics": { "type": "object" },
+        "tables": { "type": "array", "items": { "type": "object" } },
+        "charts": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": true
+    },
+    "narrative": {
+      "type": "object",
+      "required": ["summary", "evidence"],
+      "properties": {
+        "summary": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "review": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "source", "mode"],
+        "properties": {
+          "field": { "type": "string" },
+          "source": { "type": "string" },
+          "mode": { "type": "string", "enum": ["algorithm_only", "ai_writable", "audit_required"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
+

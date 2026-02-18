@@ -1,0 +1,114 @@
+﻿{
+  "zh": {
+    "professional": {
+      "display_name": "专业版",
+      "report_title": "AIWF 数据清洗审计报告",
+      "cover_title": "AIWF 清洗结果总览",
+      "primary_hex": "1F4E78",
+      "secondary_hex": "2C6A9D",
+      "accent_hex": "F39C34",
+      "bg_rgb": [248, 250, 252]
+    },
+    "academic": {
+      "display_name": "学术版",
+      "report_title": "学术数据处理报告",
+      "cover_title": "研究数据摘要",
+      "primary_hex": "2F3E63",
+      "secondary_hex": "445A8D",
+      "accent_hex": "E3A72F",
+      "bg_rgb": [246, 247, 251]
+    },
+    "debate": {
+      "display_name": "辩论版",
+      "report_title": "辩论证据简报",
+      "cover_title": "辩论证据看板",
+      "primary_hex": "7A1F1F",
+      "secondary_hex": "9C2F2F",
+      "accent_hex": "E9B949",
+      "bg_rgb": [252, 247, 247]
+    },
+    "assignment": {
+      "display_name": "作业版",
+      "report_title": "课程作业数据报告",
+      "cover_title": "作业结果与要点",
+      "primary_hex": "245C73",
+      "secondary_hex": "2F7C94",
+      "accent_hex": "F2A33B",
+      "bg_rgb": [245, 251, 253]
+    },
+    "debate_plus": {
+      "display_name": "辩论增强版",
+      "report_title": "辩论论据证据报告",
+      "cover_title": "辩论证据策略板",
+      "primary_hex": "5E1B4F",
+      "secondary_hex": "7C2868",
+      "accent_hex": "D9A441",
+      "bg_rgb": [251, 246, 250]
+    },
+    "business": {
+      "display_name": "商务版",
+      "report_title": "业务数据清洗与洞察报告",
+      "cover_title": "业务指标简报",
+      "primary_hex": "1B4D3E",
+      "secondary_hex": "2D7561",
+      "accent_hex": "E1A23A",
+      "bg_rgb": [244, 250, 247]
+    }
+  },
+  "en": {
+    "professional": {
+      "display_name": "Professional",
+      "report_title": "AIWF Data Cleaning Audit Report",
+      "cover_title": "AIWF Cleaning Output Summary",
+      "primary_hex": "1F4E78",
+      "secondary_hex": "2C6A9D",
+      "accent_hex": "F39C34",
+      "bg_rgb": [248, 250, 252]
+    },
+    "academic": {
+      "display_name": "Academic",
+      "report_title": "Academic Data Processing Report",
+      "cover_title": "Research Data Summary",
+      "primary_hex": "2F3E63",
+      "secondary_hex": "445A8D",
+      "accent_hex": "E3A72F",
+      "bg_rgb": [246, 247, 251]
+    },
+    "debate": {
+      "display_name": "Debate",
+      "report_title": "Debate Evidence Briefing",
+      "cover_title": "Debate Evidence Dashboard",
+      "primary_hex": "7A1F1F",
+      "secondary_hex": "9C2F2F",
+      "accent_hex": "E9B949",
+      "bg_rgb": [252, 247, 247]
+    },
+    "assignment": {
+      "display_name": "Assignment",
+      "report_title": "Course Assignment Data Report",
+      "cover_title": "Assignment Results & Highlights",
+      "primary_hex": "245C73",
+      "secondary_hex": "2F7C94",
+      "accent_hex": "F2A33B",
+      "bg_rgb": [245, 251, 253]
+    },
+    "debate_plus": {
+      "display_name": "Debate Plus",
+      "report_title": "Debate Evidence & Argument Report",
+      "cover_title": "Debate Strategy Board",
+      "primary_hex": "5E1B4F",
+      "secondary_hex": "7C2868",
+      "accent_hex": "D9A441",
+      "bg_rgb": [251, 246, 250]
+    },
+    "business": {
+      "display_name": "Business",
+      "report_title": "Business Data Cleaning & Insight Report",
+      "cover_title": "Business KPI Brief",
+      "primary_hex": "1B4D3E",
+      "secondary_hex": "2D7561",
+      "accent_hex": "E1A23A",
+      "bg_rgb": [244, 250, 247]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "project": "aiwf",
+  "root": "D:\AIWF",
+  "bus_root": "D:\\AIWF\\bus",
+  "lake_root": "D:\AIWF\\lake",
+  "sqlserver": {
+    "host": "localhost",
+    "port": 1433,
+    "database": "AIWF"
+  }
+}

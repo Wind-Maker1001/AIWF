@@ -1,0 +1,68 @@
+﻿[
+  {
+    "name": "debate_grid",
+    "max_fallback_ratio": 0.75,
+    "graph": {
+      "workflow_id": "debate_grid",
+      "name": "debate_grid",
+      "nodes": [
+        { "id": "n1", "type": "ingest_files", "x": 40, "y": 80 },
+        { "id": "n2", "type": "clean_md", "x": 320, "y": 80 },
+        { "id": "n3", "type": "compute_rust", "x": 600, "y": 80 },
+        { "id": "n4", "type": "ai_refine", "x": 880, "y": 80 },
+        { "id": "n5", "type": "ai_audit", "x": 320, "y": 300 },
+        { "id": "n6", "type": "md_output", "x": 600, "y": 300 },
+        { "id": "n7", "type": "office_output", "x": 880, "y": 300 },
+        { "id": "n8", "type": "publish", "x": 1160, "y": 190 }
+      ],
+      "edges": [
+        { "from": "n1", "to": "n2" },
+        { "from": "n2", "to": "n3" },
+        { "from": "n3", "to": "n4" },
+        { "from": "n2", "to": "n5" },
+        { "from": "n5", "to": "n6" },
+        { "from": "n6", "to": "n7" },
+        { "from": "n4", "to": "n8" },
+        { "from": "n7", "to": "n8" },
+        { "from": "n3", "to": "n6" }
+      ]
+    }
+  },
+  {
+    "name": "dense_cross",
+    "max_fallback_ratio": 0.9,
+    "graph": {
+      "workflow_id": "dense_cross",
+      "name": "dense_cross",
+      "nodes": [
+        { "id": "a1", "type": "ingest_files", "x": 60, "y": 60 },
+        { "id": "a2", "type": "clean_md", "x": 300, "y": 60 },
+        { "id": "a3", "type": "compute_rust", "x": 540, "y": 60 },
+        { "id": "a4", "type": "ai_refine", "x": 780, "y": 60 },
+        { "id": "b1", "type": "ingest_files", "x": 60, "y": 240 },
+        { "id": "b2", "type": "clean_md", "x": 300, "y": 240 },
+        { "id": "b3", "type": "compute_rust", "x": 540, "y": 240 },
+        { "id": "b4", "type": "ai_audit", "x": 780, "y": 240 },
+        { "id": "c1", "type": "md_output", "x": 180, "y": 420 },
+        { "id": "c2", "type": "office_output", "x": 420, "y": 420 },
+        { "id": "c3", "type": "publish", "x": 660, "y": 420 }
+      ],
+      "edges": [
+        { "from": "a1", "to": "a2" },
+        { "from": "a2", "to": "a3" },
+        { "from": "a3", "to": "a4" },
+        { "from": "b1", "to": "b2" },
+        { "from": "b2", "to": "b3" },
+        { "from": "b3", "to": "b4" },
+        { "from": "a2", "to": "b3" },
+        { "from": "b2", "to": "a3" },
+        { "from": "a4", "to": "c3" },
+        { "from": "b4", "to": "c3" },
+        { "from": "a3", "to": "c2" },
+        { "from": "b3", "to": "c2" },
+        { "from": "a2", "to": "c1" },
+        { "from": "b2", "to": "c1" }
+      ]
+    }
+  }
+]

@@ -1,0 +1,563 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIWF 离线作业助手</title>
+  <style>
+    :root { --bg:#eef6ff; --card:#fff; --line:#d7e0eb; --txt:#1f2d3d; --muted:#5f7388; --brand:#0b5ea8; --ok:#087443; --bad:#b42318; }
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#eef6ff,#fff7ee);font-family:"Segoe UI","Microsoft YaHei",sans-serif;color:var(--txt)}
+    .wrap{max-width:1200px;margin:0 auto;padding:20px;display:grid;gap:12px}
+    .hero{background:linear-gradient(120deg,#103660,#0b5ea8,#0b7d67);color:#fff;border-radius:16px;padding:18px 20px}
+    .layout{display:grid;grid-template-columns:420px 1fr;gap:12px} @media(max-width:1000px){.layout{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px}
+    .hd{padding:12px 14px;border-bottom:1px solid #e9eff7;font-weight:700}.bd{padding:12px 14px}
+    .field{margin-bottom:10px}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+    input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+    textarea{min-height:70px}
+    .btns{display:flex;gap:8px;flex-wrap:wrap} button{border:0;border-radius:10px;padding:10px 14px;color:#fff;background:var(--brand);cursor:pointer}
+    button.secondary{background:#5d748f} button:disabled{opacity:.65;cursor:not-allowed}
+    .status{margin-top:8px;min-height:20px;font-size:13px}.ok{color:var(--ok)}.bad{color:var(--bad)}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px} @media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    .metric{border:1px solid #dfe7f2;border-radius:10px;padding:8px;background:#f7fbff}.metric .k{font-size:12px;color:var(--muted)}.metric .v{font-size:20px;font-weight:700}
+    table{width:100%;border-collapse:collapse;font-size:13px} th,td{border-bottom:1px solid #eef2f7;padding:8px;text-align:left}
+    th{background:#f4f8fd;color:#4d6277} .path{max-width:560px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    pre{margin:0;min-height:240px;border:1px solid #1f2d3d;background:#0f1720;color:#d9e6f6;border-radius:12px;padding:10px;overflow:auto;white-space:pre-wrap}
+    .dropzone{border:2px dashed #a6bfdc;border-radius:12px;padding:14px;background:#f6fbff;color:#33506e;text-align:center}
+    .dropzone.active{border-color:#0b5ea8;background:#eaf4ff}
+    .mini{font-size:12px;color:var(--muted)}
+    .queue-actions{display:flex;gap:8px;justify-content:flex-end;margin:6px 0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1 style="margin:0">AIWF 离线作业助手</h1>
+      <p style="margin:8px 0 0">按 1-2-3 三步：选模式 -> 拖入生肉 -> 一键生成成品。</p>
+    </section>
+
+    <section class="card">
+      <div class="hd">新手三步走</div>
+      <div class="bd">
+        <div class="grid">
+          <div class="metric"><div class="k">第 1 步</div><div class="v" style="font-size:16px">选运行模式</div></div>
+          <div class="metric"><div class="k">第 2 步</div><div class="v" style="font-size:16px">拖入 PDF/docx/txt/图片/xlsx</div></div>
+          <div class="metric"><div class="k">第 3 步</div><div class="v" style="font-size:16px">点击“开始生成”</div></div>
+          <div class="metric"><div class="k">输出位置</div><div class="v" style="font-size:16px">文档\\AIWF-Offline\\任务ID</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="layout">
+      <article class="card">
+        <div class="hd">第 1 步：设置</div>
+        <div class="bd">
+          <div class="field"><label>运行模式（一般选第一个）</label><select id="mode"><option value="offline_local">离线本地模式（推荐）</option><option value="base_api">连接你的 AIWF 后端</option></select></div>
+          <div class="field"><label>后端地址（只在“连接后端”时填写）</label><input id="baseUrl" placeholder="http://127.0.0.1:18080" /></div>
+          <div class="field"><label>API Key（可选）</label><input id="apiKey" placeholder="X-API-Key" /></div>
+          <div class="field"><label>报告标题（会出现在 docx/pptx 封面）</label><input id="reportTitle" placeholder="例如：AI 对就业影响的证据整理" /></div>
+          <div class="field"><label>主数据文件（可选）</label><input id="inputPath" placeholder="例如：D:\\data\\input.pdf" /></div>
+          <div class="field">
+            <label>批量文件路径（可选，每行一个）</label>
+            <textarea id="inputFiles" placeholder="例如：&#10;D:\\data\\a.pdf&#10;D:\\data\\b.docx"></textarea>
+            <div class="mini">会和拖拽队列自动合并去重。</div>
+          </div>
+          <div class="field"><label>输出语言</label><select id="officeLang"><option value="zh" selected>中文</option><option value="en">English</option></select></div>
+          <div class="field"><label>成品风格（不会改数据，只改展示）</label><select id="officeTheme"><option value="assignment" selected>作业风</option><option value="debate_plus">辩论增强</option><option value="academic">学术风</option><option value="professional">专业风</option><option value="business">商务风</option><option value="debate">辩论风（经典）</option></select></div>
+          <div class="field"><label>成品质量（建议高质量）</label><select id="officeQualityMode"><option value="high" selected>高质量（推荐）</option><option value="standard">标准（更快）</option></select></div>
+          <div class="field"><label><input id="ocrEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />图片启用 OCR（离线优先调用本机 Tesseract）</label></div>
+          <div class="field"><label><input id="mdOnly" type="checkbox" checked style="width:auto;margin-right:6px" />仅输出 Markdown（给 AI 二次加工）</label></div>
+          <div class="field"><label>OCR 语言</label><input id="ocrLang" value="chi_sim+eng" /></div>
+          <div class="field"><label>OCR 参数</label><input id="ocrConfig" value="--oem 1 --psm 6" /></div>
+          <div class="field"><label><input id="autoNormalizeEncoding" type="checkbox" checked style="width:auto;margin-right:6px" />自动编码转换（检测到 GB18030 时转 UTF-8）</label></div>
+          <div class="field"><label><input id="strictEncodingMode" type="checkbox" checked style="width:auto;margin-right:6px" />严格编码模式（有“不确定编码”文件时阻止运行）</label></div>
+          <div class="btns">
+            <button id="btnRun">第 3 步：开始生成</button>
+            <button id="btnHealth" class="secondary">检查连通性</button>
+            <button id="btnSave" class="secondary">保存配置</button>
+            <button id="btnWorkflow" class="secondary">打开 Workflow Studio</button>
+          </div>
+          <div id="status" class="status"></div>
+        </div>
+      </article>
+
+      <article style="display:grid;gap:12px">
+        <div class="card">
+          <div class="hd">第 2 步：任务队列（把文件拖到这里）</div>
+          <div class="bd">
+            <div id="dropzone" class="dropzone">把 pdf/docx/txt/图片/xlsx/csv 拖到这里</div>
+            <div id="encodingHint" class="mini" style="margin-top:8px">编码检测：未检测</div>
+            <div id="fontHint" class="mini" style="margin-top:4px">字体检查：未检测</div>
+            <div id="ocrHint" class="mini" style="margin-top:4px">OCR 运行时：未检测</div>
+            <div id="taskStoreHint" class="mini" style="margin-top:4px">远程任务存储：未检测</div>
+            <div class="queue-actions">
+              <button id="btnQueueClear" class="secondary">清空队列</button>
+              <button id="btnInstallFonts" class="secondary">安装内置字体</button>
+            </div>
+            <table>
+              <thead><tr><th>#</th><th>文件名</th><th>路径</th><th>操作</th></tr></thead>
+              <tbody id="queueRows"><tr><td colspan="4" style="color:#75869a">队列为空</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card"><div class="hd">结果摘要</div><div class="bd"><div class="grid">
+          <div class="metric"><div class="k">任务ID</div><div class="v" id="mJob">-</div></div>
+          <div class="metric"><div class="k">是否成功</div><div class="v" id="mOk">-</div></div>
+          <div class="metric"><div class="k">耗时(秒)</div><div class="v" id="mSec">-</div></div>
+          <div class="metric"><div class="k">产物数</div><div class="v" id="mCnt">0</div></div>
+        </div></div></div>
+
+        <div class="card"><div class="hd">产物文件</div><div class="bd">
+          <table><thead><tr><th>ID</th><th>类型</th><th>路径</th><th>操作</th></tr></thead><tbody id="rows"><tr><td colspan="4" style="color:#75869a">暂无结果</td></tr></tbody></table>
+        </div></div>
+
+        <div class="card"><div class="hd">日志</div><div class="bd"><pre id="log">{}</pre></div></div>
+        <div class="card"><div class="hd">安装自检与诊断</div><div class="bd">
+          <div class="btns" style="margin-bottom:8px">
+            <button id="btnSelfCheck" class="secondary">执行自检</button>
+          </div>
+          <div id="selfCheckHint" class="mini" style="margin-bottom:6px">未执行</div>
+          <pre id="selfCheck">{}</pre>
+        </div></div>
+        <div class="card"><div class="hd">路由诊断</div><div class="bd">
+          <div class="btns" style="margin-bottom:8px">
+            <button id="btnRouteDiag" class="secondary">刷新诊断</button>
+            <button id="btnOpenRouteLog" class="secondary">打开路由日志目录</button>
+          </div>
+          <div id="routeDiagHint" class="mini" style="margin-bottom:6px">未加载</div>
+          <pre id="routeDiag">{}</pre>
+        </div></div>
+      </article>
+    </section>
+  </div>
+
+<script>
+const $ = (id)=>document.getElementById(id);
+const statusEl=$("status"), logEl=$("log"), rowsEl=$("rows"), queueRowsEl=$("queueRows"), dz=$("dropzone");
+const encodingHintEl=$("encodingHint"), fontHintEl=$("fontHint"), ocrHintEl=$("ocrHint");
+const taskStoreHintEl=$("taskStoreHint");
+const routeDiagEl=$("routeDiag"), routeDiagHintEl=$("routeDiagHint");
+const selfCheckEl=$("selfCheck"), selfCheckHintEl=$("selfCheckHint");
+const queuePaths = [];
+let latestEncodingSummary = { uncertainCount: 0, gbCount: 0, utfCount: 0 };
+let latestRouteSummaryMeta = null;
+
+const setStatus=(m,ok=true)=>{statusEl.className="status "+(ok?"ok":"bad");statusEl.textContent=m;};
+const show=(o)=>{logEl.textContent=JSON.stringify(o,null,2);};
+const cfgFromUi=()=>({mode:$("mode").value,baseUrl:$("baseUrl").value.trim(),apiKey:$("apiKey").value.trim()});
+
+function parseManualInputFiles(){
+  return String($("inputFiles").value||"")
+    .split(/\r?\n/)
+    .map(s=>s.trim())
+    .filter(Boolean);
+}
+
+function combinedInputFiles(){
+  const all=[...parseManualInputFiles(), ...queuePaths];
+  return Array.from(new Set(all));
+}
+
+const payloadFromUi=()=>({
+  owner:"desktop",
+  actor:"desktop",
+  ruleset_version:"v1",
+  params:{
+    report_title:$("reportTitle").value.trim(),
+    input_path:$("inputPath").value.trim(),
+    input_files:combinedInputFiles().join("\n"),
+    office_lang:$("officeLang").value,
+    office_theme:$("officeTheme").value,
+    office_quality_mode:$("officeQualityMode").value,
+    md_only:$("mdOnly").checked,
+    ocr_enabled:$("ocrEnabled").checked,
+    ocr_lang:$("ocrLang").value.trim(),
+    ocr_config:$("ocrConfig").value.trim()
+  }
+});
+
+function renderQueue(){
+  if(queuePaths.length===0){
+    queueRowsEl.innerHTML='<tr><td colspan="4" style="color:#75869a">队列为空</td></tr>';
+    return;
+  }
+  queueRowsEl.innerHTML="";
+  queuePaths.forEach((p, i) => {
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td");
+    const td2 = document.createElement("td");
+    const td3 = document.createElement("td");
+    const td4 = document.createElement("td");
+    const btn = document.createElement("button");
+    const name=(p.split(/[/\\]/).pop()||p);
+    td1.textContent = String(i + 1);
+    td2.textContent = name;
+    td3.className = "path";
+    td3.title = p;
+    td3.textContent = p;
+    btn.className = "secondary";
+    btn.textContent = "移除";
+    btn.onclick = () => {
+      if (Number.isInteger(i)) {
+        queuePaths.splice(i, 1);
+        renderQueue();
+      }
+    };
+    td4.appendChild(btn);
+    tr.append(td1, td2, td3, td4);
+    queueRowsEl.appendChild(tr);
+  });
+}
+
+async function inspectQueueEncoding(quiet=false){
+  try{
+    const files = combinedInputFiles();
+    if(files.length===0){
+      encodingHintEl.textContent = "编码检测：队列为空";
+      latestEncodingSummary = { uncertainCount: 0, gbCount: 0, utfCount: 0 };
+      return latestEncodingSummary;
+    }
+    const r = await window.aiwfDesktop.inspectEncoding(files);
+    const reps = Array.isArray(r?.reports)?r.reports:[];
+    const textReps = reps.filter(x=>x.kind==="text");
+    if(textReps.length===0){
+      encodingHintEl.textContent = "编码检测：当前无 txt/csv 文件";
+      latestEncodingSummary = { uncertainCount: 0, gbCount: 0, utfCount: 0 };
+      return latestEncodingSummary;
+    }
+    const uncertain = textReps.filter(x=>x.encoding==="uncertain");
+    const gb = textReps.filter(x=>x.encoding==="gb18030");
+    const utf8 = textReps.filter(x=>x.encoding.startsWith("utf-8") || x.encoding.startsWith("utf-16"));
+    encodingHintEl.textContent = `编码检测：UTF系 ${utf8.length} 个，GB18030 ${gb.length} 个，不确定 ${uncertain.length} 个`;
+    latestEncodingSummary = { uncertainCount: uncertain.length, gbCount: gb.length, utfCount: utf8.length };
+    if(!quiet && uncertain.length>0){
+      setStatus("检测到编码不确定文件，建议先另存为 UTF-8 再生成。", false);
+    }
+    return latestEncodingSummary;
+  }catch(e){
+    encodingHintEl.textContent = "编码检测：失败";
+    latestEncodingSummary = { uncertainCount: 0, gbCount: 0, utfCount: 0 };
+    return latestEncodingSummary;
+  }
+}
+
+async function inspectFonts(quiet=false){
+  try{
+    const r = await window.aiwfDesktop.checkFonts();
+    if(!r){
+      fontHintEl.textContent = "字体检查：失败";
+      return;
+    }
+    const missReq = Array.isArray(r.missing_required)
+      ? r.missing_required
+      : (Array.isArray(r.missing_core) ? r.missing_core : []);
+    const missOpt = Array.isArray(r.missing_optional)?r.missing_optional:[];
+    if(r.ok){
+      const coreInstalled = Array.isArray(r.core_installed) ? r.core_installed.join("/") : "";
+      fontHintEl.textContent = coreInstalled
+        ? `字体检查：通过（可用核心字体：${coreInstalled}）`
+        : "字体检查：通过";
+      return;
+    }
+    const details = `缺少核心字体: ${missReq.join("、")}` + (missOpt.length?`；可选缺失: ${missOpt.join("、")}`:"");
+    fontHintEl.textContent = `字体检查：${details}`;
+    if(!quiet){
+      setStatus("检测到核心中文字体缺失，可能导致 DOCX/PPTX 乱码或排版异常。", false);
+    }
+  }catch(e){
+    fontHintEl.textContent = "字体检查：失败";
+  }
+}
+
+async function inspectRuntime(quiet=false){
+  try{
+    const r = await window.aiwfDesktop.checkRuntime();
+    const t = r?.tesseract || {};
+    const p = r?.pdftoppm || {};
+    const langs = Array.isArray(r?.tesseract_langs?.langs) ? r.tesseract_langs.langs : [];
+    const hasChi = langs.includes("chi_sim") || langs.includes("chi_tra");
+    if(t.ok){
+      const pdfState = p.ok ? "PDF扫描件OCR可用" : "PDF扫描件OCR未启用(缺pdftoppm)";
+      const langState = hasChi ? "中文OCR语言包已安装" : "缺中文OCR语言包";
+      ocrHintEl.textContent = `OCR 运行时：可用（${t.path || t.source || "tesseract"}）| ${pdfState} | ${langState}`;
+      if(!quiet && !hasChi){
+        setStatus("检测到 Tesseract 但缺少 chi_sim 语言包，中文图片/PDF OCR 质量会下降。", false);
+      }
+    }else{
+      ocrHintEl.textContent = "OCR 运行时：未安装 Tesseract（图片将降级为文件信息）";
+      if(!quiet){
+        setStatus("未检测到 Tesseract，图片 OCR 会降级。可继续处理文本类文件。", false);
+      }
+    }
+  }catch(e){
+    ocrHintEl.textContent = "OCR 运行时：检测失败";
+  }
+}
+
+function fmtEpoch(epoch){
+  const n = Number(epoch || 0);
+  if(!Number.isFinite(n) || n <= 0) return "-";
+  try{
+    const d = new Date(n * 1000);
+    return d.toLocaleString("zh-CN", { hour12:false });
+  }catch{
+    return "-";
+  }
+}
+
+async function refreshTaskStoreStatus(quiet=true){
+  try{
+    const cfg = cfgFromUi();
+    const r = await window.aiwfDesktop.getTaskStoreStatus(cfg);
+    if(!r?.ok){
+      taskStoreHintEl.textContent = `远程任务存储：检测失败（${String(r?.error||"unknown")}）`;
+      if(!quiet) setStatus("远程任务存储检测失败，请检查 accel-rust 是否运行。", false);
+      return;
+    }
+    if(!r.enabled){
+      taskStoreHintEl.textContent = "远程任务存储：未启用（本地模式）";
+      return;
+    }
+    const ts = fmtEpoch(r.lastProbeEpoch);
+    if(r.healthy){
+      taskStoreHintEl.textContent = `远程任务存储：已启用且健康（失败计数 ${r.probeFailures||0}，最近探测 ${ts}）`;
+    }else{
+      taskStoreHintEl.textContent = `远程任务存储：已启用但异常（失败计数 ${r.probeFailures||0}，最近探测 ${ts}）`;
+      if(!quiet) setStatus("远程任务存储异常：任务共享落库可能不可用。", false);
+    }
+  }catch(e){
+    taskStoreHintEl.textContent = `远程任务存储：检测失败（${String(e)}）`;
+    if(!quiet) setStatus("远程任务存储检测失败。", false);
+  }
+}
+
+async function refreshRouteDiagnostics(){
+  try{
+    const r = await window.aiwfDesktop.getRouteMetricsSummary();
+    if(!r?.ok){
+      routeDiagHintEl.textContent = "加载失败";
+      routeDiagEl.textContent = JSON.stringify(r||{}, null, 2);
+      return;
+    }
+    latestRouteSummaryMeta = r;
+    if(!r.exists){
+      routeDiagHintEl.textContent = "暂无路由诊断数据（先打开 Workflow Studio 并操作画布）";
+      routeDiagEl.textContent = JSON.stringify({workflows:{}}, null, 2);
+      return;
+    }
+    const wf = r.summary?.workflows || {};
+    const cnt = Object.keys(wf).length;
+    routeDiagHintEl.textContent = `已加载 ${cnt} 个 workflow 路由统计，更新时间 ${r.summary?.updated_at || "-"}`;
+    routeDiagEl.textContent = JSON.stringify(r.summary || {}, null, 2);
+  }catch(e){
+    routeDiagHintEl.textContent = "加载失败";
+    routeDiagEl.textContent = JSON.stringify({error:String(e)}, null, 2);
+  }
+}
+
+async function refreshStartupSelfCheck(quiet=true){
+  try{
+    const r = await window.aiwfDesktop.startupSelfCheck(cfgFromUi());
+    selfCheckEl.textContent = JSON.stringify(r || {}, null, 2);
+    if(r?.ok){
+      selfCheckHintEl.textContent = "自检通过";
+      if(!quiet) setStatus("自检通过", true);
+    }else{
+      const issues = Array.isArray(r?.issues) ? r.issues : [];
+      selfCheckHintEl.textContent = `自检未通过：${issues.length} 个问题`;
+      if(!quiet) setStatus("自检发现问题，请按建议修复后重试。", false);
+    }
+  }catch(e){
+    selfCheckHintEl.textContent = "自检失败";
+    selfCheckEl.textContent = JSON.stringify({ ok:false, error:String(e) }, null, 2);
+    if(!quiet) setStatus("自检执行失败: "+e, false);
+  }
+}
+
+function addToQueue(paths){
+  const before=queuePaths.length;
+  paths.forEach(p=>{
+    const s=String(p||"").trim();
+    if(s && !queuePaths.includes(s)) queuePaths.push(s);
+  });
+  renderQueue();
+  inspectQueueEncoding(true);
+  const added=queuePaths.length-before;
+  setStatus(added>0?`已加入 ${added} 个文件到任务队列`:"没有新增文件（可能已在队列中）", true);
+}
+
+function getPathFromDroppedFile(file){
+  try{
+    const p = window.aiwfDesktop.getDroppedFilePath(file);
+    if(p) return String(p);
+  }catch(e){}
+  try{
+    if(file && file.path) return String(file.path);
+  }catch(e){}
+  return "";
+}
+
+function extractDropPaths(dt){
+  const out=[];
+  const files = Array.from(dt?.files || []);
+  files.forEach((f)=>{
+    const p = getPathFromDroppedFile(f);
+    if(p) out.push(p);
+  });
+  if(out.length===0){
+    const items = Array.from(dt?.items || []);
+    items.forEach((it)=>{
+      try{
+        const f = it.getAsFile ? it.getAsFile() : null;
+        const p = getPathFromDroppedFile(f);
+        if(p) out.push(p);
+      }catch(e){}
+    });
+  }
+  return Array.from(new Set(out));
+}
+
+function bindDropzone(){
+  const prevent=(e)=>{ e.preventDefault(); e.stopPropagation(); };
+  ["dragenter","dragover","dragleave","drop"].forEach(evt=>dz.addEventListener(evt, prevent));
+  ["dragenter","dragover"].forEach(evt=>dz.addEventListener(evt, ()=>dz.classList.add("active")));
+  ["dragleave","drop"].forEach(evt=>dz.addEventListener(evt, ()=>dz.classList.remove("active")));
+  dz.addEventListener("drop", (e)=>{
+    const paths=extractDropPaths(e.dataTransfer);
+    if(paths.length===0){
+      setStatus("未获取到拖拽文件路径。请先尝试点击“主数据文件”输入路径，或把文件放到本地磁盘后再拖拽。", false);
+      return;
+    }
+    addToQueue(paths);
+  });
+}
+
+function renderArtifacts(list){
+  if(!Array.isArray(list)||list.length===0){rowsEl.innerHTML='<tr><td colspan="4" style="color:#75869a">暂无结果</td></tr>';return;}
+  rowsEl.innerHTML = "";
+  list.forEach((a) => {
+    const tr = document.createElement("tr");
+    const id = String(a?.artifact_id || "-");
+    const kind = String(a?.kind || "-");
+    const p = String(a?.path || "-");
+    const td1 = document.createElement("td");
+    const td2 = document.createElement("td");
+    const td3 = document.createElement("td");
+    const td4 = document.createElement("td");
+    const btn = document.createElement("button");
+    td1.textContent = id;
+    td2.textContent = kind;
+    td3.className = "path";
+    td3.title = p;
+    td3.textContent = p;
+    btn.className = "secondary";
+    btn.textContent = "打开";
+    btn.onclick = () => window.aiwfDesktop.openPath(p);
+    td4.appendChild(btn);
+    tr.append(td1, td2, td3, td4);
+    rowsEl.appendChild(tr);
+  });
+}
+
+function renderMetrics(p){
+  $("mJob").textContent=p?.job_id||"-";
+  const ok=!!(p?.ok||p?.run?.ok);
+  $("mOk").textContent=ok?"成功":"失败";
+  $("mSec").textContent=String(p?.run?.seconds??p?.seconds??"-");
+  const c=Array.isArray(p?.artifacts)?p.artifacts.length:0;
+  $("mCnt").textContent=String(c);
+  renderArtifacts(p?.artifacts||[]);
+}
+
+async function init(){
+  const cfg=await window.aiwfDesktop.getConfig();
+  $("mode").value=cfg.mode||"offline_local";
+  $("baseUrl").value=cfg.baseUrl||"http://127.0.0.1:18080";
+  $("apiKey").value=cfg.apiKey||"";
+  bindDropzone();
+  renderQueue();
+  inspectQueueEncoding(true);
+  inspectFonts(true);
+  inspectRuntime(true);
+  refreshTaskStoreStatus(true);
+  refreshStartupSelfCheck(true);
+  refreshRouteDiagnostics();
+}
+
+$("btnQueueClear").onclick=()=>{ queuePaths.splice(0, queuePaths.length); renderQueue(); inspectQueueEncoding(true); setStatus("已清空任务队列", true); };
+$("btnInstallFonts").onclick=async()=>{
+  setStatus("正在安装内置字体...");
+  try{
+    const r = await window.aiwfDesktop.installBundledFonts();
+    if(!r || !r.ok){
+      setStatus("安装字体失败: "+(r?.reason||"unknown"), false);
+      return;
+    }
+    await inspectFonts(true);
+    const n = Number(r.installed||0);
+    const s = Number(r.skipped||0);
+    setStatus(`字体安装完成（新增 ${n}，已存在 ${s}）`, true);
+  }catch(e){
+    setStatus("安装字体失败: "+e, false);
+  }
+};
+$("btnSave").onclick=async()=>{await window.aiwfDesktop.saveConfig(cfgFromUi());setStatus("配置已保存",true);};
+$("btnHealth").onclick=async()=>{
+  setStatus("检查中...");
+  try{const j=await window.aiwfDesktop.health(cfgFromUi());show(j);setStatus(j.ok?"可用":"不可用",!!j.ok);}catch(e){setStatus("检查失败: "+e,false)}
+  await refreshTaskStoreStatus(true);
+};
+$("btnWorkflow").onclick=async()=>{
+  try{
+    await window.aiwfDesktop.openWorkflowStudio();
+    setStatus("已打开 Workflow Studio", true);
+  }catch(e){
+    setStatus("打开 Workflow Studio 失败: "+e, false);
+  }
+};
+$("btnRouteDiag").onclick=async()=>{ await refreshRouteDiagnostics(); };
+$("btnSelfCheck").onclick=async()=>{ await refreshStartupSelfCheck(false); };
+$("btnOpenRouteLog").onclick=async()=>{
+  try{
+    if(!latestRouteSummaryMeta) latestRouteSummaryMeta = await window.aiwfDesktop.getRouteMetricsSummary();
+    const dir = latestRouteSummaryMeta?.log_dir || "";
+    if(!dir){ setStatus("未找到路由日志目录", false); return; }
+    await window.aiwfDesktop.openPath(dir);
+    setStatus("已打开路由日志目录", true);
+  }catch(e){
+    setStatus("打开路由日志目录失败: "+e, false);
+  }
+};
+$("btnRun").onclick=async()=>{
+  setStatus("正在生成...");
+  try{
+    const enc = await inspectQueueEncoding(false);
+    if($("strictEncodingMode").checked && (enc?.uncertainCount||0) > 0){
+      setStatus("严格编码模式已开启：存在不确定编码文件，已阻止运行。请先转成 UTF-8。", false);
+      return;
+    }
+    const payload = payloadFromUi();
+    const files = combinedInputFiles();
+    if ($("autoNormalizeEncoding").checked && files.length > 0) {
+      const norm = await window.aiwfDesktop.normalizeEncoding(files);
+      if (norm?.ok) {
+        const mapped = (norm.items || []).map(x => String(x.output || x.source || "")).filter(Boolean);
+        payload.params.input_files = mapped.join("\n");
+        if ((norm.convertedCount || 0) > 0) {
+          setStatus(`已自动转换 ${norm.convertedCount} 个文件编码为 UTF-8，继续生成...`, true);
+        }
+      }
+    }
+    const j=await window.aiwfDesktop.runCleaning(payload,cfgFromUi());
+    show(j);renderMetrics(j);
+    setStatus(j.ok?"生成完成":"生成失败",!!j.ok);
+  }catch(e){setStatus("运行失败: "+e,false)}
+};
+
+$("mode").addEventListener("change", ()=>{ refreshTaskStoreStatus(true); });
+
+init();
+</script>
+</body>
+</html>

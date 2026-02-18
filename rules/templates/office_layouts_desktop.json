@@ -1,0 +1,18 @@
+{
+  "default": {
+    "xlsx_data_sheet_name": "cleaned",
+    "xlsx_summary_sheet_name": "summary",
+    "docx_max_table_rows": 20,
+    "pptx_sample_rows": 8,
+    "pptx_max_findings": 6,
+    "pptx_max_evidence": 6
+  },
+  "assignment": {
+    "docx_max_table_rows": 24,
+    "pptx_sample_rows": 10
+  },
+  "debate_plus": {
+    "pptx_max_findings": 8,
+    "pptx_max_evidence": 8
+  }
+}
