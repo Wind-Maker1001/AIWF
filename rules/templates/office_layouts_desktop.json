@@ -1,18 +1,32 @@
-{
+﻿{
   "default": {
     "xlsx_data_sheet_name": "cleaned",
     "xlsx_summary_sheet_name": "summary",
-    "docx_max_table_rows": 20,
+    "docx_max_table_rows": 22,
     "pptx_sample_rows": 8,
     "pptx_max_findings": 6,
-    "pptx_max_evidence": 6
+    "pptx_max_evidence": 6,
+    "pptx_evidence_page_size": 6
   },
   "assignment": {
-    "docx_max_table_rows": 24,
-    "pptx_sample_rows": 10
+    "docx_max_table_rows": 28,
+    "pptx_sample_rows": 10,
+    "pptx_max_findings": 8,
+    "pptx_max_evidence": 10,
+    "pptx_evidence_page_size": 6
   },
   "debate_plus": {
-    "pptx_max_findings": 8,
-    "pptx_max_evidence": 8
+    "docx_max_table_rows": 26,
+    "pptx_sample_rows": 10,
+    "pptx_max_findings": 9,
+    "pptx_max_evidence": 12,
+    "pptx_evidence_page_size": 7
+  },
+  "academic": {
+    "docx_max_table_rows": 24,
+    "pptx_sample_rows": 8,
+    "pptx_max_findings": 7,
+    "pptx_max_evidence": 8,
+    "pptx_evidence_page_size": 6
   }
 }

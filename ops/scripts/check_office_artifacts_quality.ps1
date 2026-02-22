@@ -27,7 +27,14 @@ from docx import Document
 from pptx import Presentation
 
 xlsx_path, docx_path, pptx_path = sys.argv[1], sys.argv[2], sys.argv[3]
-zh_font_allow = {"Microsoft YaHei", "SimHei", "SimSun"}
+zh_font_allow = {
+    "Microsoft YaHei",
+    "SimHei",
+    "SimSun",
+    "DengXian",
+    "Noto Sans CJK SC",
+    "Source Han Sans SC"
+}
 
 def has_mojibake(s: str) -> bool:
     if not s:
@@ -180,10 +187,13 @@ sys.exit(0 if out["ok"] else 2)
 '@
 
 $json = $pyCheck | python - $XlsxPath $DocxPath $PptxPath
-if ($LASTEXITCODE -ne 0) {
-  throw "office quality python check failed"
+$pyCode = $LASTEXITCODE
+try {
+  $report = $json | ConvertFrom-Json
+} catch {
+  Write-Host $json
+  throw "office quality python check failed: invalid json output"
 }
-$report = $json | ConvertFrom-Json
 
 Write-Host ""
 Write-Host "=== Office Quality Report ==="
@@ -207,4 +217,3 @@ if ([int]$report.score -lt $MinScore) {
 }
 
 Ok "office artifact quality gate passed"
-

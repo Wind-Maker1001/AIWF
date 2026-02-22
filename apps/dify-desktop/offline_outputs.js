@@ -1,8 +1,9 @@
 ﻿const fs = require("fs");
 const path = require("path");
 const ExcelJS = require("exceljs");
-const { Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, TextRun, WidthType } = require("docx");
+const { Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, TextRun, WidthType, ImageRun } = require("docx");
 const PptxGenJS = require("pptxgenjs");
+const imageSize = require("image-size");
 const {
   normalizeLineText,
   isLikelyCorruptedText,
@@ -10,6 +11,71 @@ const {
 } = require("./offline_paper");
 
 function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOfficeLayout }) {
+  function readImageSize(filePath) {
+    try {
+      if (typeof imageSize === "function") return imageSize(filePath);
+      if (imageSize && typeof imageSize.imageSize === "function") return imageSize.imageSize(filePath);
+      if (imageSize && typeof imageSize.default === "function") return imageSize.default(filePath);
+    } catch {}
+    return { width: 1, height: 1 };
+  }
+
+  function cleanOfficeText(input, maxLen = 260) {
+    let s = normalizeLineText(String(input || ""));
+    if (isLikelyCorruptedText(s)) {
+      s = s.replace(/\uFFFD/g, "").replace(/[^\x09\x0A\x0D\x20-\x7E\u4E00-\u9FFF。，、；：？！“”‘’（）【】《》—…·\-_/:%.,()]/g, "");
+    }
+    s = s.replace(/\s+/g, " ").trim();
+    if (s.length > maxLen) return `${s.slice(0, maxLen)}...`;
+    return s;
+  }
+
+  function toBulletList(items, prefix = "• ") {
+    return (items || []).map((x) => `${prefix}${cleanOfficeText(x, 180)}`);
+  }
+
+  function paginateBullets(items, pageSize = 6) {
+    const out = [];
+    for (let i = 0; i < items.length; i += pageSize) out.push(items.slice(i, i + pageSize));
+    return out.length > 0 ? out : [[]];
+  }
+
+  function fitRect(srcW, srcH, dstW, dstH) {
+    if (!(srcW > 0) || !(srcH > 0) || !(dstW > 0) || !(dstH > 0)) return { w: dstW, h: dstH };
+    const r = Math.min(dstW / srcW, dstH / srcH);
+    return { w: srcW * r, h: srcH * r };
+  }
+
+  function pickIllustrationImage(rows, options = {}) {
+    const fromInputFiles = () => {
+      const raw = options && options.input_files;
+      if (!raw) return "";
+      try {
+        const arr = Array.isArray(raw) ? raw : JSON.parse(String(raw));
+        if (!Array.isArray(arr)) return "";
+        for (const p0 of arr) {
+          const p = String(p0 || "");
+          const ext = path.extname(p).toLowerCase();
+          if (![".png", ".jpg", ".jpeg", ".bmp", ".webp"].includes(ext)) continue;
+          if (fs.existsSync(p)) return p;
+        }
+      } catch {}
+      return "";
+    };
+
+    const viaInput = fromInputFiles();
+    if (viaInput) return viaInput;
+
+    for (const r of rows || []) {
+      const p = String(r.source_file || "");
+      if (!p) continue;
+      const ext = path.extname(p).toLowerCase();
+      if (![".png", ".jpg", ".jpeg", ".bmp", ".webp"].includes(ext)) continue;
+      if (fs.existsSync(p)) return p;
+    }
+    return "";
+  }
+
   function unionColumns(rows) {
     const pref = ["source_file", "source_type", "row_no", "id", "text", "amount"];
     const set = new Set();
@@ -67,7 +133,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     for (const r of rows || []) {
       const sourceType = String(r.source_type || "");
       if (!["pdf", "pdf_ocr", "docx", "txt", "image_ocr", "pdf_md", "pdf_ocr_md", "docx_md", "pdf_md_fallback"].includes(sourceType)) continue;
-      const text = normalizeLineText(r.text || "");
+        const text = cleanOfficeText(r.text || "", 240);
       if (text.length < 40) continue;
       if (isLikelyCorruptedText(text)) continue;
       if (looksLikeReferenceEntry(text)) continue;
@@ -88,7 +154,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       for (const r of rows || []) {
         const sourceType = String(r.source_type || "");
         if (!["pdf", "pdf_ocr", "docx", "txt", "image_ocr", "pdf_md", "pdf_ocr_md", "docx_md", "pdf_md_fallback"].includes(sourceType)) continue;
-        const text = normalizeLineText(r.text || "");
+      const text = cleanOfficeText(r.text || "", 240);
         if (text.length < 40 || isLikelyCorruptedText(text) || looksLikeReferenceEntry(text)) continue;
         const key = text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, "");
         if (!key || key.length < 20 || seen.has(key)) continue;
@@ -165,6 +231,26 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       });
     }
 
+    const visual = wb.addWorksheet("visual");
+    visual.columns = [{ width: 24 }, { width: 28 }, { width: 18 }, { width: 18 }, { width: 18 }];
+    visual.addRow(["可视化说明", "内容"]);
+    visual.getRow(1).eachCell((cell) => {
+      cell.font = { name: fontName, bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${theme.primary}` } };
+    });
+    visual.addRow(["主题", theme.title]);
+    visual.addRow(["报告", cleanOfficeText(options.report_title || "", 80) || "离线作业成品"]);
+    visual.addRow(["核心发现", buildDataQualityInsights(rows).slice(0, 1)[0] || "未发现显著结构冲突"]);
+    const visualImage = pickIllustrationImage(rows, options);
+    if (visualImage) {
+      try {
+        const ext = path.extname(visualImage).slice(1).toLowerCase();
+        const imgId = wb.addImage({ filename: visualImage, extension: ext === "jpg" ? "jpeg" : ext });
+        visual.addImage(imgId, { tl: { col: 2.2, row: 1.4 }, ext: { width: 540, height: 300 } });
+        visual.addRow(["插图来源", path.basename(visualImage)]);
+      } catch {}
+    }
+
     if (warnings.length > 0) {
       const warn = wb.addWorksheet("warnings");
       warn.addRow(["告警"]);
@@ -204,11 +290,35 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     const fontName = resolveOfficeFont(options, warnings);
     const insights = buildDataQualityInsights(rows);
     const highlights = buildEvidenceHighlights(rows, 10);
+    const docImage = pickIllustrationImage(rows, options);
     const cols = rows.length > 0 ? unionColumns(rows) : ["id", "amount", "text"];
     const docxMaxRows = Math.max(8, Number(layout.docx_max_table_rows || 20));
     const table = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: makeTableRowsForDocx(rows, cols, fontName, docxMaxRows),
+    });
+    const qualityTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "质量指标", bold: true, font: fontName })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "数值", bold: true, font: fontName })] })] }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "输入行", font: fontName })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(quality.input_rows || 0), font: fontName })] })] }),
+          ],
+        }),
+        new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "输出行", font: fontName })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(quality.output_rows || 0), font: fontName })] })] }),
+          ],
+        }),
+      ],
     });
 
     const children = [
@@ -219,6 +329,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       new Paragraph({ children: [new TextRun({ text: `主题: ${theme.title}   质量模式: ${highQuality ? "high" : "standard"}`, font: fontName })] }),
       new Paragraph({ children: [new TextRun({ text: `任务ID: ${jobId}`, font: fontName })] }),
       new Paragraph({ children: [new TextRun({ text: `输入行: ${quality.input_rows}，输出行: ${quality.output_rows}`, font: fontName })] }),
+      qualityTable,
       new Paragraph(""),
       new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: "核心发现", font: fontName, bold: true })] }),
       ...((insights.length ? insights : ["数据清洗过程完成，当前未发现显著结构冲突。"])
@@ -228,11 +339,35 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: "证据摘录", font: fontName, bold: true })] }),
       ...((highlights.length ? highlights : [{ source: "N/A", text: "未提取到高质量证据摘录，请检查源文件可读性。" }])
         .slice(0, 10)
-        .map((x) => new Paragraph({ children: [new TextRun({ text: `- [${x.source}] ${x.text}`, font: fontName })] }))),
+        .map((x) => new Paragraph({ children: [new TextRun({ text: `- [${cleanOfficeText(x.source, 60)}] ${cleanOfficeText(x.text, 180)}`, font: fontName })] }))),
       new Paragraph(""),
       new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: "样例数据（前 20 行）", font: fontName, bold: true })] }),
       table,
     ];
+
+    if (docImage) {
+      try {
+        const imgBuf = fs.readFileSync(docImage);
+        const ext = path.extname(docImage).toLowerCase();
+        const docImageType = ext === ".jpg" || ext === ".jpeg"
+          ? "jpg"
+          : ext === ".gif"
+            ? "gif"
+            : "png";
+        children.push(new Paragraph(""));
+        children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: "图示样本", font: fontName, bold: true })] }));
+        children.push(new Paragraph({
+          children: [
+            new ImageRun({
+              data: imgBuf,
+              type: docImageType,
+              transformation: { width: 520, height: 290 },
+            }),
+          ],
+        }));
+        children.push(new Paragraph({ children: [new TextRun({ text: `来源: ${path.basename(docImage)}`, font: fontName })] }));
+      } catch {}
+    }
 
     if (warnings.length > 0) {
       children.push(new Paragraph(""));
@@ -253,7 +388,8 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     const insights = buildDataQualityInsights(rows);
     const maxFindings = Math.max(3, Number(layout.pptx_max_findings || 6));
     const maxEvidence = Math.max(3, Number(layout.pptx_max_evidence || 6));
-    const highlights = buildEvidenceHighlights(rows, maxEvidence);
+    const highlights = buildEvidenceHighlights(rows, Math.max(maxEvidence, 12));
+    const pptImage = pickIllustrationImage(rows, options);
     const pptx = new PptxGenJS();
     pptx.layout = "LAYOUT_WIDE";
 
@@ -263,7 +399,17 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     s1.addText(reportTitle || "离线清洗简报", { x: 0.4, y: 0.3, w: 11.8, h: 0.7, fontSize: highQuality ? 34 : 30, bold: true, color: theme.primary, fontFace });
     s1.addText(`离线模式：无网络可用  |  主题：${theme.title}`, { x: 0.5, y: 1.1, w: 10, h: 0.5, fontSize: 16, color: theme.secondary, fontFace });
     s1.addShape(pptx.ShapeType.roundRect, { x: 0.5, y: 1.8, w: 12.2, h: 4.7, fill: { color: theme.bg }, line: { color: theme.secondary } });
-    s1.addText(`输入行: ${quality.input_rows}    输出行: ${quality.output_rows}    去重移除: ${quality.duplicate_rows_removed}`, { x: 0.8, y: 2.2, w: 11, h: 0.7, fontSize: 20, fontFace });
+    s1.addText(`输入行: ${quality.input_rows}    输出行: ${quality.output_rows}    去重移除: ${quality.duplicate_rows_removed}`, { x: 0.8, y: 2.1, w: 11, h: 0.7, fontSize: 20, fontFace });
+    if (pptImage) {
+      try {
+        const dim = readImageSize(pptImage);
+        const fit = fitRect(Number(dim.width || 1), Number(dim.height || 1), 5.0, 2.4);
+        const x = 0.9 + (5.0 - fit.w) / 2;
+        const y = 2.9 + (2.4 - fit.h) / 2;
+        s1.addImage({ path: pptImage, x, y, w: fit.w, h: fit.h });
+        s1.addText(`图示来源: ${path.basename(pptImage)}`, { x: 0.9, y: 5.4, w: 5.2, h: 0.25, fontSize: 10, color: theme.secondary, fontFace });
+      } catch {}
+    }
 
     const s2 = pptx.addSlide();
     s2.background = { color: theme.bg };
@@ -315,21 +461,26 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       } catch {}
     }
 
-    const sEvidence = pptx.addSlide();
-    sEvidence.background = { color: theme.bg };
-    sEvidence.addText("证据摘录", { x: 0.5, y: 0.4, w: 4, h: 0.5, fontSize: 22, bold: true, fontFace });
-    const evText = (highlights.length ? highlights : [{ source: "N/A", text: "未提取到高质量证据摘录，请检查源文件可读性。" }])
-      .slice(0, 6)
-      .map((x) => `• [${x.source}] ${x.text}`)
-      .join("\n");
-    sEvidence.addText(evText, { x: 0.6, y: 1.0, w: 12.0, h: 5.9, fontSize: 14, color: "1F2D3D", fontFace });
+    const evBullets = (highlights.length ? highlights : [{ source: "N/A", text: "未提取到高质量证据摘录，请检查源文件可读性。" }])
+      .map((x) => `[${cleanOfficeText(x.source, 40)}] ${cleanOfficeText(x.text, 150)}`);
+    const evPages = paginateBullets(evBullets, Math.max(4, Math.min(7, Number(layout.pptx_evidence_page_size || 6))));
+    evPages.forEach((page, idx) => {
+      const sEvidence = pptx.addSlide();
+      sEvidence.background = { color: theme.bg };
+      sEvidence.addText(`证据摘录${evPages.length > 1 ? ` (${idx + 1}/${evPages.length})` : ""}`, { x: 0.5, y: 0.4, w: 6.5, h: 0.5, fontSize: 22, bold: true, fontFace });
+      sEvidence.addText(toBulletList(page).join("\n"), {
+        x: 0.6, y: 1.0, w: 12.0, h: 5.7, fontSize: 13.5, color: "1F2D3D", fontFace, breakLine: true, valign: "top",
+      });
+    });
 
     if (warnings.length > 0) {
-      const sWarn = pptx.addSlide();
-      sWarn.background = { color: theme.bg };
-      sWarn.addText("告警", { x: 0.5, y: 0.4, w: 4, h: 0.5, fontSize: 22, bold: true, color: "B42318", fontFace });
-      const content = warnings.slice(0, 12).map((w) => `• ${w}`).join("\n");
-      sWarn.addText(content, { x: 0.6, y: 1.0, w: 12.0, h: 5.8, fontSize: 16, color: "1F2D3D", fontFace });
+      const warnPages = paginateBullets(warnings.map((w) => cleanOfficeText(w, 140)), 8);
+      warnPages.forEach((page, idx) => {
+        const sWarn = pptx.addSlide();
+        sWarn.background = { color: theme.bg };
+        sWarn.addText(`告警${warnPages.length > 1 ? ` (${idx + 1}/${warnPages.length})` : ""}`, { x: 0.5, y: 0.4, w: 4, h: 0.5, fontSize: 22, bold: true, color: "B42318", fontFace });
+        sWarn.addText(toBulletList(page).join("\n"), { x: 0.6, y: 1.0, w: 12.0, h: 5.7, fontSize: 14.5, color: "1F2D3D", fontFace, breakLine: true, valign: "top" });
+      });
     }
 
     if (highQuality) {

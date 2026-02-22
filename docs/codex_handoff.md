@@ -37,10 +37,14 @@
 - Office output quality:
   - desktop and glue both support replaceable layout/theme templates
   - paper-clean profile configurable for citation/reference stripping
+  - desktop office outputs now enforce anti-overflow paging in PPTX evidence/warnings
+  - desktop docx/xlsx/pptx support mixed insertion of table + image artifacts
+  - desktop office text path includes mojibake fallback cleanup for corrupted lines
 
 ## 3) Decoupled Templates / Profiles
 - Desktop office themes: `rules/templates/office_themes_desktop.json`
 - Desktop office layouts: `rules/templates/office_layouts_desktop.json`
+- Assignment template pack v1 defaults landed in desktop theme/layout files
 - Glue office layouts: `rules/templates/office_layouts.json`
 - Paper markdown clean profile: `rules/templates/paper_clean_profile.json`
 - Observability assets:
@@ -85,8 +89,9 @@
 3. `mvn -q test` (in `apps/base-java`)
 4. `python -m unittest tests.test_cleaning_flow -v` (in `apps/glue-python`)
 5. `npm run test:unit` and `npm run test:workflow-ui` (in `apps/dify-desktop`)
+6. `powershell -ExecutionPolicy Bypass -File .\ops\scripts\acceptance_desktop_real_sample.ps1`
 
-Latest full verification run: **2026-02-19**, all passed.
+Latest desktop real-sample acceptance run: **2026-02-22**, passed.
 
 ## 6) Known Risks (Current)
 - Medium: workflow routing fallback ratio in dense random graphs remains around `~0.48`; passes gate, but visual quality headroom exists.

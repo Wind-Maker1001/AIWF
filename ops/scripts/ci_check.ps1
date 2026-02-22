@@ -9,6 +9,7 @@ param(
   [switch]$SkipPythonTests,
   [switch]$SkipRegressionQuality,
   [switch]$SkipDesktopUiTests,
+  [switch]$SkipDesktopRealSampleAcceptance,
   [switch]$SkipDesktopStress,
   [switch]$SkipDesktopPackageTests,
   [switch]$SkipRoutingBench,
@@ -75,6 +76,7 @@ $docsCheckScript = Join-Path $PSScriptRoot "check_docs_links.ps1"
 $encodingCheckScript = Join-Path $PSScriptRoot "check_encoding_health.ps1"
 $desktopPkgCheckScript = Join-Path $PSScriptRoot "check_desktop_packaged_startup.ps1"
 $desktopLitePkgCheckScript = Join-Path $PSScriptRoot "check_desktop_lite_packaged_startup.ps1"
+$desktopRealSampleScript = Join-Path $PSScriptRoot "acceptance_desktop_real_sample.ps1"
 $regressionQualityScript = Join-Path $PSScriptRoot "run_regression_quality.ps1"
 $asyncBenchTrendScript = Join-Path $PSScriptRoot "check_async_bench_trend.ps1"
 $openApiSdkSyncScript = Join-Path $PSScriptRoot "check_openapi_sdk_sync.ps1"
@@ -290,6 +292,20 @@ if (-not $SkipDesktopUiTests) {
     throw "desktop workflow UI tests failed"
   }
   Ok "desktop workflow UI tests passed"
+
+  if (-not $SkipDesktopRealSampleAcceptance) {
+    if (-not (Test-Path $desktopRealSampleScript)) {
+      throw "desktop real sample acceptance script not found: $desktopRealSampleScript"
+    }
+    Info "running desktop real sample acceptance"
+    powershell -ExecutionPolicy Bypass -File $desktopRealSampleScript -Root $root
+    if ($LASTEXITCODE -ne 0) {
+      throw "desktop real sample acceptance failed"
+    }
+    Ok "desktop real sample acceptance passed"
+  } else {
+    Warn "skip desktop real sample acceptance"
+  }
 } else {
   Warn "skip desktop workflow UI tests"
 }

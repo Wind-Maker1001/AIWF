@@ -113,6 +113,8 @@ function resolveOfficeFont(params = {}, warnings = []) {
 
   const candidates = [
     { family: "Microsoft YaHei", files: ["msyh.ttc", "msyh.ttf", "msyhbd.ttc", "msyhbd.ttf"] },
+    { family: "Noto Sans CJK SC", files: ["NotoSansCJKsc-Regular.otf", "NotoSansCJK-Regular.ttc"] },
+    { family: "Source Han Sans SC", files: ["SourceHanSansSC-Regular.otf"] },
     { family: "SimHei", files: ["simhei.ttf"] },
     { family: "SimSun", files: ["simsun.ttc", "simsun.ttf"] },
     { family: "DengXian", files: ["deng.ttf", "dengb.ttf"] },
