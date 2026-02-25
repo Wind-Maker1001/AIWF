@@ -72,6 +72,12 @@
     .edge-line.active{stroke:#e67e22 !important;stroke-width:3}
     .edge-ghost{pointer-events:none}
     .hint{font-size:12px;color:#5e7389;margin-bottom:8px}
+    .cfg-meta{font-size:12px;color:#5e7389;margin-bottom:6px}
+    .cfg-mode{margin-bottom:6px}
+    .cfg-form{border:1px solid #d8e3ef;border-radius:8px;padding:8px;background:#f8fbff;max-height:280px;overflow:auto}
+    .cfg-field{margin-bottom:8px}
+    .cfg-help{font-size:12px;color:#6a7f95}
+    .cfg-text{min-height:220px;font-family:Consolas, "Courier New", monospace}
     table{width:100%;border-collapse:collapse;font-size:12px}
     th,td{border-bottom:1px solid #edf2f7;padding:6px;text-align:left}
     th{background:#f3f7fd;color:#53687e}
@@ -98,10 +104,25 @@
           <input id="nodeType" value="ingest_files" />
           <label>工作流名称</label>
           <input id="workflowName" value="自由编排流程" />
+          <label>模板市场（本地）</label>
+          <select id="templateSelect" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+            <option value="">选择模板...</option>
+          </select>
+          <label>模板参数（可视化）</label>
+          <div id="templateParamsForm" class="cfg-form" style="max-height:220px"></div>
+          <label>模板参数(JSON)</label>
+          <textarea id="templateParams" placeholder='{"title":"我的报告","threshold":0.8}'></textarea>
+          <div class="btns" style="margin-top:8px">
+            <button id="btnApplyTemplate" class="btn secondary">应用模板</button>
+            <button id="btnSaveTemplate" class="btn secondary">保存为模板</button>
+          </div>
           <label>输入文件（每行一个）</label>
           <textarea id="inputFiles"></textarea>
           <label>报告标题</label>
           <input id="reportTitle" value="Workflow 任务" />
+          <label><input id="exportCanonicalBundle" type="checkbox" style="width:auto;margin-right:6px" />导出熟肉包（Markdown + metadata + lineage）</label>
+          <label>熟肉标题</label>
+          <input id="canonicalTitle" value="AIWF 熟肉语料" />
           <label>外部 AI Endpoint</label>
           <input id="aiEndpoint" placeholder="https://api.xxx.com/v1/chat/completions" />
           <label>外部 AI Key</label>
@@ -111,12 +132,34 @@
           <label>Rust Endpoint</label>
           <input id="rustEndpoint" value="http://127.0.0.1:18082" />
           <label><input id="rustRequired" type="checkbox" checked style="width:auto;margin-right:6px" />Rust 不可用时阻断</label>
+          <label><input id="chipletIsolationEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />启用节点隔离执行</label>
+          <label>隔离模式</label>
+          <select id="chipletIsolationMode" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+            <option value="high_risk">high_risk（默认高风险）</option>
+            <option value="all">all（全部节点）</option>
+            <option value="off">off（关闭）</option>
+          </select>
+          <label>指定隔离节点类型（逗号或分号分隔）</label>
+          <input id="chipletIsolatedTypes" placeholder="ai_refine,ai_strategy_v1,compute_rust" />
+          <label>Sandbox 最大时长(ms)</label>
+          <input id="sandboxMaxDurationMs" value="180000" />
+          <label>Sandbox 最大CPU(ms)</label>
+          <input id="sandboxMaxCpuMs" value="120000" />
+          <label>Sandbox 最大内存(MB)</label>
+          <input id="sandboxMaxRssMb" value="512" />
+          <label>Sandbox 最大输出字节</label>
+          <input id="sandboxMaxOutputBytes" value="2000000" />
           <label><input id="snapGrid" type="checkbox" checked style="width:auto;margin-right:6px" />拖拽吸附网格</label>
           <div class="btns" style="margin-top:8px">
             <button id="btnRun" class="btn">运行</button>
+            <button id="btnEnqueueRun" class="btn secondary">加入队列</button>
+            <button id="btnQueueRefresh" class="btn secondary">刷新队列</button>
+            <button id="btnQueuePause" class="btn secondary">暂停队列</button>
+            <button id="btnQueueResume" class="btn secondary">恢复队列</button>
             <button id="btnExport" class="btn secondary">导出流程 JSON</button>
             <button id="btnSaveFlow" class="btn secondary">保存流程</button>
             <button id="btnLoadFlow" class="btn secondary">加载流程</button>
+            <button id="btnVersionsRefresh" class="btn secondary">版本列表</button>
           </div>
           <div id="status" class="status"></div>
         </div>
@@ -137,7 +180,7 @@
             <button id="btnDistributeV" class="btn secondary">垂直分布</button>
             <button id="btnUnlinkSelected" class="btn danger">取消框选节点连线</button>
           </div>
-          <div class="hint">连接方式：按住节点右侧绿色输出点，拖到目标节点左侧蓝色输入点。多选可用框选或 Shift/Ctrl 点击。点击连线可取消该连线。</div>
+          <div class="hint">连接方式：按住节点右侧绿色输出点，拖到目标节点左侧蓝色输入点。多选可用框选或 Shift/Ctrl 点击。点击连线可编辑条件，Shift+点击连线可删除。</div>
           <div id="canvasWrap" class="canvas-wrap">
             <div id="canvasSurface" class="canvas-surface">
               <svg id="edges" class="edges"></svg>
@@ -151,10 +194,106 @@
         </div>
       </article>
       <article class="card">
-        <div class="hd">运行状态</div>
+        <div class="hd">节点配置与运行状态</div>
         <div class="bd">
+          <div class="cfg-meta" id="selectedNodeInfo">未选中节点</div>
+          <div class="cfg-meta" id="selectedEdgeInfo">未选中连线</div>
+          <div class="cfg-form" id="edgeConfigForm">
+            <div class="cfg-help">点击画布上的连线后可编辑条件（when），支持布尔值、字符串路径或对象条件。</div>
+            <label>条件类型</label>
+            <select id="edgeWhenKind" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+              <option value="none">无条件（总是执行）</option>
+              <option value="bool">布尔条件</option>
+              <option value="path">路径条件（字符串）</option>
+              <option value="rule">规则条件（对象）</option>
+            </select>
+            <div id="edgeWhenBoolWrap" style="margin-top:6px;display:none">
+              <label>布尔值</label>
+              <select id="edgeWhenBool" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </div>
+            <div id="edgeWhenPathWrap" style="margin-top:6px;display:none">
+              <label>路径（例如 `ok` / `detail.passed`）</label>
+              <input id="edgeWhenPath" placeholder="ok" list="edgePathHints" />
+              <datalist id="edgePathHints"></datalist>
+              <label>路径建议（带来源）</label>
+              <select id="edgePathHintSelect" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+                <option value="">选择建议...</option>
+              </select>
+            </div>
+            <div id="edgeWhenRuleWrap" style="margin-top:6px;display:none">
+              <label>字段</label>
+              <input id="edgeWhenField" placeholder="approved" list="edgeFieldHints" />
+              <datalist id="edgeFieldHints"></datalist>
+              <label>字段建议（带来源）</label>
+              <select id="edgeFieldHintSelect" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+                <option value="">选择建议...</option>
+              </select>
+              <label>操作符</label>
+              <select id="edgeWhenOp" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+                <option value="eq">eq</option>
+                <option value="ne">ne</option>
+                <option value="gt">gt</option>
+                <option value="gte">gte</option>
+                <option value="lt">lt</option>
+                <option value="lte">lte</option>
+                <option value="in">in</option>
+                <option value="not_in">not_in</option>
+                <option value="contains">contains</option>
+                <option value="exists">exists</option>
+                <option value="not_exists">not_exists</option>
+              </select>
+              <label>值（JSON，可选）</label>
+              <input id="edgeWhenValue" placeholder="true / &quot;yes&quot; / [1,2]" />
+            </div>
+            <div class="btns" style="margin-top:8px">
+              <button id="btnBuildEdgeWhen" class="btn secondary">生成到 JSON</button>
+              <button id="btnParseEdgeWhen" class="btn secondary">JSON 回填构造器</button>
+            </div>
+            <label>when(JSON，可留空)</label>
+            <textarea id="edgeWhenText" class="cfg-text" style="min-height:120px"></textarea>
+            <div class="btns" style="margin-top:8px">
+              <button id="btnApplyEdgeCfg" class="btn">应用连线条件</button>
+              <button id="btnClearEdgeCfg" class="btn secondary">清空条件</button>
+            </div>
+          </div>
+          <div class="btns cfg-mode">
+            <button id="btnCfgForm" class="btn secondary">表单模式</button>
+            <button id="btnCfgJson" class="btn secondary">JSON模式</button>
+          </div>
+          <div id="nodeConfigForm" class="cfg-form"></div>
+          <div class="cfg-help">表单覆盖常用参数；复杂参数可切到 JSON 模式直接编辑。</div>
+          <textarea id="nodeConfig" class="cfg-text" placeholder="选中单个节点后可编辑 JSON 配置"></textarea>
+          <div class="cfg-form" id="ioMapEditor" style="margin-top:8px">
+            <div class="cfg-help">I/O 映射（可视化）：来源表达式示例 `n2.rows` 或 `$prev.detail.rows`</div>
+            <label>输入映射 input_map</label>
+            <table>
+              <thead><tr><th>目标字段</th><th>来源表达式</th><th>操作</th></tr></thead>
+              <tbody id="inputMapRows"><tr><td colspan="3" style="color:#74879b">无</td></tr></tbody>
+            </table>
+            <div class="btns" style="margin-top:6px">
+              <button id="btnAddInputMap" class="btn secondary">新增输入映射</button>
+            </div>
+            <label style="margin-top:8px">输出映射 output_map</label>
+            <table>
+              <thead><tr><th>别名字段</th><th>来源表达式</th><th>操作</th></tr></thead>
+              <tbody id="outputMapRows"><tr><td colspan="3" style="color:#74879b">无</td></tr></tbody>
+            </table>
+            <div class="btns" style="margin-top:6px">
+              <button id="btnAddOutputMap" class="btn secondary">新增输出映射</button>
+            </div>
+          </div>
+          <div class="btns" style="margin:8px 0">
+            <button id="btnApplyNodeCfg" class="btn">应用配置</button>
+            <button id="btnResetNodeCfg" class="btn secondary">重置默认</button>
+            <button id="btnFormatNodeCfg" class="btn secondary">格式化</button>
+          </div>
           <div class="btns" style="margin-bottom:8px">
             <button id="btnDiagRefresh" class="btn secondary">刷新诊断</button>
+            <button id="btnRunsRefresh" class="btn secondary">刷新运行记录</button>
+            <button id="btnReviewsRefresh" class="btn secondary">刷新审核队列</button>
           </div>
           <table>
             <thead><tr><th>节点</th><th>状态</th><th>耗时</th></tr></thead>
@@ -165,6 +304,246 @@
             <thead><tr><th>Chiplet</th><th>失败率</th><th>平均耗时</th></tr></thead>
             <tbody id="diagRuns"><tr><td colspan="3" style="color:#74879b">暂无诊断</td></tr></tbody>
           </table>
+          <div style="height:8px"></div>
+          <table>
+            <thead><tr><th>运行记录</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="runHistoryRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+          </table>
+          <div style="height:8px"></div>
+          <table>
+            <thead><tr><th>队列任务</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="queueRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+          </table>
+          <div id="queueControlText" class="cfg-meta" style="margin-top:6px">队列状态: -</div>
+          <div style="height:8px"></div>
+          <table>
+            <thead><tr><th>流程版本</th><th>时间</th><th>操作</th></tr></thead>
+            <tbody id="versionRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+          </table>
+          <div class="cfg-form" style="margin-top:8px">
+            <div class="cfg-help">版本差异</div>
+            <label>Version A</label>
+            <input id="versionCompareA" placeholder="version_id A" />
+            <label>Version B</label>
+            <input id="versionCompareB" placeholder="version_id B" />
+            <div class="btns" style="margin-top:6px">
+              <button id="btnCompareVersions" class="btn secondary">对比版本</button>
+            </div>
+            <div id="versionCompareSummary" class="cfg-meta" style="margin-top:8px">暂无对比</div>
+            <table>
+              <thead><tr><th>节点ID</th><th>变更</th><th>类型A/B</th></tr></thead>
+              <tbody id="versionCompareRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+          </div>
+          <div class="cfg-form" style="margin-top:8px">
+            <div class="cfg-help">节点缓存</div>
+            <div id="cacheStatsText" class="cfg-meta">缓存状态: -</div>
+            <div class="btns" style="margin-top:6px">
+              <button id="btnCacheRefresh" class="btn secondary">刷新缓存</button>
+              <button id="btnCacheClear" class="btn secondary">清空缓存</button>
+            </div>
+          </div>
+          <div style="height:8px"></div>
+          <table>
+            <thead><tr><th>审核键</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="reviewRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+          </table>
+          <div class="cfg-form" style="margin-top:8px">
+            <div class="cfg-help">发布流程应用</div>
+            <label>应用名称</label>
+            <input id="appPublishName" placeholder="例如：财报清洗应用" />
+            <label>参数 Schema（可视化）</label>
+            <div id="appSchemaForm" class="cfg-form" style="max-height:180px"></div>
+            <div class="btns" style="margin-top:6px">
+              <button id="btnAppSchemaAdd" class="btn secondary">新增参数</button>
+              <button id="btnAppSchemaSyncJson" class="btn secondary">同步到JSON</button>
+              <button id="btnAppSchemaFromJson" class="btn secondary">JSON回填</button>
+            </div>
+            <label>参数 Schema(JSON)</label>
+            <textarea id="appSchemaJson" style="min-height:100px" placeholder='{"title":{"type":"string","required":true,"description":"任务标题"}}'></textarea>
+            <label>运行参数（可视化）</label>
+            <div id="appRunParamsForm" class="cfg-form" style="max-height:180px"></div>
+            <div class="btns" style="margin-top:6px">
+              <button id="btnAppRunSyncJson" class="btn secondary">运行参数同步到JSON</button>
+              <button id="btnAppRunFromJson" class="btn secondary">JSON回填运行参数</button>
+            </div>
+            <label>运行参数(JSON)</label>
+            <textarea id="appRunParams" style="min-height:80px" placeholder='{"title":"示例任务"}'></textarea>
+            <div class="btns" style="margin-top:6px">
+              <button id="btnPublishApp" class="btn secondary">发布应用</button>
+              <button id="btnAppsRefresh" class="btn secondary">刷新应用</button>
+            </div>
+            <table style="margin-top:8px">
+              <thead><tr><th>应用</th><th>时间</th><th>操作</th></tr></thead>
+              <tbody id="appRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+          </div>
+          <div class="cfg-form" style="margin-top:8px">
+            <div class="cfg-help">运行时间线与失败概览</div>
+            <label>Run ID</label>
+            <input id="timelineRunId" placeholder="输入 run_id 查看时间线" />
+            <div class="btns" style="margin-top:6px">
+              <button id="btnTimelineRefresh" class="btn secondary">刷新时间线</button>
+              <button id="btnFailureSummaryRefresh" class="btn secondary">失败概览</button>
+              <button id="btnSandboxAlertsRefresh" class="btn secondary">Sandbox告警</button>
+              <button id="btnSandboxExport" class="btn secondary">导出Sandbox报告</button>
+            </div>
+            <table style="margin-top:8px">
+              <thead><tr><th>节点</th><th>状态</th><th>耗时(s)</th></tr></thead>
+              <tbody id="timelineRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+            <table style="margin-top:8px">
+              <thead><tr><th>节点类型</th><th>失败次数</th><th>样例错误</th></tr></thead>
+              <tbody id="failureRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+            <div class="cfg-help" style="margin-top:8px">Sandbox 阈值与状态灯</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+              <input id="sandboxThresholdYellow" value="1" placeholder="yellow阈值" />
+              <input id="sandboxThresholdRed" value="3" placeholder="red阈值" />
+              <select id="sandboxExportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+                <option value="md">导出 Markdown</option>
+                <option value="json">导出 JSON</option>
+              </select>
+            </div>
+            <input id="sandboxDedupWindowSec" value="600" placeholder="去重窗口秒数(0表示关闭去重)" style="margin-top:6px" />
+            <div class="cfg-help" style="margin-top:8px">Sandbox 白名单与静默</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+              <select id="sandboxPreset">
+                <option value="balanced">平衡</option>
+                <option value="strict">严格</option>
+                <option value="loose">宽松</option>
+              </select>
+              <button id="btnSandboxPresetApply" class="btn secondary">应用预设</button>
+            </div>
+            <input id="sandboxWhitelistCodes" placeholder="白名单错误码(逗号分隔), 如 sandbox_limit_exceeded:output" />
+            <input id="sandboxWhitelistNodeTypes" placeholder="白名单节点类型(逗号分隔), 如 ai_refine,compute_rust" style="margin-top:6px" />
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:6px">
+              <input id="sandboxMuteNodeType" placeholder="静默 node_type 或 *" />
+              <input id="sandboxMuteNodeId" placeholder="静默 node_id 或 *" />
+              <input id="sandboxMuteCode" placeholder="静默 code 或 *" />
+              <input id="sandboxMuteMinutes" value="60" placeholder="静默分钟" />
+            </div>
+            <div class="btns" style="margin-top:6px">
+              <button id="btnSandboxRulesLoad" class="btn secondary">加载规则</button>
+              <button id="btnSandboxRulesSave" class="btn secondary">保存规则</button>
+              <button id="btnSandboxMuteApply" class="btn secondary">应用静默</button>
+              <button id="btnSandboxRuleVersions" class="btn secondary">规则版本</button>
+              <button id="btnSandboxPresetExport" class="btn secondary">导出预设</button>
+              <button id="btnSandboxPresetImport" class="btn secondary">导入预设</button>
+              <button id="btnSandboxAutoFixLog" class="btn secondary">闭环日志</button>
+              <button id="btnQualityGateRefresh" class="btn secondary">质量门禁</button>
+              <button id="btnQualityGateExport" class="btn secondary">导出门禁</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px">
+              <input id="qualityGateRunIdFilter" placeholder="质量门禁筛选 run_id(包含匹配)" />
+              <select id="qualityGateStatusFilter" style="border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+                <option value="all">全部状态</option>
+                <option value="blocked">仅 blocked</option>
+                <option value="pass">仅 pass</option>
+              </select>
+              <select id="qualityGateExportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+                <option value="md">导出 Markdown</option>
+                <option value="json">导出 JSON</option>
+              </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:6px">
+              <input id="sandboxAutoFixRedThreshold" value="3" placeholder="自动闭环红线次数" />
+              <input id="sandboxAutoFixWindowSec" value="900" placeholder="自动闭环窗口秒数" />
+              <input id="sandboxAutoFixForceMinutes" value="60" placeholder="强制隔离分钟" />
+              <input id="sandboxAutoFixForceMode" value="process" placeholder="强制隔离模式(process)" />
+            </div>
+            <label><input id="sandboxAutoFixEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />启用自动闭环</label>
+            <label><input id="sandboxAutoFixPauseQueue" type="checkbox" checked style="width:auto;margin-right:6px" />触发后暂停队列</label>
+            <label><input id="sandboxAutoFixRequireReview" type="checkbox" checked style="width:auto;margin-right:6px" />触发后进入人工审核</label>
+            <label><input id="sandboxAutoFixForceIsolation" type="checkbox" checked style="width:auto;margin-right:6px" />触发后强制全量隔离</label>
+            <div id="sandboxHealthText" class="cfg-meta" style="margin-top:6px">Sandbox状态: -</div>
+            <table style="margin-top:8px">
+              <thead><tr><th>节点</th><th>次数</th><th>最近Run</th><th>操作</th></tr></thead>
+              <tbody id="sandboxRows"><tr><td colspan="4" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+            <table style="margin-top:8px">
+              <thead><tr><th>规则版本</th><th>时间</th><th>操作</th></tr></thead>
+              <tbody id="sandboxRuleVersionRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+            <table style="margin-top:8px">
+              <thead><tr><th>时间</th><th>次数</th><th>动作</th></tr></thead>
+              <tbody id="sandboxAutoFixRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+            <table style="margin-top:8px">
+              <thead><tr><th>Run</th><th>状态</th><th>问题</th><th>时间</th></tr></thead>
+              <tbody id="qualityGateRows"><tr><td colspan="4" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+          </div>
+          <div class="cfg-form" style="margin-top:8px">
+            <div class="cfg-help">操作审计</div>
+            <div class="btns" style="margin-top:6px">
+              <button id="btnAuditRefresh" class="btn secondary">刷新审计</button>
+            </div>
+            <table style="margin-top:8px">
+              <thead><tr><th>时间</th><th>动作</th><th>详情</th></tr></thead>
+              <tbody id="auditRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+          </div>
+          <div style="height:8px"></div>
+          <div class="cfg-form">
+            <div class="cfg-help">运行对比</div>
+            <label>Run A</label>
+            <input id="compareRunA" placeholder="run_id A" />
+            <label>Run B</label>
+            <input id="compareRunB" placeholder="run_id B" />
+            <label><input id="compareOnlyChanged" type="checkbox" style="width:auto;margin-right:6px" checked />仅显示有变化节点</label>
+            <label><input id="compareOnlyStatusChanged" type="checkbox" style="width:auto;margin-right:6px" />仅显示状态变化节点</label>
+            <label>最小耗时变化阈值（秒）</label>
+            <input id="compareMinDelta" value="0.001" />
+            <div class="btns" style="margin-top:6px">
+              <button id="btnCompareRuns" class="btn secondary">对比运行</button>
+              <select id="compareReportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+                <option value="md">导出 Markdown</option>
+                <option value="html">导出 HTML</option>
+              </select>
+              <button id="btnExportCompareReport" class="btn secondary">导出对比报告</button>
+            </div>
+            <div id="compareSummary" class="cfg-meta" style="margin-top:8px">暂无对比</div>
+            <table>
+              <thead><tr><th>节点</th><th>状态A/B</th><th>耗时A(s)</th><th>耗时B(s)</th><th>Δ(s)</th></tr></thead>
+              <tbody id="compareRows"><tr><td colspan="5" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+          </div>
+          <div style="height:8px"></div>
+          <div class="cfg-form">
+            <div class="cfg-help">审核历史</div>
+            <label>Run ID</label>
+            <input id="reviewHistoryRunId" placeholder="可选：精确 run_id" />
+            <label>审核人</label>
+            <input id="reviewHistoryReviewer" placeholder="可选：包含匹配" />
+            <label>状态</label>
+            <select id="reviewHistoryStatus" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+              <option value="">全部</option>
+              <option value="approved">approved</option>
+              <option value="rejected">rejected</option>
+            </select>
+            <label>起始时间（ISO，可选）</label>
+            <input id="reviewHistoryDateFrom" placeholder="2026-01-01T00:00:00Z" />
+            <label>结束时间（ISO，可选）</label>
+            <input id="reviewHistoryDateTo" placeholder="2026-12-31T23:59:59Z" />
+            <div class="btns" style="margin-top:6px">
+              <button id="btnReviewHistoryRefresh" class="btn secondary">刷新历史</button>
+              <button id="btnReviewHistoryExport" class="btn secondary">导出历史</button>
+            </div>
+            <table style="margin-top:8px">
+              <thead><tr><th>审核键</th><th>状态</th><th>审核人</th><th>时间</th></tr></thead>
+              <tbody id="reviewHistoryRows"><tr><td colspan="4" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+          </div>
+          <div style="height:8px"></div>
+          <div class="cfg-form">
+            <div class="cfg-help">流程迁移日志</div>
+            <div id="migrationSummary" class="cfg-meta">暂无迁移</div>
+            <table>
+              <thead><tr><th>字段路径</th><th>旧值</th><th>新值</th><th>原因</th></tr></thead>
+              <tbody id="migrationRows"><tr><td colspan="4" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+          </div>
           <div style="height:8px"></div>
           <pre id="log">{}</pre>
         </div>

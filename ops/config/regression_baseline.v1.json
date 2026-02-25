@@ -1,0 +1,8 @@
+{
+  "name": "aiwf_regression_baseline_v1",
+  "version": "1.0.0",
+  "min_cleaning_output_rows": 2,
+  "max_cleaning_invalid_rows": 2,
+  "min_preprocess_debate_rows": 2,
+  "max_preprocess_required_missing_ratio": 0.1
+}

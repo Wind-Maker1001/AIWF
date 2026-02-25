@@ -10,15 +10,20 @@ param(
   [switch]$SkipRegressionQuality,
   [switch]$SkipDesktopUiTests,
   [switch]$SkipDesktopRealSampleAcceptance,
+  [switch]$SkipDesktopFinanceTemplateAcceptance,
   [switch]$SkipDesktopStress,
   [switch]$SkipDesktopPackageTests,
   [switch]$SkipRoutingBench,
   [switch]$SkipAsyncBench,
+  [switch]$SkipRustTransformBenchGate,
+  [switch]$SkipRustNewOpsBenchGate,
+  [switch]$SkipRegressionBaselineGate,
   [switch]$SkipOpenApiSdkSync,
   [switch]$SkipSecretScan,
   [switch]$SkipContractTests,
   [switch]$SkipChaosChecks,
-  [switch]$SkipSmoke
+  [switch]$SkipSmoke,
+  [switch]$SkipSqlConnectivityGate
   ,
   [switch]$SkipPostCleanup
 )
@@ -77,12 +82,17 @@ $encodingCheckScript = Join-Path $PSScriptRoot "check_encoding_health.ps1"
 $desktopPkgCheckScript = Join-Path $PSScriptRoot "check_desktop_packaged_startup.ps1"
 $desktopLitePkgCheckScript = Join-Path $PSScriptRoot "check_desktop_lite_packaged_startup.ps1"
 $desktopRealSampleScript = Join-Path $PSScriptRoot "acceptance_desktop_real_sample.ps1"
+$desktopFinanceTemplateScript = Join-Path $PSScriptRoot "acceptance_desktop_finance_template.ps1"
 $regressionQualityScript = Join-Path $PSScriptRoot "run_regression_quality.ps1"
+$regressionBaselineScript = Join-Path $PSScriptRoot "check_regression_baseline.ps1"
 $asyncBenchTrendScript = Join-Path $PSScriptRoot "check_async_bench_trend.ps1"
+$rustTransformBenchGateScript = Join-Path $PSScriptRoot "check_rust_transform_bench_gate.ps1"
+$rustNewOpsBenchGateScript = Join-Path $PSScriptRoot "check_rust_new_ops_bench_gate.ps1"
 $openApiSdkSyncScript = Join-Path $PSScriptRoot "check_openapi_sdk_sync.ps1"
 $secretScanScript = Join-Path $PSScriptRoot "secret_scan.ps1"
 $contractRustApiScript = Join-Path $PSScriptRoot "contract_test_rust_api.ps1"
 $chaosTaskStoreScript = Join-Path $PSScriptRoot "chaos_task_store.ps1"
+$sqlConnectivityScript = Join-Path $PSScriptRoot "check_sql_connectivity.ps1"
 $cleanupScript = Join-Path $PSScriptRoot "clean_workspace_artifacts.ps1"
 
 if (-not $SkipToolChecks) {
@@ -145,6 +155,20 @@ if (-not $SkipSecretScan) {
   Ok "secret scan checks passed"
 } else {
   Warn "skip secret scan checks"
+}
+
+if (-not $SkipSqlConnectivityGate) {
+  if (-not (Test-Path $sqlConnectivityScript)) {
+    throw "sql connectivity gate script not found: $sqlConnectivityScript"
+  }
+  Info "running SQL connectivity gate"
+  powershell -ExecutionPolicy Bypass -File $sqlConnectivityScript -EnvFile $EnvFile -SkipWhenTaskStoreNotSql
+  if ($LASTEXITCODE -ne 0) {
+    throw "SQL connectivity gate failed"
+  }
+  Ok "SQL connectivity gate passed"
+} else {
+  Warn "skip SQL connectivity gate"
 }
 
 if (-not $SkipEncodingChecks) {
@@ -232,6 +256,19 @@ if (-not $SkipRegressionQuality) {
     throw "regression quality checks failed"
   }
   Ok "regression quality checks passed"
+  if (-not $SkipRegressionBaselineGate) {
+    if (-not (Test-Path $regressionBaselineScript)) {
+      throw "regression baseline gate script not found: $regressionBaselineScript"
+    }
+    Info "running regression baseline gate"
+    powershell -ExecutionPolicy Bypass -File $regressionBaselineScript
+    if ($LASTEXITCODE -ne 0) {
+      throw "regression baseline gate failed"
+    }
+    Ok "regression baseline gate passed"
+  } else {
+    Warn "skip regression baseline gate"
+  }
 } else {
   Warn "skip regression quality checks"
 }
@@ -305,6 +342,20 @@ if (-not $SkipDesktopUiTests) {
     Ok "desktop real sample acceptance passed"
   } else {
     Warn "skip desktop real sample acceptance"
+  }
+
+  if (-not $SkipDesktopFinanceTemplateAcceptance) {
+    if (-not (Test-Path $desktopFinanceTemplateScript)) {
+      throw "desktop finance template acceptance script not found: $desktopFinanceTemplateScript"
+    }
+    Info "running desktop finance template acceptance"
+    powershell -ExecutionPolicy Bypass -File $desktopFinanceTemplateScript -Root $root
+    if ($LASTEXITCODE -ne 0) {
+      throw "desktop finance template acceptance failed"
+    }
+    Ok "desktop finance template acceptance passed"
+  } else {
+    Warn "skip desktop finance template acceptance"
   }
 } else {
   Warn "skip desktop workflow UI tests"
@@ -430,14 +481,22 @@ if (-not $SkipRoutingBench) {
   try {
     $prevTrendWindow = $env:AIWF_ROUTE_BENCH_TREND_WINDOW
     $prevTrendMinSamples = $env:AIWF_ROUTE_BENCH_TREND_MIN_SAMPLES
+    $prevMaxPerEdge = $env:AIWF_ROUTE_BENCH_MAX_MS_PER_EDGE
+    $prevMaxWorstPerEdge = $env:AIWF_ROUTE_BENCH_MAX_WORST_SCENARIO_MS_PER_EDGE
+    $prevMaxFallbackRatio = $env:AIWF_ROUTE_BENCH_MAX_RANDOM_FALLBACK_RATIO
+    $prevMaxFixedFallbackRatio = $env:AIWF_ROUTE_BENCH_MAX_FALLBACK_RATIO
     $prevTrendMedian = $env:AIWF_ROUTE_BENCH_TREND_MEDIAN_MS_PER_EDGE_MAX
     $prevTrendWorst = $env:AIWF_ROUTE_BENCH_TREND_MEDIAN_WORST_MS_PER_EDGE_MAX
     $prevTrendHistory = $env:AIWF_ROUTE_BENCH_HISTORY
     $prevTrendLatest = $env:AIWF_ROUTE_BENCH_LATEST
+    $env:AIWF_ROUTE_BENCH_MAX_MS_PER_EDGE = "130"
+    $env:AIWF_ROUTE_BENCH_MAX_WORST_SCENARIO_MS_PER_EDGE = "170"
+    $env:AIWF_ROUTE_BENCH_MAX_RANDOM_FALLBACK_RATIO = "0.50"
+    $env:AIWF_ROUTE_BENCH_MAX_FALLBACK_RATIO = "0.50"
     $env:AIWF_ROUTE_BENCH_TREND_WINDOW = "7"
     $env:AIWF_ROUTE_BENCH_TREND_MIN_SAMPLES = "5"
-    $env:AIWF_ROUTE_BENCH_TREND_MEDIAN_MS_PER_EDGE_MAX = "135"
-    $env:AIWF_ROUTE_BENCH_TREND_MEDIAN_WORST_MS_PER_EDGE_MAX = "175"
+    $env:AIWF_ROUTE_BENCH_TREND_MEDIAN_MS_PER_EDGE_MAX = "120"
+    $env:AIWF_ROUTE_BENCH_TREND_MEDIAN_WORST_MS_PER_EDGE_MAX = "160"
     $routeBenchDir = Join-Path $root "ops\logs\route_bench"
     New-Item -ItemType Directory -Force -Path $routeBenchDir | Out-Null
     $env:AIWF_ROUTE_BENCH_HISTORY = (Join-Path $routeBenchDir "routing_bench_history.jsonl")
@@ -465,6 +524,10 @@ if (-not $SkipRoutingBench) {
       }
     }
     finally {
+      if ($null -eq $prevMaxPerEdge) { Remove-Item Env:AIWF_ROUTE_BENCH_MAX_MS_PER_EDGE -ErrorAction SilentlyContinue } else { $env:AIWF_ROUTE_BENCH_MAX_MS_PER_EDGE = $prevMaxPerEdge }
+      if ($null -eq $prevMaxWorstPerEdge) { Remove-Item Env:AIWF_ROUTE_BENCH_MAX_WORST_SCENARIO_MS_PER_EDGE -ErrorAction SilentlyContinue } else { $env:AIWF_ROUTE_BENCH_MAX_WORST_SCENARIO_MS_PER_EDGE = $prevMaxWorstPerEdge }
+      if ($null -eq $prevMaxFallbackRatio) { Remove-Item Env:AIWF_ROUTE_BENCH_MAX_RANDOM_FALLBACK_RATIO -ErrorAction SilentlyContinue } else { $env:AIWF_ROUTE_BENCH_MAX_RANDOM_FALLBACK_RATIO = $prevMaxFallbackRatio }
+      if ($null -eq $prevMaxFixedFallbackRatio) { Remove-Item Env:AIWF_ROUTE_BENCH_MAX_FALLBACK_RATIO -ErrorAction SilentlyContinue } else { $env:AIWF_ROUTE_BENCH_MAX_FALLBACK_RATIO = $prevMaxFixedFallbackRatio }
       if ($null -eq $prevTrendWindow) { Remove-Item Env:AIWF_ROUTE_BENCH_TREND_WINDOW -ErrorAction SilentlyContinue } else { $env:AIWF_ROUTE_BENCH_TREND_WINDOW = $prevTrendWindow }
       if ($null -eq $prevTrendMinSamples) { Remove-Item Env:AIWF_ROUTE_BENCH_TREND_MIN_SAMPLES -ErrorAction SilentlyContinue } else { $env:AIWF_ROUTE_BENCH_TREND_MIN_SAMPLES = $prevTrendMinSamples }
       if ($null -eq $prevTrendMedian) { Remove-Item Env:AIWF_ROUTE_BENCH_TREND_MEDIAN_MS_PER_EDGE_MAX -ErrorAction SilentlyContinue } else { $env:AIWF_ROUTE_BENCH_TREND_MEDIAN_MS_PER_EDGE_MAX = $prevTrendMedian }
@@ -496,6 +559,34 @@ if (-not $SkipAsyncBench) {
   Ok "rust async benchmark trend gate passed"
 } else {
   Warn "skip rust async benchmark trend gate"
+}
+
+if (-not $SkipRustTransformBenchGate) {
+  if (-not (Test-Path $rustTransformBenchGateScript)) {
+    throw "rust transform benchmark gate script not found: $rustTransformBenchGateScript"
+  }
+  Info "running rust transform benchmark gate"
+  powershell -ExecutionPolicy Bypass -File $rustTransformBenchGateScript -AccelUrl "http://127.0.0.1:18082" -Rows 120000 -Runs 4 -Warmup 1 -MinSpeedup 1.03 -MinArrowSpeedup 0.90 -EnforceArrowAlways
+  if ($LASTEXITCODE -ne 0) {
+    throw "rust transform benchmark gate failed"
+  }
+  Ok "rust transform benchmark gate passed"
+} else {
+  Warn "skip rust transform benchmark gate"
+}
+
+if (-not $SkipRustNewOpsBenchGate) {
+  if (-not (Test-Path $rustNewOpsBenchGateScript)) {
+    throw "rust new-ops benchmark gate script not found: $rustNewOpsBenchGateScript"
+  }
+  Info "running rust new-ops benchmark gate"
+  powershell -ExecutionPolicy Bypass -File $rustNewOpsBenchGateScript -RustDir $rustDir -MaxColumnarMs 2500 -MaxStreamWindowMs 2500 -MaxSketchMs 2500
+  if ($LASTEXITCODE -ne 0) {
+    throw "rust new-ops benchmark gate failed"
+  }
+  Ok "rust new-ops benchmark gate passed"
+} else {
+  Warn "skip rust new-ops benchmark gate"
 }
 
 if (-not $SkipPostCleanup) {

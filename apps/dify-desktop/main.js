@@ -7,6 +7,7 @@ const { registerIpcHandlers } = require("./main_ipc");
 const { createConfigSupport } = require("./main_config_support");
 const { createRuntimeSupport } = require("./main_runtime_support");
 const { createWindowSupport } = require("./main_window_support");
+const { listCleaningTemplates } = require("./offline_engine");
 
 function loadWorkflowEngine() {
   const candidates = [
@@ -41,7 +42,9 @@ registerIpcHandlers({
   saveConfig: config.saveConfig,
   baseHealth: runtime.baseHealth,
   runOfflineCleaningInWorker: runtime.runOfflineCleaningInWorker,
+  runOfflinePrecheckInWorker: runtime.runOfflinePrecheckInWorker,
   runViaBaseApi: runtime.runViaBaseApi,
+  listCleaningTemplates,
   routeMetricsLogPath: config.routeMetricsLogPath,
   routeMetricsSummaryPath: config.routeMetricsSummaryPath,
   rotateLogIfNeeded: config.rotateLogIfNeeded,

@@ -6,6 +6,7 @@
   [switch]$IncludeBundledTools,
   [switch]$CollectBundledTools,
   [switch]$CleanOldReleases,
+  [switch]$SkipOpenApiSdkSyncGate,
   [bool]$RequireChineseOcr = $true,
   [string]$ReleaseChannel = "stable"
 )
@@ -17,6 +18,10 @@ function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$openApiSdkSyncGate = Join-Path $PSScriptRoot "check_openapi_sdk_sync.ps1"
+$openApiSdkSyncGateStatus = "skipped"
+$openApiSdkSyncGateCheckedAt = ""
+$openApiSdkSyncGateError = ""
 $distDir = Join-Path $root "apps\dify-desktop\dist"
 $exePattern = if ($PackageType -eq "installer") { "AIWF Dify Desktop Setup *.exe" } else { "AIWF Dify Desktop *.exe" }
 $exe = Get-ChildItem $distDir -File -Filter $exePattern |
@@ -40,6 +45,23 @@ if (-not $Version) {
 
 if (-not $OutDir) {
   $OutDir = Join-Path $root ("release\offline_bundle_{0}_{1}" -f $Version, $PackageType)
+}
+
+if (-not $SkipOpenApiSdkSyncGate) {
+  if (-not (Test-Path $openApiSdkSyncGate)) { throw "openapi/sdk sync gate script missing: $openApiSdkSyncGate" }
+  Info "running openapi/sdk sync package gate"
+  powershell -ExecutionPolicy Bypass -File $openApiSdkSyncGate
+  $openApiSdkSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $openApiSdkSyncGateStatus = "failed"
+    $openApiSdkSyncGateError = "check_openapi_sdk_sync.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by openapi/sdk sync gate"
+  }
+  $openApiSdkSyncGateStatus = "passed"
+  Ok "openapi/sdk sync package gate passed"
+} else {
+  $openApiSdkSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip openapi/sdk sync package gate" -ForegroundColor Yellow
 }
 
 $bundleRoot = Join-Path $OutDir "AIWF_Offline_Bundle"
@@ -137,6 +159,14 @@ $manifest = [ordered]@{
   exe = $exe.Name
   generated_at = (Get-Date).ToString("s")
   docs = @((Get-ChildItem $docsOut -File | ForEach-Object { $_.Name }))
+  gates = [ordered]@{
+    openapi_sdk_sync = [ordered]@{
+      status = $openApiSdkSyncGateStatus
+      checked_at = $openApiSdkSyncGateCheckedAt
+      script = "ops/scripts/check_openapi_sdk_sync.ps1"
+      error = $openApiSdkSyncGateError
+    }
+  }
 }
 ($manifest | ConvertTo-Json -Depth 5) | Set-Content (Join-Path $bundleRoot "manifest.json") -Encoding UTF8
 

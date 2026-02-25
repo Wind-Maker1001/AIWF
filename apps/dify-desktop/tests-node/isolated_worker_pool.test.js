@@ -40,6 +40,46 @@ test("isolated worker rejects unsupported task", async () => {
   );
 });
 
+test("isolated worker supports ai_call task", async () => {
+  const out = await runIsolatedTask("ai_call", {
+    workflowPayload: {},
+    corpusText: "hello\nworld",
+    metrics: { sections: 1, bullets: 0, chars: 11, cjk: 0, latin: 10, sha256: "x" },
+  }, 15000);
+  assert.ok(String(out?.text || "").length > 0);
+});
+
+test("sandbox mode blocks remote ai_call endpoint", async () => {
+  await assert.rejects(
+    runIsolatedTask("ai_call", {
+      workflowPayload: {
+        ai: {
+          endpoint: "https://api.example.com/v1/chat/completions",
+          api_key: "k",
+          model: "m",
+        },
+      },
+      corpusText: "hello",
+      metrics: { sections: 1, bullets: 0, chars: 5, cjk: 0, latin: 5, sha256: "x" },
+      isolation_level: "sandbox",
+    }, 15000),
+    /sandbox_egress_blocked/i
+  );
+});
+
+test("sandbox mode enforces output byte limit", async () => {
+  await assert.rejects(
+    runIsolatedTask("ai_call", {
+      workflowPayload: {},
+      corpusText: "hello\nworld",
+      metrics: { sections: 1, bullets: 0, chars: 11, cjk: 0, latin: 10, sha256: "x" },
+      isolation_level: "sandbox",
+      sandbox_limits: { max_output_bytes: 32 },
+    }, 15000),
+    /sandbox_limit_exceeded:output/i
+  );
+});
+
 test("pool stats are observable", async () => {
   await runIsolatedTask("ai_refine", {
     workflowPayload: {},

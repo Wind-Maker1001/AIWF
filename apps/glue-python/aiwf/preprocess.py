@@ -6,7 +6,7 @@ import hashlib
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from aiwf import ingest
 
@@ -184,6 +184,106 @@ def _write_jsonl(path: str, rows: List[Dict[str, Any]]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+def _safe_filename(name: str) -> str:
+    s = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name or "").strip())
+    return s.strip("._") or "artifact"
+
+
+def _pick_markdown_text(row: Dict[str, Any]) -> str:
+    for key in ("claim_text", "text", "content", "body", "paragraph"):
+        v = row.get(key)
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    parts: List[str] = []
+    for k, v in row.items():
+        if v is None:
+            continue
+        sv = str(v).strip()
+        if not sv:
+            continue
+        parts.append(f"{k}: {sv}")
+    return " | ".join(parts)
+
+
+def export_canonical_bundle(
+    *,
+    rows: List[Dict[str, Any]],
+    summary: Dict[str, Any],
+    meta: Dict[str, Any],
+    output_path: str,
+    spec: Dict[str, Any],
+) -> Dict[str, Any]:
+    bundle_dir = str(spec.get("canonical_bundle_dir") or f"{output_path}.bundle")
+    os.makedirs(bundle_dir, exist_ok=True)
+    title = str(spec.get("canonical_title") or "AIWF Canonical Corpus").strip()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    md_lines: List[str] = []
+    md_lines.append(f"# {title}")
+    md_lines.append("")
+    md_lines.append(f"- generated_at: {now}")
+    md_lines.append(f"- output_rows: {int(summary.get('output_rows', len(rows)))}")
+    md_lines.append(f"- input_format: {meta.get('input_format')}")
+    md_lines.append("")
+    md_lines.append("## Content")
+    md_lines.append("")
+    for i, r in enumerate(rows):
+        text = _pick_markdown_text(r)
+        if not text:
+            continue
+        md_lines.append(f"### Item {i + 1}")
+        md_lines.append("")
+        md_lines.append(text)
+        md_lines.append("")
+    md_path = os.path.join(bundle_dir, f"{_safe_filename(title)}.md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(md_lines).rstrip() + "\n")
+
+    source_counts: Dict[str, int] = {}
+    for r in rows:
+        src = str(r.get("source_file") or r.get("source_path") or "unknown").strip()
+        source_counts[src] = source_counts.get(src, 0) + 1
+
+    metadata = {
+        "title": title,
+        "generated_at": now,
+        "input_format": meta.get("input_format"),
+        "file_count": meta.get("file_count"),
+        "summary": summary,
+        "row_count": len(rows),
+        "source_counts": source_counts,
+    }
+    metadata_path = os.path.join(bundle_dir, "metadata.json")
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+    lineage = {
+        "generated_at": now,
+        "output_path": output_path,
+        "output_format": _detect_output_format(output_path, spec),
+        "input_files": spec.get("input_files") if isinstance(spec.get("input_files"), list) else [],
+        "skipped_files": meta.get("skipped_files") or [],
+        "failed_files": meta.get("failed_files") or [],
+        "steps": [
+            "ingest",
+            "normalize",
+            "filter",
+            "deduplicate",
+            "export_markdown_bundle",
+        ],
+    }
+    lineage_path = os.path.join(bundle_dir, "lineage.json")
+    with open(lineage_path, "w", encoding="utf-8") as f:
+        json.dump(lineage, f, ensure_ascii=False, indent=2)
+
+    return {
+        "bundle_dir": bundle_dir,
+        "markdown_path": md_path,
+        "metadata_path": metadata_path,
+        "lineage_path": lineage_path,
+    }
 
 
 def _write_rows(path: str, rows: List[Dict[str, Any]], spec: Dict[str, Any]) -> str:
@@ -620,6 +720,12 @@ def validate_preprocess_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         errors.append("generate_quality_report must be boolean")
     if "quality_report_path" in spec and not isinstance(spec.get("quality_report_path"), str):
         errors.append("quality_report_path must be string")
+    if "export_canonical_bundle" in spec and not isinstance(spec.get("export_canonical_bundle"), bool):
+        errors.append("export_canonical_bundle must be boolean")
+    if "canonical_bundle_dir" in spec and not isinstance(spec.get("canonical_bundle_dir"), str):
+        errors.append("canonical_bundle_dir must be string")
+    if "canonical_title" in spec and not isinstance(spec.get("canonical_title"), str):
+        errors.append("canonical_title must be string")
     if "evidence_schema" in spec and not isinstance(spec.get("evidence_schema"), dict):
         errors.append("evidence_schema must be object")
     if "detect_conflicts" in spec and not isinstance(spec.get("detect_conflicts"), bool):
@@ -695,6 +801,9 @@ def validate_preprocess_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         "evidence_schema",
         "generate_quality_report",
         "quality_report_path",
+        "export_canonical_bundle",
+        "canonical_bundle_dir",
+        "canonical_title",
         "quality_required_fields",
         "chunk_mode",
         "chunk_field",
@@ -981,6 +1090,15 @@ def preprocess_file(input_path: str, output_path: str, spec: Dict[str, Any]) -> 
         quality_report_path = str(spec.get("quality_report_path") or f"{output_path}.quality.json")
         report = _build_quality_report(out_rows, summary, spec)
         _write_json(quality_report_path, report)
+    canonical_bundle = None
+    if bool(spec.get("export_canonical_bundle", False)):
+        canonical_bundle = export_canonical_bundle(
+            rows=out_rows,
+            summary=summary,
+            meta=meta,
+            output_path=output_path,
+            spec=spec,
+        )
     return {
         "input_path": input_path,
         "output_path": output_path,
@@ -990,6 +1108,7 @@ def preprocess_file(input_path: str, output_path: str, spec: Dict[str, Any]) -> 
         "skipped_files": meta.get("skipped_files"),
         "failed_files": meta.get("failed_files"),
         "quality_report_path": quality_report_path,
+        "canonical_bundle": canonical_bundle,
         "summary": summary,
     }
 

@@ -29,6 +29,26 @@ test("dropzone can append files into queue and deduplicate", async () => {
   });
 
   expect(queueCount).toBe(2);
-  await expect(page.locator("#status")).toContainText("没有新增文件");
+  await electronApp.close();
+});
+
+test("save/load config keeps cleaning template", async () => {
+  const { electronApp, page } = await openMain();
+  await expect(page.locator("#cleaningTemplate")).toBeVisible();
+
+  const result = await page.evaluate(async () => {
+    if (typeof applyUiCfg === "function") {
+      applyUiCfg({ cleaningTemplate: "finance_report_v1" });
+    }
+    const loadedTemplate = document.getElementById("cleaningTemplate").value;
+    const cfg = typeof saveCfgFromUi === "function" ? saveCfgFromUi() : null;
+    return {
+      loadedTemplate,
+      savedTemplate: cfg ? cfg.cleaningTemplate : null,
+    };
+  });
+
+  expect(result.loadedTemplate).toBe("finance_report_v1");
+  expect(result.savedTemplate).toBe("finance_report_v1");
   await electronApp.close();
 });

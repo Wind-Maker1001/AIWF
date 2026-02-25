@@ -40,6 +40,8 @@ class PreprocessTests(unittest.TestCase):
         self.assertFalse(bad8["ok"])
         bad9 = preprocess.validate_preprocess_spec({"pipeline": {"stages": []}})
         self.assertFalse(bad9["ok"])
+        bad10 = preprocess.validate_preprocess_spec({"export_canonical_bundle": "yes"})
+        self.assertFalse(bad10["ok"])
 
     def test_preprocess_passes_ocr_options_to_ingest(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -267,6 +269,33 @@ class PreprocessTests(unittest.TestCase):
                 report = json.load(f)
             self.assertEqual(report["rows"], 2)
             self.assertEqual(report["required_field_missing"]["claim_text"], 0)
+
+    def test_preprocess_export_canonical_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "raw.jsonl")
+            dst = os.path.join(tmp, "cooked.jsonl")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"text": "论文主体第一段", "source_file": "a.pdf"}) + "\n")
+                f.write(json.dumps({"text": "论文主体第二段", "source_file": "a.pdf"}) + "\n")
+
+            res = preprocess.preprocess_file(
+                src,
+                dst,
+                {
+                    "input_format": "jsonl",
+                    "output_format": "jsonl",
+                    "export_canonical_bundle": True,
+                    "canonical_title": "论文熟肉包",
+                },
+            )
+            bundle = res.get("canonical_bundle") or {}
+            self.assertTrue(bundle.get("bundle_dir"))
+            self.assertTrue(os.path.isfile(bundle.get("markdown_path")))
+            self.assertTrue(os.path.isfile(bundle.get("metadata_path")))
+            self.assertTrue(os.path.isfile(bundle.get("lineage_path")))
+            with open(bundle.get("metadata_path"), "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            self.assertEqual(meta.get("row_count"), 2)
 
     def test_preprocess_chunk_and_conflict_detection(self):
         with tempfile.TemporaryDirectory() as tmp:

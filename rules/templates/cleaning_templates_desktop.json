@@ -1,0 +1,10 @@
+{
+  "templates": [
+    {
+      "id": "finance_report_v1",
+      "file": "generic_finance_strict.json",
+      "label": "财报模板 v1（资产/利润/现金流）",
+      "description": "面向财务报表金额字段的严格清洗模板，含类型转换、过滤、去重和质量门槛。"
+    }
+  ]
+}

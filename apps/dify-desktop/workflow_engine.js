@@ -24,6 +24,7 @@ const { registerBuiltinWorkflowChiplets } = require("./workflow_chiplets/builtin
 const { executeWorkflowDag } = require("./workflow_chiplets/executor");
 const { buildEnvelope } = require("./workflow_chiplets/contract");
 const { runIsolatedTask } = require("./workflow_chiplets/isolated_worker_host");
+const { loadExternalChiplets } = require("./workflow_chiplets/external_loader");
 
 function buildWorkflowDiagnostics(nodeRuns = []) {
   const byType = {};
@@ -56,7 +57,7 @@ function buildWorkflowDiagnostics(nodeRuns = []) {
   };
 }
 
-function createWorkflowChipletRegistry() {
+function createWorkflowChipletRegistry(config = {}) {
   const registry = new WorkflowChipletRegistry();
   registerBuiltinWorkflowChiplets(registry, {
     fs,
@@ -73,10 +74,17 @@ function createWorkflowChipletRegistry() {
     nodeOutputByType,
     runIsolatedTask,
   });
+  const external = loadExternalChiplets({
+    fs,
+    path,
+    registry,
+    config,
+  });
+  registry.__external_report = external;
   return registry;
 }
 
-async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot }) {
+async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeCache = null }) {
   const graph = normalizeWorkflow(payload);
   const validation = validateGraph(graph);
   if (!validation.ok) {
@@ -99,6 +107,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot }) {
     outputRoot,
     workflowId: graph.workflow_id,
     runId,
+    traceId: String(payload.trace_id || ""),
     orderedNodeRuns,
     files: [],
     cleanResult: null,
@@ -108,8 +117,12 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot }) {
     aiText: "",
     audit: null,
     workflowSummaryArtifact: null,
-    chipletRegistry: createWorkflowChipletRegistry(),
+    manualReviewRequests: [],
+    nodeCache,
+    chipletRegistry: createWorkflowChipletRegistry(config),
+    externalChipletsReport: null,
   };
+  ctx.externalChipletsReport = ctx.chipletRegistry?.__external_report || null;
 
   try {
     await executeWorkflowDag({
@@ -145,18 +158,32 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot }) {
       artifacts,
       clean_job_id: ctx.cleanResult?.job_id || null,
       warnings: ctx.cleanResult?.warnings || [],
+      node_outputs: ctx.nodeOutputs || {},
+      pending_reviews: ctx.manualReviewRequests || [],
       workflow: graph,
       diagnostics: buildWorkflowDiagnostics(orderedNodeRuns),
+      external_chiplets: ctx.externalChipletsReport || null,
+      isolation: {
+        enabled: payload?.chiplet_isolation_enabled !== false && config?.chiplet_isolation_enabled !== false,
+        mode: String(payload?.chiplet_isolation_mode || config?.chiplet_isolation_mode || process.env.AIWF_CHIPLET_ISOLATION_MODE || "high_risk"),
+        isolated_types: Array.isArray(payload?.chiplet_isolated_types)
+          ? payload.chiplet_isolated_types
+          : (Array.isArray(config?.chiplet_isolated_types) ? config.chiplet_isolated_types : []),
+      },
     };
   } catch (e) {
+    const emsg = String(e && e.stack ? e.stack : e);
+    const pending = emsg.includes("manual_review_pending:");
     return {
       ok: false,
       workflow_id: graph.workflow_id,
       run_id: runId,
-      status: "failed",
-      error: String(e && e.stack ? e.stack : e),
+      status: pending ? "pending_review" : "failed",
+      error: emsg,
       node_runs: orderedNodeRuns,
       clean_job_id: ctx.cleanResult?.job_id || null,
+      node_outputs: ctx.nodeOutputs || {},
+      pending_reviews: ctx.manualReviewRequests || [],
       workflow: graph,
     };
   }

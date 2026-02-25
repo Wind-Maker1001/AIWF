@@ -11,7 +11,9 @@ function registerIpcHandlers(ctx) {
     saveConfig,
     baseHealth,
     runOfflineCleaningInWorker,
+    runOfflinePrecheckInWorker,
     runViaBaseApi,
+    listCleaningTemplates,
     path,
   } = ctx;
 
@@ -36,6 +38,23 @@ function registerIpcHandlers(ctx) {
       return await runOfflineCleaningInWorker(payload, outRoot);
     }
     return await runViaBaseApi(payload, merged);
+  });
+
+  ipcMain.handle("aiwf:precheckCleaning", async (_evt, payload, cfg) => {
+    const merged = { ...loadConfig(), ...(cfg || {}) };
+    if ((merged.mode || "offline_local") === "offline_local") {
+      const outRoot = path.join(app.getPath("documents"), "AIWF-Offline");
+      return await runOfflinePrecheckInWorker(payload, outRoot);
+    }
+    return { ok: false, error: "当前仅离线本地模式支持模板预检" };
+  });
+
+  ipcMain.handle("aiwf:listCleaningTemplates", async () => {
+    try {
+      return listCleaningTemplates();
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
   });
 
   ipcMain.handle("aiwf:openPath", async (_evt, p) => {

@@ -187,13 +187,42 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\validate_cleaning_rules.p
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
 ```
 
-Only skip docs checks when needed:
+`ci_check.ps1` now enforces these gates by default:
+- SQL connectivity gate (`ops/scripts/check_sql_connectivity.ps1`)
+- workflow routing benchmark gate (tight thresholds)
+- rust transform benchmark gate (default-on, no env-toggle)
+
+Useful skip flags (only for local debugging):
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipSqlConnectivityGate
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipRoutingBench
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipRustTransformBenchGate
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipDocsChecks
 ```
 
-## 8. Common Issues
+## 8. Release Gate (Recommended)
+
+Use release packaging script with default hard gates:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4
+```
+
+Default release gates include:
+- SQL connectivity gate
+- routing benchmark gate (stricter than CI)
+- rust transform benchmark gate (`Rows=120000`, `Runs=4`, `MinSpeedup=1.03`, `MinArrowSpeedup=0.95`)
+
+Optional skip flags (debug only):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4 -SkipSqlConnectivityGate
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4 -SkipRoutingBenchGate
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4 -SkipRustTransformBenchGate
+```
+
+## 9. Common Issues
 
 - `sqlcmd not found`: install SQL Server command-line tools and add to PATH.
 - `mvn not found`: install Maven and add to PATH.

@@ -13,7 +13,12 @@ async function openWorkflow() {
 test('workflow studio renders baseline graph', async () => {
   const { electronApp, page } = await openWorkflow();
   await expect(page.locator('h2')).toHaveText(/Workflow Studio/);
-  await expect(page.locator('.node')).toHaveCount(6);
+  await page.waitForFunction(() => !!window.__aiwfDebug && typeof window.__aiwfDebug.graph === 'function');
+  const expectedNodes = await page.evaluate(() => {
+    const g = window.__aiwfDebug.graph();
+    return Array.isArray(g?.nodes) ? g.nodes.length : 0;
+  });
+  await expect(page.locator('.node')).toHaveCount(expectedNodes);
   const edgeCount = await page.locator('#edges path.edge-line').count();
   expect(edgeCount).toBeGreaterThan(0);
   await electronApp.close();
@@ -48,6 +53,7 @@ test('horizontal same-row nodes render visible edge path', async () => {
 
 test('unlink button removes edges among selected nodes', async () => {
   const { electronApp, page } = await openWorkflow();
+  await page.waitForFunction(() => document.querySelectorAll('#edges path.edge-line').length > 0);
   const before = await page.locator('#edges path.edge-line').count();
   expect(before).toBeGreaterThan(0);
   await page.click('.node[data-id="n1"]');
@@ -256,13 +262,18 @@ test('export flow json prints graph payload', async () => {
 
 test('delete button removes node and connected edges', async () => {
   const { electronApp, page } = await openWorkflow();
-  await expect(page.locator('.node')).toHaveCount(6);
+  await page.waitForFunction(() => !!window.__aiwfDebug && typeof window.__aiwfDebug.graph === 'function');
+  const beforeNodeCount = await page.evaluate(() => {
+    const g = window.__aiwfDebug.graph();
+    return Array.isArray(g?.nodes) ? g.nodes.length : 0;
+  });
+  await expect(page.locator('.node')).toHaveCount(beforeNodeCount);
   const edgeCountBefore = await page.locator('#edges path.edge-line').count();
   expect(edgeCountBefore).toBeGreaterThan(0);
 
   await page.click('.node[data-id="n2"] .mini.del');
   await expect(page.locator('.node[data-id="n2"]')).toHaveCount(0);
-  await expect(page.locator('.node')).toHaveCount(5);
+  await expect(page.locator('.node')).toHaveCount(beforeNodeCount - 1);
   const edgeCountAfter = await page.locator('#edges path.edge-line').count();
   expect(edgeCountAfter).toBeLessThan(edgeCountBefore);
   await electronApp.close();
@@ -412,5 +423,80 @@ test('router replay cases stay within per-case fallback bounds', async () => {
     expect(stat.solved).toBeGreaterThan(0);
     expect(stat.fallback_ratio).toBeLessThan(item.max_fallback_ratio);
   }
+  await electronApp.close();
+});
+
+test('quality gate filters and export format persist after reload', async () => {
+  const { electronApp, page } = await openWorkflow();
+  await expect(page.locator('#qualityGateRunIdFilter')).toBeVisible();
+
+  await page.fill('#qualityGateRunIdFilter', 'run_abc_123');
+  await page.selectOption('#qualityGateStatusFilter', 'blocked');
+  await page.selectOption('#qualityGateExportFormat', 'json');
+
+  await page.reload();
+  await expect(page.locator('h2')).toHaveText(/Workflow Studio/);
+  await expect(page.locator('#qualityGateRunIdFilter')).toHaveValue('run_abc_123');
+  await expect(page.locator('#qualityGateStatusFilter')).toHaveValue('blocked');
+  await expect(page.locator('#qualityGateExportFormat')).toHaveValue('json');
+
+  await electronApp.close();
+});
+
+test('quality gate export writes json and md reports via mock path', async () => {
+  const { electronApp, page } = await openWorkflow();
+  const fpJson = path.join(os.tmpdir(), `aiwf_quality_gate_${Date.now()}.json`);
+  const fpMd = path.join(os.tmpdir(), `aiwf_quality_gate_${Date.now()}.md`);
+
+  const out = await page.evaluate(async ({ jsonPath, mdPath }) => {
+    const r1 = await window.aiwfDesktop.exportWorkflowQualityGateReports({
+      mock: true,
+      path: jsonPath,
+      format: 'json',
+      limit: 100,
+      filter: { run_id: '', status: 'all' },
+    });
+    const r2 = await window.aiwfDesktop.exportWorkflowQualityGateReports({
+      mock: true,
+      path: mdPath,
+      format: 'md',
+      limit: 100,
+      filter: { run_id: '', status: 'all' },
+    });
+    return { r1, r2 };
+  }, { jsonPath: fpJson, mdPath: fpMd });
+
+  expect(out?.r1?.ok).toBeTruthy();
+  expect(out?.r2?.ok).toBeTruthy();
+  expect(fs.existsSync(fpJson)).toBeTruthy();
+  expect(fs.existsSync(fpMd)).toBeTruthy();
+
+  const jsonText = fs.readFileSync(fpJson, 'utf8');
+  const jsonObj = JSON.parse(jsonText);
+  expect(typeof jsonObj?.exported_at).toBe('string');
+  expect(typeof jsonObj?.total).toBe('number');
+  expect(Array.isArray(jsonObj?.items)).toBeTruthy();
+
+  const mdText = fs.readFileSync(fpMd, 'utf8');
+  expect(mdText).toContain('# AIWF 质量门禁报告');
+  expect(mdText).toContain('| Run | 状态 | 问题 | 时间 |');
+
+  await electronApp.close();
+});
+
+test('quality gate export returns readable error on invalid target path', async () => {
+  const { electronApp, page } = await openWorkflow();
+  const badPath = os.tmpdir();
+  const out = await page.evaluate(async (p) => {
+    return await window.aiwfDesktop.exportWorkflowQualityGateReports({
+      mock: true,
+      path: p,
+      format: 'md',
+      limit: 50,
+      filter: { run_id: '', status: 'all' },
+    });
+  }, badPath);
+  expect(out?.ok).toBeFalsy();
+  expect(String(out?.error || '')).not.toBe('');
   await electronApp.close();
 });

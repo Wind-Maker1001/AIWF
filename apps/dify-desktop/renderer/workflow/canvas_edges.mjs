@@ -142,9 +142,15 @@ function renderEdgesLayer(ctx) {
       evt.stopPropagation();
       const from = String(hit.dataset.from);
       const to = String(hit.dataset.to);
-      ctx.routeCache.delete(`${from}->${to}`);
-      ctx.store.unlink(from, to);
-      ctx.onChange();
+      if (evt.shiftKey) {
+        ctx.routeCache.delete(`${from}->${to}`);
+        ctx.store.unlink(from, to);
+        ctx.onEdgeSelect(null);
+        ctx.onChange();
+        return;
+      }
+      const edge = ctx.store.getEdge ? ctx.store.getEdge(from, to) : { from, to };
+      ctx.onEdgeSelect(edge ? { ...edge } : { from, to, when: null });
     });
 
     ctx.edgesSvg.append(stroke, hit);

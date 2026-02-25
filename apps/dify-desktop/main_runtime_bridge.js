@@ -1,3 +1,9 @@
+const {
+  normalizeDifyRequest,
+  normalizeDifyResponse,
+  normalizeDifyError,
+} = require("./dify_adapter");
+
 function createBridgeSupport({ path, fork }) {
   function headers(apiKey) {
     const h = { "Content-Type": "application/json" };
@@ -5,7 +11,7 @@ function createBridgeSupport({ path, fork }) {
     return h;
   }
 
-  function runOfflineCleaningInWorker(payload, outRoot) {
+  function runOfflineTaskInWorker(task, payload, outRoot) {
     return new Promise((resolve, reject) => {
       const workerPath = path.join(__dirname, "offline_worker.js");
       const child = fork(workerPath, [], {
@@ -48,22 +54,34 @@ function createBridgeSupport({ path, fork }) {
         reject(new Error(`offline worker exited unexpectedly: ${code}`));
       });
 
-      child.send({ payload: { ...(payload || {}), output_root: outRoot } });
+      child.send({ task, payload: { ...(payload || {}), output_root: outRoot } });
     });
+  }
+
+  function runOfflineCleaningInWorker(payload, outRoot) {
+    return runOfflineTaskInWorker("cleaning", payload, outRoot);
+  }
+
+  function runOfflinePrecheckInWorker(payload, outRoot) {
+    return runOfflineTaskInWorker("precheck", payload, outRoot);
   }
 
   async function runViaBaseApi(payload, cfg) {
     const base = String(cfg.baseUrl || "http://127.0.0.1:18080").replace(/\/$/, "");
+    const req = normalizeDifyRequest(payload || {});
     const resp = await fetch(`${base}/api/v1/integrations/dify/run_cleaning`, {
       method: "POST",
       headers: headers(cfg.apiKey),
-      body: JSON.stringify(payload || {}),
+      body: JSON.stringify(req),
     });
     const txt = await resp.text();
     let obj = {};
     try { obj = JSON.parse(txt || "{}"); } catch { obj = { ok: false, error: txt }; }
-    if (!resp.ok) throw new Error(obj?.error || txt || `HTTP ${resp.status}`);
-    return obj;
+    if (!resp.ok) {
+      const e = normalizeDifyError(obj, resp.status);
+      throw new Error(`${e.code}: ${e.error}`);
+    }
+    return normalizeDifyResponse(obj);
   }
 
   async function baseHealth(cfg) {
@@ -113,6 +131,7 @@ function createBridgeSupport({ path, fork }) {
 
   return {
     runOfflineCleaningInWorker,
+    runOfflinePrecheckInWorker,
     runViaBaseApi,
     baseHealth,
     getTaskStoreStatus,

@@ -45,6 +45,8 @@ $requiredPaths = @(
   "/operators/rules_package_v1/get",
   "/operators/load_rows_v1",
   "/operators/save_rows_v1",
+  "/operators/stream_window_v2",
+  "/operators/parquet_io_v2",
   "/workflow/run"
 )
 foreach($p in $requiredPaths){
@@ -76,6 +78,8 @@ $requiredClientFns = @(
   "def rules_package_get_v1(",
   "def load_rows_v1(",
   "def save_rows_v1(",
+  "def stream_window_v2(",
+  "def parquet_io_v2(",
   "def workflow_run("
 )
 foreach($f in $requiredClientFns){
@@ -92,6 +96,18 @@ if ($openapi -notmatch "TaskState:") {
 }
 if ($openapi -notmatch "TransformRowsResp:") {
   throw "openapi schema missing: TransformRowsResp"
+}
+if ($openapi -notmatch "StreamWindowV2Req:") {
+  throw "openapi schema missing: StreamWindowV2Req"
+}
+if ($openapi -notmatch "StreamWindowV2Resp:") {
+  throw "openapi schema missing: StreamWindowV2Resp"
+}
+if ($openapi -notmatch "ParquetIoV2Req:") {
+  throw "openapi schema missing: ParquetIoV2Req"
+}
+if ($openapi -notmatch "ParquetIoV2Resp:") {
+  throw "openapi schema missing: ParquetIoV2Resp"
 }
 
 Ok "openapi and rust client sync check passed"

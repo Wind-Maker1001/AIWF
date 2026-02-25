@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 import httpx
@@ -8,7 +9,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 
-app = FastAPI(title="AIWF Dify Console", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    env_file = os.getenv("AIWF_ENV_FILE") or _default_env_file()
+    _import_dotenv(env_file)
+    yield
+
+
+app = FastAPI(title="AIWF Dify Console", version="1.0.0", lifespan=lifespan)
 
 
 def _default_env_file() -> str:
@@ -41,12 +49,6 @@ def _api_headers() -> Dict[str, str]:
     if api_key:
         out["X-API-Key"] = api_key
     return out
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    env_file = os.getenv("AIWF_ENV_FILE") or _default_env_file()
-    _import_dotenv(env_file)
 
 
 @app.get("/health")

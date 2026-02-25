@@ -19,13 +19,14 @@ function bindCanvasEvents(ctx) {
 
   ctx.canvasWrap.addEventListener("scroll", () => {
     if (ctx.linking) ctx.requestRender(false);
-    ctx.renderMinimap();
+    ctx.requestMinimap();
   });
 
   ctx.canvasSurface.addEventListener("mousedown", (evt) => {
     if (evt.button !== 0) return;
     const target = evt.target;
     if (target.closest && (target.closest(".node") || target.closest(".port") || target.closest(".edge-hit") || target.closest(".minimap-wrap"))) return;
+    if (ctx.onEdgeSelect) ctx.onEdgeSelect(null);
     const s = ctx.clientToSurface(evt.clientX, evt.clientY);
     ctx.marquee = { x0: s.x, y0: s.y, x1: s.x, y1: s.y };
     ctx.clearSelection();
@@ -101,14 +102,15 @@ function onMarqueeEnd(ctx, nodeW, nodeH, evt) {
   const h = Math.abs(ctx.marquee.y1 - ctx.marquee.y0);
   const x2 = x + w;
   const y2 = y + h;
-  ctx.clearSelection();
+  const selectedIds = [];
   for (const n of ctx.store.state.graph.nodes) {
     const p = ctx.worldToDisplay(Number(n.x || 0), Number(n.y || 0));
     const nx2 = p.x + nodeW * ctx.zoom;
     const ny2 = p.y + nodeH * ctx.zoom;
     const inter = !(nx2 < x || p.x > x2 || ny2 < y || p.y > y2);
-    if (inter) ctx.selectedIds.add(n.id);
+    if (inter) selectedIds.push(n.id);
   }
+  ctx.setSelectedIds(selectedIds);
   ctx.marquee = null;
   ctx.render();
 }
@@ -198,15 +200,19 @@ function onDragMove(ctx, evt) {
 
   let maxX = anchorX;
   let maxY = anchorY;
+  let moved = false;
   for (const id of ctx.drag.selected) {
     const s = ctx.drag.startMap.get(id);
     if (!s) continue;
     const nx = snap(s.x + dx, ctx.gridSize, ctx.snapEnabled);
     const ny = snap(s.y + dy, ctx.gridSize, ctx.snapEnabled);
+    if (nx === s.x && ny === s.y) continue;
     ctx.store.moveNode(id, nx, ny);
+    moved = true;
     maxX = Math.max(maxX, nx);
     maxY = Math.max(maxY, ny);
   }
+  if (!moved) return;
   const ox = ctx.offsetX;
   const oy = ctx.offsetY;
   ctx.ensureViewport({ x: maxX, y: maxY });
@@ -215,8 +221,7 @@ function onDragMove(ctx, evt) {
     return;
   }
   ctx.updateNodePositionsFast(ctx.drag.selected);
-  ctx.renderEdges();
-  ctx.renderGuides();
+  ctx.requestEdgeFrame();
 }
 
 function onDragEnd(ctx) {

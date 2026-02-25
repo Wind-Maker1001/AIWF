@@ -18,6 +18,7 @@ function createRuntimeSupport({ app, fs, path, execFileSync, fork, iconv }) {
     checkPdftoppmRuntime: tools.checkPdftoppmRuntime,
     checkTesseractLangs: tools.checkTesseractLangs,
     runOfflineCleaningInWorker: bridge.runOfflineCleaningInWorker,
+    runOfflinePrecheckInWorker: bridge.runOfflinePrecheckInWorker,
     runViaBaseApi: bridge.runViaBaseApi,
     baseHealth: bridge.baseHealth,
     getTaskStoreStatus: bridge.getTaskStoreStatus,

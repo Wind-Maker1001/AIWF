@@ -12,6 +12,7 @@
     "main_runtime_fonts.js",
     "main_runtime_tools.js",
     "main_runtime_bridge.js",
+    "dify_adapter.js",
     "main_window_support.js",
     "workflow_engine.js",
     "workflow_graph.js",

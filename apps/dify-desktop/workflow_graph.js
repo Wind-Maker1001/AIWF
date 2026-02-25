@@ -20,16 +20,23 @@ function defaultWorkflowGraph() {
 }
 
 function normalizeWorkflow(payload = {}) {
-  const wf = payload.workflow && Array.isArray(payload.workflow.nodes) ? payload.workflow : defaultWorkflowGraph();
-  const nodes = Array.isArray(wf.nodes) ? wf.nodes.map((n, i) => ({
-    id: String(n.id || `n${i + 1}`),
-    type: String(n.type || ""),
-    config: n.config && typeof n.config === "object" ? n.config : {},
-  })) : [];
-  const edges = Array.isArray(wf.edges) ? wf.edges.map((e) => ({
-    from: String(e.from || ""),
-    to: String(e.to || ""),
-  })) : [];
+  const wf = payload.workflow && Array.isArray(payload.workflow.nodes)
+    ? payload.workflow
+    : defaultWorkflowGraph();
+  const nodes = Array.isArray(wf.nodes)
+    ? wf.nodes.map((n, i) => ({
+      id: String(n.id || `n${i + 1}`),
+      type: String(n.type || ""),
+      config: n.config && typeof n.config === "object" ? n.config : {},
+    }))
+    : [];
+  const edges = Array.isArray(wf.edges)
+    ? wf.edges.map((e) => ({
+      from: String(e.from || ""),
+      to: String(e.to || ""),
+      when: typeof e.when === "undefined" ? null : e.when,
+    }))
+    : [];
   return {
     workflow_id: String(payload.workflow_id || wf.workflow_id || "custom_v1"),
     nodes,
@@ -47,7 +54,9 @@ function topoSort(nodes, edges) {
     out.get(e.from).push(e.to);
   }
   const q = [];
-  for (const [id, d] of indeg.entries()) if (d === 0) q.push(id);
+  for (const [id, d] of indeg.entries()) {
+    if (d === 0) q.push(id);
+  }
   const result = [];
   while (q.length) {
     const id = q.shift();
@@ -64,17 +73,23 @@ function validateGraph(graph) {
   const errors = [];
   const idSet = new Set();
   for (const n of graph.nodes) {
-    if (!n.id) errors.push("节点缺少 id");
-    if (idSet.has(n.id)) errors.push(`节点 id 重复: ${n.id}`);
+    if (!n.id) errors.push("node missing id");
+    if (idSet.has(n.id)) errors.push(`duplicate node id: ${n.id}`);
     idSet.add(n.id);
-    if (!n.type) errors.push(`节点 ${n.id} 缺少 type`);
+    if (!n.type) errors.push(`node ${n.id} missing type`);
   }
   for (const e of graph.edges) {
-    if (!idSet.has(e.from)) errors.push(`连线 from 不存在: ${e.from}`);
-    if (!idSet.has(e.to)) errors.push(`连线 to 不存在: ${e.to}`);
+    if (!idSet.has(e.from)) errors.push(`edge from does not exist: ${e.from}`);
+    if (!idSet.has(e.to)) errors.push(`edge to does not exist: ${e.to}`);
+    if (typeof e.when !== "undefined" && e.when !== null) {
+      const t = typeof e.when;
+      if (t !== "object" && t !== "string" && t !== "boolean") {
+        errors.push(`edge.when type unsupported: ${e.from}->${e.to}`);
+      }
+    }
   }
   const ordered = topoSort(graph.nodes, graph.edges);
-  if (ordered.length !== graph.nodes.length) errors.push("流程存在环，仅支持 DAG");
+  if (ordered.length !== graph.nodes.length) errors.push("workflow has cycle; only DAG is supported");
   return { ok: errors.length === 0, errors, ordered };
 }
 

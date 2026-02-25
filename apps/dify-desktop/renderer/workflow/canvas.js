@@ -63,6 +63,8 @@ export class WorkflowCanvas {
     edgesSvg,
     onChange,
     onWarn,
+    onSelectionChange,
+    onEdgeSelect,
   }) {
     this.store = store;
     this.nodeCatalog = nodeCatalog;
@@ -74,6 +76,8 @@ export class WorkflowCanvas {
     this.edgesSvg = edgesSvg;
     this.onChange = onChange || (() => {});
     this.onWarn = onWarn || (() => {});
+    this.onSelectionChange = onSelectionChange || (() => {});
+    this.onEdgeSelect = onEdgeSelect || (() => {});
 
     this.drag = null;
     this.marquee = null;
@@ -105,9 +109,13 @@ export class WorkflowCanvas {
     this.debugRouting = (window.location && window.location.search.includes("debug=1"))
       || window.localStorage.getItem("aiwf.workflow.debugRoutes") === "1";
     this.routeDebugEl = null;
+    this.visibleNodeIds = new Set();
+    this.cullMargin = 260;
 
     this._rafPending = false;
     this._rafNeedMinimap = false;
+    this._minimapRafPending = false;
+    this._edgeRafPending = false;
 
     this.bindCanvasEvents();
     this.bindMinimapEvents();
@@ -142,18 +150,24 @@ export class WorkflowCanvas {
   }
 
   clearSelection() {
+    const changed = this.selectedIds.size > 0;
     this.selectedIds.clear();
+    if (changed) this.onSelectionChange(this.getSelectedIds());
   }
 
   selectOne(id) {
+    const prev = this.getSelectedIds().join("|");
     this.selectedIds.clear();
     if (id) this.selectedIds.add(id);
+    if (prev !== this.getSelectedIds().join("|")) this.onSelectionChange(this.getSelectedIds());
   }
 
   toggleSelection(id) {
     if (!id) return;
+    const prev = this.getSelectedIds().join("|");
     if (this.selectedIds.has(id)) this.selectedIds.delete(id);
     else this.selectedIds.add(id);
+    if (prev !== this.getSelectedIds().join("|")) this.onSelectionChange(this.getSelectedIds());
   }
 
   isSelected(id) {
@@ -165,11 +179,13 @@ export class WorkflowCanvas {
   }
 
   setSelectedIds(ids = []) {
+    const prev = this.getSelectedIds().join("|");
     this.selectedIds.clear();
     for (const id of ids || []) {
       const sid = String(id || "");
       if (sid) this.selectedIds.add(sid);
     }
+    if (prev !== this.getSelectedIds().join("|")) this.onSelectionChange(this.getSelectedIds());
   }
 
   setArrangePolicy(policy = {}) {
@@ -200,6 +216,27 @@ export class WorkflowCanvas {
       const doMinimap = this._rafNeedMinimap;
       this._rafNeedMinimap = false;
       this.renderCore(doMinimap);
+    });
+  }
+
+  requestMinimap() {
+    if (this._minimapRafPending) return;
+    this._minimapRafPending = true;
+    window.requestAnimationFrame(() => {
+      this._minimapRafPending = false;
+      this.renderMinimap();
+    });
+  }
+
+  requestEdgeFrame() {
+    if (this._edgeRafPending) return;
+    this._edgeRafPending = true;
+    window.requestAnimationFrame(() => {
+      this._edgeRafPending = false;
+      this.renderEdges();
+      this.renderGuides();
+      this.renderMarquee();
+      this.renderRouteDebug();
     });
   }
 
@@ -284,6 +321,16 @@ export class WorkflowCanvas {
 
   renderNodes() {
     renderNodesLayer(this, NODE_W, NODE_H, el);
+  }
+
+  getVisibleDisplayRect(extra = 0) {
+    const m = Math.max(0, Number(extra || 0));
+    return {
+      x: this.canvasWrap.scrollLeft - m,
+      y: this.canvasWrap.scrollTop - m,
+      w: this.canvasWrap.clientWidth + m * 2,
+      h: this.canvasWrap.clientHeight + m * 2,
+    };
   }
 
   updateNodePositionsFast(ids) {

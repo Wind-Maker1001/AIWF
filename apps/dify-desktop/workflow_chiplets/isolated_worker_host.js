@@ -157,8 +157,9 @@ const POOLS = new Map();
 function poolSizeForTask(task) {
   const t = String(task || "").toLowerCase();
   const key = t === "compute_rust"
+    || t === "rust_operator_http"
     ? "AIWF_CHIPLET_COMPUTE_POOL_SIZE"
-    : t === "ai_refine"
+    : t === "ai_refine" || t === "ai_call"
       ? "AIWF_CHIPLET_AI_POOL_SIZE"
       : "AIWF_CHIPLET_POOL_SIZE";
   const n = Number(process.env[key] || process.env.AIWF_CHIPLET_POOL_SIZE || "1");

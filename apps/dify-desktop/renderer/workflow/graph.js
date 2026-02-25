@@ -3,16 +3,25 @@ export function validateGraph(graph) {
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph?.edges) ? graph.edges : [];
   if (nodes.length === 0) errors.push("流程没有节点");
+
   const idSet = new Set();
   for (const n of nodes) {
     if (!n?.id) errors.push("存在缺少 id 的节点");
-    if (idSet.has(n.id)) errors.push(`节点ID重复: ${n.id}`);
-    idSet.add(n.id);
+    if (n?.id && idSet.has(n.id)) errors.push(`节点ID重复: ${n.id}`);
+    if (n?.id) idSet.add(n.id);
   }
+
   for (const e of edges) {
     if (!idSet.has(e.from)) errors.push(`连线 from 不存在: ${e.from}`);
     if (!idSet.has(e.to)) errors.push(`连线 to 不存在: ${e.to}`);
+    if (typeof e.when !== "undefined" && e.when !== null) {
+      const t = typeof e.when;
+      if (t !== "boolean" && t !== "string" && t !== "object") {
+        errors.push(`连线 when 类型不支持: ${e.from}->${e.to}`);
+      }
+    }
   }
+
   const cycle = hasCycle(nodes, edges);
   if (cycle) errors.push("流程存在环，当前仅支持 DAG");
   return { ok: errors.length === 0, errors };
@@ -45,4 +54,3 @@ function hasCycle(nodes, edges) {
   const ordered = topoSort(nodes, edges);
   return ordered.length !== nodes.length;
 }
-

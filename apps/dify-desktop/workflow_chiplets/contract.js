@@ -7,6 +7,9 @@ function buildEnvelope(base = {}) {
     workflow_id: String(base.workflow_id || ""),
     node_id: String(base.node_id || ""),
     node_type: String(base.node_type || ""),
+    trace_id: String(base.trace_id || ""),
+    parent_span_id: String(base.parent_span_id || ""),
+    span_id: String(base.span_id || ""),
     ts: new Date().toISOString(),
   };
 }
@@ -99,6 +102,13 @@ function validateByNodeType(out, nodeType) {
     assertString(out.path, "path");
     if (!String(out.path).toLowerCase().endsWith(".md")) throw new Error("chiplet output path must end with .md");
     assertString(out.sha256, "sha256");
+    return;
+  }
+  if (t === "manual_review") {
+    assertBoolean(out.approved, "approved");
+    assertString(out.status, "status");
+    assertString(out.review_key, "review_key");
+    return;
   }
 }
 

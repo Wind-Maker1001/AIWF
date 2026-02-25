@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiwf.local/contracts/rust/operators_extension_v1.schema.json",
+  "title": "AIWF Rust Extension Operators v1",
+  "type": "object",
+  "properties": {
+    "operators": {
+      "type": "object",
+      "properties": {
+        "plugin_operator_v1": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "required": ["plugin"],
+              "properties": {
+                "run_id": { "type": ["string", "null"] },
+                "tenant_id": { "type": ["string", "null"] },
+                "plugin": { "type": "string" },
+                "op": { "type": ["string", "null"] },
+                "payload": {}
+              }
+            },
+            "response": {
+              "type": "object",
+              "required": ["ok", "operator", "status"],
+              "properties": {
+                "ok": { "type": "boolean" },
+                "operator": { "const": "plugin_operator_v1" },
+                "status": { "type": "string" },
+                "output": {},
+                "stderr": { "type": "string" }
+              }
+            }
+          }
+        },
+        "columnar_eval_v1": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "required": ["rows"],
+              "properties": {
+                "rows": { "type": "array", "items": { "type": "object" } },
+                "select_fields": { "type": ["array", "null"], "items": { "type": "string" } },
+                "filter_eq": { "type": ["object", "null"] },
+                "limit": { "type": ["integer", "null"], "minimum": 1 }
+              }
+            },
+            "response": {
+              "type": "object",
+              "required": ["ok", "operator", "rows"],
+              "properties": {
+                "ok": { "type": "boolean" },
+                "operator": { "const": "columnar_eval_v1" },
+                "rows": { "type": "array" },
+                "stats": { "type": "object" }
+              }
+            }
+          }
+        },
+        "stream_window_v1": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "required": ["stream_key", "rows", "event_time_field", "window_ms"],
+              "properties": {
+                "stream_key": { "type": "string" },
+                "rows": { "type": "array", "items": { "type": "object" } },
+                "event_time_field": { "type": "string" },
+                "window_ms": { "type": "integer", "minimum": 1 },
+                "watermark_ms": { "type": ["integer", "null"], "minimum": 1 },
+                "group_by": { "type": ["array", "null"], "items": { "type": "string" } },
+                "value_field": { "type": ["string", "null"] },
+                "trigger": { "type": ["string", "null"] }
+              }
+            },
+            "response": {
+              "type": "object",
+              "required": ["ok", "operator", "rows", "stats"],
+              "properties": {
+                "ok": { "type": "boolean" },
+                "operator": { "const": "stream_window_v1" },
+                "rows": { "type": "array" },
+                "stats": { "type": "object" }
+              }
+            }
+          }
+        },
+        "stream_window_v2": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "required": ["stream_key", "rows", "event_time_field", "window_ms"],
+              "properties": {
+                "stream_key": { "type": "string" },
+                "rows": { "type": "array", "items": { "type": "object" } },
+                "event_time_field": { "type": "string" },
+                "window_type": { "type": ["string", "null"], "enum": ["tumbling", "sliding", "session", null] },
+                "window_ms": { "type": "integer", "minimum": 1 },
+                "slide_ms": { "type": ["integer", "null"], "minimum": 1 },
+                "session_gap_ms": { "type": ["integer", "null"], "minimum": 1 },
+                "watermark_ms": { "type": ["integer", "null"], "minimum": 1 },
+                "allowed_lateness_ms": { "type": ["integer", "null"], "minimum": 1 },
+                "group_by": { "type": ["array", "null"], "items": { "type": "string" } },
+                "value_field": { "type": ["string", "null"] },
+                "trigger": { "type": ["string", "null"] },
+                "emit_late_side": { "type": ["boolean", "null"] }
+              }
+            },
+            "response": {
+              "type": "object",
+              "required": ["ok", "operator", "rows", "stats"],
+              "properties": {
+                "ok": { "type": "boolean" },
+                "operator": { "const": "stream_window_v2" },
+                "rows": { "type": "array" },
+                "late_rows": { "type": "array" },
+                "stats": { "type": "object" }
+              }
+            }
+          }
+        },
+        "sketch_v1": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "required": ["op"],
+              "properties": {
+                "op": { "type": "string", "enum": ["create", "update", "merge"] },
+                "kind": { "type": ["string", "null"], "enum": ["hll", "tdigest", "topk", null] },
+                "state": { "type": ["object", "null"] },
+                "rows": { "type": ["array", "null"], "items": { "type": "object" } },
+                "field": { "type": ["string", "null"] },
+                "topk_n": { "type": ["integer", "null"], "minimum": 1 },
+                "merge_state": { "type": ["object", "null"] }
+              }
+            },
+            "response": {
+              "type": "object",
+              "required": ["ok", "operator", "kind", "state"],
+              "properties": {
+                "ok": { "type": "boolean" },
+                "operator": { "const": "sketch_v1" },
+                "kind": { "type": "string" },
+                "state": { "type": "object" },
+                "estimate": { "type": "number" }
+              }
+            }
+          }
+        },
+        "runtime_stats_v1": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "required": ["op"],
+              "properties": {
+                "op": { "type": "string", "enum": ["record", "summary", "reset"] },
+                "operator": { "type": ["string", "null"] },
+                "ok": { "type": ["boolean", "null"] },
+                "error_code": { "type": ["string", "null"] },
+                "duration_ms": { "type": ["integer", "null"], "minimum": 0 },
+                "rows_in": { "type": ["integer", "null"], "minimum": 0 },
+                "rows_out": { "type": ["integer", "null"], "minimum": 0 }
+              }
+            },
+            "response": {
+              "type": "object",
+              "required": ["ok", "operator", "status", "op"],
+              "properties": {
+                "ok": { "type": "boolean" },
+                "operator": { "const": "runtime_stats_v1" },
+                "status": { "type": "string" },
+                "op": { "type": "string" },
+                "items": { "type": "array" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "error_codes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "AUTH_FAILED",
+          "TIMEOUT",
+          "UPSTREAM_4XX",
+          "UPSTREAM_5XX",
+          "PLUGIN_NOT_ALLOWED",
+          "PLUGIN_SIGNATURE_INVALID",
+          "STREAM_WINDOW_INVALID",
+          "SKETCH_KIND_UNSUPPORTED",
+          "BENCHMARK_GATE_FAILED"
+        ]
+      }
+    }
+  },
+  "required": ["operators", "error_codes"]
+}

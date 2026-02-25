@@ -75,11 +75,18 @@ function Invoke-SqlScalar {
     [string]$DbName,
     [string]$User,
     [string]$Password,
+    [bool]$UseTrustedAuth = $false,
     [string]$Query
   )
-  $lines = & $SqlCmdPath -S $Server -U $User -P $Password -d $DbName -h -1 -W -Q $Query
+  if ($UseTrustedAuth) {
+    $lines = & $SqlCmdPath -S $Server -E -d $DbName -h -1 -W -Q $Query 2>&1
+  } else {
+    $lines = & $SqlCmdPath -S $Server -U $User -P $Password -d $DbName -h -1 -W -Q $Query 2>&1
+  }
   if ($LASTEXITCODE -ne 0) {
-    throw "sqlcmd query failed"
+    $msg = ($lines | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ -ne "" } | Select-Object -Last 1)
+    if (-not $msg) { $msg = "unknown sqlcmd error" }
+    throw "sqlcmd query failed: $msg"
   }
   $clean = @($lines | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ -ne "" })
   if ($clean.Count -lt 1) {
@@ -133,14 +140,32 @@ if (-not $SkipSqlVerify) {
   $sqlDb = if ($env:AIWF_SQL_DB) { $env:AIWF_SQL_DB } else { "AIWF" }
   $sqlUser = if ($env:AIWF_SQL_USER) { $env:AIWF_SQL_USER } else { "aiwf_app" }
   $sqlPassword = if ($env:AIWF_SQL_PASSWORD) { $env:AIWF_SQL_PASSWORD } else { "" }
-  if (-not $sqlPassword) {
-    throw "AIWF_SQL_PASSWORD is empty; cannot verify SQL persistence"
+  $trustedPref = if ($env:AIWF_SQL_TRUSTED) { $env:AIWF_SQL_TRUSTED } else { "" }
+  $useTrustedAuth = $false
+  if ([string]::IsNullOrWhiteSpace($trustedPref) -eq $false) {
+    $useTrustedAuth = [string]::Equals($trustedPref, "1", [System.StringComparison]::OrdinalIgnoreCase) `
+      -or [string]::Equals($trustedPref, "true", [System.StringComparison]::OrdinalIgnoreCase) `
+      -or [string]::Equals($trustedPref, "yes", [System.StringComparison]::OrdinalIgnoreCase)
+  } elseif (-not $sqlPassword -or $sqlPassword -match "^__SET_.*__$") {
+    # For local Windows deployments, prefer integrated auth when SQL password is not configured.
+    $useTrustedAuth = $true
+  }
+  if ($useTrustedAuth) {
+    Info "SQL verify auth mode: trusted (-E)"
+  } else {
+    if (-not $sqlPassword) {
+      throw "AIWF_SQL_PASSWORD is empty; cannot verify SQL persistence (or set AIWF_SQL_TRUSTED=1)"
+    }
+    if ($sqlPassword -match "^__SET_.*__$") {
+      throw "AIWF_SQL_PASSWORD is still a placeholder in env file; set real password or set AIWF_SQL_TRUSTED=1"
+    }
+    Info "SQL verify auth mode: sql user"
   }
   $safeJobId = $jobId.Replace("'", "''")
   $server = "$sqlHost,$sqlPort"
-  $jobCount = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $sqlDb -User $sqlUser -Password $sqlPassword -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.jobs WHERE job_id = N'$safeJobId';"
-  $stepCount = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $sqlDb -User $sqlUser -Password $sqlPassword -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.steps WHERE job_id = N'$safeJobId';"
-  $artifactCount = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $sqlDb -User $sqlUser -Password $sqlPassword -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.artifacts WHERE job_id = N'$safeJobId';"
+  $jobCount = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $sqlDb -User $sqlUser -Password $sqlPassword -UseTrustedAuth $useTrustedAuth -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.jobs WHERE job_id = N'$safeJobId';"
+  $stepCount = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $sqlDb -User $sqlUser -Password $sqlPassword -UseTrustedAuth $useTrustedAuth -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.steps WHERE job_id = N'$safeJobId';"
+  $artifactCount = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $sqlDb -User $sqlUser -Password $sqlPassword -UseTrustedAuth $useTrustedAuth -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM dbo.artifacts WHERE job_id = N'$safeJobId';"
   Write-Host "sql_jobs    : $jobCount"
   Write-Host "sql_steps   : $stepCount"
   Write-Host "sql_arts    : $artifactCount"

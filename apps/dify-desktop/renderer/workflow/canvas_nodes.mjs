@@ -3,10 +3,22 @@
   ctx.inputPortByNodeId.clear();
   ctx.portByNodeId.clear();
   ctx.nodeElById.clear();
+  ctx.visibleNodeIds.clear();
+  const nodeCount = Array.isArray(ctx.store?.state?.graph?.nodes) ? ctx.store.state.graph.nodes.length : 0;
+  const enableCull = nodeCount > 200;
+  const vr = enableCull && ctx.getVisibleDisplayRect ? ctx.getVisibleDisplayRect(ctx.cullMargin || 0) : null;
 
   for (const node of ctx.store.state.graph.nodes) {
-    const card = createEl("div", "node");
     const p = ctx.worldToDisplay(Number(node.x || 0), Number(node.y || 0));
+    const w = nodeW * ctx.zoom;
+    const h = nodeH * ctx.zoom;
+    if (vr) {
+      const hidden = (p.x + w < vr.x) || (p.y + h < vr.y) || (p.x > vr.x + vr.w) || (p.y > vr.y + vr.h);
+      if (hidden) continue;
+    }
+    ctx.visibleNodeIds.add(String(node.id || ""));
+
+    const card = createEl("div", "node");
     card.style.left = `${p.x}px`;
     card.style.top = `${p.y}px`;
     card.style.transform = `scale(${ctx.zoom})`;

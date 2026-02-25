@@ -351,6 +351,125 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+  /operators/plugin_operator_v1:
+    post:
+      summary: Execute plugin operator through plugin ABI wrapper
+      operationId: pluginOperatorV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PluginOperatorReq"
+      responses:
+        "200":
+          description: plugin operator result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PluginOperatorResp"
+  /operators/columnar_eval_v1:
+    post:
+      summary: Run Arrow-based columnar projection/filter
+      operationId: columnarEvalV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColumnarEvalReq"
+      responses:
+        "200":
+          description: columnar eval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ColumnarEvalResp"
+  /operators/stream_window_v1:
+    post:
+      summary: Event-time stream window with watermark
+      operationId: streamWindowV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StreamWindowReq"
+      responses:
+        "200":
+          description: stream window output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreamWindowResp"
+  /operators/stream_window_v2:
+    post:
+      summary: Event-time stream window v2 with tumbling/sliding/session and late side output
+      operationId: streamWindowV2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StreamWindowV2Req"
+      responses:
+        "200":
+          description: stream window v2 output
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StreamWindowV2Resp"
+  /operators/sketch_v1:
+    post:
+      summary: Unified sketch interface for hll/tdigest/topk
+      operationId: sketchV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SketchReq"
+      responses:
+        "200":
+          description: sketch state/result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SketchResp"
+  /operators/runtime_stats_v1:
+    post:
+      summary: Record/summary/reset runtime metrics
+      operationId: runtimeStatsV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuntimeStatsReq"
+      responses:
+        "200":
+          description: runtime stats result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeStatsResp"
+  /operators/parquet_io_v2:
+    post:
+      summary: Parquet I/O v2 with schema evolution and partition pruning
+      operationId: parquetIoV2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParquetIoV2Req"
+      responses:
+        "200":
+          description: parquet io v2 result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParquetIoV2Resp"
   /workflow/run:
     post:
       summary: Run workflow steps with built-in operators
@@ -1092,6 +1211,367 @@ components:
           type: string
         cancelled:
           type: boolean
+    PluginOperatorReq:
+      type: object
+      additionalProperties: false
+      required: [plugin]
+      properties:
+        run_id:
+          type: string
+        tenant_id:
+          type: string
+        plugin:
+          type: string
+        op:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+    PluginOperatorResp:
+      type: object
+      additionalProperties: true
+      required: [ok, operator, status]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+          enum: [plugin_operator_v1]
+        status:
+          type: string
+        run_id:
+          type: string
+        plugin:
+          type: string
+        output:
+          type: object
+          additionalProperties: true
+        stderr:
+          type: string
+    ColumnarEvalReq:
+      type: object
+      additionalProperties: false
+      required: [rows]
+      properties:
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        select_fields:
+          type: array
+          items:
+            type: string
+        filter_eq:
+          type: object
+          additionalProperties: true
+        limit:
+          type: integer
+          minimum: 1
+    ColumnarEvalResp:
+      type: object
+      additionalProperties: true
+      required: [ok, operator, status, rows]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+          enum: [columnar_eval_v1]
+        status:
+          type: string
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        stats:
+          type: object
+          additionalProperties: true
+    StreamWindowReq:
+      type: object
+      additionalProperties: false
+      required: [stream_key, rows, event_time_field, window_ms]
+      properties:
+        run_id:
+          type: string
+        stream_key:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        event_time_field:
+          type: string
+        window_ms:
+          type: integer
+          minimum: 1
+        watermark_ms:
+          type: integer
+          minimum: 1
+        group_by:
+          type: array
+          items:
+            type: string
+        value_field:
+          type: string
+        trigger:
+          type: string
+    StreamWindowResp:
+      type: object
+      additionalProperties: true
+      required: [ok, operator, status, rows, stats]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+          enum: [stream_window_v1]
+        status:
+          type: string
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        stats:
+          type: object
+          additionalProperties: true
+    StreamWindowV2Req:
+      type: object
+      additionalProperties: false
+      required: [stream_key, rows, event_time_field, window_ms]
+      properties:
+        run_id:
+          type: string
+        stream_key:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        event_time_field:
+          type: string
+        window_type:
+          type: string
+          enum: [tumbling, sliding, session]
+        window_ms:
+          type: integer
+          minimum: 1
+        slide_ms:
+          type: integer
+          minimum: 1
+        session_gap_ms:
+          type: integer
+          minimum: 1
+        watermark_ms:
+          type: integer
+          minimum: 1
+        allowed_lateness_ms:
+          type: integer
+          minimum: 1
+        group_by:
+          type: array
+          items:
+            type: string
+        value_field:
+          type: string
+        trigger:
+          type: string
+        emit_late_side:
+          type: boolean
+    StreamWindowV2Resp:
+      type: object
+      additionalProperties: true
+      required: [ok, operator, status, rows, stats]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+          enum: [stream_window_v2]
+        status:
+          type: string
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        late_rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        stats:
+          type: object
+          additionalProperties: true
+    ParquetIoV2Req:
+      type: object
+      additionalProperties: false
+      required: [op, path]
+      properties:
+        run_id:
+          type: string
+        op:
+          type: string
+          enum: [write, save, read, load, inspect, inspect_schema, merge_small]
+        path:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        parquet_mode:
+          type: string
+          enum: [typed, payload]
+        limit:
+          type: integer
+          minimum: 1
+        columns:
+          type: array
+          items:
+            type: string
+        predicate_field:
+          type: string
+        predicate_eq:
+          type: object
+          additionalProperties: true
+        partition_by:
+          type: array
+          items:
+            type: string
+        compression:
+          type: string
+        recursive:
+          type: boolean
+        schema_mode:
+          type: string
+          enum: [strict, additive, widen]
+    ParquetIoV2Resp:
+      type: object
+      additionalProperties: true
+      required: [ok, operator, status]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+          enum: [parquet_io_v2]
+        status:
+          type: string
+        run_id:
+          type: string
+        op:
+          type: string
+        path:
+          type: string
+    SketchReq:
+      type: object
+      additionalProperties: false
+      required: [op]
+      properties:
+        run_id:
+          type: string
+        op:
+          type: string
+          enum: [create, update, merge]
+        kind:
+          type: string
+          enum: [hll, tdigest, topk]
+        state:
+          type: object
+          additionalProperties: true
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        field:
+          type: string
+        topk_n:
+          type: integer
+          minimum: 1
+        merge_state:
+          type: object
+          additionalProperties: true
+    SketchResp:
+      type: object
+      additionalProperties: true
+      required: [ok, operator, status, state]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+          enum: [sketch_v1]
+        status:
+          type: string
+        run_id:
+          type: string
+        kind:
+          type: string
+        state:
+          type: object
+          additionalProperties: true
+        estimate:
+          type: number
+    RuntimeStatsReq:
+      type: object
+      additionalProperties: false
+      required: [op]
+      properties:
+        run_id:
+          type: string
+        op:
+          type: string
+          enum: [record, summary, reset]
+        operator:
+          type: string
+        ok:
+          type: boolean
+        error_code:
+          type: string
+        duration_ms:
+          type: integer
+          minimum: 0
+        rows_in:
+          type: integer
+          minimum: 0
+        rows_out:
+          type: integer
+          minimum: 0
+    RuntimeStatsResp:
+      type: object
+      additionalProperties: true
+      required: [ok, operator, status, op]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+          enum: [runtime_stats_v1]
+        status:
+          type: string
+        run_id:
+          type: string
+        op:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     TaskNotFoundResp:
       type: object
       additionalProperties: false

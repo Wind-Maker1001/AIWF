@@ -9,5 +9,8 @@ Choose one path:
 Related docs:
 - Desktop app details: `docs/dify_desktop_app.md`
 - Dify local integration: `docs/dify_local_integration.md`
+- Dify adapter v1: `docs/dify_adapter_v1.md`
+- Rust extension operators v1: `docs/rust_extension_ops_v1.md`
+- Rust new-ops perf gate: `docs/perf_gate_new_ops.md`
 - Legacy standalone web frontend (archived): `docs/archive/dify_standalone_frontend_legacy_20260216.md`
 - Current handoff baseline: `docs/codex_handoff.md`

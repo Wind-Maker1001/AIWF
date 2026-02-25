@@ -1,0 +1,12 @@
+﻿{
+    "source":  "bench_learning_v2",
+    "updated_at":  "2026-02-22T22:28:52.8024010+08:00",
+    "medium_rows_threshold":  20000,
+    "auto_decision_hit_samples":  9,
+    "auto_decision_hit_rate":  0.33333333333333331,
+    "large_rows_threshold":  120000,
+    "medium_complexity_threshold":  8,
+    "large_bytes_threshold":  50331648,
+    "medium_bytes_threshold":  12582912,
+    "samples":  9
+}

@@ -1,9 +1,15 @@
-const { runOfflineCleaning } = require("./offline_engine");
+const { runOfflineCleaning, runOfflinePrecheck } = require("./offline_engine");
 
 process.on("message", async (msg) => {
   try {
     const payload = msg && msg.payload ? msg.payload : {};
-    const result = await runOfflineCleaning(payload);
+    const task = String(msg && msg.task ? msg.task : "cleaning").toLowerCase();
+    let result = null;
+    if (task === "precheck") {
+      result = await runOfflinePrecheck(payload);
+    } else {
+      result = await runOfflineCleaning(payload);
+    }
     if (process.send) process.send({ type: "result", data: result });
     process.exit(0);
   } catch (e) {
@@ -11,4 +17,3 @@ process.on("message", async (msg) => {
     process.exit(1);
   }
 });
-

@@ -69,6 +69,104 @@ function loadDesktopLayouts() {
 
 const OFFICE_THEMES = loadDesktopThemes();
 const OFFICE_LAYOUTS = loadDesktopLayouts();
+const CLEANING_TEMPLATES = loadCleaningTemplates();
+
+function toTemplateLabel(id) {
+  if (!id) return "通用模板";
+  if (id === "finance_report_v1") return "财报模板 v1（资产/利润/现金流）";
+  const s = String(id).replace(/[_-]+/g, " ").trim();
+  if (!s) return "通用模板";
+  return s.replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function normalizeTemplateEntry(entry, templatesDir) {
+  if (!entry || typeof entry !== "object") return null;
+  const id = String(entry.id || "").trim().toLowerCase();
+  if (!id || id === "default") return null;
+  const file = String(entry.file || "").trim();
+  if (!file) return null;
+  const fp = path.join(templatesDir, file);
+  if (!fs.existsSync(fp)) return null;
+  let rules = null;
+  try {
+    const obj = JSON.parse(fs.readFileSync(fp, "utf8"));
+    if (!obj || typeof obj !== "object" || typeof obj.rules !== "object") return null;
+    rules = obj.rules;
+  } catch {
+    return null;
+  }
+  return {
+    id,
+    file,
+    label: String(entry.label || "").trim() || toTemplateLabel(id),
+    description: String(entry.description || "").trim(),
+    rules,
+  };
+}
+
+function loadCleaningTemplates() {
+  const templatesDir = path.join(__dirname, "..", "..", "rules", "templates");
+  const out = [];
+  const byId = new Map();
+  const add = (entry) => {
+    if (!entry || !entry.id || byId.has(entry.id)) return;
+    byId.set(entry.id, entry);
+    out.push(entry);
+  };
+
+  add({
+    id: "default",
+    file: "",
+    label: "通用模板",
+    description: "不追加模板规则，沿用通用清洗链路。",
+    rules: null,
+  });
+
+  const registryPath = path.join(templatesDir, "cleaning_templates_desktop.json");
+  try {
+    if (fs.existsSync(registryPath)) {
+      const reg = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      const items = Array.isArray(reg?.templates) ? reg.templates : [];
+      items.forEach((it) => add(normalizeTemplateEntry(it, templatesDir)));
+    }
+  } catch {}
+
+  try {
+    if (fs.existsSync(templatesDir)) {
+      const files = fs.readdirSync(templatesDir).filter((n) => /^generic_.*\.json$/i.test(n));
+      files.forEach((file) => {
+        const fp = path.join(templatesDir, file);
+        let obj = null;
+        try {
+          obj = JSON.parse(fs.readFileSync(fp, "utf8"));
+        } catch {
+          return;
+        }
+        if (!obj || typeof obj !== "object" || typeof obj.rules !== "object") return;
+        const id = String(obj?.meta?.template_id || path.basename(file, ".json")).trim().toLowerCase();
+        if (!id || byId.has(id)) return;
+        add({
+          id,
+          file,
+          label: String(obj?.meta?.template_label || "").trim() || toTemplateLabel(id),
+          description: String(obj?.meta?.template_description || "").trim(),
+          rules: obj.rules,
+        });
+      });
+    }
+  } catch {}
+
+  return {
+    list: out.map((x) => ({
+      id: x.id,
+      label: x.label,
+      description: x.description,
+      file: x.file,
+      rules: x.rules || null,
+    })),
+    byId,
+  };
+}
 
 function resolveOfficeTheme(name) {
   const k = String(name || "assignment").trim().toLowerCase();
@@ -84,6 +182,17 @@ function resolveOfficeLayout(name) {
 
 function ensureDir(p) {
   fs.mkdirSync(p, { recursive: true });
+}
+
+function resolveCleaningTemplateParams(params = {}) {
+  const p = { ...(params || {}) };
+  const t = String(p.cleaning_template || "").trim().toLowerCase();
+  if (!t || t === "default") return p;
+  const tpl = CLEANING_TEMPLATES.byId.get(t);
+  if (!tpl || !tpl.rules) return p;
+  // Let caller-provided rules override template defaults.
+  p.rules = { ...tpl.rules, ...(p.rules || {}) };
+  return p;
 }
 
 function sha256File(p) {
@@ -182,8 +291,8 @@ async function readInputRows(params, warnings, runtime = {}) {
   return OFFLINE_INGEST.readInputRows(params, warnings, runtime);
 }
 
-function cleanRows(rawRows) {
-  return OFFLINE_INGEST.cleanRows(rawRows);
+function cleanRows(rawRows, params = {}) {
+  return OFFLINE_INGEST.cleanRows(rawRows, params);
 }
 
 function applyQualityGates(quality, params = {}) {
@@ -216,9 +325,28 @@ async function writePptx(filePath, reportTitle, rows, quality, warnings, options
 async function writeMarkdown(filePath, jobId, reportTitle, rows, quality, warnings) {
   return OFFLINE_OUTPUTS.writeMarkdown(filePath, jobId, reportTitle, rows, quality, warnings);
 }
+
+async function runOfflinePrecheck(payload) {
+  const params = resolveCleaningTemplateParams(payload?.params || {});
+  const warnings = [];
+  const runtime = {};
+  const rawRows = await readInputRows(params, warnings, runtime);
+  const precheck = OFFLINE_INGEST.precheckRows(rawRows, params);
+  return {
+    ok: true,
+    mode: "offline_local",
+    template: String(params.cleaning_template || "default").trim().toLowerCase() || "default",
+    warnings,
+    precheck,
+  };
+}
+
+function listCleaningTemplates() {
+  return { ok: true, templates: CLEANING_TEMPLATES.list };
+}
 async function runOfflineCleaning(payload) {
   const t0 = Date.now();
-  const params = payload?.params || {};
+  const params = resolveCleaningTemplateParams(payload?.params || {});
   const reportTitle = params.report_title || payload?.report_title || "离线作业成品";
   const mdOnly = params.md_only === true || String(params.output_format || "").toLowerCase() === "md";
 
@@ -232,7 +360,7 @@ async function runOfflineCleaning(payload) {
   const warnings = [];
   const runtime = { paperMdDir, paperMdRecords: [], fileQualityRecords: [] };
   const rawRows = await readInputRows(params, warnings, runtime);
-  const cleaned = cleanRows(rawRows);
+  const cleaned = cleanRows(rawRows, params);
   const rows = cleaned.rows;
   const quality = cleaned.quality;
   const qualityGate = applyQualityGates(quality, params);
@@ -285,7 +413,7 @@ async function runOfflineCleaning(payload) {
   };
 }
 
-module.exports = { runOfflineCleaning };
+module.exports = { runOfflineCleaning, runOfflinePrecheck, listCleaningTemplates };
 
 
 

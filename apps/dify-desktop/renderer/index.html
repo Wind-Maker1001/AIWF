@@ -27,6 +27,9 @@
     .dropzone.active{border-color:#0b5ea8;background:#eaf4ff}
     .mini{font-size:12px;color:var(--muted)}
     .queue-actions{display:flex;gap:8px;justify-content:flex-end;margin:6px 0}
+    .precheck-issues{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+    .precheck-issues button{padding:6px 10px;font-size:12px}
+    .precheck-detail{border:1px solid #dfe7f2;border-radius:10px;padding:8px;background:#f8fbff;margin-bottom:8px;white-space:pre-wrap}
   </style>
 </head>
 <body>
@@ -64,6 +67,7 @@
           </div>
           <div class="field"><label>输出语言</label><select id="officeLang"><option value="zh" selected>中文</option><option value="en">English</option></select></div>
           <div class="field"><label>成品风格（不会改数据，只改展示）</label><select id="officeTheme"><option value="assignment" selected>作业风</option><option value="debate_plus">辩论增强</option><option value="academic">学术风</option><option value="professional">专业风</option><option value="business">商务风</option><option value="debate">辩论风（经典）</option></select></div>
+          <div class="field"><label>数据模板（会影响清洗规则）</label><select id="cleaningTemplate"><option value="default" selected>通用模板</option><option value="finance_report_v1">财报模板 v1（资产/利润/现金流）</option></select></div>
           <div class="field"><label>成品质量（建议高质量）</label><select id="officeQualityMode"><option value="high" selected>高质量（推荐）</option><option value="standard">标准（更快）</option></select></div>
           <div class="field"><label><input id="ocrEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />图片启用 OCR（离线优先调用本机 Tesseract）</label></div>
           <div class="field"><label><input id="mdOnly" type="checkbox" checked style="width:auto;margin-right:6px" />仅输出 Markdown（给 AI 二次加工）</label></div>
@@ -71,7 +75,11 @@
           <div class="field"><label>OCR 参数</label><input id="ocrConfig" value="--oem 1 --psm 6" /></div>
           <div class="field"><label><input id="autoNormalizeEncoding" type="checkbox" checked style="width:auto;margin-right:6px" />自动编码转换（检测到 GB18030 时转 UTF-8）</label></div>
           <div class="field"><label><input id="strictEncodingMode" type="checkbox" checked style="width:auto;margin-right:6px" />严格编码模式（有“不确定编码”文件时阻止运行）</label></div>
+          <div class="field"><label>预检金额可转换率下限（0-1）</label><input id="precheckAmountRateMin" type="number" min="0" max="1" step="0.01" value="0.90" /></div>
+          <div class="field"><label>质量门槛：最大无效行比例（0-1）</label><input id="maxInvalidRatio" type="number" min="0" max="1" step="0.001" value="0.01" /></div>
+          <div class="field"><label>质量门槛：最小输出行数</label><input id="minOutputRows" type="number" min="0" step="1" value="1" /></div>
           <div class="btns">
+            <button id="btnPrecheck" class="secondary">模板预检</button>
             <button id="btnRun">第 3 步：开始生成</button>
             <button id="btnHealth" class="secondary">检查连通性</button>
             <button id="btnSave" class="secondary">保存配置</button>
@@ -113,6 +121,24 @@
         </div></div>
 
         <div class="card"><div class="hd">日志</div><div class="bd"><pre id="log">{}</pre></div></div>
+        <div class="card"><div class="hd">模板预检结果</div><div class="bd">
+          <div id="precheckIssues" class="precheck-issues"></div>
+          <div id="precheckDetail" class="precheck-detail mini">点击上方问题可定位详情</div>
+          <div id="precheckHint" class="mini" style="margin-bottom:6px">未执行</div>
+          <pre id="precheck">{}</pre>
+        </div></div>
+        <div class="card"><div class="hd">模板管理</div><div class="bd">
+          <div class="field"><label>模板列表</label><select id="tplManageSelect"></select></div>
+          <div id="tplManageMeta" class="mini" style="margin-bottom:6px">未加载</div>
+          <div class="btns" style="margin-bottom:8px">
+            <button id="btnTplRefresh" class="secondary">刷新模板</button>
+            <button id="btnTplToggle" class="secondary">停用当前模板</button>
+            <button id="btnTplEnableAll" class="secondary">恢复全部模板</button>
+            <button id="btnTplExport" class="secondary">导出模板JSON</button>
+          </div>
+          <div class="field"><label>导入模板 JSON（仅当前用户）</label><input id="tplImportFile" type="file" accept=".json,application/json" /></div>
+          <pre id="tplManageRules">{}</pre>
+        </div></div>
         <div class="card"><div class="hd">安装自检与诊断</div><div class="bd">
           <div class="btns" style="margin-bottom:8px">
             <button id="btnSelfCheck" class="secondary">执行自检</button>
@@ -139,13 +165,70 @@ const encodingHintEl=$("encodingHint"), fontHintEl=$("fontHint"), ocrHintEl=$("o
 const taskStoreHintEl=$("taskStoreHint");
 const routeDiagEl=$("routeDiag"), routeDiagHintEl=$("routeDiagHint");
 const selfCheckEl=$("selfCheck"), selfCheckHintEl=$("selfCheckHint");
+const precheckEl=$("precheck"), precheckHintEl=$("precheckHint");
+const precheckIssuesEl=$("precheckIssues"), precheckDetailEl=$("precheckDetail");
+const tplManageMetaEl=$("tplManageMeta"), tplManageRulesEl=$("tplManageRules");
 const queuePaths = [];
 let latestEncodingSummary = { uncertainCount: 0, gbCount: 0, utfCount: 0 };
 let latestRouteSummaryMeta = null;
+let templateCatalog = [];
+window.__disabledTemplates = [];
+window.__customTemplates = [];
 
 const setStatus=(m,ok=true)=>{statusEl.className="status "+(ok?"ok":"bad");statusEl.textContent=m;};
 const show=(o)=>{logEl.textContent=JSON.stringify(o,null,2);};
 const cfgFromUi=()=>({mode:$("mode").value,baseUrl:$("baseUrl").value.trim(),apiKey:$("apiKey").value.trim()});
+const uiCfgFromUi=()=>({
+  reportTitle:$("reportTitle").value.trim(),
+  officeLang:$("officeLang").value,
+  officeTheme:$("officeTheme").value,
+  cleaningTemplate:$("cleaningTemplate").value,
+  officeQualityMode:$("officeQualityMode").value,
+  ocrEnabled:$("ocrEnabled").checked,
+  mdOnly:$("mdOnly").checked,
+  ocrLang:$("ocrLang").value.trim(),
+  ocrConfig:$("ocrConfig").value.trim(),
+  autoNormalizeEncoding:$("autoNormalizeEncoding").checked,
+  strictEncodingMode:$("strictEncodingMode").checked,
+  precheckAmountRateMin:$("precheckAmountRateMin").value,
+  maxInvalidRatio:$("maxInvalidRatio").value,
+  minOutputRows:$("minOutputRows").value,
+  disabledTemplates: Array.isArray(window.__disabledTemplates) ? window.__disabledTemplates : [],
+  customTemplates: Array.isArray(window.__customTemplates) ? window.__customTemplates : []
+});
+const saveCfgFromUi=()=>Object.assign({}, cfgFromUi(), uiCfgFromUi());
+
+function applyUiCfg(cfg){
+  const c = cfg || {};
+  $("reportTitle").value = c.reportTitle || "";
+  $("officeLang").value = c.officeLang || "zh";
+  $("officeTheme").value = c.officeTheme || "assignment";
+  $("cleaningTemplate").value = c.cleaningTemplate || "default";
+  $("officeQualityMode").value = c.officeQualityMode || "high";
+  $("ocrEnabled").checked = c.ocrEnabled !== false;
+  $("mdOnly").checked = c.mdOnly !== false;
+  $("ocrLang").value = c.ocrLang || "chi_sim+eng";
+  $("ocrConfig").value = c.ocrConfig || "--oem 1 --psm 6";
+  $("autoNormalizeEncoding").checked = c.autoNormalizeEncoding !== false;
+  $("strictEncodingMode").checked = c.strictEncodingMode !== false;
+  $("precheckAmountRateMin").value = c.precheckAmountRateMin || "0.90";
+  $("maxInvalidRatio").value = c.maxInvalidRatio || "0.01";
+  $("minOutputRows").value = c.minOutputRows || "1";
+  window.__disabledTemplates = Array.isArray(c.disabledTemplates) ? c.disabledTemplates.map(x=>String(x)) : [];
+  window.__customTemplates = Array.isArray(c.customTemplates) ? c.customTemplates : [];
+}
+
+function toNumberOrNull(v){
+  const s = String(v ?? "").trim();
+  if(!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getDisabledTemplateSet(){
+  const arr = Array.isArray(window.__disabledTemplates) ? window.__disabledTemplates : [];
+  return new Set(arr.map(x=>String(x).trim().toLowerCase()).filter(Boolean));
+}
 
 function parseManualInputFiles(){
   return String($("inputFiles").value||"")
@@ -159,23 +242,133 @@ function combinedInputFiles(){
   return Array.from(new Set(all));
 }
 
-const payloadFromUi=()=>({
-  owner:"desktop",
-  actor:"desktop",
-  ruleset_version:"v1",
-  params:{
-    report_title:$("reportTitle").value.trim(),
-    input_path:$("inputPath").value.trim(),
-    input_files:combinedInputFiles().join("\n"),
-    office_lang:$("officeLang").value,
-    office_theme:$("officeTheme").value,
-    office_quality_mode:$("officeQualityMode").value,
-    md_only:$("mdOnly").checked,
-    ocr_enabled:$("ocrEnabled").checked,
-    ocr_lang:$("ocrLang").value.trim(),
-    ocr_config:$("ocrConfig").value.trim()
+function findTemplateById(id){
+  const key = String(id || "").trim().toLowerCase();
+  if(!key) return null;
+  const all = Array.isArray(templateCatalog) ? templateCatalog : [];
+  return all.find(t => String(t.id || "").trim().toLowerCase() === key) || null;
+}
+
+const payloadFromUi=()=>{
+  const selectedTemplate = $("cleaningTemplate").value;
+  const tpl = findTemplateById(selectedTemplate);
+  const p = {
+    owner:"desktop",
+    actor:"desktop",
+    ruleset_version:"v1",
+    params:{
+      report_title:$("reportTitle").value.trim(),
+      input_path:$("inputPath").value.trim(),
+      input_files:combinedInputFiles().join("\n"),
+      office_lang:$("officeLang").value,
+      office_theme:$("officeTheme").value,
+      cleaning_template:selectedTemplate,
+      office_quality_mode:$("officeQualityMode").value,
+      md_only:$("mdOnly").checked,
+      ocr_enabled:$("ocrEnabled").checked,
+      ocr_lang:$("ocrLang").value.trim(),
+      ocr_config:$("ocrConfig").value.trim(),
+      precheck_amount_convert_rate_min: toNumberOrNull($("precheckAmountRateMin").value),
+      rules: {
+        max_invalid_ratio: toNumberOrNull($("maxInvalidRatio").value),
+        min_output_rows: toNumberOrNull($("minOutputRows").value),
+      }
+    }
+  };
+  if (tpl && tpl.rules && typeof tpl.rules === "object") {
+    p.params.rules = { ...tpl.rules, ...(p.params.rules || {}) };
   }
-});
+  Object.keys(p.params.rules || {}).forEach((k)=>{
+    if (p.params.rules[k] === null || p.params.rules[k] === undefined || p.params.rules[k] === "") {
+      delete p.params.rules[k];
+    }
+  });
+  return p;
+};
+
+function applyTemplateOptions(templates, preferred = "default"){
+  if(!Array.isArray(templates) || templates.length===0) return;
+  const current = String(preferred || $("cleaningTemplate").value || "default");
+  const disabled = getDisabledTemplateSet();
+  const visible = templates.filter((tpl)=>{
+    const id = String(tpl.id || "").toLowerCase();
+    if(id === "default") return true;
+    if(id === current.toLowerCase()) return true;
+    return !disabled.has(id);
+  });
+  $("cleaningTemplate").innerHTML = "";
+  visible.forEach((tpl)=>{
+    const opt = document.createElement("option");
+    opt.value = String(tpl.id || "");
+    opt.textContent = String(tpl.label || tpl.id || "模板");
+    if(tpl.description){
+      opt.title = String(tpl.description);
+    }
+    $("cleaningTemplate").appendChild(opt);
+  });
+  const exists = visible.some(t => String(t.id) === current);
+  $("cleaningTemplate").value = exists ? current : "default";
+}
+
+function renderTemplateManager(preferred = ""){
+  const all = Array.isArray(templateCatalog) ? templateCatalog : [];
+  const select = $("tplManageSelect");
+  select.innerHTML = "";
+  all.forEach((tpl)=>{
+    const opt = document.createElement("option");
+    const id = String(tpl.id || "");
+    const disabled = getDisabledTemplateSet().has(id.toLowerCase());
+    opt.value = id;
+    opt.textContent = disabled ? `${tpl.label || id}（已停用）` : (tpl.label || id);
+    select.appendChild(opt);
+  });
+  const pick = String(preferred || select.value || "default");
+  if (Array.from(select.options).some(o=>o.value===pick)) select.value = pick;
+  renderTemplateDetail(select.value);
+}
+
+function renderTemplateDetail(templateId){
+  const tpl = findTemplateById(templateId);
+  if(!tpl){
+    tplManageMetaEl.textContent = "未找到模板";
+    tplManageRulesEl.textContent = "{}";
+    return;
+  }
+  const id = String(tpl.id || "");
+  const disabled = getDisabledTemplateSet().has(id.toLowerCase());
+  tplManageMetaEl.textContent = `ID: ${id} | 文件: ${tpl.file || "-"} | 状态: ${disabled ? "已停用" : "启用中"}`;
+  tplManageRulesEl.textContent = JSON.stringify(tpl.rules || {}, null, 2);
+  $("btnTplToggle").textContent = disabled ? "启用当前模板" : "停用当前模板";
+}
+
+async function loadCleaningTemplates(preferred = "default"){
+  try{
+    const r = await window.aiwfDesktop.listCleaningTemplates();
+    if(!r?.ok){
+      setStatus("模板列表加载失败，已回退到内置选项。", false);
+      return;
+    }
+    const base = Array.isArray(r.templates) ? r.templates : [];
+    const customs = Array.isArray(window.__customTemplates) ? window.__customTemplates : [];
+    templateCatalog = [...base];
+    customs.forEach((tpl)=>{
+      const id = String(tpl?.id || "").trim().toLowerCase();
+      if(!id) return;
+      if(templateCatalog.some(x=>String(x.id).toLowerCase()===id)) return;
+      templateCatalog.push({
+        id,
+        label: String(tpl.label || id),
+        description: String(tpl.description || "导入模板"),
+        file: "user_import",
+        rules: tpl.rules && typeof tpl.rules === "object" ? tpl.rules : null,
+      });
+    });
+    applyTemplateOptions(templateCatalog, preferred);
+    renderTemplateManager(preferred);
+  }catch(e){
+    setStatus("模板列表加载失败，已回退到内置选项。", false);
+  }
+}
 
 function renderQueue(){
   if(queuePaths.length===0){
@@ -470,11 +663,81 @@ function renderMetrics(p){
   renderArtifacts(p?.artifacts||[]);
 }
 
+function renderPrecheck(res){
+  const p = res && typeof res === "object" ? res : {};
+  precheckEl.textContent = JSON.stringify(p, null, 2);
+  precheckIssuesEl.innerHTML = "";
+  precheckDetailEl.textContent = "点击上方问题可定位详情";
+  const ok = !!p.ok;
+  if(ok){
+    precheckHintEl.textContent = "预检通过：字段和质量门槛可接受。";
+    const passBtn = document.createElement("button");
+    passBtn.className = "secondary";
+    passBtn.textContent = "查看通过摘要";
+    passBtn.onclick = () => {
+      precheckDetailEl.textContent = `预检通过\n输入行数: ${p.input_rows || 0}\n字段数: ${Array.isArray(p.headers) ? p.headers.length : 0}\n金额可转换率: ${Number((p.amount_convert_rate || 0) * 100).toFixed(1)}%（下限 ${(Number(p.amount_convert_rate_required || 0.9) * 100).toFixed(1)}%）`;
+    };
+    precheckIssuesEl.appendChild(passBtn);
+  }else{
+    const issues = Array.isArray(p.issues) ? p.issues.length : 0;
+    precheckHintEl.textContent = `预检未通过：${issues} 个问题`;
+    const addIssueBtn = (title, detail) => {
+      const b = document.createElement("button");
+      b.className = "secondary";
+      b.textContent = title;
+      b.onclick = () => { precheckDetailEl.textContent = detail; };
+      precheckIssuesEl.appendChild(b);
+    };
+    const missing = Array.isArray(p.missing_required_fields) ? p.missing_required_fields : [];
+    if (missing.length > 0) {
+      addIssueBtn(
+        `缺少字段 (${missing.length})`,
+        `缺少必填字段:\n- ${missing.join("\n- ")}\n\n当前检测到字段:\n- ${(Array.isArray(p.headers) ? p.headers : []).join("\n- ")}`
+      );
+    }
+    const rate = Number(p.amount_convert_rate || 0);
+    const requiredRate = Number(p.amount_convert_rate_required || 0.9);
+    const invalidSamples = Array.isArray(p.amount_invalid_samples) ? p.amount_invalid_samples : [];
+    if (rate < requiredRate) {
+      const lines = invalidSamples.length > 0
+        ? invalidSamples.map((s, i) => `${i + 1}. 行${s.row_no || "-"} | ${s.raw_value || ""} | ${s.source_file || ""}`)
+        : ["无可用样本"];
+      addIssueBtn(
+        "金额列异常",
+        `金额字段: ${p.amount_field || "-"}\n可转换率: ${(rate * 100).toFixed(1)}%（下限 ${(requiredRate * 100).toFixed(1)}%）\n异常样本:\n${lines.join("\n")}`
+      );
+      invalidSamples.slice(0, 5).forEach((s, i) => {
+        const b = document.createElement("button");
+        b.className = "secondary";
+        b.textContent = `打开样本${i + 1}`;
+        b.onclick = async () => {
+          const fp = String(s?.source_file || "");
+          if(!fp){ setStatus("样本缺少文件路径", false); return; }
+          await window.aiwfDesktop.openPath(fp);
+          setStatus(`已打开样本文件，可定位到行 ${s?.row_no || "-"}`, true);
+        };
+        precheckIssuesEl.appendChild(b);
+      });
+    }
+    if (!p.quality_gate_ok) {
+      addIssueBtn(
+        "质量门槛未通过",
+        `质量门槛错误:\n${p.quality_gate_error || "unknown"}\n\n建议:\n- 先修复上述字段或金额问题\n- 再重新执行模板预检`
+      );
+    }
+    if (precheckIssuesEl.children.length === 0) {
+      addIssueBtn("查看问题摘要", (Array.isArray(p.issues) ? p.issues : []).join("\n"));
+    }
+  }
+}
+
 async function init(){
   const cfg=await window.aiwfDesktop.getConfig();
   $("mode").value=cfg.mode||"offline_local";
   $("baseUrl").value=cfg.baseUrl||"http://127.0.0.1:18080";
   $("apiKey").value=cfg.apiKey||"";
+  applyUiCfg(cfg);
+  await loadCleaningTemplates(cfg.cleaningTemplate || "default");
   bindDropzone();
   renderQueue();
   inspectQueueEncoding(true);
@@ -502,7 +765,7 @@ $("btnInstallFonts").onclick=async()=>{
     setStatus("安装字体失败: "+e, false);
   }
 };
-$("btnSave").onclick=async()=>{await window.aiwfDesktop.saveConfig(cfgFromUi());setStatus("配置已保存",true);};
+$("btnSave").onclick=async()=>{await window.aiwfDesktop.saveConfig(saveCfgFromUi());setStatus("配置已保存",true);};
 $("btnHealth").onclick=async()=>{
   setStatus("检查中...");
   try{const j=await window.aiwfDesktop.health(cfgFromUi());show(j);setStatus(j.ok?"可用":"不可用",!!j.ok);}catch(e){setStatus("检查失败: "+e,false)}
@@ -553,6 +816,93 @@ $("btnRun").onclick=async()=>{
     show(j);renderMetrics(j);
     setStatus(j.ok?"生成完成":"生成失败",!!j.ok);
   }catch(e){setStatus("运行失败: "+e,false)}
+};
+
+$("btnPrecheck").onclick=async()=>{
+  setStatus("正在执行模板预检...");
+  try{
+    const enc = await inspectQueueEncoding(false);
+    if($("strictEncodingMode").checked && (enc?.uncertainCount||0) > 0){
+      setStatus("严格编码模式已开启：存在不确定编码文件，已阻止预检。请先转成 UTF-8。", false);
+      return;
+    }
+    const payload = payloadFromUi();
+    const files = combinedInputFiles();
+    if ($("autoNormalizeEncoding").checked && files.length > 0) {
+      const norm = await window.aiwfDesktop.normalizeEncoding(files);
+      if (norm?.ok) {
+        const mapped = (norm.items || []).map(x => String(x.output || x.source || "")).filter(Boolean);
+        payload.params.input_files = mapped.join("\n");
+      }
+    }
+    const j = await window.aiwfDesktop.precheckCleaning(payload, cfgFromUi());
+    show(j);
+    renderPrecheck(j?.precheck || {});
+    setStatus(j?.precheck?.ok ? "预检通过，可以开始生成。" : "预检发现问题，请先修复。", !!j?.precheck?.ok);
+  }catch(e){
+    precheckHintEl.textContent = "预检失败";
+    precheckEl.textContent = JSON.stringify({ ok:false, error:String(e) }, null, 2);
+    setStatus("预检失败: "+e, false);
+  }
+};
+
+$("tplManageSelect").onchange=()=>{ renderTemplateDetail($("tplManageSelect").value); };
+$("btnTplRefresh").onclick=async()=>{ await loadCleaningTemplates($("cleaningTemplate").value); setStatus("模板列表已刷新", true); };
+$("btnTplToggle").onclick=async()=>{
+  const id = String($("tplManageSelect").value || "").trim().toLowerCase();
+  if(!id || id === "default"){ setStatus("默认模板不可停用", false); return; }
+  const set = getDisabledTemplateSet();
+  if(set.has(id)) set.delete(id); else set.add(id);
+  window.__disabledTemplates = Array.from(set);
+  await loadCleaningTemplates($("cleaningTemplate").value);
+  await window.aiwfDesktop.saveConfig(saveCfgFromUi());
+  setStatus(set.has(id) ? "模板已停用" : "模板已启用", true);
+};
+$("btnTplEnableAll").onclick=async()=>{
+  window.__disabledTemplates = [];
+  await loadCleaningTemplates($("cleaningTemplate").value);
+  await window.aiwfDesktop.saveConfig(saveCfgFromUi());
+  setStatus("已恢复全部模板", true);
+};
+$("btnTplExport").onclick=()=>{
+  const id = String($("tplManageSelect").value || "").trim();
+  const tpl = findTemplateById(id);
+  if(!tpl){ setStatus("未找到模板，无法导出", false); return; }
+  const blob = new Blob([JSON.stringify({ id: tpl.id, label: tpl.label, description: tpl.description, rules: tpl.rules || {} }, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${tpl.id || "template"}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus("模板 JSON 已导出", true);
+};
+$("tplImportFile").onchange=async(e)=>{
+  try{
+    const f = e?.target?.files?.[0];
+    if(!f) return;
+    const txt = await f.text();
+    const obj = JSON.parse(txt);
+    const id = String(obj.id || obj.template_id || "").trim().toLowerCase();
+    if(!id){ setStatus("导入失败：模板缺少 id", false); return; }
+    if(!obj.rules || typeof obj.rules !== "object"){ setStatus("导入失败：模板缺少 rules", false); return; }
+    const entry = {
+      id,
+      label: String(obj.label || obj.template_label || id),
+      description: String(obj.description || obj.template_description || "导入模板"),
+      rules: obj.rules,
+    };
+    const list = Array.isArray(window.__customTemplates) ? window.__customTemplates : [];
+    const next = list.filter(x=>String(x?.id||"").toLowerCase()!==id);
+    next.push(entry);
+    window.__customTemplates = next;
+    await loadCleaningTemplates(id);
+    await window.aiwfDesktop.saveConfig(saveCfgFromUi());
+    setStatus(`模板已导入：${entry.label}`, true);
+  }catch(err){
+    setStatus("导入模板失败: "+err, false);
+  }finally{
+    $("tplImportFile").value = "";
+  }
 };
 
 $("mode").addEventListener("change", ()=>{ refreshTaskStoreStatus(true); });
