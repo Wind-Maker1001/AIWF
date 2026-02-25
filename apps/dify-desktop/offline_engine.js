@@ -361,9 +361,58 @@ async function runOfflineCleaning(payload) {
   const runtime = { paperMdDir, paperMdRecords: [], fileQualityRecords: [] };
   const rawRows = await readInputRows(params, warnings, runtime);
   const cleaned = cleanRows(rawRows, params);
-  const rows = cleaned.rows;
-  const quality = cleaned.quality;
-  const qualityGate = applyQualityGates(quality, params);
+  let rows = cleaned.rows;
+  let quality = cleaned.quality;
+  let qualityGate = { evaluated: false, passed: false };
+  const fidelity = { enabled: false, reasons: [] };
+
+  const corruptRows = (rows || []).filter((r) => isLikelyCorruptedText(String(r.text || ""))).length;
+  const corruptRatio = rows.length > 0 ? (corruptRows / rows.length) : 0;
+  const autoFidelity = params.md_fidelity_auto !== false;
+
+  function activateFidelity(reason) {
+    if (fidelity.enabled) return;
+    fidelity.enabled = true;
+    fidelity.reasons.push(String(reason || "unknown"));
+    const fallbackRows = OFFLINE_INGEST.buildFidelityRows(rawRows);
+    if (fallbackRows.length > 0) {
+      rows = fallbackRows;
+      quality = {
+        input_rows: rawRows.length,
+        output_rows: fallbackRows.length,
+        filtered_rows: Math.max(0, rawRows.length - fallbackRows.length),
+        invalid_rows: 0,
+        duplicate_rows_removed: 0,
+      };
+    }
+  }
+
+  try {
+    qualityGate = applyQualityGates(quality, params);
+  } catch (e) {
+    const msg = String(e && e.message ? e.message : e);
+    qualityGate = { evaluated: true, passed: false, blocked: true, error: msg };
+    warnings.push(`质量门禁未通过，已切换文本保真模式: ${msg}`);
+    activateFidelity(`quality_gate:${msg}`);
+  }
+
+  if (autoFidelity && !fidelity.enabled && rows.length === 0 && rawRows.length > 0) {
+    warnings.push("清洗后结果为空，已切换文本保真模式。");
+    activateFidelity("empty_output_after_clean");
+  }
+  if (autoFidelity && !fidelity.enabled && corruptRatio >= 0.35) {
+    warnings.push(`清洗结果疑似乱码率过高(${(corruptRatio * 100).toFixed(1)}%)，已切换文本保真模式。`);
+    activateFidelity(`gibberish_ratio_high:${corruptRatio.toFixed(4)}`);
+  }
+  if (fidelity.enabled) {
+    qualityGate = {
+      ...(qualityGate || {}),
+      evaluated: true,
+      passed: true,
+      fallback_mode: "text_fidelity",
+      fallback_reasons: fidelity.reasons.slice(),
+    };
+  }
 
   const xlsxPath = path.join(artDir, "fin.xlsx");
   const docxPath = path.join(artDir, "audit.docx");
@@ -376,7 +425,10 @@ async function runOfflineCleaning(payload) {
   await writeMarkdown(mdPath, jobId, reportTitle, rows, quality, warnings);
   writePaperMarkdownIndex(paperMdIndexPath, runtime.paperMdRecords);
   writeAiCorpusMarkdown(aiCorpusPath, runtime.paperMdRecords);
-  writeQualityReport(qualityReportPath, rows, warnings, runtime.fileQualityRecords);
+  writeQualityReport(qualityReportPath, rows, warnings, runtime.fileQualityRecords, {
+    paperRecords: runtime.paperMdRecords,
+    fidelity,
+  });
   if (!mdOnly) {
     await writeXlsx(xlsxPath, rows, quality, warnings, params);
     await writeDocx(docxPath, jobId, reportTitle, rows, quality, warnings, params);

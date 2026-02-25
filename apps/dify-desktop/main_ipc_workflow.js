@@ -1153,6 +1153,72 @@
     return { ok: true, items, by_chiplet: by };
   }
 
+  function percentile(values, q) {
+    const arr = (Array.isArray(values) ? values : [])
+      .map((x) => Number(x))
+      .filter((x) => Number.isFinite(x))
+      .sort((a, b) => a - b);
+    if (!arr.length) return 0;
+    const p = Math.max(0, Math.min(1, Number(q)));
+    const i = Math.ceil(arr.length * p) - 1;
+    return Number(arr[Math.max(0, Math.min(arr.length - 1, i))].toFixed(3));
+  }
+
+  function isFallbackNodeRun(nodeRun) {
+    const status = String(nodeRun?.output?.status || nodeRun?.status || "").toLowerCase();
+    if (status === "fallback") return true;
+    if (nodeRun?.output?.fallback === true || nodeRun?.output?.degraded === true) return true;
+    const detail = String(nodeRun?.output?.detail || nodeRun?.error || "").toLowerCase();
+    return /fallback|degrad|降级/.test(detail);
+  }
+
+  function buildPerfDashboard(limit = 200) {
+    const runs = listRunHistory(limit);
+    const by = {};
+    runs.forEach((it) => {
+      const nodes = Array.isArray(it?.result?.node_runs) ? it.result.node_runs : [];
+      nodes.forEach((n) => {
+        const k = String(n?.type || "").trim();
+        if (!k) return;
+        if (!by[k]) {
+          by[k] = {
+            chiplet: k,
+            calls: 0,
+            failed: 0,
+            seconds: [],
+            attempts_total: 0,
+            fallback_count: 0,
+          };
+        }
+        by[k].calls += 1;
+        if (String(n?.status || "") !== "done") by[k].failed += 1;
+        by[k].seconds.push(Number(n?.seconds || 0));
+        by[k].attempts_total += Math.max(1, Number(n?.telemetry?.attempts || 1));
+        if (isFallbackNodeRun(n)) by[k].fallback_count += 1;
+      });
+    });
+    const items = Object.values(by).map((x) => {
+      const calls = Number(x.calls || 0);
+      const retries = Math.max(0, Number(x.attempts_total || 0) - calls);
+      return {
+        chiplet: x.chiplet,
+        calls,
+        failed: Number(x.failed || 0),
+        error_rate: calls > 0 ? Number((Number(x.failed || 0) / calls).toFixed(4)) : 0,
+        retry_rate: calls > 0 ? Number((retries / calls).toFixed(4)) : 0,
+        fallback_rate: calls > 0 ? Number((Number(x.fallback_count || 0) / calls).toFixed(4)) : 0,
+        p95_seconds: percentile(x.seconds, 0.95),
+        avg_seconds: calls > 0 ? Number((x.seconds.reduce((a, b) => a + b, 0) / calls).toFixed(3)) : 0,
+      };
+    }).sort((a, b) => String(a.chiplet).localeCompare(String(b.chiplet)));
+    return {
+      ok: true,
+      total_runs: runs.length,
+      items,
+      generated_at: nowIso(),
+    };
+  }
+
   function listRunHistory(limit = 50) {
     const fp = runHistoryPath();
     if (!fs.existsSync(fp)) return [];
@@ -1348,6 +1414,12 @@
     const limit = Number(opts?.limit || 50);
     const safe = Number.isFinite(limit) ? Math.max(1, Math.min(500, Math.floor(limit))) : 50;
     return readDiagnostics(safe);
+  });
+
+  ipcMain.handle("aiwf:getWorkflowPerfDashboard", async (_evt, opts) => {
+    const limit = Number(opts?.limit || 200);
+    const safe = Number.isFinite(limit) ? Math.max(10, Math.min(2000, Math.floor(limit))) : 200;
+    return buildPerfDashboard(safe);
   });
 
   ipcMain.handle("aiwf:listWorkflowRuns", async (_evt, opts) => {

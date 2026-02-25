@@ -129,6 +129,9 @@
           <input id="aiKey" />
           <label>外部 AI Model</label>
           <input id="aiModel" placeholder="deepseek-chat" />
+          <div id="offlineBoundaryHint" class="cfg-help" style="margin-top:6px;color:#7a4a00;background:#fff7e6;border:1px solid #f2d39b;border-radius:8px;padding:8px">
+            离线能力边界：仅本地清洗/计算/模板渲染节点可离线运行；AI 相关节点需外部 API。
+          </div>
           <label>Rust Endpoint</label>
           <input id="rustEndpoint" value="http://127.0.0.1:18082" />
           <label><input id="rustRequired" type="checkbox" checked style="width:auto;margin-right:6px" />Rust 不可用时阻断</label>
@@ -301,8 +304,8 @@
           </table>
           <div style="height:8px"></div>
           <table>
-            <thead><tr><th>Chiplet</th><th>失败率</th><th>平均耗时</th></tr></thead>
-            <tbody id="diagRuns"><tr><td colspan="3" style="color:#74879b">暂无诊断</td></tr></tbody>
+            <thead><tr><th>Chiplet</th><th>错误率</th><th>P95耗时</th><th>重试率</th><th>Fallback率</th></tr></thead>
+            <tbody id="diagRuns"><tr><td colspan="5" style="color:#74879b">暂无诊断</td></tr></tbody>
           </table>
           <div style="height:8px"></div>
           <table>

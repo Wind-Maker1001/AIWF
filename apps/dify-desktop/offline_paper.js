@@ -186,23 +186,44 @@ function stripInlineCitations(text) {
   return normalizeLineText(s);
 }
 
-function cleanAcademicChunks(chunks, filePath) {
+function cleanAcademicChunksDetailed(chunks, filePath) {
   const src = Array.isArray(chunks) ? chunks : [];
   const cleaned = [];
+  const stats = {
+    source_file: filePath,
+    raw_chunks: src.length,
+    kept_chunks: 0,
+    removed_reference_lines: 0,
+    removed_noise_lines: 0,
+    removed_short_lines: 0,
+    stop_section_hit: false,
+    inline_citation_cleaned_lines: 0,
+  };
   let stopBody = false;
   for (const raw of src) {
     if (stopBody) break;
     const line = normalizeLineText(raw);
     if (!line) continue;
     if (isReferenceSectionTitle(line) || isNonBodySectionTitle(line)) {
+      stats.stop_section_hit = true;
       stopBody = true;
       continue;
     }
-    if (looksLikeReferenceEntry(line)) continue;
+    if (looksLikeReferenceEntry(line)) {
+      stats.removed_reference_lines += 1;
+      continue;
+    }
     const stripped = stripInlineCitations(line);
+    if (stripped !== line) stats.inline_citation_cleaned_lines += 1;
     if (!stripped) continue;
-    if (isLikelyNoiseLine(stripped)) continue;
-    if (stripped.length < 10) continue;
+    if (isLikelyNoiseLine(stripped)) {
+      stats.removed_noise_lines += 1;
+      continue;
+    }
+    if (stripped.length < 10) {
+      stats.removed_short_lines += 1;
+      continue;
+    }
     cleaned.push(stripped);
   }
   const dedup = [];
@@ -213,11 +234,20 @@ function cleanAcademicChunks(chunks, filePath) {
     seen.add(key);
     dedup.push(x);
   }
-  if (dedup.length > 0) return dedup;
-  return src
+  if (dedup.length > 0) {
+    stats.kept_chunks = dedup.length;
+    return { chunks: dedup, stats };
+  }
+  const fallback = src
     .map((x) => normalizeLineText(stripInlineCitations(x)))
     .filter((x) => x && x.length >= 10)
     .slice(0, 5000);
+  stats.kept_chunks = fallback.length;
+  return { chunks: fallback, stats };
+}
+
+function cleanAcademicChunks(chunks, filePath) {
+  return cleanAcademicChunksDetailed(chunks, filePath).chunks;
 }
 
 function pickPaperTitle(chunks, filePath) {
@@ -307,7 +337,8 @@ function chunksFromMarkdown(mdText) {
 
 function materializePaperMarkdown(filePath, sourceType, chunks, runtime, params = {}) {
   const enabled = params.paper_markdown_enabled !== false && params.pdf_markdown_enabled !== false;
-  const cleanedChunks = cleanAcademicChunks(chunks, filePath);
+  const detail = cleanAcademicChunksDetailed(chunks, filePath);
+  const cleanedChunks = detail.chunks;
   if (!enabled || !runtime || !runtime.paperMdDir) return cleanedChunks;
   fs.mkdirSync(runtime.paperMdDir, { recursive: true });
   const base = safeFileStem(path.basename(filePath, path.extname(filePath)));
@@ -321,6 +352,11 @@ function materializePaperMarkdown(filePath, sourceType, chunks, runtime, params 
       source_file: filePath,
       source_type: sourceType,
       chunk_count: chunksFromMarkdown(md).length,
+      raw_chunk_count: Number(detail?.stats?.raw_chunks || 0),
+      removed_reference_lines: Number(detail?.stats?.removed_reference_lines || 0),
+      removed_noise_lines: Number(detail?.stats?.removed_noise_lines || 0),
+      inline_citation_cleaned_lines: Number(detail?.stats?.inline_citation_cleaned_lines || 0),
+      stop_section_hit: !!detail?.stats?.stop_section_hit,
       path: mdPath,
     });
   }
@@ -375,28 +411,73 @@ function writeAiCorpusMarkdown(filePath, records) {
   fs.writeFileSync(filePath, `\uFEFF${lines.join("\n")}\n`, "utf8");
 }
 
-function writeQualityReport(filePath, rows, warnings, records) {
+function writeQualityReport(filePath, rows, warnings, records, options = {}) {
+  const paperRecords = Array.isArray(options?.paperRecords) ? options.paperRecords : [];
+  const fidelity = options?.fidelity || {};
+  const totalRows = Array.isArray(rows) ? rows.length : 0;
+  const badRows = (rows || []).filter((r) => isLikelyCorruptedText(String(r.text || "")));
+  const gibberishRatio = totalRows > 0 ? badRows.length / totalRows : 0;
+  const rawChunks = paperRecords.reduce((a, r) => a + Number(r.raw_chunk_count || 0), 0);
+  const keptChunks = paperRecords.reduce((a, r) => a + Number(r.chunk_count || 0), 0);
+  const refRemoved = paperRecords.reduce((a, r) => a + Number(r.removed_reference_lines || 0), 0);
+  const citeCleaned = paperRecords.reduce((a, r) => a + Number(r.inline_citation_cleaned_lines || 0), 0);
+  const stopHitCount = paperRecords.reduce((a, r) => a + (r.stop_section_hit ? 1 : 0), 0);
+  const extractionRate = rawChunks > 0 ? keptChunks / rawChunks : 1;
+  const referencePruneRate = rawChunks > 0 ? refRemoved / rawChunks : 0;
+  const sectionIntegrityRate = paperRecords.length > 0 ? stopHitCount / paperRecords.length : 1;
+
   const lines = [];
   lines.push("# 质量体检报告");
   lines.push("");
-  lines.push(`- 行数: ${Array.isArray(rows) ? rows.length : 0}`);
+  lines.push(`- 行数: ${totalRows}`);
   lines.push(`- 告警数: ${Array.isArray(warnings) ? warnings.length : 0}`);
+  lines.push(`- 模式: ${fidelity.enabled ? "text_fidelity" : "standard"}`);
+  if (fidelity.enabled && Array.isArray(fidelity.reasons) && fidelity.reasons.length > 0) {
+    lines.push(`- 降级原因: ${fidelity.reasons.join("; ")}`);
+  }
+  lines.push("");
+  lines.push("## Markdown 质量指标");
+  lines.push(`- 抽取率(extraction_rate): ${(extractionRate * 100).toFixed(1)}%`);
+  lines.push(`- 乱码疑似率(gibberish_ratio): ${(gibberishRatio * 100).toFixed(1)}%`);
+  lines.push(`- 参考/注释剔除率(reference_prune_rate): ${(referencePruneRate * 100).toFixed(1)}%`);
+  lines.push(`- 引文清洗触发率(citation_cleaned_rate): ${rawChunks > 0 ? ((citeCleaned / rawChunks) * 100).toFixed(1) : "0.0"}%`);
+  lines.push(`- 章节完整度(section_integrity_rate): ${(sectionIntegrityRate * 100).toFixed(1)}%`);
   lines.push("");
   lines.push("## 文件级检查");
-  if (!Array.isArray(records) || records.length === 0) {
+  const hasLayerRecords = Array.isArray(records) && records.length > 0;
+  const hasPaperRecords = Array.isArray(paperRecords) && paperRecords.length > 0;
+  if (!hasLayerRecords && !hasPaperRecords) {
     lines.push("- 无文件级质量记录。");
   } else {
-    records.forEach((r, i) => {
-      lines.push(`### ${i + 1}. ${path.basename(String(r.source_file || ""))} (${r.source_type || "unknown"})`);
-      lines.push(`- quality_score: ${r.quality_score}`);
-      lines.push(`- text_chars: ${r.text_chars}`);
-      lines.push(`- chunks: ${r.chunks}`);
-      lines.push(`- corrupted: ${r.corrupted ? "yes" : "no"}`);
-      lines.push("");
-    });
+    if (hasLayerRecords) {
+      records.forEach((r, i) => {
+        lines.push(`### ${i + 1}. ${path.basename(String(r.source_file || ""))} (${r.source_type || "unknown"})`);
+        lines.push(`- quality_score: ${r.quality_score}`);
+        lines.push(`- text_chars: ${r.text_chars}`);
+        lines.push(`- chunks: ${r.chunks}`);
+        lines.push(`- corrupted: ${r.corrupted ? "yes" : "no"}`);
+        lines.push("");
+      });
+    }
+    if (hasPaperRecords) {
+      paperRecords.forEach((r, i) => {
+        const raw = Number(r.raw_chunk_count || 0);
+        const kept = Number(r.chunk_count || 0);
+        const keepRate = raw > 0 ? (kept / raw) : 1;
+        lines.push(`### ${i + 1}. ${path.basename(String(r.source_file || ""))} (paper_markdown)`);
+        lines.push(`- raw_chunks: ${raw}`);
+        lines.push(`- kept_chunks: ${kept}`);
+        lines.push(`- keep_rate: ${(keepRate * 100).toFixed(1)}%`);
+        lines.push(`- removed_reference_lines: ${Number(r.removed_reference_lines || 0)}`);
+        lines.push(`- removed_noise_lines: ${Number(r.removed_noise_lines || 0)}`);
+        lines.push(`- inline_citation_cleaned_lines: ${Number(r.inline_citation_cleaned_lines || 0)}`);
+        lines.push(`- stop_section_hit: ${r.stop_section_hit ? "yes" : "no"}`);
+        lines.push(`- markdown: ${String(r.path || "")}`);
+        lines.push("");
+      });
+    }
   }
   lines.push("## 行级异常");
-  const badRows = (rows || []).filter((r) => isLikelyCorruptedText(String(r.text || "")));
   lines.push(`- 乱码疑似行数: ${badRows.length}`);
   badRows.slice(0, 20).forEach((r, i) => {
     lines.push(`${i + 1}. [${path.basename(String(r.source_file || ""))}] ${normalizeLineText(String(r.text || "")).slice(0, 200)}`);

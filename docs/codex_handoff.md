@@ -262,6 +262,16 @@ Recent rust/de-coupling upgrades (2026-02-24):
     - `ops/scripts/release_rust_binary.ps1`
     - `ops/scripts/package_rust_offline_bundle.ps1`
     - `ops/scripts/check_rust_operator_perf_gate.ps1`
+  - desktop release baseline script:
+    - `ops/scripts/release_baseline_v1_1_4.ps1`
+    - outputs clean-windows checklist + baseline summary under `release/v1.1.4/`.
+  - markdown quality gate productization:
+    - quality report now includes extraction/gibberish/reference-prune/section-integrity metrics.
+    - automatic fallback to `text_fidelity` mode when quality gate blocks / output empty / gibberish ratio too high.
+  - workflow observability upgrades:
+    - new IPC: `aiwf:getWorkflowPerfDashboard` (error rate / p95 / retry rate / fallback rate).
+    - workflow studio diagnostics panel upgraded to display these metrics.
+    - workflow studio now shows offline capability boundary hints (local-only vs online-required nodes).
 
 ## 6) Known Risks (Current)
 - Medium: workflow routing fallback ratio in dense random graphs remains around `~0.48`; now under stricter gate, but visual quality headroom still exists.

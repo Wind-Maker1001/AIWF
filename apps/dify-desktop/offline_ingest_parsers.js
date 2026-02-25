@@ -1,4 +1,4 @@
-function createOfflineIngestParsers(deps = {}) {
+﻿function createOfflineIngestParsers(deps = {}) {
   const {
     fs,
     path,
@@ -73,7 +73,7 @@ function createOfflineIngestParsers(deps = {}) {
 
     const ocr = runPdfOcr(filePath, params);
     if (ocr.ok) {
-      if (corrupted) warnings.push(`PDF 文本层疑似乱码，已强制切换 OCR: ${path.basename(filePath)}`);
+      if (corrupted) warnings.push(`PDF 文本层疑似乱码，已切换 OCR: ${path.basename(filePath)}`);
       else warnings.push(`PDF 文本层质量较低，已自动切换 OCR: ${path.basename(filePath)}`);
 
       const ocrChunks = splitPdfTextToEvidence(ocr.text);
@@ -91,7 +91,7 @@ function createOfflineIngestParsers(deps = {}) {
       return mdChunks.map((s, i) => rowFromText(filePath, "pdf_ocr_md", s, i));
     }
 
-    warnings.push(`PDF 文本提取质量较低，OCR 未完成(${ocr.reason || "unknown"})，可能漏读: ${path.basename(filePath)}`);
+    warnings.push(`PDF 文本提取质量较低且 OCR 未完成(${ocr.reason || "unknown"})，可能漏读: ${path.basename(filePath)}`);
     const mdChunks = materializePaperMarkdown(filePath, "pdf_fallback", chunks, runtime, params);
     return mdChunks.map((s, i) => rowFromText(filePath, "pdf_md_fallback", s, i));
   }

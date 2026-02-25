@@ -24,6 +24,7 @@ const els = {
   aiEndpoint: $("aiEndpoint"),
   aiKey: $("aiKey"),
   aiModel: $("aiModel"),
+  offlineBoundaryHint: $("offlineBoundaryHint"),
   rustEndpoint: $("rustEndpoint"),
   rustRequired: $("rustRequired"),
   chipletIsolationEnabled: $("chipletIsolationEnabled"),
@@ -1908,10 +1909,11 @@ function renderNodeRuns(nodeRuns) {
   });
 }
 
-function renderDiagRuns(summary, rustStats) {
+function renderDiagRuns(summary, rustStats, perfStats) {
   const by = summary && typeof summary === "object" ? summary.by_chiplet : null;
   const entries = by && typeof by === "object" ? Object.entries(by) : [];
   const rustEntries = Array.isArray(rustStats?.items) ? rustStats.items : [];
+  const perfByChiplet = new Map((Array.isArray(perfStats?.items) ? perfStats.items : []).map((x) => [String(x.chiplet || ""), x]));
   if (!entries.length) {
     els.diagRuns.innerHTML = "";
   } else {
@@ -1922,12 +1924,20 @@ function renderDiagRuns(summary, rustStats) {
         const tr = document.createElement("tr");
         const tdType = document.createElement("td");
         const tdFail = document.createElement("td");
-        const tdSec = document.createElement("td");
-        const fr = Number(item.failure_rate || 0) * 100;
+        const tdP95 = document.createElement("td");
+        const tdRetry = document.createElement("td");
+        const tdFallback = document.createElement("td");
+        const perf = perfByChiplet.get(String(chiplet || ""));
+        const fr = Number(perf?.error_rate ?? item.failure_rate ?? 0) * 100;
+        const p95 = Number(perf?.p95_seconds ?? item.seconds_avg ?? 0);
+        const retry = Number(perf?.retry_rate ?? 0) * 100;
+        const fallback = Number(perf?.fallback_rate ?? 0) * 100;
         tdType.textContent = chiplet;
         tdFail.textContent = `${fr.toFixed(1)}%`;
-        tdSec.textContent = `${Number(item.seconds_avg || 0).toFixed(3)}s`;
-        tr.append(tdType, tdFail, tdSec);
+        tdP95.textContent = `${p95.toFixed(3)}s`;
+        tdRetry.textContent = `${retry.toFixed(1)}%`;
+        tdFallback.textContent = `${fallback.toFixed(1)}%`;
+        tr.append(tdType, tdFail, tdP95, tdRetry, tdFallback);
         els.diagRuns.appendChild(tr);
       });
   }
@@ -1937,18 +1947,22 @@ function renderDiagRuns(summary, rustStats) {
       const tr = document.createElement("tr");
       const tdType = document.createElement("td");
       const tdFail = document.createElement("td");
-      const tdSec = document.createElement("td");
+      const tdP95 = document.createElement("td");
+      const tdRetry = document.createElement("td");
+      const tdFallback = document.createElement("td");
       const calls = Number(item.calls || 0);
       const errs = Number(item.err || 0);
       const fr = calls > 0 ? (errs / calls) * 100 : 0;
       tdType.textContent = `rust:${String(item.operator || "")}`;
       tdFail.textContent = `${fr.toFixed(1)}%`;
-      tdSec.textContent = `${(Number(item.p95_ms || 0) / 1000).toFixed(3)}s`;
-      tr.append(tdType, tdFail, tdSec);
+      tdP95.textContent = `${(Number(item.p95_ms || 0) / 1000).toFixed(3)}s`;
+      tdRetry.textContent = "-";
+      tdFallback.textContent = "-";
+      tr.append(tdType, tdFail, tdP95, tdRetry, tdFallback);
       els.diagRuns.appendChild(tr);
     });
   if (!entries.length && !rustEntries.length) {
-    els.diagRuns.innerHTML = '<tr><td colspan="3" style="color:#74879b">暂无诊断</td></tr>';
+    els.diagRuns.innerHTML = '<tr><td colspan="5" style="color:#74879b">暂无诊断</td></tr>';
   }
 }
 
@@ -2457,6 +2471,7 @@ function renderAll() {
   canvas.render();
   renderNodeConfigEditor();
   renderEdgeConfigEditor();
+  refreshOfflineBoundaryHint();
   const pct = Math.round(canvas.getZoom() * 100);
   if (els.zoomText) els.zoomText.textContent = `${pct}%`;
 }
@@ -2554,10 +2569,96 @@ async function enqueueWorkflowRun() {
 
 async function refreshDiagnostics() {
   try {
-    const out = await window.aiwfDesktop.getWorkflowDiagnostics({ limit: 80 });
-    const rust = await fetchRustRuntimeStats();
-    renderDiagRuns(out || {}, rust || {});
+    const [out, rust, perf] = await Promise.all([
+      window.aiwfDesktop.getWorkflowDiagnostics({ limit: 80 }),
+      fetchRustRuntimeStats(),
+      window.aiwfDesktop.getWorkflowPerfDashboard({ limit: 200 }),
+    ]);
+    renderDiagRuns(out || {}, rust || {}, perf || {});
   } catch {}
+}
+
+const OFFLINE_LOCAL_NODE_TYPES = new Set([
+  "ingest_files",
+  "clean_md",
+  "compute_rust",
+  "transform_rows_v3",
+  "join_rows_v2",
+  "join_rows_v3",
+  "join_rows_v4",
+  "aggregate_rows_v2",
+  "aggregate_rows_v3",
+  "aggregate_rows_v4",
+  "quality_check_v2",
+  "quality_check_v3",
+  "quality_check_v4",
+  "window_rows_v1",
+  "optimizer_v1",
+  "load_rows_v2",
+  "load_rows_v3",
+  "schema_registry_v1_infer",
+  "schema_registry_v1_get",
+  "schema_registry_v1_register",
+  "schema_registry_v2_check_compat",
+  "schema_registry_v2_suggest_migration",
+  "query_lang_v1",
+  "columnar_eval_v1",
+  "stream_window_v1",
+  "stream_window_v2",
+  "sketch_v1",
+  "runtime_stats_v1",
+  "capabilities_v1",
+  "io_contract_v1",
+  "failure_policy_v1",
+  "incremental_plan_v1",
+  "tenant_isolation_v1",
+  "operator_policy_v1",
+  "optimizer_adaptive_v2",
+  "vector_index_v2_build",
+  "vector_index_v2_search",
+  "vector_index_v2_eval",
+  "stream_reliability_v1",
+  "lineage_provenance_v1",
+  "contract_regression_v1",
+  "perf_baseline_v1",
+  "md_output",
+  "manual_review",
+  "sql_chart_v1",
+  "office_slot_fill_v1",
+]);
+
+const ONLINE_REQUIRED_NODE_TYPES = new Set([
+  "ai_refine",
+  "ai_audit",
+  "ai_strategy_v1",
+  "ai_call",
+]);
+
+function refreshOfflineBoundaryHint() {
+  if (!els.offlineBoundaryHint) return;
+  const graph = store.exportGraph();
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const onlineNodes = nodes.filter((n) => ONLINE_REQUIRED_NODE_TYPES.has(String(n?.type || "")));
+  const unknownNodes = nodes.filter((n) => {
+    const t = String(n?.type || "");
+    return !OFFLINE_LOCAL_NODE_TYPES.has(t) && !ONLINE_REQUIRED_NODE_TYPES.has(t);
+  });
+  if (onlineNodes.length === 0 && unknownNodes.length === 0) {
+    els.offlineBoundaryHint.textContent = "离线能力边界：当前流程全部为本地可执行节点（离线可跑）。";
+    return;
+  }
+  const aiEndpoint = String(els.aiEndpoint?.value || "").trim();
+  const lines = [];
+  if (onlineNodes.length > 0) {
+    const types = Array.from(new Set(onlineNodes.map((n) => String(n.type || "")))).join(", ");
+    lines.push(`检测到在线节点: ${types}。`);
+    lines.push(aiEndpoint ? "已配置外部 AI Endpoint，可在线执行。" : "未配置外部 AI Endpoint，这些节点离线不可执行。");
+  }
+  if (unknownNodes.length > 0) {
+    const types = Array.from(new Set(unknownNodes.map((n) => String(n.type || "")))).join(", ");
+    lines.push(`检测到未知边界节点: ${types}（请确认是否需要外部服务）。`);
+  }
+  els.offlineBoundaryHint.textContent = `离线能力边界：${lines.join(" ")}`;
 }
 
 async function refreshRunHistory() {
@@ -3371,6 +3472,7 @@ els.btnLoadFlow.addEventListener("click", loadFlow);
 if (els.btnApplyTemplate) els.btnApplyTemplate.addEventListener("click", applySelectedTemplate);
 if (els.btnSaveTemplate) els.btnSaveTemplate.addEventListener("click", saveCurrentAsTemplate);
 if (els.templateSelect) els.templateSelect.addEventListener("change", renderTemplateParamsForm);
+if (els.aiEndpoint) els.aiEndpoint.addEventListener("input", refreshOfflineBoundaryHint);
 if (els.btnAddInputMap) {
   els.btnAddInputMap.addEventListener("click", () => {
     const node = singleSelectedNode();

@@ -1,4 +1,4 @@
-const { createOfflineIngestParsers } = require("./offline_ingest_parsers");
+﻿const { createOfflineIngestParsers } = require("./offline_ingest_parsers");
 
 function createOfflineIngest(deps = {}) {
   const {
@@ -190,10 +190,10 @@ function createOfflineIngest(deps = {}) {
         const kind = String(casts[field] || "").toLowerCase();
         const val = out[field];
         if (kind === "int") {
-          const n = Number(String(val).replace(/[,，\s]/g, ""));
+          const n = Number(String(val).replace(/[\s,，$¥￥]/g, ""));
           out[field] = Number.isFinite(n) ? Math.trunc(n) : "";
         } else if (kind === "float") {
-          const n = Number(String(val).replace(/[,，\s$¥￥]/g, ""));
+          const n = Number(String(val).replace(/[\s,，$¥￥]/g, ""));
           out[field] = Number.isFinite(n) ? Math.round(n * 100) / 100 : "";
         } else if (kind === "string") {
           out[field] = String(val ?? "");
@@ -246,6 +246,26 @@ function createOfflineIngest(deps = {}) {
     };
   }
 
+  function buildFidelityRows(rawRows = []) {
+    const rows = [];
+    const seen = new Set();
+    (Array.isArray(rawRows) ? rawRows : []).forEach((r, idx) => {
+      const text = String(r?.text ?? "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+      const out = {
+        source_file: String(r?.source_file || ""),
+        source_type: String(r?.source_type || "raw_text"),
+        row_no: Number.isFinite(Number(r?.row_no)) ? Number(r.row_no) : idx + 1,
+        text,
+      };
+      const key = `${out.source_file}|${out.source_type}|${out.row_no}|${out.text}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push(out);
+    });
+    return rows;
+  }
+
   function precheckRows(rawRows, params = {}) {
     const ruleObj = resolveRuleObject(params);
     const renameMap = normalizeRuleMap(ruleObj.rename_map);
@@ -264,7 +284,7 @@ function createOfflineIngest(deps = {}) {
       amountField = castFloatFields.find((k) => headers.has(k)) || "";
     }
     if (!amountField) {
-      const firstAmountLike = Array.from(headers).find((k) => /amount|amt|金额/i.test(k));
+      const firstAmountLike = Array.from(headers).find((k) => /amount|amt|金额|金額/i.test(k));
       if (firstAmountLike) amountField = firstAmountLike;
     }
 
@@ -288,8 +308,9 @@ function createOfflineIngest(deps = {}) {
               raw_value: s,
             });
           }
+        } else {
+          amountConvertible += 1;
         }
-        else amountConvertible += 1;
       });
     }
 
@@ -312,13 +333,13 @@ function createOfflineIngest(deps = {}) {
 
     const issues = [];
     if (missingRequired.length > 0) {
-      issues.push(`缺少必填字段：${missingRequired.join("、")}`);
+      issues.push(`缺少必填字段: ${missingRequired.join("、")}`);
     }
     if (amountNonEmpty > 0 && amountConvertRate < requiredAmountConvertRate) {
-      issues.push(`金额列可转换率偏低：${(amountConvertRate * 100).toFixed(1)}%`);
+      issues.push(`金额列可转换率偏低: ${(amountConvertRate * 100).toFixed(1)}%`);
     }
     if (!qualityGateOk && qualityGateError) {
-      issues.push(`质量门槛预检未通过：${qualityGateError}`);
+      issues.push(`质量门禁预检未通过: ${qualityGateError}`);
     }
 
     const suggestions = [];
@@ -422,12 +443,14 @@ function createOfflineIngest(deps = {}) {
       min_output_rows: minOutputRows,
       max_invalid_ratio: maxInvalidRatio,
       allow_empty_output: allowEmpty,
+      passed: true,
     };
   }
 
   return {
     readInputRows,
     cleanRows,
+    buildFidelityRows,
     precheckRows,
     applyQualityGates,
   };

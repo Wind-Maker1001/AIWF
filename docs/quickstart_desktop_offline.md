@@ -120,3 +120,17 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\package_offline_bundle.ps
 
 Bundle output:
 - `release\offline_bundle_<version>_installer\AIWF_Offline_Bundle`
+
+## 6. v1.1.4 发布基线（一键）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_baseline_v1_1_4.ps1
+```
+
+产出：
+- `release\v1.1.4\baseline_summary.json`
+- `release\v1.1.4\clean_windows_checklist.md`
+
+说明：
+- 会串行执行发布打包和两套验收（通用样例、财务模板样例）。
+- 若仅做本地快速验证可加 `-SkipPackage -SkipHeavyGates`。
