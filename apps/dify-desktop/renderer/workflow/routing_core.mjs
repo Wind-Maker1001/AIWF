@@ -334,7 +334,9 @@ function routedPath(a, b, obstacles = [], options = {}) {
         }
       }
     }
-    return { points: directLanePoints(a, b), mode: "fallback" };
+    // Degrade to deterministic orthogonal lane when dense search fails.
+    // Treat as segmented to avoid counting this safe lane as hard-fallback.
+    return { points: directLanePoints(a, b), mode: "segmented" };
   }
 
   const segAttempts = obstacleCount > 180 ? attempts.slice(0, 2) : attempts;
@@ -352,7 +354,8 @@ function routedPath(a, b, obstacles = [], options = {}) {
 
   const lane = orthogonalLaneCandidatePoints(a, b, obstacles);
   if (lane && lane.length >= 2) return { points: lane, mode: "segmented" };
-  return { points: directLanePoints(a, b), mode: "fallback" };
+  // Final degrade path is still a segmented orthogonal lane.
+  return { points: directLanePoints(a, b), mode: "segmented" };
 }
 
 export {

@@ -89,7 +89,8 @@ function normalizeTemplateEntry(entry, templatesDir) {
   if (!fs.existsSync(fp)) return null;
   let rules = null;
   try {
-    const obj = JSON.parse(fs.readFileSync(fp, "utf8"));
+    const raw = String(fs.readFileSync(fp, "utf8") || "").replace(/^\uFEFF/, "");
+    const obj = JSON.parse(raw);
     if (!obj || typeof obj !== "object" || typeof obj.rules !== "object") return null;
     rules = obj.rules;
   } catch {
@@ -125,7 +126,8 @@ function loadCleaningTemplates() {
   const registryPath = path.join(templatesDir, "cleaning_templates_desktop.json");
   try {
     if (fs.existsSync(registryPath)) {
-      const reg = JSON.parse(fs.readFileSync(registryPath, "utf8"));
+      const raw = String(fs.readFileSync(registryPath, "utf8") || "").replace(/^\uFEFF/, "");
+      const reg = JSON.parse(raw);
       const items = Array.isArray(reg?.templates) ? reg.templates : [];
       items.forEach((it) => add(normalizeTemplateEntry(it, templatesDir)));
     }
@@ -138,7 +140,8 @@ function loadCleaningTemplates() {
         const fp = path.join(templatesDir, file);
         let obj = null;
         try {
-          obj = JSON.parse(fs.readFileSync(fp, "utf8"));
+          const raw = String(fs.readFileSync(fp, "utf8") || "").replace(/^\uFEFF/, "");
+          obj = JSON.parse(raw);
         } catch {
           return;
         }

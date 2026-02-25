@@ -1,0 +1,26 @@
+﻿{
+  "rules": {
+    "platform_mode": "generic",
+    "rename_map": {
+      "claim_text": "text",
+      "ClaimText": "text",
+      "content": "text",
+      "speaker": "speaker",
+      "Speaker": "speaker",
+      "source_url": "source_url",
+      "SourceUrl": "source_url"
+    },
+    "casts": {
+      "text": "string",
+      "speaker": "string",
+      "source_url": "string"
+    },
+    "required_fields": ["text"],
+    "trim_strings": true,
+    "deduplicate_by": ["source_file", "text"],
+    "deduplicate_keep": "first",
+    "min_output_rows": 1,
+    "max_invalid_ratio": 0.2,
+    "allow_empty_output": false
+  }
+}

@@ -1,10 +1,16 @@
-{
+﻿{
   "templates": [
     {
       "id": "finance_report_v1",
       "file": "generic_finance_strict.json",
       "label": "财报模板 v1（资产/利润/现金流）",
-      "description": "面向财务报表金额字段的严格清洗模板，含类型转换、过滤、去重和质量门槛。"
+      "description": "面向财务报表金额字段的严格清洗模板，包含类型转换、过滤、去重和质量门禁。"
+    },
+    {
+      "id": "debate_evidence_v1",
+      "file": "generic_debate_evidence.json",
+      "label": "辩论证据模板 v1（文本证据）",
+      "description": "面向辩论证据文本的清洗模板，保留核心论据并按来源去重。"
     }
   ]
 }

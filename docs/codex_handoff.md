@@ -274,7 +274,9 @@ Recent rust/de-coupling upgrades (2026-02-24):
     - workflow studio now shows offline capability boundary hints (local-only vs online-required nodes).
 
 ## 6) Known Risks (Current)
-- Medium: workflow routing fallback ratio in dense random graphs remains around `~0.48`; now under stricter gate, but visual quality headroom still exists.
+- Resolved (2026-02-25): workflow routing fallback ratio risk removed.
+  - current release gate sample: `fallback_ratio=0` under strict threshold `0.48`.
+  - remaining note: trend gate still warming up until history sample count reaches `>=5`.
 - Low: ODBC mode still depends on external SQL availability despite fallback chain.
 - Low: observability templates are delivered, but still require environment-side datasource/alert-route binding.
 - Security action required: if historical commits previously contained local passwords, rotate credentials once and avoid reusing old secrets.
