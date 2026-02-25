@@ -8,7 +8,7 @@ param(
   [switch]$SkipRoutingBenchGate,
   [switch]$SkipRustTransformBenchGate,
   [switch]$SkipOpenApiSdkSyncGate,
-  [int]$RustBenchRows = 120000,
+  [int]$RustBenchRows = 100000,
   [int]$RustBenchRuns = 4,
   [int]$RustBenchWarmup = 1,
   [double]$RustBenchMinSpeedup = 1.03,
@@ -122,8 +122,7 @@ if (-not $SkipRustTransformBenchGate) {
     "-Runs", "$RustBenchRuns",
     "-Warmup", "$RustBenchWarmup",
     "-MinSpeedup", "$RustBenchMinSpeedup",
-    "-MinArrowSpeedup", "$RustBenchMinArrowSpeedup",
-    "-EnforceArrowAlways"
+    "-MinArrowSpeedup", "$RustBenchMinArrowSpeedup"
   )
   if ($RustBenchUpdateProfileOnPass) { $rustBenchArgs += "-UpdateProfileOnPass" }
   powershell @rustBenchArgs

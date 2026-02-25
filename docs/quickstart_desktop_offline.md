@@ -134,3 +134,13 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_baseline_v1_1_4.p
 说明：
 - 会串行执行发布打包和两套验收（通用样例、财务模板样例）。
 - 若仅做本地快速验证可加 `-SkipPackage -SkipHeavyGates`。
+
+## 7. v1.1.5 稳定封板（3轮）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_stability_v1_1_5.ps1
+```
+
+产出：
+- `release\stability_v1.1.5\stability_summary.json`
+- `release\stability_v1.1.5\stability_summary.md`

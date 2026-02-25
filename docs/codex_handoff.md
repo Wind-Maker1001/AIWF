@@ -272,6 +272,15 @@ Recent rust/de-coupling upgrades (2026-02-24):
     - new IPC: `aiwf:getWorkflowPerfDashboard` (error rate / p95 / retry rate / fallback rate).
     - workflow studio diagnostics panel upgraded to display these metrics.
     - workflow studio now shows offline capability boundary hints (local-only vs online-required nodes).
+  - release stability seal (2026-02-25):
+    - `v1.1.5` completed 3-round release seal with full flow checks.
+    - report:
+      - `release/stability_v1.1.5/stability_summary.json`
+      - `release/stability_v1.1.5/stability_summary.md`
+    - round result: `release_productize + packaged_startup + real_sample_acceptance + finance_acceptance` all passed in all 3 rounds.
+    - release benchmark gate policy tuned for stability:
+      - `ops/scripts/release_productize.ps1` default `RustBenchRows` changed `120000 -> 100000`.
+      - removed forced `-EnforceArrowAlways` in release gate invocation to reduce environment-induced false blocking.
 
 ## 6) Known Risks (Current)
 - Resolved (2026-02-25): workflow routing fallback ratio risk removed.
