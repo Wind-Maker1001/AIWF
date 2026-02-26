@@ -83,7 +83,7 @@
     }
     textarea{min-height:76px}
     .btns{display:flex;gap:8px;flex-wrap:wrap}
-    button{
+    button, fluent-button{
       border:1px solid transparent;
       border-radius:10px;
       padding:9px 14px;
@@ -94,12 +94,12 @@
       box-shadow:0 2px 8px rgba(15,108,189,.22);
       transition:transform .08s ease, box-shadow .12s ease, opacity .12s ease;
     }
-    button:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(15,108,189,.3)}
-    button.secondary{
+    button:hover, fluent-button:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(15,108,189,.3)}
+    button.secondary, fluent-button.secondary{
       background:linear-gradient(180deg,#5d7189,#4f6277);
       box-shadow:0 2px 6px rgba(31,45,61,.18);
     }
-    button:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    button:disabled, fluent-button[disabled]{opacity:.6;cursor:not-allowed;transform:none}
     .status{margin-top:8px;min-height:20px;font-size:13px}
     .ok{color:var(--ok)}
     .bad{color:var(--bad)}
@@ -128,13 +128,118 @@
     .mini{font-size:12px;color:var(--sub)}
     .queue-actions{display:flex;gap:8px;justify-content:flex-end;margin:6px 0}
     .precheck-issues{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-    .precheck-issues button{padding:6px 10px;font-size:12px}
+    .precheck-issues button,.precheck-issues fluent-button{padding:6px 10px;font-size:12px}
     .precheck-detail{
       border:1px solid #dbe5f1;border-radius:10px;padding:8px;
       background:linear-gradient(180deg,#fbfdff,#f4f8ff);
       margin-bottom:8px;white-space:pre-wrap;
     }
   </style>
+  <style>
+    :root{
+      --bg:#f2f6fb;
+      --layer-1:#f7faff;
+      --layer-2:#ffffff;
+      --line:#d0deef;
+      --line-strong:#9cb6d6;
+      --text:#0f172a;
+      --sub:#475569;
+      --brand:#0f6cbd;
+      --brand-2:#0b5cab;
+      --radius:16px;
+      --shadow:0 20px 40px rgba(8,32,58,.12);
+      --shadow-soft:0 8px 24px rgba(8,32,58,.08);
+    }
+    body{
+      font-family:"Segoe UI Variable Display","Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+      background:
+        radial-gradient(1200px 640px at -5% -10%, #d5e8ff 0%, transparent 60%),
+        radial-gradient(980px 520px at 100% 0%, #e6f2ff 0%, transparent 58%),
+        linear-gradient(180deg, #f8fbff 0%, #eff4fb 100%);
+    }
+    .wrap{max-width:1400px;padding:26px 24px 30px}
+    .hero{
+      border:1px solid rgba(255,255,255,.24);
+      border-radius:24px;
+      padding:28px 28px;
+      background:
+        radial-gradient(420px 220px at 12% -10%, rgba(255,255,255,.22), transparent 68%),
+        linear-gradient(124deg,#0a2440 0%, #0f6cbd 54%, #0d8f83 100%);
+    }
+    .hero h1{font-size:33px;letter-spacing:.3px}
+    .hero p{font-size:15px;opacity:.95}
+    .card{
+      border:1px solid rgba(159,184,214,.52);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow-soft);
+    }
+    .hd{
+      padding:13px 15px;
+      border-bottom:1px solid #deebf8;
+      background:linear-gradient(180deg,#fafdff,#f2f7ff);
+    }
+    .bd{padding:14px 15px}
+    .field label{
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.18px;
+      color:#50657f;
+    }
+    input,select,textarea{
+      border-radius:12px;
+      border:1px solid #c7daef;
+      background:linear-gradient(180deg,#ffffff,#f9fcff);
+    }
+    textarea{min-height:82px}
+    button, fluent-button{
+      border-radius:12px;
+      font-weight:700;
+      letter-spacing:.15px;
+      background:linear-gradient(180deg,#0f7ad6,#0f62b8);
+      box-shadow:0 5px 14px rgba(15,98,184,.26);
+    }
+    button.secondary, fluent-button.secondary{
+      background:linear-gradient(180deg,#617a96,#52677f);
+      box-shadow:0 4px 12px rgba(40,54,73,.2);
+    }
+    .metric{
+      border-radius:12px;
+      border:1px solid #d3e4f5;
+      background:
+        radial-gradient(280px 120px at 0% 0%, rgba(255,255,255,.82), transparent 62%),
+        linear-gradient(180deg,#fafdff,#f2f8ff);
+    }
+    .metric .v{font-size:24px}
+    .dropzone{
+      border-radius:14px;
+      border:2px dashed #8fb4d8;
+      background:linear-gradient(180deg,#fbfeff,#eef6ff);
+      transition:all .16s ease;
+    }
+    .dropzone.active{
+      border-color:#0f6cbd;
+      box-shadow:0 0 0 4px rgba(15,108,189,.14);
+      transform:translateY(-1px);
+    }
+    table{border-radius:12px;overflow:hidden}
+    th{
+      background:linear-gradient(180deg,#f0f6ff,#e7f0fb);
+      color:#2f4863;
+      font-weight:700;
+    }
+    pre{
+      border-radius:14px;
+      border:1px solid #1a3855;
+      background:linear-gradient(180deg,#0d1b2a,#0e2437);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .card,.hero,.metric,.dropzone{animation:fadeRise .35s ease both}
+    @keyframes fadeRise{
+      from{opacity:0;transform:translateY(6px)}
+      to{opacity:1;transform:translateY(0)}
+    }
+  </style>
+  <script type="module" src="../node_modules/@fluentui/web-components/dist/web-components.min.js"></script>
 </head>
 <body>
   <div class="wrap">
@@ -176,15 +281,15 @@
           <div class="field"><label>XLSX模板路径（可选，含预置图表）</label><input id="xlsxTemplatePath" placeholder="例如：E:\\Desktop_Real\\templates\\report_chart_template.xlsx" /></div>
           <div class="field"><label>输出语言</label><select id="officeLang"><option value="zh" selected>中文</option><option value="en">English</option></select></div>
           <div class="field"><label>成品风格（已统一 Fluent 宣传风）</label><select id="officeTheme"><option value="fluent_ms" selected>Fluent 宣传风（统一）</option></select></div>
-          <div class="field"><label>Fluent 模板包</label><select id="officeVariant"><option value="light" selected>Fluent Light（浅色商务）</option><option value="strong">Fluent Strong（高对比展示）</option></select></div>
+          <div class="field"><label>Fluent 模板包</label><select id="officeVariant"><option value="light" selected>Fluent Light（浅色商务）</option><option value="strong">Fluent Strong（高对比展示）</option><option value="vibrant">Fluent Vibrant（演示冲击）</option></select></div>
           <div class="field"><label>数据模板（会影响清洗规则）</label><select id="cleaningTemplate"><option value="default">通用模板</option><option value="debate_evidence_v1" selected>辩论证据模板 v1（文本证据）</option><option value="finance_report_v1">财报模板 v1（资产/利润/现金流）</option></select></div>
           <div class="field"><label>辩论战场规则（关键词=战场名，每行一条，可选）</label><textarea id="debateBattlefieldRules" placeholder="谣言=内容差&#10;成瘾=能力减损&#10;社交=社交与表达">谣言=内容差
 成瘾=能力减损
 社交=社交与表达</textarea></div>
           <div class="field"><label>出处字段优先级（逗号分隔，可选）</label><input id="debateSourcePriority" value="source_org,publisher,source,author,source_type" placeholder="source_org,publisher,source,author,source_type" /></div>
           <div class="btns" style="margin-bottom:8px">
-            <button id="btnDebateCfgExport" class="secondary">导出辩论配置JSON</button>
-            <button id="btnDebateCfgImport" class="secondary">导入辩论配置JSON</button>
+            <fluent-button id="btnDebateCfgExport" class="secondary">导出辩论配置JSON</fluent-button>
+            <fluent-button id="btnDebateCfgImport" class="secondary">导入辩论配置JSON</fluent-button>
             <input id="debateCfgImportFile" type="file" accept=".json,application/json" style="display:none" />
           </div>
           <div class="field"><label>成品质量（建议高质量）</label><select id="officeQualityMode"><option value="high" selected>高质量（推荐）</option><option value="standard">标准（更快）</option></select></div>
@@ -202,14 +307,14 @@
           <div class="field"><label>Office门禁最小质量分（0-100）</label><input id="minOfficeQualityScore" type="number" min="0" max="100" step="1" value="65" /></div>
           <div class="field"><label><input id="officeQualityGateEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />启用Office质量门禁（低质量不生成三件套）</label></div>
           <div class="btns">
-            <button id="btnPrecheck" class="secondary">模板预检</button>
-            <button id="btnDebatePreview" class="secondary">样式预览（前10条）</button>
-            <button id="btnRun">第 3 步：开始生成</button>
-            <button id="btnRunDebateQuick" class="secondary">一键生成辩论资料</button>
-            <button id="btnHealth" class="secondary">检查连通性</button>
-            <button id="btnDifyWizard" class="secondary">Dify连接向导</button>
-            <button id="btnSave" class="secondary">保存配置</button>
-            <button id="btnWorkflow" class="secondary">打开 Workflow Studio</button>
+            <fluent-button id="btnPrecheck" class="secondary">模板预检</fluent-button>
+            <fluent-button id="btnDebatePreview" class="secondary">样式预览（前10条）</fluent-button>
+            <fluent-button id="btnRun">第 3 步：开始生成</fluent-button>
+            <fluent-button id="btnRunDebateQuick" class="secondary">一键生成辩论资料</fluent-button>
+            <fluent-button id="btnHealth" class="secondary">检查连通性</fluent-button>
+            <fluent-button id="btnDifyWizard" class="secondary">Dify连接向导</fluent-button>
+            <fluent-button id="btnSave" class="secondary">保存配置</fluent-button>
+            <fluent-button id="btnWorkflow" class="secondary">打开 Workflow Studio</fluent-button>
           </div>
           <div id="status" class="status"></div>
         </div>
@@ -225,8 +330,8 @@
             <div id="ocrHint" class="mini" style="margin-top:4px">OCR 运行时：未检测</div>
             <div id="taskStoreHint" class="mini" style="margin-top:4px">远程任务存储：未检测</div>
             <div class="queue-actions">
-              <button id="btnQueueClear" class="secondary">清空队列</button>
-              <button id="btnInstallFonts" class="secondary">安装内置字体</button>
+              <fluent-button id="btnQueueClear" class="secondary">清空队列</fluent-button>
+              <fluent-button id="btnInstallFonts" class="secondary">安装内置字体</fluent-button>
             </div>
             <table>
               <thead><tr><th>#</th><th>文件名</th><th>路径</th><th>操作</th></tr></thead>
@@ -241,9 +346,9 @@
             <div id="sampleDropzone" class="dropzone">把样本文件拖到这里（会复制到样本池目录）</div>
             <div id="sampleHint" class="mini" style="margin-top:8px">样本池：未加载</div>
             <div class="queue-actions">
-              <button id="btnSampleRefresh" class="secondary">刷新样本池</button>
-              <button id="btnSampleOpen" class="secondary">打开样本池目录</button>
-              <button id="btnSampleClear" class="secondary">清空样本池</button>
+              <fluent-button id="btnSampleRefresh" class="secondary">刷新样本池</fluent-button>
+              <fluent-button id="btnSampleOpen" class="secondary">打开样本池目录</fluent-button>
+              <fluent-button id="btnSampleClear" class="secondary">清空样本池</fluent-button>
             </div>
             <table>
               <thead><tr><th>#</th><th>文件名</th><th>大小(KB)</th><th>路径</th></tr></thead>
@@ -261,7 +366,7 @@
           <div class="metric"><div class="k">产物数</div><div class="v" id="mCnt">0</div></div>
         </div></div></div>
 
-        <div class="card"><div class="hd" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span>产物文件</span><button id="btnOpenNoise" class="secondary" style="display:none;padding:6px 10px;font-size:12px">打开噪声清单</button></div><div class="bd">
+        <div class="card"><div class="hd" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span>产物文件</span><fluent-button id="btnOpenNoise" class="secondary" style="display:none;padding:6px 10px;font-size:12px">打开噪声清单</fluent-button></div><div class="bd">
           <table><thead><tr><th>ID</th><th>类型</th><th>路径</th><th>操作</th></tr></thead><tbody id="rows"><tr><td colspan="4" style="color:#75869a">暂无结果</td></tr></tbody></table>
         </div></div>
 
@@ -269,23 +374,23 @@
         <div class="card"><div class="hd">快速验收面板</div><div class="bd">
           <div class="mini" style="margin-bottom:6px">一键执行并实时查看日志：</div>
           <div class="btns" style="margin-bottom:8px">
-            <button id="btnGateAll">一键全跑</button>
-            <button id="btnGateCancel" class="secondary">取消当前任务</button>
-            <button id="btnGateUnit" class="secondary">跑 unit</button>
-            <button id="btnGateSmoke" class="secondary">跑 smoke</button>
-            <button id="btnGateReg" class="secondary">跑 normal 回归</button>
-            <button id="btnGateRegDirty" class="secondary">跑 dirty 回归</button>
-            <button id="btnGateOffice" class="secondary">跑 office-gate</button>
-            <button id="btnGateAcceptance" class="secondary">跑 acceptance</button>
-            <button id="btnGateRefresh" class="secondary">刷新看板</button>
-            <button id="btnGatePackGuard" class="secondary">打包前检查</button>
-            <button id="btnBuildPortable" class="secondary">打包 Portable(gated)</button>
-            <button id="btnBuildInstaller" class="secondary">打包 Installer(gated)</button>
-            <button id="btnBuildCancel" class="secondary">取消打包</button>
-            <button id="btnOpenBuildDir" class="secondary">打开桌面产物目录</button>
-            <button id="btnOpenLatestArtifacts" class="secondary">打开最新成品目录</button>
-            <button id="btnExportReleaseMd" class="secondary">导出发布报告(MD)</button>
-            <button id="btnExportReleaseJson" class="secondary">导出发布报告(JSON)</button>
+            <fluent-button id="btnGateAll">一键全跑</fluent-button>
+            <fluent-button id="btnGateCancel" class="secondary">取消当前任务</fluent-button>
+            <fluent-button id="btnGateUnit" class="secondary">跑 unit</fluent-button>
+            <fluent-button id="btnGateSmoke" class="secondary">跑 smoke</fluent-button>
+            <fluent-button id="btnGateReg" class="secondary">跑 normal 回归</fluent-button>
+            <fluent-button id="btnGateRegDirty" class="secondary">跑 dirty 回归</fluent-button>
+            <fluent-button id="btnGateOffice" class="secondary">跑 office-gate</fluent-button>
+            <fluent-button id="btnGateAcceptance" class="secondary">跑 acceptance</fluent-button>
+            <fluent-button id="btnGateRefresh" class="secondary">刷新看板</fluent-button>
+            <fluent-button id="btnGatePackGuard" class="secondary">打包前检查</fluent-button>
+            <fluent-button id="btnBuildPortable" class="secondary">打包 Portable(gated)</fluent-button>
+            <fluent-button id="btnBuildInstaller" class="secondary">打包 Installer(gated)</fluent-button>
+            <fluent-button id="btnBuildCancel" class="secondary">取消打包</fluent-button>
+            <fluent-button id="btnOpenBuildDir" class="secondary">打开桌面产物目录</fluent-button>
+            <fluent-button id="btnOpenLatestArtifacts" class="secondary">打开最新成品目录</fluent-button>
+            <fluent-button id="btnExportReleaseMd" class="secondary">导出发布报告(MD)</fluent-button>
+            <fluent-button id="btnExportReleaseJson" class="secondary">导出发布报告(JSON)</fluent-button>
           </div>
           <div class="grid" style="margin-bottom:8px">
             <div class="metric"><div class="k">总次数</div><div class="v" id="gateTotal">0</div></div>
@@ -316,25 +421,25 @@
           <div class="field"><label>模板列表</label><select id="tplManageSelect"></select></div>
           <div id="tplManageMeta" class="mini" style="margin-bottom:6px">未加载</div>
           <div class="btns" style="margin-bottom:8px">
-            <button id="btnTplRefresh" class="secondary">刷新模板</button>
-            <button id="btnTplToggle" class="secondary">停用当前模板</button>
-            <button id="btnTplEnableAll" class="secondary">恢复全部模板</button>
-            <button id="btnTplExport" class="secondary">导出模板JSON</button>
+            <fluent-button id="btnTplRefresh" class="secondary">刷新模板</fluent-button>
+            <fluent-button id="btnTplToggle" class="secondary">停用当前模板</fluent-button>
+            <fluent-button id="btnTplEnableAll" class="secondary">恢复全部模板</fluent-button>
+            <fluent-button id="btnTplExport" class="secondary">导出模板JSON</fluent-button>
           </div>
           <div class="field"><label>导入模板 JSON（仅当前用户）</label><input id="tplImportFile" type="file" accept=".json,application/json" /></div>
           <pre id="tplManageRules">{}</pre>
         </div></div>
         <div class="card"><div class="hd">安装自检与诊断</div><div class="bd">
           <div class="btns" style="margin-bottom:8px">
-            <button id="btnSelfCheck" class="secondary">执行自检</button>
+            <fluent-button id="btnSelfCheck" class="secondary">执行自检</fluent-button>
           </div>
           <div id="selfCheckHint" class="mini" style="margin-bottom:6px">未执行</div>
           <pre id="selfCheck">{}</pre>
         </div></div>
         <div class="card"><div class="hd">路由诊断</div><div class="bd">
           <div class="btns" style="margin-bottom:8px">
-            <button id="btnRouteDiag" class="secondary">刷新诊断</button>
-            <button id="btnOpenRouteLog" class="secondary">打开路由日志目录</button>
+            <fluent-button id="btnRouteDiag" class="secondary">刷新诊断</fluent-button>
+            <fluent-button id="btnOpenRouteLog" class="secondary">打开路由日志目录</fluent-button>
           </div>
           <div id="routeDiagHint" class="mini" style="margin-bottom:6px">未加载</div>
           <pre id="routeDiag">{}</pre>
@@ -343,6 +448,15 @@
     </section>
   </div>
 
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("fluent-button").forEach((btn) => {
+    const cls = String(btn.className || "");
+    if (/\bsecondary\b/.test(cls)) btn.setAttribute("appearance", "neutral");
+    else btn.setAttribute("appearance", "accent");
+  });
+});
+</script>
 <script>
 const $ = (id)=>document.getElementById(id);
 const statusEl=$("status"), logEl=$("log"), rowsEl=$("rows"), queueRowsEl=$("queueRows"), dz=$("dropzone");
@@ -491,7 +605,9 @@ const payloadFromUi=()=>{
   const selectedTemplate = $("cleaningTemplate").value;
   const tpl = findTemplateById(selectedTemplate);
   const officeVariant = String($("officeVariant").value || "light").toLowerCase();
-  const mappedTheme = officeVariant === "strong" ? "fluent_ms_strong" : "fluent_ms_light";
+  const mappedTheme = officeVariant === "strong"
+    ? "fluent_ms_strong"
+    : (officeVariant === "vibrant" ? "fluent_ms_vibrant" : "fluent_ms_light");
   const p = {
     owner:"desktop",
     actor:"desktop",

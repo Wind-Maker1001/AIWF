@@ -213,19 +213,21 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     return Math.max(1, Math.floor(avail / rowHeight));
   }
 
-  function resolveVisualPack(theme, isStrong) {
-    const primary = isStrong ? "005FB8" : String(theme?.primary || "0F6CBD");
-    const secondary = isStrong ? "083B7A" : String(theme?.secondary || primary || "115EA3");
+  function resolveVisualPack(theme, variant = {}) {
+    const isStrong = !!variant.isStrong;
+    const isVibrant = !!variant.isVibrant;
+    const primary = isStrong ? "005FB8" : (isVibrant ? "0A66C2" : String(theme?.primary || "0F6CBD"));
+    const secondary = isStrong ? "083B7A" : (isVibrant ? "0078D4" : String(theme?.secondary || primary || "115EA3"));
     return {
       accent_primary: primary,
       accent_secondary: secondary,
-      panel_fill: isStrong ? "FFE3F0FE" : "FFEAF3FB",
-      card_fill: isStrong ? "FFEAF3FF" : "FFF2F8FF",
-      border: isStrong ? "FFBFD3EA" : "FFD6E4F5",
-      zebra: isStrong ? "FFF2F7FD" : "FFF7FAFD",
-      chrome_fill: isStrong ? "F6FAFF" : "FFFFFF",
-      chrome_transparency: isStrong ? 12 : 24,
-      chrome_line: isStrong ? "C7DCF4" : "DCEBFA",
+      panel_fill: isStrong ? "FFE3F0FE" : (isVibrant ? "FFDDEBFF" : "FFEAF3FB"),
+      card_fill: isStrong ? "FFEAF3FF" : (isVibrant ? "FFEAF2FF" : "FFF2F8FF"),
+      border: isStrong ? "FFBFD3EA" : (isVibrant ? "FFB3CEEF" : "FFD6E4F5"),
+      zebra: isStrong ? "FFF2F7FD" : (isVibrant ? "FFEFF5FF" : "FFF7FAFD"),
+      chrome_fill: isStrong ? "F6FAFF" : (isVibrant ? "F2F7FF" : "FFFFFF"),
+      chrome_transparency: isStrong ? 12 : (isVibrant ? 6 : 24),
+      chrome_line: isStrong ? "C7DCF4" : (isVibrant ? "B8D3F2" : "DCEBFA"),
     };
   }
 
@@ -699,8 +701,10 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
 
   async function writeXlsx(filePath, rows, quality, warnings, options = {}) {
     const theme = resolveOfficeTheme(options.office_theme);
-    const isStrong = /fluent_ms_strong/i.test(String(options.office_theme || ""));
-    const visual = resolveVisualPack(theme, isStrong);
+    const themeName = String(options.office_theme || "").toLowerCase();
+    const isStrong = /fluent_ms_strong/i.test(themeName);
+    const isVibrant = /fluent_ms_vibrant/i.test(themeName);
+    const visual = resolveVisualPack(theme, { isStrong, isVibrant });
     const accentPrimary = visual.accent_primary;
     const accentSecondary = visual.accent_secondary;
     const lightPanelFill = visual.panel_fill;
@@ -1018,8 +1022,10 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
 
   async function writeDocx(filePath, jobId, reportTitle, rows, quality, warnings, options = {}) {
     const theme = resolveOfficeTheme(options.office_theme);
-    const isStrong = /fluent_ms_strong/i.test(String(options.office_theme || ""));
-    const visual = resolveVisualPack(theme, isStrong);
+    const themeName = String(options.office_theme || "").toLowerCase();
+    const isStrong = /fluent_ms_strong/i.test(themeName);
+    const isVibrant = /fluent_ms_vibrant/i.test(themeName);
+    const visual = resolveVisualPack(theme, { isStrong, isVibrant });
     const docxGlassFill = (visual.panel_fill || "FFEAF3FB").slice(2);
     const docxStripFill = (visual.card_fill || "FFF2F8FF").slice(2);
     const layout = typeof resolveOfficeLayout === "function" ? resolveOfficeLayout(options.office_theme) : {};
@@ -1213,8 +1219,10 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
 
   async function writePptx(filePath, reportTitle, rows, quality, warnings, options = {}) {
     const theme = resolveOfficeTheme(options.office_theme);
-    const isStrong = /fluent_ms_strong/i.test(String(options.office_theme || ""));
-    const visual = resolveVisualPack(theme, isStrong);
+    const themeName = String(options.office_theme || "").toLowerCase();
+    const isStrong = /fluent_ms_strong/i.test(themeName);
+    const isVibrant = /fluent_ms_vibrant/i.test(themeName);
+    const visual = resolveVisualPack(theme, { isStrong, isVibrant });
     const accentPrimary = visual.accent_primary;
     const accentSecondary = visual.accent_secondary;
     const chromeCardFill = visual.chrome_fill;

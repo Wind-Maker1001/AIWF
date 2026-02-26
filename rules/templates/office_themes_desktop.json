@@ -1,4 +1,28 @@
 ﻿{
+  "fluent_ms": {
+    "title": "Fluent 宣传风",
+    "primary": "0F6CBD",
+    "secondary": "0B3A75",
+    "bg": "F7FAFE"
+  },
+  "fluent_ms_light": {
+    "title": "Fluent Light",
+    "primary": "0F6CBD",
+    "secondary": "0B3A75",
+    "bg": "F7FAFE"
+  },
+  "fluent_ms_strong": {
+    "title": "Fluent Strong",
+    "primary": "005FB8",
+    "secondary": "083B7A",
+    "bg": "EEF5FD"
+  },
+  "fluent_ms_vibrant": {
+    "title": "Fluent Vibrant",
+    "primary": "0A66C2",
+    "secondary": "0078D4",
+    "bg": "EDF5FF"
+  },
   "assignment": {
     "title": "作业风 v1",
     "primary": "245C73",

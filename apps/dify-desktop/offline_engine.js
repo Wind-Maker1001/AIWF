@@ -33,6 +33,7 @@ function loadDesktopThemes() {
     fluent_ms: { title: "Fluent 宣传风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
     fluent_ms_light: { title: "Fluent Light", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
     fluent_ms_strong: { title: "Fluent Strong", primary: "005FB8", secondary: "083B7A", bg: "EEF5FD" },
+    fluent_ms_vibrant: { title: "Fluent Vibrant", primary: "0A66C2", secondary: "0078D4", bg: "EDF5FF" },
     professional: { title: "专业风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
     academic: { title: "学术风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
     debate: { title: "辩论风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
@@ -83,6 +84,14 @@ function loadDesktopLayouts() {
       pptx_sample_rows: 8,
       pptx_max_findings: 7,
       pptx_max_evidence: 7,
+    },
+    fluent_ms_vibrant: {
+      xlsx_data_sheet_name: "cleaned",
+      xlsx_summary_sheet_name: "summary",
+      docx_max_table_rows: 26,
+      pptx_sample_rows: 10,
+      pptx_max_findings: 9,
+      pptx_max_evidence: 10,
     },
   };
   const p = process.env.AIWF_OFFICE_LAYOUT_FILE_DESKTOP

@@ -140,6 +140,112 @@
       border:1px solid #1c2f45;
     }
   </style>
+  <style>
+    :root{
+      --bg:#f2f6fb;
+      --line:#cddcec;
+      --line-strong:#9ab6d7;
+      --txt:#0f172a;
+      --muted:#4b5e75;
+      --brand:#0f6cbd;
+      --brand-2:#0b5cab;
+      --ok:#0f7b0f;
+      --bad:#b10e1c;
+      --shadow:0 18px 38px rgba(8,32,58,.12);
+      --shadow-soft:0 8px 24px rgba(8,32,58,.08);
+    }
+    body{
+      font-family:"Segoe UI Variable Display","Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+      background:
+        radial-gradient(1100px 540px at -8% -12%, #d9e9ff 0%, transparent 62%),
+        radial-gradient(760px 380px at 100% 0%, #e9f3ff 0%, transparent 56%),
+        linear-gradient(180deg,#f8fbff,#f0f5fb);
+    }
+    .wrap{padding:18px 16px;gap:12px}
+    .hero{
+      border-radius:18px;
+      padding:18px 18px;
+      border:1px solid rgba(255,255,255,.22);
+      background:
+        radial-gradient(360px 170px at 10% -8%, rgba(255,255,255,.24), transparent 68%),
+        linear-gradient(125deg,#0b2440 0%, #0f6cbd 56%, #0f887a 100%);
+      box-shadow:var(--shadow);
+    }
+    .card{
+      border-radius:14px;
+      border:1px solid rgba(156,183,214,.52);
+      box-shadow:var(--shadow-soft);
+    }
+    .hd{
+      padding:12px 12px;
+      border-bottom:1px solid #deebf8;
+      background:linear-gradient(180deg,#fafdff,#f2f7ff);
+    }
+    .bd{padding:12px}
+    label{
+      color:#4f6480;
+      font-size:12px;
+      text-transform:uppercase;
+      letter-spacing:.18px;
+    }
+    input,textarea,select{
+      border-radius:11px;
+      border:1px solid #c8daee;
+      background:linear-gradient(180deg,#ffffff,#f9fcff);
+    }
+    .btn{
+      border-radius:11px;
+      font-weight:700;
+      letter-spacing:.15px;
+      background:linear-gradient(180deg,#0f7bd8,#0f62b8);
+      box-shadow:0 4px 12px rgba(15,98,184,.25);
+    }
+    .btn.secondary{
+      background:linear-gradient(180deg,#607a96,#50677f);
+      box-shadow:0 3px 10px rgba(32,46,66,.2);
+    }
+    .btn.danger{
+      background:linear-gradient(180deg,#cb4b42,#a73632);
+      box-shadow:0 3px 10px rgba(140,43,39,.25);
+    }
+    .canvas-wrap{
+      border:1px solid #bad1e7;
+      border-radius:14px;
+      background:#f8fbff;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.65);
+    }
+    .canvas-surface{
+      background-image:
+        linear-gradient(to right, rgba(105,138,170,.16) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(105,138,170,.16) 1px, transparent 1px),
+        radial-gradient(circle at 0 0, rgba(255,255,255,.66), rgba(246,250,255,.92));
+    }
+    .node{
+      border:1px solid #c7ddf2;
+      border-radius:13px;
+      box-shadow:0 8px 16px rgba(31,45,61,.11);
+    }
+    .node.selected{
+      border-color:#0f6cbd;
+      box-shadow:0 0 0 3px rgba(15,108,189,.2),0 10px 18px rgba(31,45,61,.14);
+    }
+    .node-hd{
+      background:linear-gradient(180deg,#eef6ff,#e5f1ff);
+      border-bottom:1px solid #d4e6f7;
+    }
+    table{border-radius:11px;overflow:hidden}
+    th{
+      background:linear-gradient(180deg,#f0f6ff,#e8f1fb);
+      color:#2f4863;
+      font-weight:700;
+    }
+    pre{
+      border-radius:11px;
+      border:1px solid #1d3752;
+      background:linear-gradient(180deg,#0d1a2a,#0e2436);
+    }
+  </style>
+  <script type="module" src="../node_modules/@fluentui/web-components/dist/web-components.min.js"></script>
 </head>
 <body>
   <div class="wrap">
@@ -160,9 +266,9 @@
           <input id="paletteSearch" placeholder="输入关键词筛选节点（如 提炼 / rust / 审核）" />
           <div id="palette"></div>
           <div class="btns">
-            <button id="btnAdd" class="btn">添加所选节点</button>
-            <button id="btnReset" class="btn secondary">重置默认流程</button>
-            <button id="btnClear" class="btn danger">清空画布</button>
+            <fluent-button id="btnAdd" class="btn">添加所选节点</fluent-button>
+            <fluent-button id="btnReset" class="btn secondary">重置默认流程</fluent-button>
+            <fluent-button id="btnClear" class="btn danger">清空画布</fluent-button>
           </div>
           <label>节点类型</label>
           <input id="nodeType" value="ingest_files" />
@@ -177,19 +283,19 @@
           <label>模板参数(JSON)</label>
           <textarea id="templateParams" placeholder='{"title":"我的报告","threshold":0.8}'></textarea>
           <div class="btns" style="margin-top:8px">
-            <button id="btnApplyTemplate" class="btn secondary">应用模板</button>
-            <button id="btnSaveTemplate" class="btn secondary">保存为模板</button>
-            <button id="btnTemplatePackInstall" class="btn secondary">安装模板包</button>
-            <button id="btnTemplatePackRemove" class="btn secondary">移除模板包</button>
-            <button id="btnTemplatePackExport" class="btn secondary">导出模板包</button>
+            <fluent-button id="btnApplyTemplate" class="btn secondary">应用模板</fluent-button>
+            <fluent-button id="btnSaveTemplate" class="btn secondary">保存为模板</fluent-button>
+            <fluent-button id="btnTemplatePackInstall" class="btn secondary">安装模板包</fluent-button>
+            <fluent-button id="btnTemplatePackRemove" class="btn secondary">移除模板包</fluent-button>
+            <fluent-button id="btnTemplatePackExport" class="btn secondary">导出模板包</fluent-button>
           </div>
           <div class="btns" style="margin-top:6px">
-            <button id="btnTemplateAcceptance" class="btn secondary">模板验收</button>
+            <fluent-button id="btnTemplateAcceptance" class="btn secondary">模板验收</fluent-button>
             <select id="templateAcceptanceExportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:6px 8px;font-size:12px">
               <option value="md">Markdown</option>
               <option value="json">JSON</option>
             </select>
-            <button id="btnTemplateAcceptanceExport" class="btn secondary">导出验收报告</button>
+            <fluent-button id="btnTemplateAcceptanceExport" class="btn secondary">导出验收报告</fluent-button>
           </div>
           <label>输入文件（每行一个）</label>
           <textarea id="inputFiles"></textarea>
@@ -198,9 +304,9 @@
           <label>质量规则集ID（可选，自动注入 quality_check 节点）</label>
           <input id="qualityRuleSetId" placeholder="例如: finance_strict_v1" />
           <div class="btns" style="margin-top:6px">
-            <button id="btnQualityRuleSetsRefresh" class="btn secondary">刷新规则集</button>
-            <button id="btnQualityRuleSetSave" class="btn secondary">保存当前规则集</button>
-            <button id="btnQualityRuleSetRemove" class="btn secondary">删除规则集</button>
+            <fluent-button id="btnQualityRuleSetsRefresh" class="btn secondary">刷新规则集</fluent-button>
+            <fluent-button id="btnQualityRuleSetSave" class="btn secondary">保存当前规则集</fluent-button>
+            <fluent-button id="btnQualityRuleSetRemove" class="btn secondary">删除规则集</fluent-button>
           </div>
           <label>质量规则集列表</label>
           <select id="qualityRuleSetSelect" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
@@ -218,7 +324,7 @@
           <label>外部 AI Model</label>
           <input id="aiModel" placeholder="deepseek-chat" />
           <div class="btns" style="margin-top:6px">
-            <button id="btnUseDeepSeek" class="btn secondary">一键填充 DeepSeek</button>
+            <fluent-button id="btnUseDeepSeek" class="btn secondary">一键填充 DeepSeek</fluent-button>
           </div>
           <div id="offlineBoundaryHint" class="cfg-help" style="margin-top:6px;color:#7a4a00;background:#fff7e6;border:1px solid #f2d39b;border-radius:8px;padding:8px">
             离线能力边界：仅本地清洗/计算/模板渲染节点可离线运行；AI 相关节点需外部 API。
@@ -245,20 +351,20 @@
           <input id="sandboxMaxOutputBytes" value="2000000" />
           <label><input id="snapGrid" type="checkbox" checked style="width:auto;margin-right:6px" />拖拽吸附网格</label>
           <div class="btns" style="margin-top:8px">
-            <button id="btnPreflight" class="btn secondary">运行前预检</button>
-            <button id="btnAutoFixGraph" class="btn secondary">自动修复图结构</button>
-            <button id="btnRun" class="btn">运行</button>
-            <button id="btnEnqueueRun" class="btn secondary">加入队列</button>
-            <button id="btnSaveBaseline" class="btn secondary">保存为基线</button>
-            <button id="btnCompareBaseline" class="btn secondary">与基线对比</button>
-            <button id="btnLoadLineage" class="btn secondary">加载血缘图</button>
-            <button id="btnQueueRefresh" class="btn secondary">刷新队列</button>
-            <button id="btnQueuePause" class="btn secondary">暂停队列</button>
-            <button id="btnQueueResume" class="btn secondary">恢复队列</button>
-            <button id="btnExport" class="btn secondary">导出流程 JSON</button>
-            <button id="btnSaveFlow" class="btn secondary">保存流程</button>
-            <button id="btnLoadFlow" class="btn secondary">加载流程</button>
-            <button id="btnVersionsRefresh" class="btn secondary">版本列表</button>
+            <fluent-button id="btnPreflight" class="btn secondary">运行前预检</fluent-button>
+            <fluent-button id="btnAutoFixGraph" class="btn secondary">自动修复图结构</fluent-button>
+            <fluent-button id="btnRun" class="btn">运行</fluent-button>
+            <fluent-button id="btnEnqueueRun" class="btn secondary">加入队列</fluent-button>
+            <fluent-button id="btnSaveBaseline" class="btn secondary">保存为基线</fluent-button>
+            <fluent-button id="btnCompareBaseline" class="btn secondary">与基线对比</fluent-button>
+            <fluent-button id="btnLoadLineage" class="btn secondary">加载血缘图</fluent-button>
+            <fluent-button id="btnQueueRefresh" class="btn secondary">刷新队列</fluent-button>
+            <fluent-button id="btnQueuePause" class="btn secondary">暂停队列</fluent-button>
+            <fluent-button id="btnQueueResume" class="btn secondary">恢复队列</fluent-button>
+            <fluent-button id="btnExport" class="btn secondary">导出流程 JSON</fluent-button>
+            <fluent-button id="btnSaveFlow" class="btn secondary">保存流程</fluent-button>
+            <fluent-button id="btnLoadFlow" class="btn secondary">加载流程</fluent-button>
+            <fluent-button id="btnVersionsRefresh" class="btn secondary">版本列表</fluent-button>
           </div>
           <div id="status" class="status"></div>
         </div>
@@ -267,17 +373,17 @@
         <div class="hd">流程画布</div>
         <div class="bd">
           <div class="btns" style="margin-bottom:8px">
-            <button id="btnZoomOut" class="btn secondary">缩小</button>
-            <button id="btnZoomIn" class="btn secondary">放大</button>
-            <button id="btnZoomReset" class="btn secondary">100%</button>
+            <fluent-button id="btnZoomOut" class="btn secondary">缩小</fluent-button>
+            <fluent-button id="btnZoomIn" class="btn secondary">放大</fluent-button>
+            <fluent-button id="btnZoomReset" class="btn secondary">100%</fluent-button>
             <span id="zoomText" style="display:inline-flex;align-items:center;color:#4f6378;font-size:12px;padding:0 4px">100%</span>
           </div>
           <div class="btns" style="margin-bottom:8px">
-            <button id="btnAlignLeft" class="btn secondary">左对齐</button>
-            <button id="btnAlignTop" class="btn secondary">上对齐</button>
-            <button id="btnDistributeH" class="btn secondary">水平分布</button>
-            <button id="btnDistributeV" class="btn secondary">垂直分布</button>
-            <button id="btnUnlinkSelected" class="btn danger">取消框选节点连线</button>
+            <fluent-button id="btnAlignLeft" class="btn secondary">左对齐</fluent-button>
+            <fluent-button id="btnAlignTop" class="btn secondary">上对齐</fluent-button>
+            <fluent-button id="btnDistributeH" class="btn secondary">水平分布</fluent-button>
+            <fluent-button id="btnDistributeV" class="btn secondary">垂直分布</fluent-button>
+            <fluent-button id="btnUnlinkSelected" class="btn danger">取消框选节点连线</fluent-button>
           </div>
           <div class="hint">连接方式：按住节点右侧绿色输出点，拖到目标节点左侧蓝色输入点。多选可用框选或 Shift/Ctrl 点击。点击连线可编辑条件，Shift+点击连线可删除。</div>
           <div id="canvasWrap" class="canvas-wrap">
@@ -304,7 +410,7 @@
                 <option value="md">Markdown</option>
                 <option value="json">JSON</option>
               </select>
-              <button id="btnPreflightExport" class="btn secondary">导出预检报告</button>
+              <fluent-button id="btnPreflightExport" class="btn secondary">导出预检报告</fluent-button>
             </div>
             <table>
               <thead><tr><th>级别</th><th>类型</th><th>说明</th><th>操作</th></tr></thead>
@@ -370,19 +476,19 @@
               <input id="edgeWhenValue" placeholder="true / &quot;yes&quot; / [1,2]" />
             </div>
             <div class="btns" style="margin-top:8px">
-              <button id="btnBuildEdgeWhen" class="btn secondary">生成到 JSON</button>
-              <button id="btnParseEdgeWhen" class="btn secondary">JSON 回填构造器</button>
+              <fluent-button id="btnBuildEdgeWhen" class="btn secondary">生成到 JSON</fluent-button>
+              <fluent-button id="btnParseEdgeWhen" class="btn secondary">JSON 回填构造器</fluent-button>
             </div>
             <label>when(JSON，可留空)</label>
             <textarea id="edgeWhenText" class="cfg-text" style="min-height:120px"></textarea>
             <div class="btns" style="margin-top:8px">
-              <button id="btnApplyEdgeCfg" class="btn">应用连线条件</button>
-              <button id="btnClearEdgeCfg" class="btn secondary">清空条件</button>
+              <fluent-button id="btnApplyEdgeCfg" class="btn">应用连线条件</fluent-button>
+              <fluent-button id="btnClearEdgeCfg" class="btn secondary">清空条件</fluent-button>
             </div>
           </div>
           <div class="btns cfg-mode">
-            <button id="btnCfgForm" class="btn secondary">表单模式</button>
-            <button id="btnCfgJson" class="btn secondary">JSON模式</button>
+            <fluent-button id="btnCfgForm" class="btn secondary">表单模式</fluent-button>
+            <fluent-button id="btnCfgJson" class="btn secondary">JSON模式</fluent-button>
           </div>
           <div id="nodeConfigForm" class="cfg-form"></div>
           <div class="cfg-help">表单覆盖常用参数；复杂参数可切到 JSON 模式直接编辑。</div>
@@ -395,7 +501,7 @@
               <tbody id="inputMapRows"><tr><td colspan="3" style="color:#74879b">无</td></tr></tbody>
             </table>
             <div class="btns" style="margin-top:6px">
-              <button id="btnAddInputMap" class="btn secondary">新增输入映射</button>
+              <fluent-button id="btnAddInputMap" class="btn secondary">新增输入映射</fluent-button>
             </div>
             <label style="margin-top:8px">输出映射 output_map</label>
             <table>
@@ -403,18 +509,18 @@
               <tbody id="outputMapRows"><tr><td colspan="3" style="color:#74879b">无</td></tr></tbody>
             </table>
             <div class="btns" style="margin-top:6px">
-              <button id="btnAddOutputMap" class="btn secondary">新增输出映射</button>
+              <fluent-button id="btnAddOutputMap" class="btn secondary">新增输出映射</fluent-button>
             </div>
           </div>
           <div class="btns" style="margin:8px 0">
-            <button id="btnApplyNodeCfg" class="btn">应用配置</button>
-            <button id="btnResetNodeCfg" class="btn secondary">重置默认</button>
-            <button id="btnFormatNodeCfg" class="btn secondary">格式化</button>
+            <fluent-button id="btnApplyNodeCfg" class="btn">应用配置</fluent-button>
+            <fluent-button id="btnResetNodeCfg" class="btn secondary">重置默认</fluent-button>
+            <fluent-button id="btnFormatNodeCfg" class="btn secondary">格式化</fluent-button>
           </div>
           <div class="btns" style="margin-bottom:8px">
-            <button id="btnDiagRefresh" class="btn secondary">刷新诊断</button>
-            <button id="btnRunsRefresh" class="btn secondary">刷新运行记录</button>
-            <button id="btnReviewsRefresh" class="btn secondary">刷新审核队列</button>
+            <fluent-button id="btnDiagRefresh" class="btn secondary">刷新诊断</fluent-button>
+            <fluent-button id="btnRunsRefresh" class="btn secondary">刷新运行记录</fluent-button>
+            <fluent-button id="btnReviewsRefresh" class="btn secondary">刷新审核队列</fluent-button>
           </div>
           <table>
             <thead><tr><th>节点</th><th>状态</th><th>耗时</th><th>输出体积</th><th>失败类型</th></tr></thead>
@@ -448,7 +554,7 @@
             <label>Version B</label>
             <input id="versionCompareB" placeholder="version_id B" />
             <div class="btns" style="margin-top:6px">
-              <button id="btnCompareVersions" class="btn secondary">对比版本</button>
+              <fluent-button id="btnCompareVersions" class="btn secondary">对比版本</fluent-button>
             </div>
             <div id="versionCompareSummary" class="cfg-meta" style="margin-top:8px">暂无对比</div>
             <table>
@@ -460,8 +566,8 @@
             <div class="cfg-help">节点缓存</div>
             <div id="cacheStatsText" class="cfg-meta">缓存状态: -</div>
             <div class="btns" style="margin-top:6px">
-              <button id="btnCacheRefresh" class="btn secondary">刷新缓存</button>
-              <button id="btnCacheClear" class="btn secondary">清空缓存</button>
+              <fluent-button id="btnCacheRefresh" class="btn secondary">刷新缓存</fluent-button>
+              <fluent-button id="btnCacheClear" class="btn secondary">清空缓存</fluent-button>
             </div>
           </div>
           <div style="height:8px"></div>
@@ -476,24 +582,24 @@
             <label>参数 Schema（可视化）</label>
             <div id="appSchemaForm" class="cfg-form" style="max-height:180px"></div>
             <div class="btns" style="margin-top:6px">
-              <button id="btnAppSchemaAdd" class="btn secondary">新增参数</button>
-              <button id="btnAppSchemaSyncJson" class="btn secondary">同步到JSON</button>
-              <button id="btnAppSchemaFromJson" class="btn secondary">JSON回填</button>
+              <fluent-button id="btnAppSchemaAdd" class="btn secondary">新增参数</fluent-button>
+              <fluent-button id="btnAppSchemaSyncJson" class="btn secondary">同步到JSON</fluent-button>
+              <fluent-button id="btnAppSchemaFromJson" class="btn secondary">JSON回填</fluent-button>
             </div>
             <label>参数 Schema(JSON)</label>
             <textarea id="appSchemaJson" style="min-height:100px" placeholder='{"title":{"type":"string","required":true,"description":"任务标题"}}'></textarea>
             <label>运行参数（可视化）</label>
             <div id="appRunParamsForm" class="cfg-form" style="max-height:180px"></div>
             <div class="btns" style="margin-top:6px">
-              <button id="btnAppRunSyncJson" class="btn secondary">运行参数同步到JSON</button>
-              <button id="btnAppRunFromJson" class="btn secondary">JSON回填运行参数</button>
+              <fluent-button id="btnAppRunSyncJson" class="btn secondary">运行参数同步到JSON</fluent-button>
+              <fluent-button id="btnAppRunFromJson" class="btn secondary">JSON回填运行参数</fluent-button>
             </div>
             <label>运行参数(JSON)</label>
             <textarea id="appRunParams" style="min-height:80px" placeholder='{"title":"示例任务"}'></textarea>
             <label><input id="publishRequirePreflight" type="checkbox" checked style="width:auto;margin-right:6px" />发布前必须预检通过</label>
             <div class="btns" style="margin-top:6px">
-              <button id="btnPublishApp" class="btn secondary">发布应用</button>
-              <button id="btnAppsRefresh" class="btn secondary">刷新应用</button>
+              <fluent-button id="btnPublishApp" class="btn secondary">发布应用</fluent-button>
+              <fluent-button id="btnAppsRefresh" class="btn secondary">刷新应用</fluent-button>
             </div>
             <table style="margin-top:8px">
               <thead><tr><th>应用</th><th>时间</th><th>操作</th></tr></thead>
@@ -505,10 +611,10 @@
             <label>Run ID</label>
             <input id="timelineRunId" placeholder="输入 run_id 查看时间线" />
             <div class="btns" style="margin-top:6px">
-              <button id="btnTimelineRefresh" class="btn secondary">刷新时间线</button>
-              <button id="btnFailureSummaryRefresh" class="btn secondary">失败概览</button>
-              <button id="btnSandboxAlertsRefresh" class="btn secondary">Sandbox告警</button>
-              <button id="btnSandboxExport" class="btn secondary">导出Sandbox报告</button>
+              <fluent-button id="btnTimelineRefresh" class="btn secondary">刷新时间线</fluent-button>
+              <fluent-button id="btnFailureSummaryRefresh" class="btn secondary">失败概览</fluent-button>
+              <fluent-button id="btnSandboxAlertsRefresh" class="btn secondary">Sandbox告警</fluent-button>
+              <fluent-button id="btnSandboxExport" class="btn secondary">导出Sandbox报告</fluent-button>
             </div>
             <table style="margin-top:8px">
               <thead><tr><th>节点</th><th>状态</th><th>耗时(s)</th></tr></thead>
@@ -535,7 +641,7 @@
                 <option value="strict">严格</option>
                 <option value="loose">宽松</option>
               </select>
-              <button id="btnSandboxPresetApply" class="btn secondary">应用预设</button>
+              <fluent-button id="btnSandboxPresetApply" class="btn secondary">应用预设</fluent-button>
             </div>
             <input id="sandboxWhitelistCodes" placeholder="白名单错误码(逗号分隔), 如 sandbox_limit_exceeded:output" />
             <input id="sandboxWhitelistNodeTypes" placeholder="白名单节点类型(逗号分隔), 如 ai_refine,compute_rust" style="margin-top:6px" />
@@ -546,15 +652,15 @@
               <input id="sandboxMuteMinutes" value="60" placeholder="静默分钟" />
             </div>
             <div class="btns" style="margin-top:6px">
-              <button id="btnSandboxRulesLoad" class="btn secondary">加载规则</button>
-              <button id="btnSandboxRulesSave" class="btn secondary">保存规则</button>
-              <button id="btnSandboxMuteApply" class="btn secondary">应用静默</button>
-              <button id="btnSandboxRuleVersions" class="btn secondary">规则版本</button>
-              <button id="btnSandboxPresetExport" class="btn secondary">导出预设</button>
-              <button id="btnSandboxPresetImport" class="btn secondary">导入预设</button>
-              <button id="btnSandboxAutoFixLog" class="btn secondary">闭环日志</button>
-              <button id="btnQualityGateRefresh" class="btn secondary">质量门禁</button>
-              <button id="btnQualityGateExport" class="btn secondary">导出门禁</button>
+              <fluent-button id="btnSandboxRulesLoad" class="btn secondary">加载规则</fluent-button>
+              <fluent-button id="btnSandboxRulesSave" class="btn secondary">保存规则</fluent-button>
+              <fluent-button id="btnSandboxMuteApply" class="btn secondary">应用静默</fluent-button>
+              <fluent-button id="btnSandboxRuleVersions" class="btn secondary">规则版本</fluent-button>
+              <fluent-button id="btnSandboxPresetExport" class="btn secondary">导出预设</fluent-button>
+              <fluent-button id="btnSandboxPresetImport" class="btn secondary">导入预设</fluent-button>
+              <fluent-button id="btnSandboxAutoFixLog" class="btn secondary">闭环日志</fluent-button>
+              <fluent-button id="btnQualityGateRefresh" class="btn secondary">质量门禁</fluent-button>
+              <fluent-button id="btnQualityGateExport" class="btn secondary">导出门禁</fluent-button>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px">
               <input id="qualityGateRunIdFilter" placeholder="质量门禁筛选 run_id(包含匹配)" />
@@ -599,7 +705,7 @@
           <div class="cfg-form" style="margin-top:8px">
             <div class="cfg-help">操作审计</div>
             <div class="btns" style="margin-top:6px">
-              <button id="btnAuditRefresh" class="btn secondary">刷新审计</button>
+              <fluent-button id="btnAuditRefresh" class="btn secondary">刷新审计</fluent-button>
             </div>
             <table style="margin-top:8px">
               <thead><tr><th>时间</th><th>动作</th><th>详情</th></tr></thead>
@@ -618,12 +724,12 @@
             <label>最小耗时变化阈值（秒）</label>
             <input id="compareMinDelta" value="0.001" />
             <div class="btns" style="margin-top:6px">
-              <button id="btnCompareRuns" class="btn secondary">对比运行</button>
+              <fluent-button id="btnCompareRuns" class="btn secondary">对比运行</fluent-button>
               <select id="compareReportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
                 <option value="md">导出 Markdown</option>
                 <option value="html">导出 HTML</option>
               </select>
-              <button id="btnExportCompareReport" class="btn secondary">导出对比报告</button>
+              <fluent-button id="btnExportCompareReport" class="btn secondary">导出对比报告</fluent-button>
             </div>
             <div id="compareSummary" class="cfg-meta" style="margin-top:8px">暂无对比</div>
             <table>
@@ -649,8 +755,8 @@
             <label>结束时间（ISO，可选）</label>
             <input id="reviewHistoryDateTo" placeholder="2026-12-31T23:59:59Z" />
             <div class="btns" style="margin-top:6px">
-              <button id="btnReviewHistoryRefresh" class="btn secondary">刷新历史</button>
-              <button id="btnReviewHistoryExport" class="btn secondary">导出历史</button>
+              <fluent-button id="btnReviewHistoryRefresh" class="btn secondary">刷新历史</fluent-button>
+              <fluent-button id="btnReviewHistoryExport" class="btn secondary">导出历史</fluent-button>
             </div>
             <table style="margin-top:8px">
               <thead><tr><th>审核键</th><th>状态</th><th>审核人</th><th>时间</th></tr></thead>
@@ -672,6 +778,16 @@
       </article>
     </section>
   </div>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      document.querySelectorAll("fluent-button").forEach((btn) => {
+        const cls = String(btn.className || "");
+        if (/\bdanger\b/.test(cls)) btn.setAttribute("appearance", "accent");
+        else if (/\bsecondary\b/.test(cls)) btn.setAttribute("appearance", "neutral");
+        else btn.setAttribute("appearance", "accent");
+      });
+    });
+  </script>
   <script type="module" src="./workflow/app.js"></script>
 </body>
 </html>
