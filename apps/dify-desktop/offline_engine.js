@@ -19,6 +19,7 @@ const {
   splitPdfTextToEvidence,
   scorePdfExtractText,
   isLikelyCorruptedText,
+  rowTextForQuality,
   materializePaperMarkdown,
   writePaperMarkdownIndex,
   writeAiCorpusMarkdown,
@@ -261,14 +262,13 @@ function resolveOfficeFont(params = {}, warnings = []) {
   if (lang === "en") return "Calibri";
 
   const candidates = [
-    { family: "Microsoft YaHei UI", files: ["msyh.ttc", "msyh.ttf", "msyhbd.ttc", "msyhbd.ttf"] },
-    { family: "Segoe UI", files: ["segoeui.ttf", "segoeuib.ttf"] },
     { family: "Microsoft YaHei", files: ["msyh.ttc", "msyh.ttf", "msyhbd.ttc", "msyhbd.ttf"] },
-    { family: "Noto Sans CJK SC", files: ["NotoSansCJKsc-Regular.otf", "NotoSansCJK-Regular.ttc"] },
-    { family: "Source Han Sans SC", files: ["SourceHanSansSC-Regular.otf"] },
     { family: "SimHei", files: ["simhei.ttf"] },
     { family: "SimSun", files: ["simsun.ttc", "simsun.ttf"] },
     { family: "DengXian", files: ["deng.ttf", "dengb.ttf"] },
+    { family: "Noto Sans CJK SC", files: ["NotoSansCJKsc-Regular.otf", "NotoSansCJK-Regular.ttc"] },
+    { family: "Source Han Sans SC", files: ["SourceHanSansSC-Regular.otf"] },
+    { family: "Segoe UI", files: ["segoeui.ttf", "segoeuib.ttf"] },
   ];
 
   for (const c of candidates) {
@@ -470,8 +470,11 @@ async function runOfflineCleaning(payload) {
   let qualityGate = { evaluated: false, passed: false };
   const fidelity = { enabled: false, reasons: [] };
 
-  const corruptRows = (rows || []).filter((r) => isLikelyCorruptedText(String(r.text || ""))).length;
-  const corruptRatio = rows.length > 0 ? (corruptRows / rows.length) : 0;
+  const evalTextRows = (rows || [])
+    .map((r) => rowTextForQuality(r))
+    .filter((t) => String(t || "").length >= 4);
+  const corruptRows = evalTextRows.filter((t) => isLikelyCorruptedText(t)).length;
+  const corruptRatio = evalTextRows.length > 0 ? (corruptRows / evalTextRows.length) : 0;
   const autoFidelity = params.md_fidelity_auto !== false;
 
   function activateFidelity(reason) {
@@ -504,9 +507,13 @@ async function runOfflineCleaning(payload) {
     warnings.push("清洗后结果为空，已切换文本保真模式。");
     activateFidelity("empty_output_after_clean");
   }
-  if (autoFidelity && !fidelity.enabled && corruptRatio >= 0.35) {
-    warnings.push(`清洗结果疑似乱码率过高(${(corruptRatio * 100).toFixed(1)}%)，已切换文本保真模式。`);
-    activateFidelity(`gibberish_ratio_high:${corruptRatio.toFixed(4)}`);
+  if (!fidelity.enabled && corruptRatio >= 0.2) {
+    if (autoFidelity && corruptRatio >= 0.35) {
+      warnings.push(`清洗结果疑似乱码率过高(${(corruptRatio * 100).toFixed(1)}%，评估行=${evalTextRows.length})，已切换文本保真模式。`);
+      activateFidelity(`gibberish_ratio_high:${corruptRatio.toFixed(4)}`);
+    } else {
+      warnings.push(`清洗结果疑似乱码率偏高(${(corruptRatio * 100).toFixed(1)}%，评估行=${evalTextRows.length})，建议检查源文件编码。`);
+    }
   }
   if (fidelity.enabled) {
     qualityGate = {

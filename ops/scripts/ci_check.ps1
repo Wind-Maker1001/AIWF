@@ -66,6 +66,80 @@ function WithNoDeprecation([scriptblock]$Action) {
   }
 }
 
+function Wait-AccelRustHealthy([string]$Url, [int]$MaxRetries = 80, [int]$DelayMs = 250) {
+  for ($i = 0; $i -lt $MaxRetries; $i++) {
+    try {
+      $h = Invoke-RestMethod -Uri "$Url/health" -TimeoutSec 2
+      if ($h.ok) { return $true }
+    } catch {}
+    Start-Sleep -Milliseconds $DelayMs
+  }
+  return $false
+}
+
+function Ensure-AccelRustService([string]$RustDir, [string]$AccelUrl = "http://127.0.0.1:18082") {
+  try {
+    $healthy = Invoke-RestMethod -Uri "$AccelUrl/health" -TimeoutSec 2
+    if ($healthy.ok) {
+      return @{
+        started = $false
+        proc = $null
+        prevHost = $null
+        prevPort = $null
+      }
+    }
+  } catch {}
+
+  $accelExe = Join-Path $RustDir "target\debug\accel-rust.exe"
+  if (-not (Test-Path $accelExe)) {
+    Push-Location $RustDir
+    try {
+      cargo build -q
+    }
+    finally {
+      Pop-Location
+    }
+  }
+  if (-not (Test-Path $accelExe)) {
+    throw "accel-rust exe not found for local bootstrap: $accelExe"
+  }
+
+  $uri = [Uri]$AccelUrl
+  $bindHost = if ([string]::IsNullOrWhiteSpace($uri.Host)) { "127.0.0.1" } else { $uri.Host }
+  $port = if ($uri.Port -gt 0) { "$($uri.Port)" } else { "18082" }
+  $prevHost = $env:AIWF_ACCEL_RUST_HOST
+  $prevPort = $env:AIWF_ACCEL_RUST_PORT
+  $env:AIWF_ACCEL_RUST_HOST = $bindHost
+  $env:AIWF_ACCEL_RUST_PORT = $port
+  $proc = Start-Process -FilePath $accelExe -WorkingDirectory $RustDir -WindowStyle Hidden -PassThru
+  if (-not (Wait-AccelRustHealthy -Url $AccelUrl -MaxRetries 100 -DelayMs 250)) {
+    if ($proc -and -not $proc.HasExited) {
+      Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    }
+    if ($null -eq $prevHost) { Remove-Item Env:AIWF_ACCEL_RUST_HOST -ErrorAction SilentlyContinue } else { $env:AIWF_ACCEL_RUST_HOST = $prevHost }
+    if ($null -eq $prevPort) { Remove-Item Env:AIWF_ACCEL_RUST_PORT -ErrorAction SilentlyContinue } else { $env:AIWF_ACCEL_RUST_PORT = $prevPort }
+    throw "failed to bootstrap accel-rust at $AccelUrl"
+  }
+
+  return @{
+    started = $true
+    proc = $proc
+    prevHost = $prevHost
+    prevPort = $prevPort
+  }
+}
+
+function Stop-AccelRustService($State) {
+  if ($null -eq $State) { return }
+  if ($State.started -and $State.proc -and -not $State.proc.HasExited) {
+    Stop-Process -Id $State.proc.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($State.started) {
+    if ($null -eq $State.prevHost) { Remove-Item Env:AIWF_ACCEL_RUST_HOST -ErrorAction SilentlyContinue } else { $env:AIWF_ACCEL_RUST_HOST = $State.prevHost }
+    if ($null -eq $State.prevPort) { Remove-Item Env:AIWF_ACCEL_RUST_PORT -ErrorAction SilentlyContinue } else { $env:AIWF_ACCEL_RUST_PORT = $State.prevPort }
+  }
+}
+
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $EnvFile) {
   $EnvFile = Join-Path $root "ops\config\dev.env"
@@ -94,6 +168,7 @@ $contractRustApiScript = Join-Path $PSScriptRoot "contract_test_rust_api.ps1"
 $chaosTaskStoreScript = Join-Path $PSScriptRoot "chaos_task_store.ps1"
 $sqlConnectivityScript = Join-Path $PSScriptRoot "check_sql_connectivity.ps1"
 $cleanupScript = Join-Path $PSScriptRoot "clean_workspace_artifacts.ps1"
+$accelServiceState = $null
 
 if (-not $SkipToolChecks) {
   if (Test-Path $toolsScript) {
@@ -399,6 +474,17 @@ if (-not $SkipSmoke) {
   Warn "skip smoke/integration checks"
 }
 
+$needsAccelRustService = (-not $SkipContractTests) -or (-not $SkipChaosChecks) -or (-not $SkipAsyncBench) -or (-not $SkipRustTransformBenchGate)
+if ($needsAccelRustService) {
+  Info "ensuring accel-rust service is available on 127.0.0.1:18082"
+  $accelServiceState = Ensure-AccelRustService -RustDir $rustDir -AccelUrl "http://127.0.0.1:18082"
+  if ($accelServiceState.started) {
+    Ok "accel-rust service bootstrapped"
+  } else {
+    Ok "accel-rust service already available"
+  }
+}
+
 if (-not $SkipContractTests) {
   if (-not (Test-Path $contractRustApiScript)) {
     throw "contract test script not found: $contractRustApiScript"
@@ -588,6 +674,8 @@ if (-not $SkipRustNewOpsBenchGate) {
 } else {
   Warn "skip rust new-ops benchmark gate"
 }
+
+Stop-AccelRustService $accelServiceState
 
 if (-not $SkipPostCleanup) {
   if (Test-Path $cleanupScript) {

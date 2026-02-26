@@ -316,6 +316,7 @@ test('save/load workflow via mock dialog path', async () => {
 
 test('marquee selection selects multiple nodes', async () => {
   const { electronApp, page } = await openWorkflow();
+  await page.locator('#canvasWrap').scrollIntoViewIfNeeded();
   const box1 = await page.locator('.node[data-id="n1"]').boundingBox();
   const box2 = await page.locator('.node[data-id="n2"]').boundingBox();
   expect(box1).toBeTruthy();
@@ -339,6 +340,7 @@ test('marquee selection selects multiple nodes', async () => {
 
 test('multi-drag keeps relative movement across selected nodes', async () => {
   const { electronApp, page } = await openWorkflow();
+  await page.locator('#canvasWrap').scrollIntoViewIfNeeded();
 
   const beforeA = await page.locator('.node[data-id="n1"]').boundingBox();
   const beforeB = await page.locator('.node[data-id="n2"]').boundingBox();

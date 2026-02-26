@@ -808,7 +808,7 @@
         const p = String(a?.path || "");
         if (!p || !fs.existsSync(p)) return;
         const txt = fs.readFileSync(p, "utf8");
-        const bad = (txt.match(/\uFFFD|�/g) || []).length;
+        const bad = (txt.match(/\uFFFD/g) || []).length;
         const rate = txt.length > 0 ? bad / txt.length : 0;
         if (rate > maxMojibakeRate) issues.push(`mojibake_high:${p}:${rate.toFixed(4)}`);
       } catch {}
