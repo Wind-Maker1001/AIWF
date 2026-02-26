@@ -4,247 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AIWF 离线作业助手</title>
-  <style>
-    :root{
-      --bg:#f4f8fd;
-      --layer-1:#f9fbff;
-      --layer-2:#ffffff;
-      --line:#d4deea;
-      --line-strong:#b8c8db;
-      --text:#162438;
-      --sub:#4a5f76;
-      --brand:#0f6cbd;
-      --brand-2:#115ea3;
-      --ok:#0f7b0f;
-      --bad:#b10e1c;
-      --warn:#8a5700;
-      --radius:14px;
-      --shadow:0 8px 24px rgba(8,32,58,.08);
-      --shadow-soft:0 2px 10px rgba(8,32,58,.06);
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      color:var(--text);
-      font-family:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
-      background:
-        radial-gradient(1200px 620px at 8% -8%, #d9ebff 0%, transparent 64%),
-        radial-gradient(980px 540px at 100% 0%, #e8f3ff 0%, transparent 58%),
-        linear-gradient(180deg, #f7fbff 0%, #f2f6fb 100%);
-    }
-    .wrap{max-width:1320px;margin:0 auto;padding:24px;display:grid;gap:14px}
-    .hero{
-      position:relative;
-      border-radius:20px;
-      padding:22px 24px;
-      color:#fff;
-      background:linear-gradient(128deg,#0d2f4f 0%, #0f6cbd 58%, #1a8f6c 100%);
-      box-shadow:var(--shadow);
-      overflow:hidden;
-    }
-    .hero::after{
-      content:"";
-      position:absolute;right:-80px;top:-120px;width:340px;height:340px;border-radius:50%;
-      background:rgba(255,255,255,.13);filter:blur(2px);
-    }
-    .layout{display:grid;grid-template-columns:440px 1fr;gap:14px}
-    @media(max-width:1120px){.layout{grid-template-columns:1fr}}
-    .card{
-      background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.86));
-      border:1px solid var(--line);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow-soft);
-      backdrop-filter:blur(8px);
-      overflow:hidden;
-    }
-    .hd{
-      padding:12px 14px;
-      border-bottom:1px solid #e4ecf5;
-      background:linear-gradient(180deg,#f7fbff,#f2f7fd);
-      font-weight:700;
-      letter-spacing:.2px;
-    }
-    .bd{padding:12px 14px}
-    .field{margin-bottom:10px}
-    .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px}
-    input,select,textarea{
-      width:100%;
-      border:1px solid var(--line);
-      border-radius:10px;
-      padding:9px 10px;
-      font-size:14px;
-      color:var(--text);
-      background:#fff;
-      transition:border-color .15s ease, box-shadow .15s ease;
-    }
-    input:focus,select:focus,textarea:focus{
-      outline:none;border-color:var(--brand);
-      box-shadow:0 0 0 3px rgba(15,108,189,.18);
-    }
-    textarea{min-height:76px}
-    .btns{display:flex;gap:8px;flex-wrap:wrap}
-    button, fluent-button{
-      border:1px solid transparent;
-      border-radius:10px;
-      padding:9px 14px;
-      color:#fff;
-      background:linear-gradient(180deg,var(--brand),var(--brand-2));
-      cursor:pointer;
-      font-weight:600;
-      box-shadow:0 2px 8px rgba(15,108,189,.22);
-      transition:transform .08s ease, box-shadow .12s ease, opacity .12s ease;
-    }
-    button:hover, fluent-button:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(15,108,189,.3)}
-    button.secondary, fluent-button.secondary{
-      background:linear-gradient(180deg,#5d7189,#4f6277);
-      box-shadow:0 2px 6px rgba(31,45,61,.18);
-    }
-    button:disabled, fluent-button[disabled]{opacity:.6;cursor:not-allowed;transform:none}
-    .status{margin-top:8px;min-height:20px;font-size:13px}
-    .ok{color:var(--ok)}
-    .bad{color:var(--bad)}
-    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-    @media(max-width:860px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    .metric{
-      border:1px solid #dbe5f1;border-radius:11px;padding:9px;
-      background:linear-gradient(180deg,#fbfdff,#f3f8ff);
-    }
-    .metric .k{font-size:12px;color:var(--sub)}
-    .metric .v{font-size:20px;font-weight:700;line-height:1.2}
-    table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
-    th,td{border-bottom:1px solid #ecf1f7;padding:8px;text-align:left;vertical-align:top}
-    th{background:#f4f8fd;color:#4d6277}
-    .path{max-width:560px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    pre{
-      margin:0;min-height:240px;border:1px solid #1b2d43;background:#101a27;color:#dbe9fb;
-      border-radius:12px;padding:10px;overflow:auto;white-space:pre-wrap;
-      box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
-    }
-    .dropzone{
-      border:2px dashed #a9c2de;border-radius:12px;padding:16px;
-      background:linear-gradient(180deg,#f7fbff,#eef5ff);color:#33506e;text-align:center;
-    }
-    .dropzone.active{border-color:var(--brand);background:#e9f3ff}
-    .mini{font-size:12px;color:var(--sub)}
-    .queue-actions{display:flex;gap:8px;justify-content:flex-end;margin:6px 0}
-    .precheck-issues{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-    .precheck-issues button,.precheck-issues fluent-button{padding:6px 10px;font-size:12px}
-    .precheck-detail{
-      border:1px solid #dbe5f1;border-radius:10px;padding:8px;
-      background:linear-gradient(180deg,#fbfdff,#f4f8ff);
-      margin-bottom:8px;white-space:pre-wrap;
-    }
-  </style>
-  <style>
-    :root{
-      --bg:#f2f6fb;
-      --layer-1:#f7faff;
-      --layer-2:#ffffff;
-      --line:#d0deef;
-      --line-strong:#9cb6d6;
-      --text:#0f172a;
-      --sub:#475569;
-      --brand:#0f6cbd;
-      --brand-2:#0b5cab;
-      --radius:16px;
-      --shadow:0 20px 40px rgba(8,32,58,.12);
-      --shadow-soft:0 8px 24px rgba(8,32,58,.08);
-    }
-    body{
-      font-family:"Segoe UI Variable Display","Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
-      background:
-        radial-gradient(1200px 640px at -5% -10%, #d5e8ff 0%, transparent 60%),
-        radial-gradient(980px 520px at 100% 0%, #e6f2ff 0%, transparent 58%),
-        linear-gradient(180deg, #f8fbff 0%, #eff4fb 100%);
-    }
-    .wrap{max-width:1400px;padding:26px 24px 30px}
-    .hero{
-      border:1px solid rgba(255,255,255,.24);
-      border-radius:24px;
-      padding:28px 28px;
-      background:
-        radial-gradient(420px 220px at 12% -10%, rgba(255,255,255,.22), transparent 68%),
-        linear-gradient(124deg,#0a2440 0%, #0f6cbd 54%, #0d8f83 100%);
-    }
-    .hero h1{font-size:33px;letter-spacing:.3px}
-    .hero p{font-size:15px;opacity:.95}
-    .card{
-      border:1px solid rgba(159,184,214,.52);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow-soft);
-    }
-    .hd{
-      padding:13px 15px;
-      border-bottom:1px solid #deebf8;
-      background:linear-gradient(180deg,#fafdff,#f2f7ff);
-    }
-    .bd{padding:14px 15px}
-    .field label{
-      font-size:12px;
-      text-transform:uppercase;
-      letter-spacing:.18px;
-      color:#50657f;
-    }
-    input,select,textarea{
-      border-radius:12px;
-      border:1px solid #c7daef;
-      background:linear-gradient(180deg,#ffffff,#f9fcff);
-    }
-    textarea{min-height:82px}
-    button, fluent-button{
-      border-radius:12px;
-      font-weight:700;
-      letter-spacing:.15px;
-      background:linear-gradient(180deg,#0f7ad6,#0f62b8);
-      box-shadow:0 5px 14px rgba(15,98,184,.26);
-    }
-    button.secondary, fluent-button.secondary{
-      background:linear-gradient(180deg,#617a96,#52677f);
-      box-shadow:0 4px 12px rgba(40,54,73,.2);
-    }
-    .metric{
-      border-radius:12px;
-      border:1px solid #d3e4f5;
-      background:
-        radial-gradient(280px 120px at 0% 0%, rgba(255,255,255,.82), transparent 62%),
-        linear-gradient(180deg,#fafdff,#f2f8ff);
-    }
-    .metric .v{font-size:24px}
-    .dropzone{
-      border-radius:14px;
-      border:2px dashed #8fb4d8;
-      background:linear-gradient(180deg,#fbfeff,#eef6ff);
-      transition:all .16s ease;
-    }
-    .dropzone.active{
-      border-color:#0f6cbd;
-      box-shadow:0 0 0 4px rgba(15,108,189,.14);
-      transform:translateY(-1px);
-    }
-    table{border-radius:12px;overflow:hidden}
-    th{
-      background:linear-gradient(180deg,#f0f6ff,#e7f0fb);
-      color:#2f4863;
-      font-weight:700;
-    }
-    pre{
-      border-radius:14px;
-      border:1px solid #1a3855;
-      background:linear-gradient(180deg,#0d1b2a,#0e2437);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
-    }
-    .card,.hero,.metric,.dropzone{animation:fadeRise .35s ease both}
-    @keyframes fadeRise{
-      from{opacity:0;transform:translateY(6px)}
-      to{opacity:1;transform:translateY(0)}
-    }
-  </style>
-  <script type="module" src="../node_modules/@fluentui/web-components/dist/web-components.min.js"></script>
+    <link rel="stylesheet" href="./fluent-shell.css" />
+  <script type="module" src="./vendor/fluent-web-components.min.js"></script>
+  <script type="module" src="./fluent-init.js"></script>
 </head>
-<body>
+<body class="page-home">
   <div class="wrap">
     <section class="hero">
-      <h1 style="margin:0">AIWF 离线作业助手</h1>
+      <h1 style="margin:0">AIWF 离线作业助手</h1><div style="margin-top:8px;display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.24);font-size:12px;font-weight:700;letter-spacing:.3px">Fluent Rebuild v2</div>
       <p style="margin:8px 0 0">按 1-2-3 三步：选模式 -> 拖入生肉 -> 一键生成成品。</p>
     </section>
 
@@ -265,27 +32,25 @@
         <div class="hd">第 1 步：设置</div>
         <div class="bd">
           <div class="field"><label>运行模式（一般选第一个）</label><select id="mode"><option value="offline_local">离线本地模式（推荐）</option><option value="base_api">连接你的 AIWF 后端</option></select></div>
-          <div class="field"><label>后端地址（只在“连接后端”时填写）</label><input id="baseUrl" placeholder="http://127.0.0.1:18080" /></div>
-          <div class="field"><label>API Key（可选）</label><input id="apiKey" placeholder="X-API-Key" /></div>
+          <div class="field"><label>后端地址（只在“连接后端”时填写）</label><fluent-text-field id="baseUrl" placeholder="http://127.0.0.1:18080"></fluent-text-field></div>
+          <div class="field"><label>API Key（可选）</label><fluent-text-field id="apiKey" placeholder="X-API-Key"></fluent-text-field></div>
           <div class="field"><label><input id="enableOfflineFallback" type="checkbox" checked style="width:auto;margin-right:6px" />后端失败时自动切换离线模式</label></div>
           <div class="field"><label>回退策略</label><select id="fallbackPolicy"><option value="smart" selected>smart（推荐）</option><option value="smart_strict">smart_strict（仅网络/超时/5xx）</option><option value="always">always（全部回退）</option><option value="never">never（不回退）</option></select></div>
-          <div class="field"><label>报告标题（会出现在 docx/pptx 封面）</label><input id="reportTitle" placeholder="例如：AI 对就业影响的证据整理" /></div>
-          <div class="field"><label>主数据文件（可选）</label><input id="inputPath" placeholder="例如：D:\\data\\input.pdf" /></div>
+          <div class="field"><label>报告标题（会出现在 docx/pptx 封面）</label><fluent-text-field id="reportTitle" placeholder="例如：AI 对就业影响的证据整理"></fluent-text-field></div>
+          <div class="field"><label>主数据文件（可选）</label><fluent-text-field id="inputPath" placeholder="例如：D:\\data\\input.pdf"></fluent-text-field></div>
           <div class="field">
             <label>批量文件路径（可选，每行一个）</label>
-            <textarea id="inputFiles" placeholder="例如：&#10;D:\\data\\a.pdf&#10;D:\\data\\b.docx"></textarea>
+            <fluent-text-area id="inputFiles" placeholder="例如：&#10;D:\\data\\a.pdf&#10;D:\\data\\b.docx"></fluent-text-area>
             <div class="mini">会和拖拽队列自动合并去重。</div>
           </div>
-          <div class="field"><label>输出目录（成品输出到这里）</label><input id="outputRoot" value="E:\\Desktop_Real\\AIWF" placeholder="例如：E:\\Desktop_Real\\AIWF" /></div>
-          <div class="field"><label>样本池目录（可选，不填则用 输出目录\\sample_pool）</label><input id="samplePoolDir" placeholder="例如：E:\\Desktop_Real\\AIWF\\sample_pool" /></div>
-          <div class="field"><label>XLSX模板路径（可选，含预置图表）</label><input id="xlsxTemplatePath" placeholder="例如：E:\\Desktop_Real\\templates\\report_chart_template.xlsx" /></div>
+          <div class="field"><label>输出目录（成品输出到这里）</label><fluent-text-field id="outputRoot" value="E:\\Desktop_Real\\AIWF" placeholder="例如：E:\\Desktop_Real\\AIWF"></fluent-text-field></div>
+          <div class="field"><label>样本池目录（可选，不填则用 输出目录\\sample_pool）</label><fluent-text-field id="samplePoolDir" placeholder="例如：E:\\Desktop_Real\\AIWF\\sample_pool"></fluent-text-field></div>
+          <div class="field"><label>XLSX模板路径（可选，含预置图表）</label><fluent-text-field id="xlsxTemplatePath" placeholder="例如：E:\\Desktop_Real\\templates\\report_chart_template.xlsx"></fluent-text-field></div>
           <div class="field"><label>输出语言</label><select id="officeLang"><option value="zh" selected>中文</option><option value="en">English</option></select></div>
           <div class="field"><label>成品风格（已统一 Fluent 宣传风）</label><select id="officeTheme"><option value="fluent_ms" selected>Fluent 宣传风（统一）</option></select></div>
           <div class="field"><label>Fluent 模板包</label><select id="officeVariant"><option value="light" selected>Fluent Light（浅色商务）</option><option value="strong">Fluent Strong（高对比展示）</option><option value="vibrant">Fluent Vibrant（演示冲击）</option></select></div>
           <div class="field"><label>数据模板（会影响清洗规则）</label><select id="cleaningTemplate"><option value="default">通用模板</option><option value="debate_evidence_v1" selected>辩论证据模板 v1（文本证据）</option><option value="finance_report_v1">财报模板 v1（资产/利润/现金流）</option></select></div>
-          <div class="field"><label>辩论战场规则（关键词=战场名，每行一条，可选）</label><textarea id="debateBattlefieldRules" placeholder="谣言=内容差&#10;成瘾=能力减损&#10;社交=社交与表达">谣言=内容差
-成瘾=能力减损
-社交=社交与表达</textarea></div>
+          <div class="field"><label>辩论战场规则（关键词=战场名，每行一条，可选）</label><fluent-text-area id="debateBattlefieldRules" placeholder="谣言=内容差&#10;成瘾=能力减损&#10;社交=社交与表达" value="谣言=内容差&#10;成瘾=能力减损&#10;社交=社交与表达"></fluent-text-area></div>
           <div class="field"><label>出处字段优先级（逗号分隔，可选）</label><input id="debateSourcePriority" value="source_org,publisher,source,author,source_type" placeholder="source_org,publisher,source,author,source_type" /></div>
           <div class="btns" style="margin-bottom:8px">
             <fluent-button id="btnDebateCfgExport" class="secondary">导出辩论配置JSON</fluent-button>
@@ -371,7 +136,7 @@
         </div></div>
 
         <div class="card"><div class="hd">日志</div><div class="bd"><pre id="log">{}</pre></div></div>
-        <div class="card"><div class="hd">快速验收面板</div><div class="bd">
+        <div class="card dev-only"><div class="hd">快速验收面板</div><div class="bd">
           <div class="mini" style="margin-bottom:6px">一键执行并实时查看日志：</div>
           <div class="btns" style="margin-bottom:8px">
             <fluent-button id="btnGateAll">一键全跑</fluent-button>
@@ -429,14 +194,14 @@
           <div class="field"><label>导入模板 JSON（仅当前用户）</label><input id="tplImportFile" type="file" accept=".json,application/json" /></div>
           <pre id="tplManageRules">{}</pre>
         </div></div>
-        <div class="card"><div class="hd">安装自检与诊断</div><div class="bd">
+        <div class="card dev-only"><div class="hd">安装自检与诊断</div><div class="bd">
           <div class="btns" style="margin-bottom:8px">
             <fluent-button id="btnSelfCheck" class="secondary">执行自检</fluent-button>
           </div>
           <div id="selfCheckHint" class="mini" style="margin-bottom:6px">未执行</div>
           <pre id="selfCheck">{}</pre>
         </div></div>
-        <div class="card"><div class="hd">路由诊断</div><div class="bd">
+        <div class="card dev-only"><div class="hd">路由诊断</div><div class="bd">
           <div class="btns" style="margin-bottom:8px">
             <fluent-button id="btnRouteDiag" class="secondary">刷新诊断</fluent-button>
             <fluent-button id="btnOpenRouteLog" class="secondary">打开路由日志目录</fluent-button>
@@ -1875,4 +1640,6 @@ init();
 </script>
 </body>
 </html>
+
+
 

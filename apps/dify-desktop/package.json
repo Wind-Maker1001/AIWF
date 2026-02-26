@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "electron .",
     "smoke": "node smoke.js",
+    "test": "npm run test:unit",
     "test:regression": "node scripts/regression_baseline.js",
     "test:regression:dirty": "node scripts/regression_dirty.js",
     "test:office-gate": "node scripts/regression_office_gate.js",

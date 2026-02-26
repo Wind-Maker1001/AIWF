@@ -4,253 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AIWF Workflow Studio</title>
-  <style>
-    :root{
-      --bg:#f4f8fd;
-      --layer-1:#f8fbff;
-      --layer-2:#ffffff;
-      --line:#d3ddea;
-      --line-strong:#b9c9dd;
-      --txt:#162438;
-      --muted:#4e6278;
-      --brand:#0f6cbd;
-      --brand-2:#115ea3;
-      --ok:#0f7b0f;
-      --bad:#b10e1c;
-      --radius:12px;
-      --shadow:0 8px 24px rgba(8,32,58,.08);
-      --shadow-soft:0 2px 10px rgba(8,32,58,.06);
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;color:var(--txt);
-      font-family:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
-      background:
-        radial-gradient(1200px 560px at 0% -10%, #daeaff 0%, transparent 62%),
-        linear-gradient(180deg,#f7fbff,#f2f6fb);
-    }
-    .wrap{padding:14px;display:grid;gap:10px}
-    .hero{
-      position:relative;overflow:hidden;
-      background:linear-gradient(128deg,#0d2f4f 0%, #0f6cbd 58%, #1a8f6c 100%);
-      color:#fff;padding:14px 16px;border-radius:14px;box-shadow:var(--shadow)
-    }
-    .main{display:grid;grid-template-columns:320px 1fr 400px;gap:10px}
-    @media(max-width:1500px){.main{grid-template-columns:1fr}}
-    .card{
-      background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.88));
-      border:1px solid var(--line);
-      border-radius:12px;overflow:hidden;box-shadow:var(--shadow-soft);backdrop-filter:blur(8px)
-    }
-    .hd{padding:10px 11px;border-bottom:1px solid #e6edf6;background:linear-gradient(180deg,#f7fbff,#f2f7fd);font-weight:700}
-    .bd{padding:10px}
-    .palette-item{
-      border:1px solid #d7e3f1;background:linear-gradient(180deg,#fafdff,#f2f8ff);
-      border-radius:9px;padding:7px;margin-bottom:7px;cursor:grab
-    }
-    .palette-item:active{cursor:grabbing}
-    .btn{
-      border:1px solid transparent;border-radius:9px;padding:8px 11px;color:#fff;
-      background:linear-gradient(180deg,var(--brand),var(--brand-2));cursor:pointer;font-weight:600;
-      box-shadow:0 2px 8px rgba(15,108,189,.22);transition:transform .08s ease, box-shadow .12s ease
-    }
-    .btn:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(15,108,189,.3)}
-    .btn.secondary{background:linear-gradient(180deg,#5d7189,#4f6277);box-shadow:0 2px 6px rgba(31,45,61,.18)}
-    .btn.danger{background:linear-gradient(180deg,#bd3b34,#a12f2a);box-shadow:0 2px 6px rgba(160,42,40,.22)}
-    .btns{display:flex;gap:7px;flex-wrap:wrap}
-    label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
-    input,textarea,select{
-      width:100%;border:1px solid #d2dceb;border-radius:9px;padding:8px 9px;font-size:13px;
-      color:var(--txt);background:#fff;transition:border-color .15s ease, box-shadow .15s ease
-    }
-    input:focus,textarea:focus,select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(15,108,189,.18)}
-    textarea{min-height:80px}
-    .status{font-size:13px;min-height:18px;margin-top:6px}.ok{color:var(--ok)}.bad{color:var(--bad)}
-    .canvas-wrap{
-      position:relative;height:680px;border:1px solid #c8d7e8;border-radius:12px;overflow:auto;
-      background:#f8fbff;box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
-    }
-    .canvas-surface{
-      position:relative;
-      min-width:100%;
-      min-height:100%;
-      background-color:#f8fbff;
-      background-image:
-        linear-gradient(to right, rgba(117,146,176,0.18) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(117,146,176,0.18) 1px, transparent 1px),
-        radial-gradient(circle at 0 0, rgba(255,255,255,.6), rgba(248,251,255,.88));
-      background-size:24px 24px;
-    }
-    .edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto;overflow:visible;z-index:1}
-    #guideLayer{position:absolute;inset:0;z-index:3;pointer-events:none}
-    .guide-line{position:absolute;background:#f59e0b;opacity:.75}
-    .guide-line.v{width:1px;height:100%}
-    .guide-line.h{height:1px;width:100%}
-    .marquee-box{position:absolute;border:1px dashed #0b5ea8;background:rgba(11,94,168,.08)}
-    .edge-hit{cursor:pointer;pointer-events:stroke}
-    #nodesLayer{position:absolute;inset:0;z-index:2}
-    .minimap-wrap{
-      position:absolute;right:10px;bottom:10px;z-index:4;background:rgba(255,255,255,0.92);
-      border:1px solid #d3dfec;border-radius:9px;padding:6px;box-shadow:0 4px 12px rgba(31,45,61,.14)
-    }
-    .route-debug{
-      position:absolute;left:10px;bottom:10px;z-index:4;
-      background:rgba(15,23,32,0.82);color:#d9e6f6;border:1px solid #2c4057;
-      border-radius:8px;padding:6px 8px;font-size:12px;font-family:Consolas, "Courier New", monospace;
-      pointer-events:none
-    }
-    #minimap{display:block;width:180px;height:120px;border-radius:6px;background:#eef4fb;cursor:pointer}
-    .node{
-      position:absolute;width:224px;border:1px solid #cfe0f3;background:#fff;border-radius:12px;
-      box-shadow:0 4px 12px rgba(31,45,61,0.09);user-select:none
-    }
-    .node.selected{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.28),0 8px 16px rgba(31,45,61,.14)}
-    .node-hd{
-      padding:6px 8px;background:linear-gradient(180deg,#eef5ff,#e8f1fd);
-      border-bottom:1px solid #dbe8f7;display:flex;justify-content:space-between;align-items:center;cursor:move
-    }
-    .node-hd strong{font-size:13px}
-    .node-bd{padding:6px 8px;font-size:12px;color:#4f6378}
-    .node-actions{display:flex;gap:5px}
-    .mini{font-size:11px;padding:4px 6px;border-radius:6px;border:0;color:#fff;background:#466f99;cursor:pointer}
-    .mini.del{background:#a63d35}
-    .port{position:absolute;width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(31,45,61,0.22);cursor:crosshair}
-    .port.in{left:-8px;top:50%;transform:translateY(-50%);background:#2f7db7}
-    .port.out{right:-8px;top:50%;transform:translateY(-50%);background:#0b7d67}
-    .port.in.target{box-shadow:0 0 0 3px rgba(47,125,183,0.25)}
-    .edge-line{pointer-events:none;transition:stroke .14s ease, stroke-width .14s ease, opacity .12s ease}
-    .edge-line.active{stroke:#e67e22 !important;stroke-width:3}
-    .edge-ghost{pointer-events:none}
-    .hint{font-size:12px;color:#5e7389;margin-bottom:8px}
-    .cfg-meta{font-size:12px;color:#5e7389;margin-bottom:6px}
-    .cfg-mode{margin-bottom:6px}
-    .cfg-form{
-      border:1px solid #d8e3ef;border-radius:9px;padding:8px;
-      background:linear-gradient(180deg,#fbfdff,#f4f8ff);max-height:280px;overflow:auto
-    }
-    .cfg-field{margin-bottom:8px}
-    .cfg-help{font-size:12px;color:#6a7f95}
-    .cfg-text{min-height:220px;font-family:Consolas, "Courier New", monospace}
-    table{width:100%;border-collapse:collapse;font-size:12px;background:#fff}
-    th,td{border-bottom:1px solid #edf2f7;padding:6px;text-align:left}
-    th{background:#f3f7fd;color:#53687e}
-    pre{
-      margin:0;white-space:pre-wrap;word-break:break-word;
-      background:#0f1720;color:#d9e6f6;border-radius:9px;padding:9px;min-height:160px;
-      border:1px solid #1c2f45;
-    }
-  </style>
-  <style>
-    :root{
-      --bg:#f2f6fb;
-      --line:#cddcec;
-      --line-strong:#9ab6d7;
-      --txt:#0f172a;
-      --muted:#4b5e75;
-      --brand:#0f6cbd;
-      --brand-2:#0b5cab;
-      --ok:#0f7b0f;
-      --bad:#b10e1c;
-      --shadow:0 18px 38px rgba(8,32,58,.12);
-      --shadow-soft:0 8px 24px rgba(8,32,58,.08);
-    }
-    body{
-      font-family:"Segoe UI Variable Display","Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
-      background:
-        radial-gradient(1100px 540px at -8% -12%, #d9e9ff 0%, transparent 62%),
-        radial-gradient(760px 380px at 100% 0%, #e9f3ff 0%, transparent 56%),
-        linear-gradient(180deg,#f8fbff,#f0f5fb);
-    }
-    .wrap{padding:18px 16px;gap:12px}
-    .hero{
-      border-radius:18px;
-      padding:18px 18px;
-      border:1px solid rgba(255,255,255,.22);
-      background:
-        radial-gradient(360px 170px at 10% -8%, rgba(255,255,255,.24), transparent 68%),
-        linear-gradient(125deg,#0b2440 0%, #0f6cbd 56%, #0f887a 100%);
-      box-shadow:var(--shadow);
-    }
-    .card{
-      border-radius:14px;
-      border:1px solid rgba(156,183,214,.52);
-      box-shadow:var(--shadow-soft);
-    }
-    .hd{
-      padding:12px 12px;
-      border-bottom:1px solid #deebf8;
-      background:linear-gradient(180deg,#fafdff,#f2f7ff);
-    }
-    .bd{padding:12px}
-    label{
-      color:#4f6480;
-      font-size:12px;
-      text-transform:uppercase;
-      letter-spacing:.18px;
-    }
-    input,textarea,select{
-      border-radius:11px;
-      border:1px solid #c8daee;
-      background:linear-gradient(180deg,#ffffff,#f9fcff);
-    }
-    .btn{
-      border-radius:11px;
-      font-weight:700;
-      letter-spacing:.15px;
-      background:linear-gradient(180deg,#0f7bd8,#0f62b8);
-      box-shadow:0 4px 12px rgba(15,98,184,.25);
-    }
-    .btn.secondary{
-      background:linear-gradient(180deg,#607a96,#50677f);
-      box-shadow:0 3px 10px rgba(32,46,66,.2);
-    }
-    .btn.danger{
-      background:linear-gradient(180deg,#cb4b42,#a73632);
-      box-shadow:0 3px 10px rgba(140,43,39,.25);
-    }
-    .canvas-wrap{
-      border:1px solid #bad1e7;
-      border-radius:14px;
-      background:#f8fbff;
-      box-shadow:inset 0 1px 0 rgba(255,255,255,.65);
-    }
-    .canvas-surface{
-      background-image:
-        linear-gradient(to right, rgba(105,138,170,.16) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(105,138,170,.16) 1px, transparent 1px),
-        radial-gradient(circle at 0 0, rgba(255,255,255,.66), rgba(246,250,255,.92));
-    }
-    .node{
-      border:1px solid #c7ddf2;
-      border-radius:13px;
-      box-shadow:0 8px 16px rgba(31,45,61,.11);
-    }
-    .node.selected{
-      border-color:#0f6cbd;
-      box-shadow:0 0 0 3px rgba(15,108,189,.2),0 10px 18px rgba(31,45,61,.14);
-    }
-    .node-hd{
-      background:linear-gradient(180deg,#eef6ff,#e5f1ff);
-      border-bottom:1px solid #d4e6f7;
-    }
-    table{border-radius:11px;overflow:hidden}
-    th{
-      background:linear-gradient(180deg,#f0f6ff,#e8f1fb);
-      color:#2f4863;
-      font-weight:700;
-    }
-    pre{
-      border-radius:11px;
-      border:1px solid #1d3752;
-      background:linear-gradient(180deg,#0d1a2a,#0e2436);
-    }
-  </style>
-  <script type="module" src="../node_modules/@fluentui/web-components/dist/web-components.min.js"></script>
+    <link rel="stylesheet" href="./fluent-shell.css" />
+  <script type="module" src="./vendor/fluent-web-components.min.js"></script>
+  <script type="module" src="./fluent-init.js"></script>
 </head>
-<body>
+<body class="page-workflow">
   <div class="wrap">
     <section class="hero">
-      <h2 style="margin:0">Workflow Studio</h2>
+      <h2 style="margin:0">Workflow Studio</h2><div style="margin-top:6px;display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.22);font-size:12px;font-weight:700;letter-spacing:.3px">Fluent Rebuild v2</div>
       <div style="margin-top:4px">可自由拖拽节点、连线、运行。数据计算节点默认走 Rust。</div>
     </section>
     <section class="main">
@@ -271,9 +32,9 @@
             <fluent-button id="btnClear" class="btn danger">清空画布</fluent-button>
           </div>
           <label>节点类型</label>
-          <input id="nodeType" value="ingest_files" />
+          <fluent-text-field id="nodeType" value="ingest_files"></fluent-text-field>
           <label>工作流名称</label>
-          <input id="workflowName" value="自由编排流程" />
+          <fluent-text-field id="workflowName" value="自由编排流程"></fluent-text-field>
           <label>模板市场（本地）</label>
           <select id="templateSelect" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
             <option value="">选择模板...</option>
@@ -281,7 +42,7 @@
           <label>模板参数（可视化）</label>
           <div id="templateParamsForm" class="cfg-form" style="max-height:220px"></div>
           <label>模板参数(JSON)</label>
-          <textarea id="templateParams" placeholder='{"title":"我的报告","threshold":0.8}'></textarea>
+          <fluent-text-area id="templateParams" placeholder='{"title":"我的报告","threshold":0.8}'></fluent-text-area>
           <div class="btns" style="margin-top:8px">
             <fluent-button id="btnApplyTemplate" class="btn secondary">应用模板</fluent-button>
             <fluent-button id="btnSaveTemplate" class="btn secondary">保存为模板</fluent-button>
@@ -289,7 +50,7 @@
             <fluent-button id="btnTemplatePackRemove" class="btn secondary">移除模板包</fluent-button>
             <fluent-button id="btnTemplatePackExport" class="btn secondary">导出模板包</fluent-button>
           </div>
-          <div class="btns" style="margin-top:6px">
+          <div class="btns dev-only" style="margin-top:6px">
             <fluent-button id="btnTemplateAcceptance" class="btn secondary">模板验收</fluent-button>
             <select id="templateAcceptanceExportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:6px 8px;font-size:12px">
               <option value="md">Markdown</option>
@@ -298,9 +59,9 @@
             <fluent-button id="btnTemplateAcceptanceExport" class="btn secondary">导出验收报告</fluent-button>
           </div>
           <label>输入文件（每行一个）</label>
-          <textarea id="inputFiles"></textarea>
+          <fluent-text-area id="inputFiles"></fluent-text-area>
           <label>报告标题</label>
-          <input id="reportTitle" value="Workflow 任务" />
+          <fluent-text-field id="reportTitle" value="Workflow 任务"></fluent-text-field>
           <label>质量规则集ID（可选，自动注入 quality_check 节点）</label>
           <input id="qualityRuleSetId" placeholder="例如: finance_strict_v1" />
           <div class="btns" style="margin-top:6px">
@@ -318,11 +79,11 @@
           <label>熟肉标题</label>
           <input id="canonicalTitle" value="AIWF 熟肉语料" />
           <label>外部 AI Endpoint</label>
-          <input id="aiEndpoint" placeholder="https://api.xxx.com/v1/chat/completions" />
+          <fluent-text-field id="aiEndpoint" placeholder="https://api.xxx.com/v1/chat/completions"></fluent-text-field>
           <label>外部 AI Key</label>
-          <input id="aiKey" />
+          <fluent-text-field id="aiKey"></fluent-text-field>
           <label>外部 AI Model</label>
-          <input id="aiModel" placeholder="deepseek-chat" />
+          <fluent-text-field id="aiModel" placeholder="deepseek-chat"></fluent-text-field>
           <div class="btns" style="margin-top:6px">
             <fluent-button id="btnUseDeepSeek" class="btn secondary">一键填充 DeepSeek</fluent-button>
           </div>
@@ -330,7 +91,7 @@
             离线能力边界：仅本地清洗/计算/模板渲染节点可离线运行；AI 相关节点需外部 API。
           </div>
           <label>Rust Endpoint</label>
-          <input id="rustEndpoint" value="http://127.0.0.1:18082" />
+          <fluent-text-field id="rustEndpoint" value="http://127.0.0.1:18082"></fluent-text-field>
           <label><input id="rustRequired" type="checkbox" checked style="width:auto;margin-right:6px" />Rust 不可用时阻断</label>
           <label><input id="chipletIsolationEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />启用节点隔离执行</label>
           <label>隔离模式</label>
@@ -355,16 +116,16 @@
             <fluent-button id="btnAutoFixGraph" class="btn secondary">自动修复图结构</fluent-button>
             <fluent-button id="btnRun" class="btn">运行</fluent-button>
             <fluent-button id="btnEnqueueRun" class="btn secondary">加入队列</fluent-button>
-            <fluent-button id="btnSaveBaseline" class="btn secondary">保存为基线</fluent-button>
-            <fluent-button id="btnCompareBaseline" class="btn secondary">与基线对比</fluent-button>
+            <fluent-button id="btnSaveBaseline" class="btn secondary dev-only">保存为基线</fluent-button>
+            <fluent-button id="btnCompareBaseline" class="btn secondary dev-only">与基线对比</fluent-button>
             <fluent-button id="btnLoadLineage" class="btn secondary">加载血缘图</fluent-button>
             <fluent-button id="btnQueueRefresh" class="btn secondary">刷新队列</fluent-button>
-            <fluent-button id="btnQueuePause" class="btn secondary">暂停队列</fluent-button>
-            <fluent-button id="btnQueueResume" class="btn secondary">恢复队列</fluent-button>
+            <fluent-button id="btnQueuePause" class="btn secondary dev-only">暂停队列</fluent-button>
+            <fluent-button id="btnQueueResume" class="btn secondary dev-only">恢复队列</fluent-button>
             <fluent-button id="btnExport" class="btn secondary">导出流程 JSON</fluent-button>
             <fluent-button id="btnSaveFlow" class="btn secondary">保存流程</fluent-button>
             <fluent-button id="btnLoadFlow" class="btn secondary">加载流程</fluent-button>
-            <fluent-button id="btnVersionsRefresh" class="btn secondary">版本列表</fluent-button>
+            <fluent-button id="btnVersionsRefresh" class="btn secondary dev-only">版本列表</fluent-button>
           </div>
           <div id="status" class="status"></div>
         </div>
@@ -480,7 +241,7 @@
               <fluent-button id="btnParseEdgeWhen" class="btn secondary">JSON 回填构造器</fluent-button>
             </div>
             <label>when(JSON，可留空)</label>
-            <textarea id="edgeWhenText" class="cfg-text" style="min-height:120px"></textarea>
+            <fluent-text-area id="edgeWhenText" class="cfg-text" style="min-height:120px"></fluent-text-area>
             <div class="btns" style="margin-top:8px">
               <fluent-button id="btnApplyEdgeCfg" class="btn">应用连线条件</fluent-button>
               <fluent-button id="btnClearEdgeCfg" class="btn secondary">清空条件</fluent-button>
@@ -492,7 +253,7 @@
           </div>
           <div id="nodeConfigForm" class="cfg-form"></div>
           <div class="cfg-help">表单覆盖常用参数；复杂参数可切到 JSON 模式直接编辑。</div>
-          <textarea id="nodeConfig" class="cfg-text" placeholder="选中单个节点后可编辑 JSON 配置"></textarea>
+          <fluent-text-area id="nodeConfig" class="cfg-text" placeholder="选中单个节点后可编辑 JSON 配置"></fluent-text-area>
           <div class="cfg-form" id="ioMapEditor" style="margin-top:8px">
             <div class="cfg-help">I/O 映射（可视化）：来源表达式示例 `n2.rows` 或 `$prev.detail.rows`</div>
             <label>输入映射 input_map</label>
@@ -517,7 +278,7 @@
             <fluent-button id="btnResetNodeCfg" class="btn secondary">重置默认</fluent-button>
             <fluent-button id="btnFormatNodeCfg" class="btn secondary">格式化</fluent-button>
           </div>
-          <div class="btns" style="margin-bottom:8px">
+          <div class="btns dev-only" style="margin-bottom:8px">
             <fluent-button id="btnDiagRefresh" class="btn secondary">刷新诊断</fluent-button>
             <fluent-button id="btnRunsRefresh" class="btn secondary">刷新运行记录</fluent-button>
             <fluent-button id="btnReviewsRefresh" class="btn secondary">刷新审核队列</fluent-button>
@@ -527,7 +288,7 @@
             <tbody id="nodeRuns"><tr><td colspan="5" style="color:#74879b">未运行</td></tr></tbody>
           </table>
           <div style="height:8px"></div>
-          <table>
+          <table class="dev-only">
             <thead><tr><th>Chiplet</th><th>错误率</th><th>P95耗时</th><th>重试率</th><th>Fallback率</th></tr></thead>
             <tbody id="diagRuns"><tr><td colspan="5" style="color:#74879b">暂无诊断</td></tr></tbody>
           </table>
@@ -543,11 +304,11 @@
           </table>
           <div id="queueControlText" class="cfg-meta" style="margin-top:6px">队列状态: -</div>
           <div style="height:8px"></div>
-          <table>
+          <table class="dev-only">
             <thead><tr><th>流程版本</th><th>时间</th><th>操作</th></tr></thead>
             <tbody id="versionRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
           </table>
-          <div class="cfg-form" style="margin-top:8px">
+          <div class="cfg-form dev-only" style="margin-top:8px">
             <div class="cfg-help">版本差异</div>
             <label>Version A</label>
             <input id="versionCompareA" placeholder="version_id A" />
@@ -562,7 +323,7 @@
               <tbody id="versionCompareRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
             </table>
           </div>
-          <div class="cfg-form" style="margin-top:8px">
+          <div class="cfg-form dev-only" style="margin-top:8px">
             <div class="cfg-help">节点缓存</div>
             <div id="cacheStatsText" class="cfg-meta">缓存状态: -</div>
             <div class="btns" style="margin-top:6px">
@@ -571,11 +332,11 @@
             </div>
           </div>
           <div style="height:8px"></div>
-          <table>
+          <table class="dev-only">
             <thead><tr><th>审核键</th><th>状态</th><th>操作</th></tr></thead>
             <tbody id="reviewRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
           </table>
-          <div class="cfg-form" style="margin-top:8px">
+          <div class="cfg-form dev-only" style="margin-top:8px">
             <div class="cfg-help">发布流程应用</div>
             <label>应用名称</label>
             <input id="appPublishName" placeholder="例如：财报清洗应用" />
@@ -587,7 +348,7 @@
               <fluent-button id="btnAppSchemaFromJson" class="btn secondary">JSON回填</fluent-button>
             </div>
             <label>参数 Schema(JSON)</label>
-            <textarea id="appSchemaJson" style="min-height:100px" placeholder='{"title":{"type":"string","required":true,"description":"任务标题"}}'></textarea>
+            <fluent-text-area id="appSchemaJson" style="min-height:100px" placeholder='{"title":{"type":"string","required":true,"description":"任务标题"}}'></fluent-text-area>
             <label>运行参数（可视化）</label>
             <div id="appRunParamsForm" class="cfg-form" style="max-height:180px"></div>
             <div class="btns" style="margin-top:6px">
@@ -595,7 +356,7 @@
               <fluent-button id="btnAppRunFromJson" class="btn secondary">JSON回填运行参数</fluent-button>
             </div>
             <label>运行参数(JSON)</label>
-            <textarea id="appRunParams" style="min-height:80px" placeholder='{"title":"示例任务"}'></textarea>
+            <fluent-text-area id="appRunParams" style="min-height:80px" placeholder='{"title":"示例任务"}'></fluent-text-area>
             <label><input id="publishRequirePreflight" type="checkbox" checked style="width:auto;margin-right:6px" />发布前必须预检通过</label>
             <div class="btns" style="margin-top:6px">
               <fluent-button id="btnPublishApp" class="btn secondary">发布应用</fluent-button>
@@ -606,7 +367,7 @@
               <tbody id="appRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
             </table>
           </div>
-          <div class="cfg-form" style="margin-top:8px">
+          <div class="cfg-form dev-only" style="margin-top:8px">
             <div class="cfg-help">运行时间线与失败概览</div>
             <label>Run ID</label>
             <input id="timelineRunId" placeholder="输入 run_id 查看时间线" />
@@ -702,7 +463,7 @@
               <tbody id="qualityGateRows"><tr><td colspan="4" style="color:#74879b">暂无</td></tr></tbody>
             </table>
           </div>
-          <div class="cfg-form" style="margin-top:8px">
+          <div class="cfg-form dev-only" style="margin-top:8px">
             <div class="cfg-help">操作审计</div>
             <div class="btns" style="margin-top:6px">
               <fluent-button id="btnAuditRefresh" class="btn secondary">刷新审计</fluent-button>
@@ -713,7 +474,7 @@
             </table>
           </div>
           <div style="height:8px"></div>
-          <div class="cfg-form">
+          <div class="cfg-form dev-only">
             <div class="cfg-help">运行对比</div>
             <label>Run A</label>
             <input id="compareRunA" placeholder="run_id A" />
@@ -738,7 +499,7 @@
             </table>
           </div>
           <div style="height:8px"></div>
-          <div class="cfg-form">
+          <div class="cfg-form dev-only">
             <div class="cfg-help">审核历史</div>
             <label>Run ID</label>
             <input id="reviewHistoryRunId" placeholder="可选：精确 run_id" />
@@ -764,7 +525,7 @@
             </table>
           </div>
           <div style="height:8px"></div>
-          <div class="cfg-form">
+          <div class="cfg-form dev-only">
             <div class="cfg-help">流程迁移日志</div>
             <div id="migrationSummary" class="cfg-meta">暂无迁移</div>
             <table>
@@ -778,16 +539,8 @@
       </article>
     </section>
   </div>
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      document.querySelectorAll("fluent-button").forEach((btn) => {
-        const cls = String(btn.className || "");
-        if (/\bdanger\b/.test(cls)) btn.setAttribute("appearance", "accent");
-        else if (/\bsecondary\b/.test(cls)) btn.setAttribute("appearance", "neutral");
-        else btn.setAttribute("appearance", "accent");
-      });
-    });
-  </script>
   <script type="module" src="./workflow/app.js"></script>
 </body>
 </html>
+
+
