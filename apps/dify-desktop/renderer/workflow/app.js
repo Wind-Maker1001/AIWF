@@ -3061,7 +3061,14 @@ async function runWorkflow() {
     await refreshDiagnostics();
     await refreshRunHistory();
     await refreshReviewQueue();
-    setStatus(out.ok ? `运行完成: ${out.run_id}` : `运行结束: ${out.status || "failed"}`, !!out.ok);
+    if (out?.ok) {
+      const slaPassed = out?.sla?.passed !== false;
+      const lineageEdges = Number(out?.lineage?.edge_count || 0);
+      const aiCalls = Number(out?.governance?.ai_budget?.calls || 0);
+      setStatus(`运行完成: ${out.run_id} | SLA:${slaPassed ? "通过" : "未通过"} | 血缘边:${lineageEdges} | AI调用:${aiCalls}`, true);
+    } else {
+      setStatus(`运行结束: ${out.status || "failed"}`, false);
+    }
   } catch (e) {
     setStatus(`运行失败: ${e}`, false);
   }

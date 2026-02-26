@@ -51,6 +51,7 @@
       "workflow_graph.js",
       "workflow_utils.js",
       "workflow_services.js",
+      "workflow_governance.js",
       "workflow_chiplets/registry.js",
       "workflow_chiplets/runner.js",
       "workflow_chiplets/executor.js",

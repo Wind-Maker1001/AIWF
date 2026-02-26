@@ -25,6 +25,14 @@ const { executeWorkflowDag } = require("./workflow_chiplets/executor");
 const { buildEnvelope } = require("./workflow_chiplets/contract");
 const { runIsolatedTask } = require("./workflow_chiplets/isolated_worker_host");
 const { loadExternalChiplets } = require("./workflow_chiplets/external_loader");
+const {
+  mergeGovernanceProfile,
+  authorizeGraph,
+  classifyInputFiles,
+  buildLineageSummary,
+  evaluateSla,
+  initAiBudgetState,
+} = require("./workflow_governance");
 
 function buildWorkflowDiagnostics(nodeRuns = []) {
   const byType = {};
@@ -94,6 +102,8 @@ function createWorkflowChipletRegistry(config = {}) {
 
 async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeCache = null }) {
   const graph = normalizeWorkflow(payload);
+  const governance = mergeGovernanceProfile(payload, config);
+  const actorRole = String(payload?.actor_role || payload?.actor?.role || "owner");
   const validation = validateGraph(graph);
   if (!validation.ok) {
     return {
@@ -102,6 +112,21 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       run_id: crypto.randomUUID().replace(/-/g, ""),
       status: "invalid_graph",
       error: validation.errors.join("; "),
+      node_runs: graph.nodes.map(makeNodeRun),
+    };
+  }
+  const authz = authorizeGraph(graph, actorRole, governance);
+  if (!authz.ok) {
+    return {
+      ok: false,
+      workflow_id: graph.workflow_id,
+      run_id: crypto.randomUUID().replace(/-/g, ""),
+      status: "forbidden_graph",
+      error: `governance_forbidden_nodes:${authz.denied_nodes.map((x) => `${x.id}:${x.type}`).join(",")}`,
+      governance: {
+        actor_role: actorRole,
+        authorization: authz,
+      },
       node_runs: graph.nodes.map(makeNodeRun),
     };
   }
@@ -129,6 +154,8 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
     nodeCache,
     chipletRegistry: createWorkflowChipletRegistry(config),
     externalChipletsReport: null,
+    governance,
+    aiBudget: initAiBudgetState(governance),
   };
   ctx.externalChipletsReport = ctx.chipletRegistry?.__external_report || null;
 
@@ -155,6 +182,9 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
     const artifacts = [...(ctx.cleanResult?.artifacts || [])];
     if (ctx.workflowSummaryArtifact) artifacts.push(ctx.workflowSummaryArtifact);
     const nodeOutputs = ctx.nodeOutputs && typeof ctx.nodeOutputs === "object" ? ctx.nodeOutputs : {};
+    const inputClasses = classifyInputFiles(ctx.files || []);
+    const lineage = buildLineageSummary(nodeOutputs);
+    const sla = evaluateSla(orderedNodeRuns, governance);
     const templateValidation = Object.entries(nodeOutputs)
       .map(([nodeId, out]) => ({
         node_id: String(nodeId || ""),
@@ -179,6 +209,14 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       pending_reviews: ctx.manualReviewRequests || [],
       workflow: graph,
       diagnostics: buildWorkflowDiagnostics(orderedNodeRuns),
+      governance: {
+        actor_role: actorRole,
+        authorization: authz,
+        input_classes: inputClasses,
+        ai_budget: ctx.aiBudget || initAiBudgetState(governance),
+      },
+      lineage,
+      sla,
       external_chiplets: ctx.externalChipletsReport || null,
       isolation: {
         enabled: payload?.chiplet_isolation_enabled !== false && config?.chiplet_isolation_enabled !== false,
@@ -202,6 +240,14 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       node_outputs: ctx.nodeOutputs || {},
       pending_reviews: ctx.manualReviewRequests || [],
       workflow: graph,
+      governance: {
+        actor_role: actorRole,
+        authorization: authz,
+        input_classes: classifyInputFiles(ctx.files || []),
+        ai_budget: ctx.aiBudget || initAiBudgetState(governance),
+      },
+      lineage: buildLineageSummary(ctx.nodeOutputs || {}),
+      sla: evaluateSla(orderedNodeRuns, governance),
     };
   }
 }

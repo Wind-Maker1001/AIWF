@@ -1,5 +1,32 @@
 ﻿# Codex Handoff (Updated: 2026-02-25)
 
+## 0) 2026-02-26 Governance/Production Patch
+- Production acceptance matrix:
+  - `ops/scripts/acceptance_production_matrix.ps1`
+  - one command runs unit/smoke/real-sample/office-gate checks.
+- Offline install diagnostics:
+  - `ops/scripts/check_offline_readiness.ps1`
+  - checks EXE + OCR/Poppler/tool data in installed directory.
+- Governance core integrated into workflow engine:
+  - `apps/dify-desktop/workflow_governance.js`
+  - role-based graph authorization (`owner/analyst/reviewer` + allow/deny)
+  - input classification (`data/doc/image/unknown`)
+  - workflow SLA evaluation (`max_workflow_seconds`, `max_node_seconds`)
+  - lineage summary extraction from node outputs (`lineage_v2/v3/provenance` edges/nodes).
+- AI hallucination governance strengthened:
+  - data-class input still default blocks AI refine/strategy unless explicit override.
+  - AI budget hard gate added (`max_calls_per_run`, `max_estimated_tokens_per_run`, `max_estimated_cost_usd_per_run`).
+  - run result now includes `governance.ai_budget` usage summary.
+- Workflow run result now contains:
+  - `governance`, `lineage`, `sla` sections for audit/ops integration.
+- GUI status bar run summary upgraded:
+  - shows SLA pass/fail, lineage edge count, AI call count after run.
+- Governance profile sample:
+  - `ops/config/governance_profile.example.json`
+- New tests:
+  - `apps/dify-desktop/tests-node/workflow_engine_governance.test.js`
+  - covers forbidden role blocking, input-class classification, AI budget gate.
+
 ## 1) Project State
 - Primary delivery path: `apps/dify-desktop` (Windows-first, offline-capable, one-click GUI).
 - Optional service chain: `apps/base-java` + `apps/glue-python` + `apps/accel-rust`.

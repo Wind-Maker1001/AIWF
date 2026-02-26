@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "roles": {
+    "owner": { "allow": ["*"] },
+    "analyst": {
+      "allow": [
+        "ingest_files",
+        "clean_md",
+        "compute_rust",
+        "load_rows_v3",
+        "transform_rows_v3",
+        "join_rows_v4",
+        "aggregate_rows_v4",
+        "quality_check_v4",
+        "sql_chart_v1",
+        "office_slot_fill_v1",
+        "md_output"
+      ],
+      "deny": ["plugin_operator_v1"]
+    },
+    "reviewer": {
+      "allow": ["manual_review", "ai_audit", "md_output"]
+    }
+  },
+  "ai_budget": {
+    "enabled": true,
+    "max_calls_per_run": 2,
+    "max_estimated_tokens_per_run": 120000,
+    "max_estimated_cost_usd_per_run": 0.8,
+    "token_price_usd_per_1k": 0.002
+  },
+  "sla": {
+    "enabled": true,
+    "max_workflow_seconds": 900,
+    "max_node_seconds": 300
+  },
+  "dictionary": {
+    "required_fields": ["id", "date", "value"]
+  }
+}

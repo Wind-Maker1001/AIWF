@@ -157,6 +157,37 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
     return { block: false, reason: "" };
   }
 
+  function estimateTextTokens(s) {
+    const chars = String(s || "").length;
+    return Math.max(1, Math.ceil(chars / 4));
+  }
+
+  function enforceAiBudgetBeforeCall(ctx, corpusText) {
+    const st = ctx?.aiBudget && typeof ctx.aiBudget === "object" ? ctx.aiBudget : null;
+    if (!st || st.enabled === false) return;
+    if (Number(st.calls || 0) >= Number(st.max_calls_per_run || 2)) {
+      throw new Error(`ai_budget_exceeded:calls>${st.max_calls_per_run}`);
+    }
+    const projected = Number(st.estimated_tokens || 0) + estimateTextTokens(corpusText);
+    if (projected > Number(st.max_estimated_tokens_per_run || 120000)) {
+      throw new Error(`ai_budget_exceeded:tokens>${st.max_estimated_tokens_per_run}`);
+    }
+  }
+
+  function recordAiBudgetAfterCall(ctx, corpusText, aiText) {
+    const st = ctx?.aiBudget && typeof ctx.aiBudget === "object" ? ctx.aiBudget : null;
+    if (!st || st.enabled === false) return;
+    st.calls = Number(st.calls || 0) + 1;
+    const inTokens = estimateTextTokens(corpusText);
+    const outTokens = estimateTextTokens(aiText);
+    st.estimated_tokens = Number(st.estimated_tokens || 0) + inTokens + outTokens;
+    const unit = Number(st.token_price_usd_per_1k || 0.002);
+    st.estimated_cost_usd = Number((((Number(st.estimated_tokens || 0) / 1000) * unit).toFixed(6)));
+    if (Number(st.estimated_cost_usd || 0) > Number(st.max_estimated_cost_usd_per_run || 0.8)) {
+      throw new Error(`ai_budget_exceeded:cost>${st.max_estimated_cost_usd_per_run}`);
+    }
+  }
+
   async function callRustOperator(base, operatorPath, body, required, timeoutMs, operatorName) {
     const resp = await fetch(`${base}${operatorPath}`, {
       method: "POST",
@@ -1196,6 +1227,7 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
             },
           };
           let out = null;
+          enforceAiBudgetBeforeCall(ctx, corpusText);
           const isolationLevel = resolveIsolationLevel(ctx, "ai_strategy_v1", true, node);
           if (isolationLevel !== "none") {
             try {
@@ -1221,6 +1253,7 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
             out.isolation_level = "none";
           }
           ctx.aiText = out.text || "";
+          recordAiBudgetAfterCall(ctx, corpusText, ctx.aiText);
           ctx.aiProvider = String((p && (p.name || p.model || p.endpoint)) || "default");
           return {
             ok: true,
@@ -1275,6 +1308,7 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
       let refined = null;
       const corpusText = ctx.corpusText || "";
       const metrics = ctx.metrics || summarizeCorpus(corpusText);
+      enforceAiBudgetBeforeCall(ctx, corpusText);
       const isolationLevel = resolveIsolationLevel(ctx, "ai_refine", true, node);
       if (isolationLevel !== "none") {
         try {
@@ -1300,6 +1334,7 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
         refined.isolation_level = "none";
       }
       ctx.aiText = refined.text || "";
+      recordAiBudgetAfterCall(ctx, corpusText, ctx.aiText);
       ctx.aiTextSource = "ai_refine";
       return {
         ai_mode: refined.reason,
