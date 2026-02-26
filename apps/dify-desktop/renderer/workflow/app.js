@@ -22,8 +22,16 @@ const els = {
   btnTemplateAcceptanceExport: $("btnTemplateAcceptanceExport"),
   btnApplyTemplate: $("btnApplyTemplate"),
   btnSaveTemplate: $("btnSaveTemplate"),
+  btnTemplatePackInstall: $("btnTemplatePackInstall"),
+  btnTemplatePackRemove: $("btnTemplatePackRemove"),
+  btnTemplatePackExport: $("btnTemplatePackExport"),
   inputFiles: $("inputFiles"),
   reportTitle: $("reportTitle"),
+  qualityRuleSetId: $("qualityRuleSetId"),
+  qualityRuleSetSelect: $("qualityRuleSetSelect"),
+  btnQualityRuleSetsRefresh: $("btnQualityRuleSetsRefresh"),
+  btnQualityRuleSetSave: $("btnQualityRuleSetSave"),
+  btnQualityRuleSetRemove: $("btnQualityRuleSetRemove"),
   breakpointNodeId: $("breakpointNodeId"),
   exportCanonicalBundle: $("exportCanonicalBundle"),
   canonicalTitle: $("canonicalTitle"),
@@ -113,6 +121,9 @@ const els = {
   btnAutoFixGraph: $("btnAutoFixGraph"),
   btnRun: $("btnRun"),
   btnEnqueueRun: $("btnEnqueueRun"),
+  btnSaveBaseline: $("btnSaveBaseline"),
+  btnCompareBaseline: $("btnCompareBaseline"),
+  btnLoadLineage: $("btnLoadLineage"),
   btnQueueRefresh: $("btnQueueRefresh"),
   btnQueuePause: $("btnQueuePause"),
   btnQueueResume: $("btnQueueResume"),
@@ -870,6 +881,26 @@ function saveLocalTemplates(items) {
   } catch {}
 }
 
+let marketplaceTemplates = [];
+
+async function refreshTemplateMarketplace() {
+  try {
+    const out = await window.aiwfDesktop.listTemplateMarketplace({ limit: 500 });
+    const packs = Array.isArray(out?.items) ? out.items : [];
+    const merged = [];
+    packs.forEach((p) => {
+      const arr = Array.isArray(p?.templates) ? p.templates : [];
+      arr.forEach((t) => {
+        if (!t || typeof t !== "object") return;
+        merged.push({ ...t, __pack_id: String(p?.id || ""), __pack_name: String(p?.name || "") });
+      });
+    });
+    marketplaceTemplates = merged;
+  } catch {
+    marketplaceTemplates = [];
+  }
+}
+
 function parseRunParamsLoose() {
   try {
     const raw = String(els.appRunParams?.value || "").trim();
@@ -890,7 +921,7 @@ function currentTemplateGovernance() {
 }
 
 function allTemplates() {
-  return [...BUILTIN_TEMPLATES, ...loadLocalTemplates()];
+  return [...BUILTIN_TEMPLATES, ...loadLocalTemplates(), ...marketplaceTemplates];
 }
 
 function renderTemplateSelect() {
@@ -2926,6 +2957,7 @@ function runPayload(extra = {}) {
   const base = {
     workflow_id: graph.workflow_id || "custom_v1",
     workflow: graph,
+    quality_rule_set_id: String(els.qualityRuleSetId?.value || els.qualityRuleSetSelect?.value || "").trim(),
     params: {
       report_title: String(els.reportTitle.value || "").trim(),
       input_files: String(els.inputFiles.value || "").trim(),
@@ -3072,6 +3104,171 @@ async function runWorkflow() {
   } catch (e) {
     setStatus(`运行失败: ${e}`, false);
   }
+}
+
+async function refreshQualityRuleSets() {
+  if (!els.qualityRuleSetSelect) return;
+  try {
+    const out = await window.aiwfDesktop.listQualityRuleSets();
+    const sets = Array.isArray(out?.sets) ? out.sets : [];
+    const cur = String(els.qualityRuleSetId?.value || "").trim();
+    els.qualityRuleSetSelect.innerHTML = '<option value="">选择规则集...</option>';
+    sets.forEach((s) => {
+      const id = String(s?.id || "");
+      if (!id) return;
+      const op = document.createElement("option");
+      op.value = id;
+      op.textContent = `${String(s?.name || id)} (${String(s?.version || "v1")})`;
+      els.qualityRuleSetSelect.appendChild(op);
+    });
+    if (cur) els.qualityRuleSetSelect.value = cur;
+  } catch {}
+}
+
+function collectRulesFromGraph() {
+  const g = store.exportGraph();
+  const nodes = Array.isArray(g?.nodes) ? g.nodes : [];
+  const target = nodes.find((n) => ["quality_check_v2", "quality_check_v3", "quality_check_v4"].includes(String(n?.type || "")));
+  if (!target) return {};
+  const cfg = target?.config && typeof target.config === "object" ? target.config : {};
+  return cfg.rules && typeof cfg.rules === "object" ? cfg.rules : {};
+}
+
+async function saveQualityRuleSetFromGraph() {
+  const id = String(els.qualityRuleSetId?.value || "").trim();
+  if (!id) {
+    setStatus("请先填写质量规则集ID", false);
+    return;
+  }
+  const rules = collectRulesFromGraph();
+  const out = await window.aiwfDesktop.saveQualityRuleSet({
+    set: {
+      id,
+      name: id,
+      version: "v1",
+      scope: "workflow",
+      rules,
+    },
+  });
+  if (out?.ok) {
+    await refreshQualityRuleSets();
+    setStatus(`质量规则集已保存: ${id}`, true);
+  } else {
+    setStatus(`保存规则集失败: ${out?.error || "unknown"}`, false);
+  }
+}
+
+async function removeQualityRuleSetCurrent() {
+  const id = String(els.qualityRuleSetId?.value || els.qualityRuleSetSelect?.value || "").trim();
+  if (!id) {
+    setStatus("请先选择质量规则集", false);
+    return;
+  }
+  const out = await window.aiwfDesktop.removeQualityRuleSet({ id });
+  if (out?.ok) {
+    if (els.qualityRuleSetId) els.qualityRuleSetId.value = "";
+    await refreshQualityRuleSets();
+    setStatus(`质量规则集已删除: ${id}`, true);
+  } else {
+    setStatus(`删除规则集失败: ${out?.error || "unknown"}`, false);
+  }
+}
+
+async function installTemplatePack() {
+  const out = await window.aiwfDesktop.loadWorkflow();
+  if (!out?.ok || !out?.path) {
+    if (!out?.canceled) setStatus(`读取模板包失败: ${out?.error || "unknown"}`, false);
+    return;
+  }
+  const ret = await window.aiwfDesktop.installTemplatePack({ path: out.path });
+  if (!ret?.ok) {
+    setStatus(`安装模板包失败: ${ret?.error || "unknown"}`, false);
+    return;
+  }
+  await refreshTemplateMarketplace();
+  renderTemplateSelect();
+  setStatus(`模板包已安装: ${ret?.item?.name || ret?.item?.id || ""}`, true);
+}
+
+async function removeTemplatePackByCurrentTemplate() {
+  const id = String(els.templateSelect?.value || "").trim();
+  const tpl = allTemplates().find((x) => String(x?.id || "") === id);
+  const packId = String(tpl?.__pack_id || "").trim();
+  if (!packId) {
+    setStatus("当前模板不是模板包来源，无法移除", false);
+    return;
+  }
+  const out = await window.aiwfDesktop.removeTemplatePack({ id: packId });
+  if (!out?.ok) {
+    setStatus(`移除模板包失败: ${out?.error || "unknown"}`, false);
+    return;
+  }
+  await refreshTemplateMarketplace();
+  renderTemplateSelect();
+  setStatus(`模板包已移除: ${packId}`, true);
+}
+
+async function exportTemplatePackByCurrentTemplate() {
+  const id = String(els.templateSelect?.value || "").trim();
+  const tpl = allTemplates().find((x) => String(x?.id || "") === id);
+  const packId = String(tpl?.__pack_id || "").trim();
+  if (!packId) {
+    setStatus("当前模板不是模板包来源，无法导出", false);
+    return;
+  }
+  const out = await window.aiwfDesktop.exportTemplatePack({ id: packId });
+  if (out?.ok) setStatus(`模板包已导出: ${out.path}`, true);
+  else if (!out?.canceled) setStatus(`导出模板包失败: ${out?.error || "unknown"}`, false);
+}
+
+async function saveCurrentRunAsBaseline() {
+  const runA = String(els.compareRunA?.value || "").trim();
+  if (!runA) {
+    setStatus("请先在“运行对比”里选择 Run A 作为基线", false);
+    return;
+  }
+  const out = await window.aiwfDesktop.saveRunBaseline({ run_id: runA, name: `baseline_${runA.slice(0, 8)}` });
+  if (out?.ok) setStatus(`基线已保存: ${out?.item?.baseline_id}`, true);
+  else setStatus(`保存基线失败: ${out?.error || "unknown"}`, false);
+}
+
+async function compareWithLatestBaseline() {
+  const runB = String(els.compareRunB?.value || "").trim();
+  if (!runB) {
+    setStatus("请先在“运行对比”里选择 Run B", false);
+    return;
+  }
+  const baselines = await window.aiwfDesktop.listRunBaselines();
+  const first = Array.isArray(baselines?.items) ? baselines.items[0] : null;
+  if (!first) {
+    setStatus("未找到基线，请先保存基线", false);
+    return;
+  }
+  const out = await window.aiwfDesktop.compareRunWithBaseline({ run_id: runB, baseline_id: first.baseline_id });
+  if (!out?.ok) {
+    setStatus(`基线对比失败: ${out?.error || "unknown"}`, false);
+    return;
+  }
+  const reg = out.regression || {};
+  setStatus(`基线对比完成: changed=${reg.changed_nodes || 0}, status_flip=${reg.status_flip_nodes || 0}, perf_hot=${reg.perf_hot_nodes || 0}`, true);
+}
+
+async function loadLineageForRunA() {
+  const runId = String(els.compareRunA?.value || "").trim();
+  if (!runId) {
+    setStatus("请先在“运行对比”里选择 Run A", false);
+    return;
+  }
+  const out = await window.aiwfDesktop.getWorkflowLineage({ run_id: runId });
+  if (!out?.ok) {
+    setStatus(`加载血缘失败: ${out?.error || "unknown"}`, false);
+    return;
+  }
+  const lineage = out.lineage || {};
+  const nodes = Array.isArray(lineage?.nodes) ? lineage.nodes.length : Number(lineage?.node_count || 0);
+  const edges = Array.isArray(lineage?.edges) ? lineage.edges.length : Number(lineage?.edge_count || 0);
+  els.log.textContent = JSON.stringify({ run_id: runId, lineage }, null, 2);
+  setStatus(`血缘已加载: nodes=${nodes}, edges=${edges}`, true);
 }
 
 async function enqueueWorkflowRun() {
@@ -4065,6 +4262,9 @@ if (els.btnReviewsRefresh) els.btnReviewsRefresh.addEventListener("click", refre
 if (els.btnReviewHistoryRefresh) els.btnReviewHistoryRefresh.addEventListener("click", refreshReviewHistory);
 if (els.btnReviewHistoryExport) els.btnReviewHistoryExport.addEventListener("click", exportReviewHistory);
 if (els.btnCompareRuns) els.btnCompareRuns.addEventListener("click", compareRuns);
+if (els.btnSaveBaseline) els.btnSaveBaseline.addEventListener("click", saveCurrentRunAsBaseline);
+if (els.btnCompareBaseline) els.btnCompareBaseline.addEventListener("click", compareWithLatestBaseline);
+if (els.btnLoadLineage) els.btnLoadLineage.addEventListener("click", loadLineageForRunA);
 if (els.btnExportCompareReport) els.btnExportCompareReport.addEventListener("click", exportCompareReport);
 if (els.compareOnlyChanged) els.compareOnlyChanged.addEventListener("change", () => renderCompareResult(lastCompareResult || { ok: false, error: "请先执行对比" }));
 if (els.compareOnlyStatusChanged) els.compareOnlyStatusChanged.addEventListener("change", () => renderCompareResult(lastCompareResult || { ok: false, error: "请先执行对比" }));
@@ -4074,9 +4274,20 @@ els.btnSaveFlow.addEventListener("click", saveFlow);
 els.btnLoadFlow.addEventListener("click", loadFlow);
 if (els.btnApplyTemplate) els.btnApplyTemplate.addEventListener("click", applySelectedTemplate);
 if (els.btnSaveTemplate) els.btnSaveTemplate.addEventListener("click", saveCurrentAsTemplate);
+if (els.btnTemplatePackInstall) els.btnTemplatePackInstall.addEventListener("click", installTemplatePack);
+if (els.btnTemplatePackRemove) els.btnTemplatePackRemove.addEventListener("click", removeTemplatePackByCurrentTemplate);
+if (els.btnTemplatePackExport) els.btnTemplatePackExport.addEventListener("click", exportTemplatePackByCurrentTemplate);
 if (els.btnTemplateAcceptance) els.btnTemplateAcceptance.addEventListener("click", runTemplateAcceptance);
 if (els.btnTemplateAcceptanceExport) els.btnTemplateAcceptanceExport.addEventListener("click", exportTemplateAcceptanceReport);
 if (els.templateSelect) els.templateSelect.addEventListener("change", renderTemplateParamsForm);
+if (els.qualityRuleSetSelect) {
+  els.qualityRuleSetSelect.addEventListener("change", () => {
+    if (els.qualityRuleSetId) els.qualityRuleSetId.value = String(els.qualityRuleSetSelect.value || "");
+  });
+}
+if (els.btnQualityRuleSetsRefresh) els.btnQualityRuleSetsRefresh.addEventListener("click", refreshQualityRuleSets);
+if (els.btnQualityRuleSetSave) els.btnQualityRuleSetSave.addEventListener("click", saveQualityRuleSetFromGraph);
+if (els.btnQualityRuleSetRemove) els.btnQualityRuleSetRemove.addEventListener("click", removeQualityRuleSetCurrent);
 if (els.paletteMode) els.paletteMode.addEventListener("change", renderPalette);
 if (els.paletteSearch) els.paletteSearch.addEventListener("input", renderPalette);
 if (els.btnUseDeepSeek) {
@@ -4332,6 +4543,8 @@ els.canvasWrap.addEventListener("drop", (evt) => {
 
 renderPalette();
 renderTemplateSelect();
+refreshTemplateMarketplace().then(() => renderTemplateSelect()).catch(() => {});
+refreshQualityRuleSets().catch(() => {});
 setCfgMode("form");
 setEdgeWhenBuilderVisibility(els.edgeWhenKind?.value || "none");
 rebuildEdgeHints(null);

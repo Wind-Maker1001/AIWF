@@ -179,6 +179,9 @@
           <div class="btns" style="margin-top:8px">
             <button id="btnApplyTemplate" class="btn secondary">应用模板</button>
             <button id="btnSaveTemplate" class="btn secondary">保存为模板</button>
+            <button id="btnTemplatePackInstall" class="btn secondary">安装模板包</button>
+            <button id="btnTemplatePackRemove" class="btn secondary">移除模板包</button>
+            <button id="btnTemplatePackExport" class="btn secondary">导出模板包</button>
           </div>
           <div class="btns" style="margin-top:6px">
             <button id="btnTemplateAcceptance" class="btn secondary">模板验收</button>
@@ -192,6 +195,17 @@
           <textarea id="inputFiles"></textarea>
           <label>报告标题</label>
           <input id="reportTitle" value="Workflow 任务" />
+          <label>质量规则集ID（可选，自动注入 quality_check 节点）</label>
+          <input id="qualityRuleSetId" placeholder="例如: finance_strict_v1" />
+          <div class="btns" style="margin-top:6px">
+            <button id="btnQualityRuleSetsRefresh" class="btn secondary">刷新规则集</button>
+            <button id="btnQualityRuleSetSave" class="btn secondary">保存当前规则集</button>
+            <button id="btnQualityRuleSetRemove" class="btn secondary">删除规则集</button>
+          </div>
+          <label>质量规则集列表</label>
+          <select id="qualityRuleSetSelect" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+            <option value="">选择规则集...</option>
+          </select>
           <label>断点节点ID（可选，仅运行到该节点）</label>
           <input id="breakpointNodeId" placeholder="例如: n3" />
           <label><input id="exportCanonicalBundle" type="checkbox" style="width:auto;margin-right:6px" />导出熟肉包（Markdown + metadata + lineage）</label>
@@ -235,6 +249,9 @@
             <button id="btnAutoFixGraph" class="btn secondary">自动修复图结构</button>
             <button id="btnRun" class="btn">运行</button>
             <button id="btnEnqueueRun" class="btn secondary">加入队列</button>
+            <button id="btnSaveBaseline" class="btn secondary">保存为基线</button>
+            <button id="btnCompareBaseline" class="btn secondary">与基线对比</button>
+            <button id="btnLoadLineage" class="btn secondary">加载血缘图</button>
             <button id="btnQueueRefresh" class="btn secondary">刷新队列</button>
             <button id="btnQueuePause" class="btn secondary">暂停队列</button>
             <button id="btnQueueResume" class="btn secondary">恢复队列</button>

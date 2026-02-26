@@ -27,6 +27,22 @@
   - `apps/dify-desktop/tests-node/workflow_engine_governance.test.js`
   - covers forbidden role blocking, input-class classification, AI budget gate.
 
+## 0.1) 2026-02-26 Functional Deepening Patch
+- Template marketplace (pack level) via Workflow IPC:
+  - `listTemplateMarketplace/installTemplatePack/removeTemplatePack/exportTemplatePack`
+- Data quality rule center:
+  - `listQualityRuleSets/saveQualityRuleSet/removeQualityRuleSet`
+  - `quality_rule_set_id` can be injected into workflow run payload and auto-applied to `quality_check_v2/v3/v4` nodes.
+- Run regression baseline:
+  - `listRunBaselines/saveRunBaseline/compareRunWithBaseline`
+  - regression summary includes changed/status-flip/perf-hot node counts.
+- Lineage fetch API:
+  - `getWorkflowLineage(run_id)` for run-level lineage readback.
+- GUI wiring:
+  - template pack install/remove/export buttons
+  - quality rule-set selector + save/remove actions
+  - save-baseline / compare-baseline / load-lineage actions
+
 ## 1) Project State
 - Primary delivery path: `apps/dify-desktop` (Windows-first, offline-capable, one-click GUI).
 - Optional service chain: `apps/base-java` + `apps/glue-python` + `apps/accel-rust`.

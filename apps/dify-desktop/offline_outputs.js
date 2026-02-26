@@ -200,6 +200,15 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     return { w: srcW * r, h: srcH * r };
   }
 
+  function fitTableBodyRowCount(maxHeight, opts = {}) {
+    const headerRows = Number.isFinite(Number(opts.header_rows)) ? Math.max(0, Math.floor(Number(opts.header_rows))) : 1;
+    const rowHeight = Number.isFinite(Number(opts.row_height)) ? Math.max(0.15, Number(opts.row_height)) : 0.42;
+    const padTop = Number.isFinite(Number(opts.pad_top)) ? Math.max(0, Number(opts.pad_top)) : 0.06;
+    const padBottom = Number.isFinite(Number(opts.pad_bottom)) ? Math.max(0, Number(opts.pad_bottom)) : 0.06;
+    const avail = Math.max(0, Number(maxHeight || 0) - padTop - padBottom - headerRows * rowHeight);
+    return Math.max(1, Math.floor(avail / rowHeight));
+  }
+
   function pickIllustrationImage(rows, options = {}) {
     const fromInputFiles = () => {
       const raw = options && options.input_files;
@@ -1370,7 +1379,8 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     addFluentChrome(s3, "样例数据（前 6 行）");
     const cols = rows.length > 0 ? unionColumns(rows).slice(0, 3) : ["id", "text", "amount"];
     const tableRows = [[...cols]];
-    const sampleRows = Math.min(6, Math.max(3, Number(layout.pptx_sample_rows || 6)));
+    const sampleRowsByHeight = fitTableBodyRowCount(4.6, { header_rows: 1, row_height: 0.42, pad_top: 0.08, pad_bottom: 0.08 });
+    const sampleRows = Math.min(sampleRowsByHeight, Math.max(3, Number(layout.pptx_sample_rows || 6)));
     rows.slice(0, sampleRows).forEach((r) => tableRows.push(cols.map((c) => cleanOfficeText(String(r[c] ?? ""), 44))));
     s3.addTable(tableRows, { x: 0.6, y: 1.05, w: 12.0, h: 4.6, border: { pt: 1, color: "DDE7F2" }, fontFace, fontSize: 11 });
 

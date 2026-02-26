@@ -58,6 +58,18 @@
     return path.join(workflowStoreDir(), "workflow_apps.json");
   }
 
+  function templateMarketplacePath() {
+    return path.join(workflowStoreDir(), "template_marketplace.json");
+  }
+
+  function qualityRuleCenterPath() {
+    return path.join(workflowStoreDir(), "quality_rule_center.json");
+  }
+
+  function runBaselinePath() {
+    return path.join(workflowStoreDir(), "workflow_run_baselines.json");
+  }
+
   function workflowAuditPath() {
     return path.join(workflowStoreDir(), "workflow_audit.jsonl");
   }
@@ -91,6 +103,10 @@
   function writeJsonFile(fp, obj) {
     fs.mkdirSync(path.dirname(fp), { recursive: true });
     fs.writeFileSync(fp, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
+  }
+
+  function deepClone(v) {
+    return JSON.parse(JSON.stringify(v));
   }
 
   function resolveOutputRoot(cfg = null) {
@@ -320,6 +336,35 @@
 
   function saveWorkflowApps(items) {
     writeJsonFile(workflowAppsPath(), { items: Array.isArray(items) ? items : [] });
+  }
+
+  function listTemplateMarketplace(limit = 500) {
+    const obj = readJsonFile(templateMarketplacePath(), { items: [] });
+    const arr = Array.isArray(obj?.items) ? obj.items : [];
+    return arr.slice(0, Math.max(1, Math.min(5000, Number(limit || 500))));
+  }
+
+  function saveTemplateMarketplace(items) {
+    writeJsonFile(templateMarketplacePath(), { items: Array.isArray(items) ? items : [] });
+  }
+
+  function listQualityRuleCenter() {
+    const obj = readJsonFile(qualityRuleCenterPath(), { sets: [] });
+    const arr = Array.isArray(obj?.sets) ? obj.sets : [];
+    return arr;
+  }
+
+  function saveQualityRuleCenter(sets) {
+    writeJsonFile(qualityRuleCenterPath(), { sets: Array.isArray(sets) ? sets : [] });
+  }
+
+  function listRunBaselines() {
+    const obj = readJsonFile(runBaselinePath(), { items: [] });
+    return Array.isArray(obj?.items) ? obj.items : [];
+  }
+
+  function saveRunBaselines(items) {
+    writeJsonFile(runBaselinePath(), { items: Array.isArray(items) ? items : [] });
   }
 
   function appendAudit(action, detail) {
@@ -900,7 +945,7 @@
         saveWorkflowQueue(items);
         const promise = (async () => {
           const merged = { ...loadConfig(), ...(next.cfg || {}) };
-          const effectivePayload = applySandboxAutoFixPayload(next.payload || {});
+          const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(next.payload || {}));
           const out = attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
             config: merged,
@@ -1428,6 +1473,63 @@
     return `${lines.join("\n")}\n`;
   }
 
+  function applyQualityRuleSetToPayload(payload) {
+    const p = payload && typeof payload === "object" ? { ...payload } : {};
+    const workflow = p.workflow && typeof p.workflow === "object" ? deepClone(p.workflow) : null;
+    const qualityRuleSetId = String(p?.quality_rule_set_id || "").trim();
+    if (!workflow || !qualityRuleSetId) return p;
+    const sets = listQualityRuleCenter();
+    const hit = sets.find((x) => String(x?.id || "") === qualityRuleSetId);
+    if (!hit || !hit.rules || typeof hit.rules !== "object") return p;
+    const targetTypes = new Set(["quality_check_v2", "quality_check_v3", "quality_check_v4"]);
+    const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+    nodes.forEach((n) => {
+      const t = String(n?.type || "");
+      if (!targetTypes.has(t)) return;
+      const cfg = n?.config && typeof n.config === "object" ? n.config : {};
+      n.config = {
+        ...cfg,
+        rules: deepClone(hit.rules),
+        rule_set_meta: {
+          id: String(hit.id || ""),
+          name: String(hit.name || ""),
+          version: String(hit.version || "v1"),
+        },
+      };
+    });
+    p.workflow = workflow;
+    return p;
+  }
+
+  function buildRunRegressionAgainstBaseline(runId, baselineId) {
+    const cur = findRunById(runId);
+    if (!cur) return { ok: false, error: `run not found: ${runId}` };
+    const bases = listRunBaselines();
+    const hit = bases.find((x) => String(x?.baseline_id || "") === String(baselineId || ""));
+    if (!hit) return { ok: false, error: `baseline not found: ${baselineId}` };
+    const baseRunId = String(hit?.run_id || "");
+    const cmp = buildRunCompare(baseRunId, runId);
+    if (!cmp?.ok) return cmp;
+    const changed = Array.isArray(cmp.node_diff) ? cmp.node_diff.filter((x) => x.status_changed || Math.abs(Number(x.seconds_delta || 0)) > 0.001) : [];
+    const statusFlip = changed.filter((x) => x.status_changed);
+    const perfHot = changed.filter((x) => Number(x.seconds_delta || 0) > 0.5);
+    return {
+      ok: true,
+      baseline_id: String(hit.baseline_id || ""),
+      baseline_name: String(hit.name || ""),
+      baseline_run_id: baseRunId,
+      run_id: runId,
+      compare: cmp,
+      regression: {
+        changed_nodes: changed.length,
+        status_flip_nodes: statusFlip.length,
+        perf_hot_nodes: perfHot.length,
+        status_flip: statusFlip,
+        perf_hot: perfHot,
+      },
+    };
+  }
+
   ipcMain.handle("aiwf:openWorkflowStudio", async () => {
     createWorkflowWindow();
     return { ok: true };
@@ -1435,7 +1537,7 @@
 
   ipcMain.handle("aiwf:runWorkflow", async (_evt, payload, cfg) => {
     const merged = { ...loadConfig(), ...(cfg || {}) };
-    const effectivePayload = applySandboxAutoFixPayload(payload || {});
+    const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(payload || {}));
     const out = attachQualityGate(await runMinimalWorkflow({
       payload: effectivePayload,
       config: merged,
@@ -1474,6 +1576,18 @@
     return { ok: true, items: listRunHistory(safe) };
   });
 
+  ipcMain.handle("aiwf:getWorkflowLineage", async (_evt, req) => {
+    try {
+      const runId = String(req?.run_id || "").trim();
+      const hit = findRunById(runId);
+      if (!hit) return { ok: false, error: "run not found" };
+      const lineage = hit?.result?.lineage && typeof hit.result.lineage === "object" ? hit.result.lineage : {};
+      return { ok: true, run_id: runId, lineage };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
   ipcMain.handle("aiwf:replayWorkflowRun", async (_evt, req, cfg) => {
     try {
       const runId = String(req?.run_id || "").trim();
@@ -1493,7 +1607,7 @@
         },
       };
       const merged = { ...loadConfig(), ...(found.config || {}), ...(cfg || {}) };
-      const effectivePayload = applySandboxAutoFixPayload(replayPayload);
+      const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(replayPayload));
       const out = attachQualityGate(await runMinimalWorkflow({
         payload: effectivePayload,
         config: merged,
@@ -1516,6 +1630,47 @@
       const runA = String(req?.run_a || "").trim();
       const runB = String(req?.run_b || "").trim();
       return buildRunCompare(runA, runB);
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:listRunBaselines", async () => {
+    return { ok: true, items: listRunBaselines() };
+  });
+
+  ipcMain.handle("aiwf:saveRunBaseline", async (_evt, req) => {
+    try {
+      const runId = String(req?.run_id || "").trim();
+      if (!runId) return { ok: false, error: "run_id required" };
+      const hit = findRunById(runId);
+      if (!hit) return { ok: false, error: "run not found" };
+      const items = listRunBaselines();
+      const baselineId = String(req?.baseline_id || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`);
+      const row = {
+        baseline_id: baselineId,
+        name: String(req?.name || hit?.workflow_id || "baseline"),
+        run_id: runId,
+        workflow_id: String(hit?.workflow_id || ""),
+        created_at: nowIso(),
+        notes: String(req?.notes || ""),
+      };
+      const idx = items.findIndex((x) => String(x?.baseline_id || "") === baselineId);
+      if (idx >= 0) items[idx] = row;
+      else items.unshift(row);
+      saveRunBaselines(items);
+      appendAudit("baseline_save", { baseline_id: baselineId, run_id: runId });
+      return { ok: true, item: row };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:compareRunWithBaseline", async (_evt, req) => {
+    try {
+      const runId = String(req?.run_id || "").trim();
+      const baselineId = String(req?.baseline_id || "").trim();
+      return buildRunRegressionAgainstBaseline(runId, baselineId);
     } catch (e) {
       return { ok: false, error: String(e) };
     }
@@ -1547,6 +1702,128 @@
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       fs.writeFileSync(filePath, content, "utf8");
       return { ok: true, path: filePath, format };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:listTemplateMarketplace", async (_evt, req) => {
+    const limit = Number(req?.limit || 500);
+    return { ok: true, items: listTemplateMarketplace(limit) };
+  });
+
+  ipcMain.handle("aiwf:installTemplatePack", async (_evt, req) => {
+    try {
+      const inPack = req?.pack && typeof req.pack === "object" ? req.pack : null;
+      const fromPath = String(req?.path || "").trim();
+      let pack = inPack;
+      if (!pack && fromPath) {
+        const obj = JSON.parse(fs.readFileSync(fromPath, "utf8"));
+        pack = obj && typeof obj === "object" ? obj : null;
+      }
+      if (!pack) return { ok: false, error: "pack or path required" };
+      const templates = Array.isArray(pack.templates) ? pack.templates : [];
+      if (!templates.length) return { ok: false, error: "templates required" };
+      const id = String(pack.id || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`);
+      const item = {
+        id,
+        name: String(pack.name || id),
+        version: String(pack.version || "v1"),
+        source: fromPath || "inline",
+        templates,
+        created_at: nowIso(),
+      };
+      const items = listTemplateMarketplace(5000);
+      const idx = items.findIndex((x) => String(x?.id || "") === id);
+      if (idx >= 0) items[idx] = item;
+      else items.unshift(item);
+      saveTemplateMarketplace(items);
+      appendAudit("template_pack_install", { id, name: item.name, templates: templates.length });
+      return { ok: true, item };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:removeTemplatePack", async (_evt, req) => {
+    try {
+      const id = String(req?.id || "").trim();
+      if (!id) return { ok: false, error: "id required" };
+      const items = listTemplateMarketplace(5000);
+      const next = items.filter((x) => String(x?.id || "") !== id);
+      saveTemplateMarketplace(next);
+      appendAudit("template_pack_remove", { id });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:exportTemplatePack", async (_evt, req) => {
+    try {
+      const id = String(req?.id || "").trim();
+      if (!id) return { ok: false, error: "id required" };
+      const hit = listTemplateMarketplace(5000).find((x) => String(x?.id || "") === id);
+      if (!hit) return { ok: false, error: "template pack not found" };
+      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      let filePath = "";
+      if (req?.mock && req?.path && allowMockIo) {
+        filePath = String(req.path);
+      } else {
+        const pick = await dialog.showSaveDialog({
+          title: "导出模板包",
+          defaultPath: path.join(app.getPath("documents"), `template_pack_${id}.json`),
+          filters: [{ name: "JSON", extensions: ["json"] }],
+          properties: ["createDirectory", "showOverwriteConfirmation"],
+        });
+        if (pick.canceled || !pick.filePath) return { ok: false, canceled: true };
+        filePath = pick.filePath;
+      }
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, `${JSON.stringify(hit, null, 2)}\n`, "utf8");
+      return { ok: true, path: filePath };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:listQualityRuleSets", async () => {
+    return { ok: true, sets: listQualityRuleCenter() };
+  });
+
+  ipcMain.handle("aiwf:saveQualityRuleSet", async (_evt, req) => {
+    try {
+      const set = req?.set && typeof req.set === "object" ? req.set : null;
+      if (!set) return { ok: false, error: "set required" };
+      const id = String(set.id || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`);
+      const row = {
+        id,
+        name: String(set.name || id),
+        version: String(set.version || "v1"),
+        rules: set.rules && typeof set.rules === "object" ? set.rules : {},
+        scope: String(set.scope || "generic"),
+        updated_at: nowIso(),
+      };
+      const sets = listQualityRuleCenter();
+      const idx = sets.findIndex((x) => String(x?.id || "") === id);
+      if (idx >= 0) sets[idx] = row;
+      else sets.unshift(row);
+      saveQualityRuleCenter(sets);
+      appendAudit("quality_rule_set_save", { id, name: row.name, scope: row.scope });
+      return { ok: true, set: row };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:removeQualityRuleSet", async (_evt, req) => {
+    try {
+      const id = String(req?.id || "").trim();
+      if (!id) return { ok: false, error: "id required" };
+      const sets = listQualityRuleCenter().filter((x) => String(x?.id || "") !== id);
+      saveQualityRuleCenter(sets);
+      appendAudit("quality_rule_set_remove", { id });
+      return { ok: true };
     } catch (e) {
       return { ok: false, error: String(e) };
     }
@@ -1709,7 +1986,7 @@
             },
           };
           const merged = { ...loadConfig(), ...(found.config || {}) };
-          const effectivePayload = applySandboxAutoFixPayload(replayPayload);
+          const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(replayPayload));
           const out = attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
             config: merged,
@@ -1735,7 +2012,7 @@
       const item = {
         task_id: String((req && req.task_id) || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`),
         label: String((req && req.label) || "workflow_task"),
-        payload: (req && req.payload) || {},
+        payload: applyQualityRuleSetToPayload((req && req.payload) || {}),
         cfg: (req && req.cfg) || {},
         priority: Number((req && req.priority) || 100),
         status: "queued",
@@ -1908,7 +2185,7 @@
       mergedPayload.workflow = applyTemplateParams(item.graph || {}, params);
       if (!mergedPayload.workflow.workflow_id) mergedPayload.workflow.workflow_id = item.workflow_id || "custom";
       const merged = { ...loadConfig(), ...(cfg || {}), ...(req?.cfg || {}) };
-      const effectivePayload = applySandboxAutoFixPayload(mergedPayload);
+      const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(mergedPayload));
       const out = attachQualityGate(await runMinimalWorkflow({
         payload: effectivePayload,
         config: merged,
