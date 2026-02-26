@@ -123,7 +123,7 @@ function renderMinimap(ctx, nodeW, nodeH) {
   const w = ctx.minimapCanvas.width;
   const h = ctx.minimapCanvas.height;
   g.clearRect(0, 0, w, h);
-  g.fillStyle = "#eaf1f9";
+  g.fillStyle = "#ecf4fe";
   g.fillRect(0, 0, w, h);
 
   const sx = w / ctx.surfaceWidth;
@@ -131,7 +131,7 @@ function renderMinimap(ctx, nodeW, nodeH) {
 
   const graph = ctx.store.state.graph;
   const nodeMap = new Map(graph.nodes.map((n) => [n.id, n]));
-  g.strokeStyle = "#93afd0";
+  g.strokeStyle = "#8aa8cd";
   g.lineWidth = 1;
   for (const e of graph.edges) {
     const from = nodeMap.get(e.from);
@@ -147,7 +147,7 @@ function renderMinimap(ctx, nodeW, nodeH) {
     g.stroke();
   }
 
-  g.fillStyle = "#4d7eb0";
+  g.fillStyle = "#0f6cbd";
   for (const n of graph.nodes) {
     const x = (n.x + ctx.offsetX) * sx;
     const y = (n.y + ctx.offsetY) * sy;
@@ -158,7 +158,7 @@ function renderMinimap(ctx, nodeW, nodeH) {
   const vy = ctx.canvasWrap.scrollTop / ctx.zoom;
   const vw = ctx.canvasWrap.clientWidth / ctx.zoom;
   const vh = ctx.canvasWrap.clientHeight / ctx.zoom;
-  g.strokeStyle = "#f59e0b";
+  g.strokeStyle = "#ffb900";
   g.lineWidth = 1.2;
   g.strokeRect(vx * sx, vy * sy, vw * sx, vh * sy);
 }

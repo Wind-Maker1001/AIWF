@@ -1,6 +1,21 @@
 const CONFIG_NAME = "config.json";
 
 function createConfigSupport({ app, fs, path }) {
+  function defaultCfg() {
+    const eDesktop = "E:\\Desktop_Real";
+    const outputRoot = fs.existsSync(eDesktop)
+      ? path.join(eDesktop, "AIWF")
+      : path.join(app.getPath("desktop"), "AIWF_Builds");
+    return {
+      mode: "offline_local",
+      baseUrl: "http://127.0.0.1:18080",
+      apiKey: "",
+      enableOfflineFallback: true,
+      fallbackPolicy: "smart",
+      outputRoot,
+    };
+  }
+
   function configPath() {
     return path.join(app.getPath("userData"), CONFIG_NAME);
   }
@@ -11,6 +26,10 @@ function createConfigSupport({ app, fs, path }) {
 
   function routeMetricsSummaryPath() {
     return path.join(app.getPath("userData"), "logs", "route_metrics_summary.json");
+  }
+
+  function runModeAuditLogPath() {
+    return path.join(app.getPath("userData"), "logs", "run_mode_audit.jsonl");
   }
 
   function rotateLogIfNeeded(filePath, maxBytes = 5 * 1024 * 1024, keep = 5) {
@@ -37,11 +56,16 @@ function createConfigSupport({ app, fs, path }) {
     try {
       const p = configPath();
       if (!fs.existsSync(p)) {
-        return { mode: "offline_local", baseUrl: "http://127.0.0.1:18080", apiKey: "" };
+        return defaultCfg();
       }
-      return JSON.parse(fs.readFileSync(p, "utf8"));
+      const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (!cfg || typeof cfg !== "object") return defaultCfg();
+      if (typeof cfg.enableOfflineFallback === "undefined") cfg.enableOfflineFallback = true;
+      if (!cfg.fallbackPolicy) cfg.fallbackPolicy = "smart";
+      if (!cfg.outputRoot) cfg.outputRoot = defaultCfg().outputRoot;
+      return cfg;
     } catch {
-      return { mode: "offline_local", baseUrl: "http://127.0.0.1:18080", apiKey: "" };
+      return defaultCfg();
     }
   }
 
@@ -54,6 +78,7 @@ function createConfigSupport({ app, fs, path }) {
     configPath,
     routeMetricsLogPath,
     routeMetricsSummaryPath,
+    runModeAuditLogPath,
     rotateLogIfNeeded,
     loadConfig,
     saveConfig,

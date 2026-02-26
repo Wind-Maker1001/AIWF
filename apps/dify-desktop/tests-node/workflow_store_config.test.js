@@ -18,6 +18,13 @@ test("workflow store assigns default config for new rust nodes", async () => {
   assert.deepEqual(node.config.left_on, ["id"]);
   assert.deepEqual(node.config.right_on, ["id"]);
   assert.equal(node.config.join_type, "inner");
+
+  const dsId = store.addNode("ds_refine", 30, 40);
+  const dsNode = store.getNode(dsId);
+  assert.ok(dsNode);
+  assert.equal(dsNode.type, "ds_refine");
+  assert.equal(dsNode.config.provider_name, "DeepSeek");
+  assert.equal(dsNode.config.ai_model, "deepseek-chat");
 });
 
 test("workflow store import/export preserves node config", async () => {

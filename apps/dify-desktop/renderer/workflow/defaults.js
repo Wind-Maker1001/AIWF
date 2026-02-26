@@ -42,6 +42,7 @@
   { type: "timeseries_forecast_v1", name: "时序预测 v1", desc: "naive_drift/naive_last 预测" },
   { type: "finance_ratio_v1", name: "财务比率 v1", desc: "流动比率/杠杆/利润率/现金流率" },
   { type: "anomaly_explain_v1", name: "异常解释 v1", desc: "按字段贡献解释异常记录" },
+  { type: "evidence_conflict_v1", name: "证据冲突检测 v1", desc: "检测同主题证据间支持/反驳冲突" },
   { type: "template_bind_v1", name: "模板绑定 v1", desc: "把 JSON 数据绑定到模板占位符" },
   { type: "provenance_sign_v1", name: "溯源签名 v1", desc: "生成哈希链签名记录" },
   { type: "stream_state_v1_save", name: "流状态保存 v1", desc: "保存流式状态与 offset" },
@@ -76,6 +77,7 @@
   { type: "sql_chart_v1", name: "SQL图表 v1", desc: "将行数据转换为图表 categories/series" },
   { type: "office_slot_fill_v1", name: "Office插槽填充 v1", desc: "将图表/文本数据绑定到模板插槽，供 DOCX/PPTX/XLSX 渲染" },
   { type: "ai_strategy_v1", name: "AI策略路由 v1", desc: "按主备策略路由外部AI并降级重试" },
+  { type: "ds_refine", name: "DS提炼（推荐）", desc: "使用 DeepSeek API 提炼 PDF/图片抽取文本（内部映射到 ai_refine）" },
   { type: "ai_refine", name: "AI 提炼", desc: "外部 AI 对内容进行摘要提炼" },
   { type: "ai_audit", name: "AI 审核", desc: "审核门禁，不通过则阻断后续流程" },
   { type: "md_output", name: "Markdown 输出", desc: "写出 workflow_summary 与产物索引" },
@@ -301,6 +303,12 @@ const NODE_CONFIG_TEMPLATES = {
     score_field: "score",
     threshold: 0.8,
   },
+  evidence_conflict_v1: {
+    rows: [],
+    claim_field: "claim",
+    stance_field: "stance",
+    source_field: "source",
+  },
   template_bind_v1: {
     template_text: "",
     data: {},
@@ -518,6 +526,8 @@ const NODE_CONFIG_TEMPLATES = {
   },
   office_slot_fill_v1: {
     template_kind: "pptx",
+    template_version: "v1",
+    required_slots: ["title", "chart_main"],
     slots: {
       title: "报告标题",
       chart_main: { categories: [], series: [] },
@@ -526,11 +536,30 @@ const NODE_CONFIG_TEMPLATES = {
   },
   ai_strategy_v1: {
     providers: [],
+    allow_ai_on_data: false,
+  },
+  ds_refine: {
+    reuse_existing: false,
+    provider_name: "DeepSeek",
+    ai_endpoint: "https://api.deepseek.com/v1/chat/completions",
+    ai_api_key: "",
+    ai_model: "deepseek-chat",
   },
   ai_refine: {
     reuse_existing: true,
+    provider_name: "",
+    ai_endpoint: "",
+    ai_api_key: "",
+    ai_model: "",
+    allow_ai_on_data: false,
   },
-  ai_audit: {},
+  ai_audit: {
+    numeric_lock: true,
+    citation_required: true,
+    recalc_verify: true,
+    max_new_numbers: 0,
+    max_metric_delta: 0,
+  },
   md_output: {},
 };
 

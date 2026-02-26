@@ -5,31 +5,135 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AIWF 离线作业助手</title>
   <style>
-    :root { --bg:#eef6ff; --card:#fff; --line:#d7e0eb; --txt:#1f2d3d; --muted:#5f7388; --brand:#0b5ea8; --ok:#087443; --bad:#b42318; }
-    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#eef6ff,#fff7ee);font-family:"Segoe UI","Microsoft YaHei",sans-serif;color:var(--txt)}
-    .wrap{max-width:1200px;margin:0 auto;padding:20px;display:grid;gap:12px}
-    .hero{background:linear-gradient(120deg,#103660,#0b5ea8,#0b7d67);color:#fff;border-radius:16px;padding:18px 20px}
-    .layout{display:grid;grid-template-columns:420px 1fr;gap:12px} @media(max-width:1000px){.layout{grid-template-columns:1fr}}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:14px}
-    .hd{padding:12px 14px;border-bottom:1px solid #e9eff7;font-weight:700}.bd{padding:12px 14px}
-    .field{margin-bottom:10px}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
-    input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
-    textarea{min-height:70px}
-    .btns{display:flex;gap:8px;flex-wrap:wrap} button{border:0;border-radius:10px;padding:10px 14px;color:#fff;background:var(--brand);cursor:pointer}
-    button.secondary{background:#5d748f} button:disabled{opacity:.65;cursor:not-allowed}
-    .status{margin-top:8px;min-height:20px;font-size:13px}.ok{color:var(--ok)}.bad{color:var(--bad)}
-    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px} @media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    .metric{border:1px solid #dfe7f2;border-radius:10px;padding:8px;background:#f7fbff}.metric .k{font-size:12px;color:var(--muted)}.metric .v{font-size:20px;font-weight:700}
-    table{width:100%;border-collapse:collapse;font-size:13px} th,td{border-bottom:1px solid #eef2f7;padding:8px;text-align:left}
-    th{background:#f4f8fd;color:#4d6277} .path{max-width:560px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    pre{margin:0;min-height:240px;border:1px solid #1f2d3d;background:#0f1720;color:#d9e6f6;border-radius:12px;padding:10px;overflow:auto;white-space:pre-wrap}
-    .dropzone{border:2px dashed #a6bfdc;border-radius:12px;padding:14px;background:#f6fbff;color:#33506e;text-align:center}
-    .dropzone.active{border-color:#0b5ea8;background:#eaf4ff}
-    .mini{font-size:12px;color:var(--muted)}
+    :root{
+      --bg:#f4f8fd;
+      --layer-1:#f9fbff;
+      --layer-2:#ffffff;
+      --line:#d4deea;
+      --line-strong:#b8c8db;
+      --text:#162438;
+      --sub:#4a5f76;
+      --brand:#0f6cbd;
+      --brand-2:#115ea3;
+      --ok:#0f7b0f;
+      --bad:#b10e1c;
+      --warn:#8a5700;
+      --radius:14px;
+      --shadow:0 8px 24px rgba(8,32,58,.08);
+      --shadow-soft:0 2px 10px rgba(8,32,58,.06);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      color:var(--text);
+      font-family:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+      background:
+        radial-gradient(1200px 620px at 8% -8%, #d9ebff 0%, transparent 64%),
+        radial-gradient(980px 540px at 100% 0%, #e8f3ff 0%, transparent 58%),
+        linear-gradient(180deg, #f7fbff 0%, #f2f6fb 100%);
+    }
+    .wrap{max-width:1320px;margin:0 auto;padding:24px;display:grid;gap:14px}
+    .hero{
+      position:relative;
+      border-radius:20px;
+      padding:22px 24px;
+      color:#fff;
+      background:linear-gradient(128deg,#0d2f4f 0%, #0f6cbd 58%, #1a8f6c 100%);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .hero::after{
+      content:"";
+      position:absolute;right:-80px;top:-120px;width:340px;height:340px;border-radius:50%;
+      background:rgba(255,255,255,.13);filter:blur(2px);
+    }
+    .layout{display:grid;grid-template-columns:440px 1fr;gap:14px}
+    @media(max-width:1120px){.layout{grid-template-columns:1fr}}
+    .card{
+      background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.86));
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow-soft);
+      backdrop-filter:blur(8px);
+      overflow:hidden;
+    }
+    .hd{
+      padding:12px 14px;
+      border-bottom:1px solid #e4ecf5;
+      background:linear-gradient(180deg,#f7fbff,#f2f7fd);
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+    .bd{padding:12px 14px}
+    .field{margin-bottom:10px}
+    .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px}
+    input,select,textarea{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:9px 10px;
+      font-size:14px;
+      color:var(--text);
+      background:#fff;
+      transition:border-color .15s ease, box-shadow .15s ease;
+    }
+    input:focus,select:focus,textarea:focus{
+      outline:none;border-color:var(--brand);
+      box-shadow:0 0 0 3px rgba(15,108,189,.18);
+    }
+    textarea{min-height:76px}
+    .btns{display:flex;gap:8px;flex-wrap:wrap}
+    button{
+      border:1px solid transparent;
+      border-radius:10px;
+      padding:9px 14px;
+      color:#fff;
+      background:linear-gradient(180deg,var(--brand),var(--brand-2));
+      cursor:pointer;
+      font-weight:600;
+      box-shadow:0 2px 8px rgba(15,108,189,.22);
+      transition:transform .08s ease, box-shadow .12s ease, opacity .12s ease;
+    }
+    button:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(15,108,189,.3)}
+    button.secondary{
+      background:linear-gradient(180deg,#5d7189,#4f6277);
+      box-shadow:0 2px 6px rgba(31,45,61,.18);
+    }
+    button:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    .status{margin-top:8px;min-height:20px;font-size:13px}
+    .ok{color:var(--ok)}
+    .bad{color:var(--bad)}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    @media(max-width:860px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    .metric{
+      border:1px solid #dbe5f1;border-radius:11px;padding:9px;
+      background:linear-gradient(180deg,#fbfdff,#f3f8ff);
+    }
+    .metric .k{font-size:12px;color:var(--sub)}
+    .metric .v{font-size:20px;font-weight:700;line-height:1.2}
+    table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+    th,td{border-bottom:1px solid #ecf1f7;padding:8px;text-align:left;vertical-align:top}
+    th{background:#f4f8fd;color:#4d6277}
+    .path{max-width:560px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    pre{
+      margin:0;min-height:240px;border:1px solid #1b2d43;background:#101a27;color:#dbe9fb;
+      border-radius:12px;padding:10px;overflow:auto;white-space:pre-wrap;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .dropzone{
+      border:2px dashed #a9c2de;border-radius:12px;padding:16px;
+      background:linear-gradient(180deg,#f7fbff,#eef5ff);color:#33506e;text-align:center;
+    }
+    .dropzone.active{border-color:var(--brand);background:#e9f3ff}
+    .mini{font-size:12px;color:var(--sub)}
     .queue-actions{display:flex;gap:8px;justify-content:flex-end;margin:6px 0}
     .precheck-issues{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
     .precheck-issues button{padding:6px 10px;font-size:12px}
-    .precheck-detail{border:1px solid #dfe7f2;border-radius:10px;padding:8px;background:#f8fbff;margin-bottom:8px;white-space:pre-wrap}
+    .precheck-detail{
+      border:1px solid #dbe5f1;border-radius:10px;padding:8px;
+      background:linear-gradient(180deg,#fbfdff,#f4f8ff);
+      margin-bottom:8px;white-space:pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -46,7 +150,7 @@
           <div class="metric"><div class="k">第 1 步</div><div class="v" style="font-size:16px">选运行模式</div></div>
           <div class="metric"><div class="k">第 2 步</div><div class="v" style="font-size:16px">拖入 PDF/docx/txt/图片/xlsx</div></div>
           <div class="metric"><div class="k">第 3 步</div><div class="v" style="font-size:16px">点击“开始生成”</div></div>
-          <div class="metric"><div class="k">输出位置</div><div class="v" style="font-size:16px">文档\\AIWF-Offline\\任务ID</div></div>
+          <div class="metric"><div class="k">输出位置</div><div class="v" style="font-size:16px">输出目录\\任务ID</div></div>
         </div>
       </div>
     </section>
@@ -58,6 +162,8 @@
           <div class="field"><label>运行模式（一般选第一个）</label><select id="mode"><option value="offline_local">离线本地模式（推荐）</option><option value="base_api">连接你的 AIWF 后端</option></select></div>
           <div class="field"><label>后端地址（只在“连接后端”时填写）</label><input id="baseUrl" placeholder="http://127.0.0.1:18080" /></div>
           <div class="field"><label>API Key（可选）</label><input id="apiKey" placeholder="X-API-Key" /></div>
+          <div class="field"><label><input id="enableOfflineFallback" type="checkbox" checked style="width:auto;margin-right:6px" />后端失败时自动切换离线模式</label></div>
+          <div class="field"><label>回退策略</label><select id="fallbackPolicy"><option value="smart" selected>smart（推荐）</option><option value="smart_strict">smart_strict（仅网络/超时/5xx）</option><option value="always">always（全部回退）</option><option value="never">never（不回退）</option></select></div>
           <div class="field"><label>报告标题（会出现在 docx/pptx 封面）</label><input id="reportTitle" placeholder="例如：AI 对就业影响的证据整理" /></div>
           <div class="field"><label>主数据文件（可选）</label><input id="inputPath" placeholder="例如：D:\\data\\input.pdf" /></div>
           <div class="field">
@@ -65,9 +171,22 @@
             <textarea id="inputFiles" placeholder="例如：&#10;D:\\data\\a.pdf&#10;D:\\data\\b.docx"></textarea>
             <div class="mini">会和拖拽队列自动合并去重。</div>
           </div>
+          <div class="field"><label>输出目录（成品输出到这里）</label><input id="outputRoot" value="E:\\Desktop_Real\\AIWF" placeholder="例如：E:\\Desktop_Real\\AIWF" /></div>
+          <div class="field"><label>样本池目录（可选，不填则用 输出目录\\sample_pool）</label><input id="samplePoolDir" placeholder="例如：E:\\Desktop_Real\\AIWF\\sample_pool" /></div>
+          <div class="field"><label>XLSX模板路径（可选，含预置图表）</label><input id="xlsxTemplatePath" placeholder="例如：E:\\Desktop_Real\\templates\\report_chart_template.xlsx" /></div>
           <div class="field"><label>输出语言</label><select id="officeLang"><option value="zh" selected>中文</option><option value="en">English</option></select></div>
-          <div class="field"><label>成品风格（不会改数据，只改展示）</label><select id="officeTheme"><option value="assignment" selected>作业风</option><option value="debate_plus">辩论增强</option><option value="academic">学术风</option><option value="professional">专业风</option><option value="business">商务风</option><option value="debate">辩论风（经典）</option></select></div>
-          <div class="field"><label>数据模板（会影响清洗规则）</label><select id="cleaningTemplate"><option value="default" selected>通用模板</option><option value="finance_report_v1">财报模板 v1（资产/利润/现金流）</option></select></div>
+          <div class="field"><label>成品风格（已统一 Fluent 宣传风）</label><select id="officeTheme"><option value="fluent_ms" selected>Fluent 宣传风（统一）</option></select></div>
+          <div class="field"><label>Fluent 模板包</label><select id="officeVariant"><option value="light" selected>Fluent Light（浅色商务）</option><option value="strong">Fluent Strong（高对比展示）</option></select></div>
+          <div class="field"><label>数据模板（会影响清洗规则）</label><select id="cleaningTemplate"><option value="default">通用模板</option><option value="debate_evidence_v1" selected>辩论证据模板 v1（文本证据）</option><option value="finance_report_v1">财报模板 v1（资产/利润/现金流）</option></select></div>
+          <div class="field"><label>辩论战场规则（关键词=战场名，每行一条，可选）</label><textarea id="debateBattlefieldRules" placeholder="谣言=内容差&#10;成瘾=能力减损&#10;社交=社交与表达">谣言=内容差
+成瘾=能力减损
+社交=社交与表达</textarea></div>
+          <div class="field"><label>出处字段优先级（逗号分隔，可选）</label><input id="debateSourcePriority" value="source_org,publisher,source,author,source_type" placeholder="source_org,publisher,source,author,source_type" /></div>
+          <div class="btns" style="margin-bottom:8px">
+            <button id="btnDebateCfgExport" class="secondary">导出辩论配置JSON</button>
+            <button id="btnDebateCfgImport" class="secondary">导入辩论配置JSON</button>
+            <input id="debateCfgImportFile" type="file" accept=".json,application/json" style="display:none" />
+          </div>
           <div class="field"><label>成品质量（建议高质量）</label><select id="officeQualityMode"><option value="high" selected>高质量（推荐）</option><option value="standard">标准（更快）</option></select></div>
           <div class="field"><label><input id="ocrEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />图片启用 OCR（离线优先调用本机 Tesseract）</label></div>
           <div class="field"><label><input id="mdOnly" type="checkbox" checked style="width:auto;margin-right:6px" />仅输出 Markdown（给 AI 二次加工）</label></div>
@@ -78,10 +197,17 @@
           <div class="field"><label>预检金额可转换率下限（0-1）</label><input id="precheckAmountRateMin" type="number" min="0" max="1" step="0.01" value="0.90" /></div>
           <div class="field"><label>质量门槛：最大无效行比例（0-1）</label><input id="maxInvalidRatio" type="number" min="0" max="1" step="0.001" value="0.01" /></div>
           <div class="field"><label>质量门槛：最小输出行数</label><input id="minOutputRows" type="number" min="0" step="1" value="1" /></div>
+          <div class="field"><label>内容门禁最小质量分（0-100）</label><input id="minContentScore" type="number" min="0" max="100" step="1" value="60" /></div>
+          <div class="field"><label><input id="contentQualityGateEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />启用内容质量门禁（低质量自动仅输出 Markdown）</label></div>
+          <div class="field"><label>Office门禁最小质量分（0-100）</label><input id="minOfficeQualityScore" type="number" min="0" max="100" step="1" value="65" /></div>
+          <div class="field"><label><input id="officeQualityGateEnabled" type="checkbox" checked style="width:auto;margin-right:6px" />启用Office质量门禁（低质量不生成三件套）</label></div>
           <div class="btns">
             <button id="btnPrecheck" class="secondary">模板预检</button>
+            <button id="btnDebatePreview" class="secondary">样式预览（前10条）</button>
             <button id="btnRun">第 3 步：开始生成</button>
+            <button id="btnRunDebateQuick" class="secondary">一键生成辩论资料</button>
             <button id="btnHealth" class="secondary">检查连通性</button>
+            <button id="btnDifyWizard" class="secondary">Dify连接向导</button>
             <button id="btnSave" class="secondary">保存配置</button>
             <button id="btnWorkflow" class="secondary">打开 Workflow Studio</button>
           </div>
@@ -109,23 +235,82 @@
           </div>
         </div>
 
+        <div class="card">
+          <div class="hd">样本池（验收专用，可持续追加）</div>
+          <div class="bd">
+            <div id="sampleDropzone" class="dropzone">把样本文件拖到这里（会复制到样本池目录）</div>
+            <div id="sampleHint" class="mini" style="margin-top:8px">样本池：未加载</div>
+            <div class="queue-actions">
+              <button id="btnSampleRefresh" class="secondary">刷新样本池</button>
+              <button id="btnSampleOpen" class="secondary">打开样本池目录</button>
+              <button id="btnSampleClear" class="secondary">清空样本池</button>
+            </div>
+            <table>
+              <thead><tr><th>#</th><th>文件名</th><th>大小(KB)</th><th>路径</th></tr></thead>
+              <tbody id="sampleRows"><tr><td colspan="4" style="color:#75869a">暂无样本</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="card"><div class="hd">结果摘要</div><div class="bd"><div class="grid">
           <div class="metric"><div class="k">任务ID</div><div class="v" id="mJob">-</div></div>
           <div class="metric"><div class="k">是否成功</div><div class="v" id="mOk">-</div></div>
+          <div class="metric"><div class="k">运行模式</div><div class="v" id="mMode">-</div></div>
+          <div class="metric"><div class="k">质量分</div><div class="v" id="mQScore">-</div></div>
           <div class="metric"><div class="k">耗时(秒)</div><div class="v" id="mSec">-</div></div>
           <div class="metric"><div class="k">产物数</div><div class="v" id="mCnt">0</div></div>
         </div></div></div>
 
-        <div class="card"><div class="hd">产物文件</div><div class="bd">
+        <div class="card"><div class="hd" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span>产物文件</span><button id="btnOpenNoise" class="secondary" style="display:none;padding:6px 10px;font-size:12px">打开噪声清单</button></div><div class="bd">
           <table><thead><tr><th>ID</th><th>类型</th><th>路径</th><th>操作</th></tr></thead><tbody id="rows"><tr><td colspan="4" style="color:#75869a">暂无结果</td></tr></tbody></table>
         </div></div>
 
         <div class="card"><div class="hd">日志</div><div class="bd"><pre id="log">{}</pre></div></div>
+        <div class="card"><div class="hd">快速验收面板</div><div class="bd">
+          <div class="mini" style="margin-bottom:6px">一键执行并实时查看日志：</div>
+          <div class="btns" style="margin-bottom:8px">
+            <button id="btnGateAll">一键全跑</button>
+            <button id="btnGateCancel" class="secondary">取消当前任务</button>
+            <button id="btnGateUnit" class="secondary">跑 unit</button>
+            <button id="btnGateSmoke" class="secondary">跑 smoke</button>
+            <button id="btnGateReg" class="secondary">跑 normal 回归</button>
+            <button id="btnGateRegDirty" class="secondary">跑 dirty 回归</button>
+            <button id="btnGateOffice" class="secondary">跑 office-gate</button>
+            <button id="btnGateAcceptance" class="secondary">跑 acceptance</button>
+            <button id="btnGateRefresh" class="secondary">刷新看板</button>
+            <button id="btnGatePackGuard" class="secondary">打包前检查</button>
+            <button id="btnBuildPortable" class="secondary">打包 Portable(gated)</button>
+            <button id="btnBuildInstaller" class="secondary">打包 Installer(gated)</button>
+            <button id="btnBuildCancel" class="secondary">取消打包</button>
+            <button id="btnOpenBuildDir" class="secondary">打开桌面产物目录</button>
+            <button id="btnOpenLatestArtifacts" class="secondary">打开最新成品目录</button>
+            <button id="btnExportReleaseMd" class="secondary">导出发布报告(MD)</button>
+            <button id="btnExportReleaseJson" class="secondary">导出发布报告(JSON)</button>
+          </div>
+          <div class="grid" style="margin-bottom:8px">
+            <div class="metric"><div class="k">总次数</div><div class="v" id="gateTotal">0</div></div>
+            <div class="metric"><div class="k">通过</div><div class="v" id="gatePassed">0</div></div>
+            <div class="metric"><div class="k">失败</div><div class="v" id="gateFailed">0</div></div>
+            <div class="metric"><div class="k">通过率</div><div class="v" id="gatePassRate">0%</div></div>
+          </div>
+          <div id="gateReleaseStatus" class="mini" style="margin-bottom:8px">最近 release gate 状态：未知</div>
+          <div id="buildReleaseStatus" class="mini" style="margin-bottom:4px">最近打包状态：未知</div>
+          <div id="buildArtifactStatus" class="mini" style="margin-bottom:8px">最近产物校验：未知</div>
+          <table style="margin-bottom:8px">
+            <thead><tr><th>时间</th><th>命令</th><th>状态</th><th>耗时</th><th>操作</th></tr></thead>
+            <tbody id="gateRows"><tr><td colspan="5" style="color:#75869a">暂无</td></tr></tbody>
+          </table>
+          <pre id="gateLog" style="min-height:120px">等待执行...</pre>
+        </div></div>
         <div class="card"><div class="hd">模板预检结果</div><div class="bd">
           <div id="precheckIssues" class="precheck-issues"></div>
           <div id="precheckDetail" class="precheck-detail mini">点击上方问题可定位详情</div>
           <div id="precheckHint" class="mini" style="margin-bottom:6px">未执行</div>
           <pre id="precheck">{}</pre>
+        </div></div>
+        <div class="card"><div class="hd">辩论样式预览（前10条）</div><div class="bd">
+          <div id="debatePreviewHint" class="mini" style="margin-bottom:6px">未执行</div>
+          <pre id="debatePreview">{}</pre>
         </div></div>
         <div class="card"><div class="hd">模板管理</div><div class="bd">
           <div class="field"><label>模板列表</label><select id="tplManageSelect"></select></div>
@@ -161,28 +346,64 @@
 <script>
 const $ = (id)=>document.getElementById(id);
 const statusEl=$("status"), logEl=$("log"), rowsEl=$("rows"), queueRowsEl=$("queueRows"), dz=$("dropzone");
+const sampleDz=$("sampleDropzone"), sampleRowsEl=$("sampleRows"), sampleHintEl=$("sampleHint");
 const encodingHintEl=$("encodingHint"), fontHintEl=$("fontHint"), ocrHintEl=$("ocrHint");
 const taskStoreHintEl=$("taskStoreHint");
 const routeDiagEl=$("routeDiag"), routeDiagHintEl=$("routeDiagHint");
 const selfCheckEl=$("selfCheck"), selfCheckHintEl=$("selfCheckHint");
 const precheckEl=$("precheck"), precheckHintEl=$("precheckHint");
 const precheckIssuesEl=$("precheckIssues"), precheckDetailEl=$("precheckDetail");
+const debatePreviewEl=$("debatePreview"), debatePreviewHintEl=$("debatePreviewHint");
 const tplManageMetaEl=$("tplManageMeta"), tplManageRulesEl=$("tplManageRules");
+const btnOpenNoiseEl=$("btnOpenNoise");
+const gateLogEl=$("gateLog"), gateRowsEl=$("gateRows");
+const gateReleaseStatusEl=$("gateReleaseStatus");
+const buildReleaseStatusEl=$("buildReleaseStatus");
+const buildArtifactStatusEl=$("buildArtifactStatus");
 const queuePaths = [];
 let latestEncodingSummary = { uncertainCount: 0, gbCount: 0, utfCount: 0 };
 let latestRouteSummaryMeta = null;
+let latestArtifacts = [];
 let templateCatalog = [];
+let gateLogUnsub = null;
+let buildLogUnsub = null;
+let gateRunning = false;
+let buildRunning = false;
 window.__disabledTemplates = [];
 window.__customTemplates = [];
 
 const setStatus=(m,ok=true)=>{statusEl.className="status "+(ok?"ok":"bad");statusEl.textContent=m;};
 const show=(o)=>{logEl.textContent=JSON.stringify(o,null,2);};
-const cfgFromUi=()=>({mode:$("mode").value,baseUrl:$("baseUrl").value.trim(),apiKey:$("apiKey").value.trim()});
+function normalizeTitleInput(raw, fallback="辩论资料库"){
+  const t = String(raw || "").trim();
+  if(!t) return fallback;
+  const bad = (t.match(/[?\uFFFD]/g) || []).length;
+  const cjk = (t.match(/[\u4E00-\u9FFF]/g) || []).length;
+  if(bad >= 2 && (bad / Math.max(1, t.length) >= 0.2 || cjk === 0)) return fallback;
+  return t;
+}
+const cfgFromUi=()=>({
+  mode:$("mode").value,
+  baseUrl:$("baseUrl").value.trim(),
+  apiKey:$("apiKey").value.trim(),
+  enableOfflineFallback:$("enableOfflineFallback").checked,
+  fallbackPolicy:$("fallbackPolicy").value,
+  outputRoot:$("outputRoot").value.trim(),
+  samplePoolDir:$("samplePoolDir").value.trim(),
+});
 const uiCfgFromUi=()=>({
-  reportTitle:$("reportTitle").value.trim(),
+  enableOfflineFallback:$("enableOfflineFallback").checked,
+  fallbackPolicy:$("fallbackPolicy").value,
+  outputRoot:$("outputRoot").value.trim(),
+  samplePoolDir:$("samplePoolDir").value.trim(),
+  xlsxTemplatePath:$("xlsxTemplatePath").value.trim(),
+  reportTitle:normalizeTitleInput($("reportTitle").value.trim()),
   officeLang:$("officeLang").value,
   officeTheme:$("officeTheme").value,
+  officeVariant:$("officeVariant").value,
   cleaningTemplate:$("cleaningTemplate").value,
+  debateBattlefieldRules:$("debateBattlefieldRules").value,
+  debateSourcePriority:$("debateSourcePriority").value.trim(),
   officeQualityMode:$("officeQualityMode").value,
   ocrEnabled:$("ocrEnabled").checked,
   mdOnly:$("mdOnly").checked,
@@ -193,6 +414,10 @@ const uiCfgFromUi=()=>({
   precheckAmountRateMin:$("precheckAmountRateMin").value,
   maxInvalidRatio:$("maxInvalidRatio").value,
   minOutputRows:$("minOutputRows").value,
+  minContentScore:$("minContentScore").value,
+  contentQualityGateEnabled:$("contentQualityGateEnabled").checked,
+  minOfficeQualityScore:$("minOfficeQualityScore").value,
+  officeQualityGateEnabled:$("officeQualityGateEnabled").checked,
   disabledTemplates: Array.isArray(window.__disabledTemplates) ? window.__disabledTemplates : [],
   customTemplates: Array.isArray(window.__customTemplates) ? window.__customTemplates : []
 });
@@ -200,10 +425,19 @@ const saveCfgFromUi=()=>Object.assign({}, cfgFromUi(), uiCfgFromUi());
 
 function applyUiCfg(cfg){
   const c = cfg || {};
-  $("reportTitle").value = c.reportTitle || "";
+  const defaultDebateRules = "谣言=内容差\n成瘾=能力减损\n社交=社交与表达";
+  $("enableOfflineFallback").checked = c.enableOfflineFallback !== false;
+  $("fallbackPolicy").value = c.fallbackPolicy || "smart";
+  $("outputRoot").value = c.outputRoot || "E:\\Desktop_Real\\AIWF";
+  $("samplePoolDir").value = c.samplePoolDir || "";
+  $("xlsxTemplatePath").value = c.xlsxTemplatePath || "";
+  $("reportTitle").value = normalizeTitleInput(c.reportTitle || "");
   $("officeLang").value = c.officeLang || "zh";
-  $("officeTheme").value = c.officeTheme || "assignment";
-  $("cleaningTemplate").value = c.cleaningTemplate || "default";
+  $("officeTheme").value = "fluent_ms";
+  $("officeVariant").value = c.officeVariant || "light";
+  $("cleaningTemplate").value = c.cleaningTemplate || "debate_evidence_v1";
+  $("debateBattlefieldRules").value = c.debateBattlefieldRules || defaultDebateRules;
+  $("debateSourcePriority").value = c.debateSourcePriority || "source_org,publisher,source,author,source_type";
   $("officeQualityMode").value = c.officeQualityMode || "high";
   $("ocrEnabled").checked = c.ocrEnabled !== false;
   $("mdOnly").checked = c.mdOnly !== false;
@@ -214,6 +448,10 @@ function applyUiCfg(cfg){
   $("precheckAmountRateMin").value = c.precheckAmountRateMin || "0.90";
   $("maxInvalidRatio").value = c.maxInvalidRatio || "0.01";
   $("minOutputRows").value = c.minOutputRows || "1";
+  $("minContentScore").value = c.minContentScore || "60";
+  $("contentQualityGateEnabled").checked = c.contentQualityGateEnabled !== false;
+  $("minOfficeQualityScore").value = c.minOfficeQualityScore || "65";
+  $("officeQualityGateEnabled").checked = c.officeQualityGateEnabled !== false;
   window.__disabledTemplates = Array.isArray(c.disabledTemplates) ? c.disabledTemplates.map(x=>String(x)) : [];
   window.__customTemplates = Array.isArray(c.customTemplates) ? c.customTemplates : [];
 }
@@ -252,23 +490,32 @@ function findTemplateById(id){
 const payloadFromUi=()=>{
   const selectedTemplate = $("cleaningTemplate").value;
   const tpl = findTemplateById(selectedTemplate);
+  const officeVariant = String($("officeVariant").value || "light").toLowerCase();
+  const mappedTheme = officeVariant === "strong" ? "fluent_ms_strong" : "fluent_ms_light";
   const p = {
     owner:"desktop",
     actor:"desktop",
     ruleset_version:"v1",
     params:{
-      report_title:$("reportTitle").value.trim(),
+      report_title:normalizeTitleInput($("reportTitle").value.trim()),
       input_path:$("inputPath").value.trim(),
       input_files:combinedInputFiles().join("\n"),
       office_lang:$("officeLang").value,
-      office_theme:$("officeTheme").value,
+      office_theme:mappedTheme,
+      xlsx_template_path:$("xlsxTemplatePath").value.trim(),
       cleaning_template:selectedTemplate,
+      debate_battlefield_rules:$("debateBattlefieldRules").value,
+      debate_source_priority:$("debateSourcePriority").value.trim(),
       office_quality_mode:$("officeQualityMode").value,
       md_only:$("mdOnly").checked,
       ocr_enabled:$("ocrEnabled").checked,
       ocr_lang:$("ocrLang").value.trim(),
       ocr_config:$("ocrConfig").value.trim(),
       precheck_amount_convert_rate_min: toNumberOrNull($("precheckAmountRateMin").value),
+      min_content_score: toNumberOrNull($("minContentScore").value),
+      content_quality_gate_enabled: $("contentQualityGateEnabled").checked,
+      min_office_quality_score: toNumberOrNull($("minOfficeQualityScore").value),
+      office_quality_gate_enabled: $("officeQualityGateEnabled").checked,
       rules: {
         max_invalid_ratio: toNumberOrNull($("maxInvalidRatio").value),
         min_output_rows: toNumberOrNull($("minOutputRows").value),
@@ -611,25 +858,123 @@ function extractDropPaths(dt){
   return Array.from(new Set(out));
 }
 
-function bindDropzone(){
+function bindDropzone(targetDz, onDropPaths){
+  if(!targetDz) return;
   const prevent=(e)=>{ e.preventDefault(); e.stopPropagation(); };
-  ["dragenter","dragover","dragleave","drop"].forEach(evt=>dz.addEventListener(evt, prevent));
-  ["dragenter","dragover"].forEach(evt=>dz.addEventListener(evt, ()=>dz.classList.add("active")));
-  ["dragleave","drop"].forEach(evt=>dz.addEventListener(evt, ()=>dz.classList.remove("active")));
-  dz.addEventListener("drop", (e)=>{
+  ["dragenter","dragover","dragleave","drop"].forEach(evt=>targetDz.addEventListener(evt, prevent));
+  ["dragenter","dragover"].forEach(evt=>targetDz.addEventListener(evt, ()=>targetDz.classList.add("active")));
+  ["dragleave","drop"].forEach(evt=>targetDz.addEventListener(evt, ()=>targetDz.classList.remove("active")));
+  targetDz.addEventListener("drop", (e)=>{
     const paths=extractDropPaths(e.dataTransfer);
     if(paths.length===0){
       setStatus("未获取到拖拽文件路径。请先尝试点击“主数据文件”输入路径，或把文件放到本地磁盘后再拖拽。", false);
       return;
     }
-    addToQueue(paths);
+    onDropPaths(paths);
   });
 }
 
+function renderSamplePool(items = [], root = ""){
+  const list = Array.isArray(items) ? items : [];
+  const hintRoot = root || $("samplePoolDir").value.trim() || (($("outputRoot").value.trim() || "E:\\Desktop_Real\\AIWF") + "\\sample_pool");
+  if(sampleHintEl){
+    sampleHintEl.textContent = `样本池：${hintRoot}（${list.length} 个样本）`;
+  }
+  if(!sampleRowsEl) return;
+  if(list.length===0){
+    sampleRowsEl.innerHTML = '<tr><td colspan="4" style="color:#75869a">暂无样本</td></tr>';
+    return;
+  }
+  sampleRowsEl.innerHTML = "";
+  list.forEach((it, i)=>{
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td");
+    const td2 = document.createElement("td");
+    const td3 = document.createElement("td");
+    const td4 = document.createElement("td");
+    td1.textContent = String(i + 1);
+    td2.textContent = String(it?.name || "");
+    td3.textContent = (Number(it?.size || 0) / 1024).toFixed(1);
+    td4.className = "path";
+    td4.textContent = String(it?.path || "");
+    td4.title = String(it?.path || "");
+    tr.append(td1, td2, td3, td4);
+    sampleRowsEl.appendChild(tr);
+  });
+}
+
+async function refreshSamplePool(quiet=false){
+  try{
+    const out = await window.aiwfDesktop.getSamplePoolInfo(cfgFromUi());
+    if(!out?.ok){
+      if(!quiet) setStatus(`样本池刷新失败: ${out?.error || "unknown"}`, false);
+      renderSamplePool([], out?.root || "");
+      return out;
+    }
+    renderSamplePool(out.files || [], out.root || "");
+    if(!quiet) setStatus("样本池已刷新", true);
+    return out;
+  }catch(e){
+    if(!quiet) setStatus(`样本池刷新失败: ${e}`, false);
+    return { ok:false, error:String(e) };
+  }
+}
+
+async function addToSamplePool(paths){
+  try{
+    const out = await window.aiwfDesktop.samplePoolAddFiles(paths, cfgFromUi());
+    await refreshSamplePool(true);
+    if(!out?.ok){
+      setStatus(`加入样本池失败: ${out?.error || "unknown"}`, false);
+      return;
+    }
+    const copied = Array.isArray(out.copied) ? out.copied.length : 0;
+    const skipped = Array.isArray(out.skipped) ? out.skipped.length : 0;
+    setStatus(`样本池更新完成：新增 ${copied}，跳过 ${skipped}`, true);
+  }catch(e){
+    setStatus(`加入样本池失败: ${e}`, false);
+  }
+}
+
 function renderArtifacts(list){
-  if(!Array.isArray(list)||list.length===0){rowsEl.innerHTML='<tr><td colspan="4" style="color:#75869a">暂无结果</td></tr>';return;}
+  latestArtifacts = Array.isArray(list) ? list : [];
+  if(!Array.isArray(list)||list.length===0){
+    rowsEl.innerHTML='<tr><td colspan="4" style="color:#75869a">暂无结果</td></tr>';
+    if (btnOpenNoiseEl) btnOpenNoiseEl.style.display = "none";
+    return;
+  }
   rowsEl.innerHTML = "";
-  list.forEach((a) => {
+  const nameMap = {
+    xlsx_fin_001: "财务表格成品",
+    docx_audit_001: "文档成品",
+    pptx_deck_001: "演示成品",
+    md_evidence_001: "证据 Markdown",
+    md_paper_index_001: "论文分片索引",
+    md_ai_corpus_001: "AI 语料合并",
+    md_quality_001: "质量报告",
+    md_filtered_noise_001: "问号噪声清单",
+  };
+  const prio = {
+    xlsx_fin_001: 10,
+    docx_audit_001: 11,
+    pptx_deck_001: 12,
+    md_evidence_001: 20,
+    md_ai_corpus_001: 21,
+    md_paper_index_001: 22,
+    md_quality_001: 23,
+    md_filtered_noise_001: 24,
+  };
+  const ordered = [...list].sort((a, b) => {
+    const ida = String(a?.artifact_id || "");
+    const idb = String(b?.artifact_id || "");
+    const pa = Number(prio[ida] ?? 999);
+    const pb = Number(prio[idb] ?? 999);
+    if (pa !== pb) return pa - pb;
+    return ida.localeCompare(idb, "zh-CN");
+  });
+  const noiseArtifact = ordered.find((x) => String(x?.artifact_id || "") === "md_filtered_noise_001");
+  if (btnOpenNoiseEl) btnOpenNoiseEl.style.display = noiseArtifact ? "inline-block" : "none";
+  ordered.forEach((a) => {
     const tr = document.createElement("tr");
     const id = String(a?.artifact_id || "-");
     const kind = String(a?.kind || "-");
@@ -639,7 +984,8 @@ function renderArtifacts(list){
     const td3 = document.createElement("td");
     const td4 = document.createElement("td");
     const btn = document.createElement("button");
-    td1.textContent = id;
+    const label = String(nameMap[id] || "");
+    td1.textContent = label ? `${id}（${label}）` : id;
     td2.textContent = kind;
     td3.className = "path";
     td3.title = p;
@@ -648,6 +994,9 @@ function renderArtifacts(list){
     btn.textContent = "打开";
     btn.onclick = () => window.aiwfDesktop.openPath(p);
     td4.appendChild(btn);
+    if (id === "md_filtered_noise_001") {
+      tr.style.background = "#fff8e8";
+    }
     tr.append(td1, td2, td3, td4);
     rowsEl.appendChild(tr);
   });
@@ -657,10 +1006,284 @@ function renderMetrics(p){
   $("mJob").textContent=p?.job_id||"-";
   const ok=!!(p?.ok||p?.run?.ok);
   $("mOk").textContent=ok?"成功":"失败";
+  const mode = p?.fallback_applied ? "offline_fallback" : (p?.mode || (cfgFromUi().mode || "-"));
+  $("mMode").textContent=String(mode);
+  const q = Number(p?.quality_score?.score ?? p?.quality_score ?? p?.quality?.quality_score ?? 0);
+  $("mQScore").textContent=Number.isFinite(q) && q > 0 ? q.toFixed(1) : "-";
   $("mSec").textContent=String(p?.run?.seconds??p?.seconds??"-");
   const c=Array.isArray(p?.artifacts)?p.artifacts.length:0;
   $("mCnt").textContent=String(c);
   renderArtifacts(p?.artifacts||[]);
+}
+
+function appendGateLog(line){
+  if(!gateLogEl) return;
+  const txt = String(line || "");
+  const prev = String(gateLogEl.textContent || "");
+  const next = `${prev}${prev ? "\n" : ""}${txt}`;
+  gateLogEl.textContent = next.length > 20000 ? next.slice(-20000) : next;
+  gateLogEl.scrollTop = gateLogEl.scrollHeight;
+}
+
+function renderGateSummary(out){
+  const x = out && typeof out === "object" ? out : {};
+  $("gateTotal").textContent = String(Number(x.total || 0));
+  $("gatePassed").textContent = String(Number(x.passed || 0));
+  $("gateFailed").textContent = String(Number(x.failed || 0));
+  $("gatePassRate").textContent = `${(Number(x.pass_rate || 0) * 100).toFixed(1)}%`;
+  const items = Array.isArray(x.items) ? x.items : [];
+  const latest = items[0] || null;
+  if (gateReleaseStatusEl) {
+    gateReleaseStatusEl.textContent = latest
+      ? `最近 release gate 状态：${latest.ok ? "通过" : (latest.canceled ? "已取消" : "失败")} | ${String(latest.script || "")} | ${String(latest.ts || "").replace("T"," ").replace("Z","")}`
+      : "最近 release gate 状态：未知";
+  }
+  if(!gateRowsEl) return;
+  if(!items.length){
+    gateRowsEl.innerHTML = '<tr><td colspan="5" style="color:#75869a">暂无</td></tr>';
+    return;
+  }
+  gateRowsEl.innerHTML = "";
+  items.slice(0, 20).forEach((it)=>{
+    const tr=document.createElement("tr");
+    const tdTs=document.createElement("td");
+    const tdSc=document.createElement("td");
+    const tdSt=document.createElement("td");
+    const tdSec=document.createElement("td");
+    const tdOp=document.createElement("td");
+    tdTs.textContent = String(it.ts || "").replace("T"," ").replace("Z","");
+    tdSc.textContent = String(it.script || "");
+    tdSt.textContent = it.ok ? "通过" : (it.canceled ? "已取消" : "失败");
+    tdSt.style.color = it.ok ? "#087443" : (it.canceled ? "#8a6d1f" : "#b42318");
+    tdSec.textContent = `${Number(it.seconds || 0).toFixed(2)}s`;
+    const reportDir = String(it.report_dir || "");
+    const failSummary = `${String(it.script || "")} | exit=${Number(it.exit_code || 0)} | ${String(it.stderr_tail || it.stdout_tail || "").slice(0, 240)}`;
+    const btnOpen = document.createElement("button");
+    btnOpen.className = "secondary";
+    btnOpen.style.padding = "4px 8px";
+    btnOpen.style.fontSize = "12px";
+    btnOpen.textContent = "打开报告";
+    btnOpen.disabled = !reportDir;
+    btnOpen.onclick = async () => { if (reportDir) await window.aiwfDesktop.openPath(reportDir); };
+    const btnCopy = document.createElement("button");
+    btnCopy.className = "secondary";
+    btnCopy.style.padding = "4px 8px";
+    btnCopy.style.fontSize = "12px";
+    btnCopy.style.marginLeft = "4px";
+    btnCopy.textContent = "复制摘要";
+    btnCopy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(failSummary);
+        setStatus("已复制失败摘要", true);
+      } catch (e) {
+        setStatus(`复制失败摘要失败: ${e}`, false);
+      }
+    };
+    tdOp.append(btnOpen, btnCopy);
+    tr.append(tdTs,tdSc,tdSt,tdSec,tdOp);
+    gateRowsEl.appendChild(tr);
+  });
+}
+
+function setBuildButtonsDisabled(disabled){
+  ["btnBuildPortable","btnBuildInstaller","btnBuildCancel","btnOpenBuildDir","btnOpenLatestArtifacts","btnExportReleaseMd","btnExportReleaseJson"].forEach((id)=>{
+    const el = $(id);
+    if (!el) return;
+    if (id === "btnBuildCancel") el.disabled = !disabled;
+    else el.disabled = !!disabled;
+  });
+}
+
+async function refreshBuildGuardStatus(){
+  try{
+    const out = await window.aiwfDesktop.getBuildGuardStatus();
+    const missing = Array.isArray(out?.missing) ? out.missing : [];
+    if (buildReleaseStatusEl) {
+      if (missing.length === 0) buildReleaseStatusEl.textContent = "最近打包门禁状态：通过（可执行 gated 打包）";
+      else buildReleaseStatusEl.textContent = `最近打包门禁状态：未通过，缺少 ${missing.join(", ")}`;
+    }
+    const artifact = out?.artifact_check || {};
+    const artifactMissing = Array.isArray(artifact?.missing) ? artifact.missing : [];
+    if (buildArtifactStatusEl) {
+      if (artifactMissing.length === 0) buildArtifactStatusEl.textContent = "最近产物校验：通过（exe + md/json 报告均为近期生成）";
+      else buildArtifactStatusEl.textContent = `最近产物校验：未通过，缺少 ${artifactMissing.join(", ")}`;
+    }
+    if (!buildRunning) setBuildButtonsDisabled(missing.length > 0);
+    const runs = Array.isArray(out?.build_runs) ? out.build_runs : [];
+    if (runs.length > 0) {
+      const last = runs[0];
+      appendGateLog(`[build][history] ${String(last.script || "")} -> ${last.ok ? "通过" : "失败"} (${Number(last.seconds || 0).toFixed(2)}s)`);
+    }
+    return out;
+  }catch(e){
+    if (buildReleaseStatusEl) buildReleaseStatusEl.textContent = `最近打包门禁状态：读取失败 ${e}`;
+    if (buildArtifactStatusEl) buildArtifactStatusEl.textContent = `最近产物校验：读取失败 ${e}`;
+    return { ok:false, error:String(e) };
+  }
+}
+
+function setGateButtonsDisabled(disabled){
+  const ids = ["btnGateAll","btnGateCancel","btnGateUnit","btnGateSmoke","btnGateReg","btnGateRegDirty","btnGateOffice","btnGateAcceptance","btnGateRefresh","btnGatePackGuard"];
+  ids.forEach((id)=>{
+    const el = $(id);
+    if (!el) return;
+    if (id === "btnGateCancel") el.disabled = !disabled;
+    else el.disabled = !!disabled;
+  });
+  if (disabled) setBuildButtonsDisabled(true);
+  else refreshBuildGuardStatus();
+}
+
+async function refreshGateSummary(){
+  try{
+    const out = await window.aiwfDesktop.getLocalGateSummary({ limit: 80 });
+    renderGateSummary(out);
+  }catch(e){
+    appendGateLog(`刷新看板失败: ${e}`);
+  }
+}
+
+async function runGateScript(script){
+  if (gateRunning) {
+    setStatus("已有验收任务在运行，请先取消或等待完成。", false);
+    return { ok: false, error: "gate_running" };
+  }
+  try{
+    gateRunning = true;
+    setGateButtonsDisabled(true);
+    appendGateLog(`>>> 执行 ${script}`);
+    const out = await window.aiwfDesktop.runLocalGateCheck({ script });
+    appendGateLog(`>>> 结束 ${script} (exit=${out?.exit_code ?? "?"})`);
+    await refreshGateSummary();
+    setStatus(out?.ok ? `验收通过: ${script}` : `验收失败: ${script}`, !!out?.ok);
+    return out;
+  }catch(e){
+    appendGateLog(`>>> 执行异常 ${script}: ${e}`);
+    setStatus(`验收执行失败: ${e}`, false);
+    return { ok: false, error: String(e) };
+  } finally {
+    gateRunning = false;
+    setGateButtonsDisabled(false);
+  }
+}
+
+async function runGateAll() {
+  const scripts = ["test:unit", "smoke", "test:regression", "test:regression:dirty", "test:office-gate", "acceptance:real"];
+  let passed = 0;
+  appendGateLog(">>> 开始一键全跑");
+  for (const s of scripts) {
+    // eslint-disable-next-line no-await-in-loop
+    const one = await runGateScript(s);
+    if (one && one.ok) {
+      passed += 1;
+      continue;
+    }
+    appendGateLog(`>>> 一键全跑中止于 ${s}`);
+    setStatus(`一键全跑失败（${passed}/${scripts.length}）`, false);
+    return;
+  }
+  appendGateLog(">>> 一键全跑完成");
+  setStatus(`一键全跑通过（${passed}/${scripts.length}）`, true);
+}
+
+async function cancelGateRun() {
+  try {
+    const out = await window.aiwfDesktop.cancelLocalGateCheck();
+    if (out?.ok) {
+      appendGateLog(">>> 已请求取消当前任务");
+      setStatus("已请求取消当前验收任务", true);
+    } else {
+      setStatus(`取消失败: ${out?.error || "unknown"}`, false);
+    }
+  } catch (e) {
+    setStatus(`取消失败: ${e}`, false);
+  }
+}
+
+async function ensureReleaseGatePassedBeforePack() {
+  const out = await window.aiwfDesktop.getLocalGateSummary({ limit: 20 });
+  const items = Array.isArray(out?.items) ? out.items : [];
+  const required = ["test:unit", "smoke", "test:regression", "test:regression:dirty", "test:office-gate"];
+  const latestByScript = {};
+  items.forEach((it) => {
+    const s = String(it?.script || "");
+    if (!required.includes(s)) return;
+    if (!latestByScript[s]) latestByScript[s] = it;
+  });
+  const missing = required.filter((s) => !latestByScript[s] || !latestByScript[s].ok);
+  if (missing.length > 0) {
+    setStatus(`打包前检查未通过，缺少通过项: ${missing.join(", ")}`, false);
+    appendGateLog(`>>> 打包前硬提示阻断: ${missing.join(", ")}`);
+    setBuildButtonsDisabled(true);
+    return false;
+  }
+  setStatus("打包前检查通过，可执行 gated build。", true);
+  appendGateLog(">>> 打包前检查通过");
+  if (!buildRunning) setBuildButtonsDisabled(false);
+  return true;
+}
+
+async function runLocalBuildScript(script){
+  if (buildRunning || gateRunning) {
+    setStatus("当前有任务执行中，请稍后再试。", false);
+    return;
+  }
+  const ok = await ensureReleaseGatePassedBeforePack();
+  if (!ok) return;
+  try{
+    buildRunning = true;
+    setBuildButtonsDisabled(true);
+    appendGateLog(`>>> 开始打包 ${script}`);
+    const out = await window.aiwfDesktop.runLocalBuildScript({ script });
+    appendGateLog(`>>> 打包结束 ${script} (exit=${out?.exit_code ?? "?"})`);
+    setStatus(out?.ok ? `打包成功: ${script}` : `打包失败: ${script}`, !!out?.ok);
+  }catch(e){
+    appendGateLog(`>>> 打包异常 ${script}: ${e}`);
+    setStatus(`打包异常: ${e}`, false);
+  }finally{
+    buildRunning = false;
+    await refreshBuildGuardStatus();
+  }
+}
+
+async function cancelBuildRun() {
+  try {
+    const out = await window.aiwfDesktop.cancelLocalBuildScript();
+    if (out?.ok) {
+      appendGateLog(">>> 已请求取消当前打包任务");
+      setStatus("已请求取消当前打包任务", true);
+    } else {
+      setStatus(`取消打包失败: ${out?.error || "unknown"}`, false);
+    }
+  } catch (e) {
+    setStatus(`取消打包失败: ${e}`, false);
+  }
+}
+
+async function openDesktopBuildDir() {
+  const st = await window.aiwfDesktop.getBuildGuardStatus();
+  const runs = Array.isArray(st?.build_runs) ? st.build_runs : [];
+  const dir = String(runs[0]?.desktop_dir || $("outputRoot").value.trim() || "");
+  if (!dir) {
+    setStatus("暂无桌面打包目录记录", false);
+    return;
+  }
+  await window.aiwfDesktop.openPath(dir);
+  setStatus("已打开桌面产物目录", true);
+}
+
+async function exportReleaseReport(format) {
+  try {
+    const out = await window.aiwfDesktop.exportReleaseReport({ format });
+    if (!out?.ok) {
+      setStatus(`导出发布报告失败: ${out?.error || "unknown"}`, false);
+      return;
+    }
+    appendGateLog(`>>> 发布报告已导出: ${out.path}`);
+    setStatus(`发布报告已导出（未自动打开）: ${out.path}`, true);
+  } catch (e) {
+    setStatus(`导出发布报告失败: ${e}`, false);
+  }
 }
 
 function renderPrecheck(res){
@@ -738,17 +1361,140 @@ async function init(){
   $("apiKey").value=cfg.apiKey||"";
   applyUiCfg(cfg);
   await loadCleaningTemplates(cfg.cleaningTemplate || "default");
-  bindDropzone();
+  bindDropzone(dz, addToQueue);
+  bindDropzone(sampleDz, addToSamplePool);
   renderQueue();
+  await refreshSamplePool(true);
   inspectQueueEncoding(true);
   inspectFonts(true);
   inspectRuntime(true);
   refreshTaskStoreStatus(true);
   refreshStartupSelfCheck(true);
   refreshRouteDiagnostics();
+  if (!gateLogUnsub && window.aiwfDesktop.onLocalGateLog) {
+    gateLogUnsub = window.aiwfDesktop.onLocalGateLog((evt)=>{
+      const sc = String(evt?.script || "");
+      const type = String(evt?.type || "");
+      const t = String(evt?.text || "").trimEnd();
+      if (!t) return;
+      appendGateLog(`[${sc}][${type}] ${t}`);
+    });
+  }
+  if (!buildLogUnsub && window.aiwfDesktop.onLocalBuildLog) {
+    buildLogUnsub = window.aiwfDesktop.onLocalBuildLog((evt)=>{
+      const sc = String(evt?.script || "");
+      const type = String(evt?.type || "");
+      const t = String(evt?.text || "").trimEnd();
+      if (!t) return;
+      appendGateLog(`[build:${sc}][${type}] ${t}`);
+    });
+  }
+  try {
+    const rt = await window.aiwfDesktop.getLocalGateRuntime();
+    gateRunning = !!rt?.running;
+    setGateButtonsDisabled(gateRunning);
+  } catch {}
+  try {
+    const br = await window.aiwfDesktop.getLocalBuildRuntime();
+    buildRunning = !!br?.running;
+    const st = await window.aiwfDesktop.getBuildGuardStatus();
+    const missing = Array.isArray(st?.missing) ? st.missing : [];
+    if (buildRunning) setBuildButtonsDisabled(true);
+    else setBuildButtonsDisabled(missing.length > 0);
+  } catch {}
+  refreshGateSummary();
+  refreshBuildGuardStatus();
+}
+
+function renderDebatePreview(out){
+  const p = out && typeof out === "object" ? out : {};
+  debatePreviewEl.textContent = JSON.stringify(p, null, 2);
+  const total = Number(p?.preview?.total || 0);
+  const groups = Array.isArray(p?.preview?.groups) ? p.preview.groups : [];
+  if (p?.ok) {
+    const top = groups.slice(0, 5).map((g)=>`${g.battlefield}:${g.count}`).join(" | ");
+    debatePreviewHintEl.textContent = `预览完成：候选 ${total} 条，战场 ${groups.length} 个${top ? `（${top}）` : ""}`;
+  } else {
+    debatePreviewHintEl.textContent = `预览失败：${p?.error || "unknown"}`;
+  }
+}
+
+async function runDebatePreview() {
+  try{
+    debatePreviewHintEl.textContent = "预览中...";
+    const out = await window.aiwfDesktop.previewDebateStyle(payloadFromUi(), cfgFromUi());
+    renderDebatePreview(out);
+    setStatus(out?.ok ? "辩论样式预览完成" : `辩论样式预览失败: ${out?.error || "unknown"}`, !!out?.ok);
+  }catch(e){
+    debatePreviewHintEl.textContent = `预览失败: ${e}`;
+    setStatus(`辩论样式预览失败: ${e}`, false);
+  }
+}
+
+function applyDebatePreset() {
+  $("cleaningTemplate").value = "debate_evidence_v1";
+  $("officeTheme").value = "fluent_ms";
+  $("officeVariant").value = "light";
+  $("officeLang").value = "zh";
+  if (!$("reportTitle").value.trim()) $("reportTitle").value = "辩论资料库";
+  if (!$("debateBattlefieldRules").value.trim()) {
+    $("debateBattlefieldRules").value = "谣言=内容差\n成瘾=能力减损\n社交=社交与表达";
+  }
+  if (!$("debateSourcePriority").value.trim()) {
+    $("debateSourcePriority").value = "source_org,publisher,source,author,source_type";
+  }
+}
+
+async function runDebateQuick() {
+  applyDebatePreset();
+  await window.aiwfDesktop.saveConfig(saveCfgFromUi());
+  await runDebatePreview();
+  await runMain();
+}
+
+function buildDebateConfigPayload() {
+  return {
+    version: "debate_config_v1",
+    exported_at: new Date().toISOString(),
+    cleaningTemplate: "debate_evidence_v1",
+    officeTheme: "fluent_ms",
+    officeVariant: $("officeVariant").value || "light",
+    officeLang: $("officeLang").value || "zh",
+    reportTitle: $("reportTitle").value.trim() || "辩论资料库",
+    debateBattlefieldRules: $("debateBattlefieldRules").value || "",
+    debateSourcePriority: $("debateSourcePriority").value.trim() || "",
+  };
+}
+
+function applyDebateConfigPayload(cfg = {}) {
+  $("cleaningTemplate").value = "debate_evidence_v1";
+  if (cfg.officeTheme) $("officeTheme").value = String(cfg.officeTheme);
+  if (cfg.officeVariant) $("officeVariant").value = String(cfg.officeVariant);
+  if (cfg.officeLang) $("officeLang").value = String(cfg.officeLang);
+  if (cfg.reportTitle !== undefined) $("reportTitle").value = String(cfg.reportTitle || "");
+  if (cfg.debateBattlefieldRules !== undefined) $("debateBattlefieldRules").value = String(cfg.debateBattlefieldRules || "");
+  if (cfg.debateSourcePriority !== undefined) $("debateSourcePriority").value = String(cfg.debateSourcePriority || "");
 }
 
 $("btnQueueClear").onclick=()=>{ queuePaths.splice(0, queuePaths.length); renderQueue(); inspectQueueEncoding(true); setStatus("已清空任务队列", true); };
+$("btnSampleRefresh").onclick=()=>refreshSamplePool(false);
+$("btnSampleOpen").onclick=async()=>{
+  const out = await window.aiwfDesktop.getSamplePoolInfo(cfgFromUi());
+  if(out?.root){
+    await window.aiwfDesktop.openPath(out.root);
+    setStatus("已打开样本池目录", true);
+  }else{
+    setStatus("样本池目录不可用", false);
+  }
+};
+$("btnSampleClear").onclick=async()=>{
+  const ok = window.confirm("确定清空样本池吗？该操作会删除样本池目录中的文件。");
+  if(!ok) return;
+  const out = await window.aiwfDesktop.samplePoolClear(cfgFromUi());
+  await refreshSamplePool(true);
+  if(out?.ok) setStatus(`样本池已清空（删除 ${Number(out.removed||0)} 个文件）`, true);
+  else setStatus(`清空样本池失败: ${out?.error || "unknown"}`, false);
+};
 $("btnInstallFonts").onclick=async()=>{
   setStatus("正在安装内置字体...");
   try{
@@ -771,6 +1517,28 @@ $("btnHealth").onclick=async()=>{
   try{const j=await window.aiwfDesktop.health(cfgFromUi());show(j);setStatus(j.ok?"可用":"不可用",!!j.ok);}catch(e){setStatus("检查失败: "+e,false)}
   await refreshTaskStoreStatus(true);
 };
+$("btnDifyWizard").onclick=async()=>{
+  try{
+    setStatus("向导执行中：先检查连通性...");
+    const h = await window.aiwfDesktop.health(cfgFromUi());
+    if(!h?.ok){
+      setStatus("后端连通失败。可继续使用离线模式，或检查 Base URL/API Key。", false);
+      show(h || {});
+      return;
+    }
+    setStatus("连通通过，正在做一键联调回放...");
+    const payload = payloadFromUi();
+    const out = await window.aiwfDesktop.runCleaning(payload,cfgFromUi());
+    show(out); renderMetrics(out);
+    if(out?.ok){
+      setStatus("Dify连接向导完成：联调通过。", true);
+    }else{
+      setStatus("Dify连接向导完成：请求已发出但结果失败。", false);
+    }
+  }catch(e){
+    setStatus("Dify连接向导失败: "+e,false);
+  }
+};
 $("btnWorkflow").onclick=async()=>{
   try{
     await window.aiwfDesktop.openWorkflowStudio();
@@ -781,6 +1549,35 @@ $("btnWorkflow").onclick=async()=>{
 };
 $("btnRouteDiag").onclick=async()=>{ await refreshRouteDiagnostics(); };
 $("btnSelfCheck").onclick=async()=>{ await refreshStartupSelfCheck(false); };
+$("btnGateUnit").onclick=async()=>{ await runGateScript("test:unit"); };
+$("btnGateSmoke").onclick=async()=>{ await runGateScript("smoke"); };
+$("btnGateReg").onclick=async()=>{ await runGateScript("test:regression"); };
+$("btnGateRegDirty").onclick=async()=>{ await runGateScript("test:regression:dirty"); };
+$("btnGateOffice").onclick=async()=>{ await runGateScript("test:office-gate"); };
+$("btnGateAcceptance").onclick=async()=>{ await runGateScript("acceptance:real"); };
+$("btnGateRefresh").onclick=async()=>{ await refreshGateSummary(); await refreshSamplePool(true); };
+$("btnGateAll").onclick=async()=>{ await runGateAll(); };
+$("btnGateCancel").onclick=async()=>{ await cancelGateRun(); };
+$("btnGatePackGuard").onclick=async()=>{ await ensureReleaseGatePassedBeforePack(); };
+$("btnBuildPortable").onclick=async()=>{ await runLocalBuildScript("build:win:release:gated"); };
+$("btnBuildInstaller").onclick=async()=>{ await runLocalBuildScript("build:win:installer:release:gated"); };
+$("btnBuildCancel").onclick=async()=>{ await cancelBuildRun(); };
+$("btnOpenBuildDir").onclick=async()=>{ await openDesktopBuildDir(); };
+$("btnOpenLatestArtifacts").onclick=async()=>{
+  try{
+    const out = await window.aiwfDesktop.getLatestArtifactsDir();
+    if(!out?.ok || !out?.artifacts_dir){
+      setStatus(`暂无最新成品目录: ${out?.error || "unknown"}`, false);
+      return;
+    }
+    await window.aiwfDesktop.openPath(String(out.artifacts_dir));
+    setStatus(`已打开最新成品目录: ${out.artifacts_dir}`, true);
+  }catch(e){
+    setStatus(`打开最新成品目录失败: ${e}`, false);
+  }
+};
+$("btnExportReleaseMd").onclick=async()=>{ await exportReleaseReport("md"); };
+$("btnExportReleaseJson").onclick=async()=>{ await exportReleaseReport("json"); };
 $("btnOpenRouteLog").onclick=async()=>{
   try{
     if(!latestRouteSummaryMeta) latestRouteSummaryMeta = await window.aiwfDesktop.getRouteMetricsSummary();
@@ -792,7 +1589,20 @@ $("btnOpenRouteLog").onclick=async()=>{
     setStatus("打开路由日志目录失败: "+e, false);
   }
 };
-$("btnRun").onclick=async()=>{
+if (btnOpenNoiseEl) {
+  btnOpenNoiseEl.onclick = async () => {
+    try {
+      const noise = (latestArtifacts || []).find((x) => String(x?.artifact_id || "") === "md_filtered_noise_001");
+      const p = String(noise?.path || "");
+      if (!p) { setStatus("当前任务没有噪声清单", false); return; }
+      await window.aiwfDesktop.openPath(p);
+      setStatus("已打开噪声清单", true);
+    } catch (e) {
+      setStatus("打开噪声清单失败: " + e, false);
+    }
+  };
+}
+async function runMain(){
   setStatus("正在生成...");
   try{
     const enc = await inspectQueueEncoding(false);
@@ -814,9 +1624,15 @@ $("btnRun").onclick=async()=>{
     }
     const j=await window.aiwfDesktop.runCleaning(payload,cfgFromUi());
     show(j);renderMetrics(j);
-    setStatus(j.ok?"生成完成":"生成失败",!!j.ok);
+    if(j?.fallback_applied){
+      setStatus(`生成完成（已自动切换离线模式）: ${j.fallback_message || "后端不可用或失败"}`, true);
+    }else{
+      setStatus(j.ok?"生成完成":"生成失败",!!j.ok);
+    }
   }catch(e){setStatus("运行失败: "+e,false)}
-};
+}
+
+$("btnRun").onclick=async()=>{ await runMain(); };
 
 $("btnPrecheck").onclick=async()=>{
   setStatus("正在执行模板预检...");
@@ -843,6 +1659,38 @@ $("btnPrecheck").onclick=async()=>{
     precheckHintEl.textContent = "预检失败";
     precheckEl.textContent = JSON.stringify({ ok:false, error:String(e) }, null, 2);
     setStatus("预检失败: "+e, false);
+  }
+};
+$("btnDebatePreview").onclick=async()=>{ await runDebatePreview(); };
+$("btnRunDebateQuick").onclick=async()=>{ await runDebateQuick(); };
+$("btnDebateCfgExport").onclick=()=>{
+  try{
+    const obj = buildDebateConfigPayload();
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `debate_config_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setStatus("辩论配置已导出", true);
+  }catch(e){
+    setStatus("导出辩论配置失败: " + e, false);
+  }
+};
+$("btnDebateCfgImport").onclick=()=>{ $("debateCfgImportFile").click(); };
+$("debateCfgImportFile").onchange=async(e)=>{
+  try{
+    const f = e?.target?.files?.[0];
+    if(!f) return;
+    const txt = await f.text();
+    const obj = JSON.parse(txt || "{}");
+    applyDebateConfigPayload(obj || {});
+    await window.aiwfDesktop.saveConfig(saveCfgFromUi());
+    setStatus("辩论配置已导入并保存", true);
+  }catch(err){
+    setStatus("导入辩论配置失败: " + err, false);
+  }finally{
+    $("debateCfgImportFile").value = "";
   }
 };
 
@@ -911,3 +1759,4 @@ init();
 </script>
 </body>
 </html>
+

@@ -1,4 +1,4 @@
-﻿# Codex Handoff (Updated: 2026-02-23)
+﻿# Codex Handoff (Updated: 2026-02-25)
 
 ## 1) Project State
 - Primary delivery path: `apps/dify-desktop` (Windows-first, offline-capable, one-click GUI).
@@ -64,6 +64,76 @@
 - Dify adapter:
   - `apps/dify-desktop/dify_adapter.js`
   - normalized request/response/error mapping for bridge runtime
+- Dify integration baseline scripts:
+  - `ops/scripts/dify_health_check.ps1`
+  - `ops/scripts/dify_replay_run_cleaning.ps1`
+  - `ops/scripts/dify_integration_baseline.ps1`
+  - `ops/scripts/dify_run_with_offline_fallback.ps1`
+  - `ops/scripts/dify_integration_production_check.ps1` (supports `EnableOfflineFallback`)
+  - `ops/scripts/release_gate_v1_1_6.ps1`
+  - `ops/scripts/release_baseline_v1_1_6.ps1`
+  - example payload: `ops/config/dify_run_cleaning.payload.example.json`
+
+## 2.2) Desktop v1.1.6 (2026-02-25)
+- GUI fallback:
+  - `base_api` mode now supports automatic fallback to offline cleaning when backend request fails or returns `ok=false`.
+  - fallback switch exposed in GUI config: `enableOfflineFallback` (default: true).
+  - fallback policy supports `smart|smart_strict|always|never`.
+- GUI result visibility:
+  - result summary adds run mode display: `base_api | offline_local | offline_fallback`.
+  - result summary adds quality score (`quality_score`).
+  - status bar shows explicit fallback message when applied.
+- Run-mode audit:
+  - new log: `%APPDATA%\AIWF Dify Desktop\logs\run_mode_audit.jsonl` (Electron `userData/logs/run_mode_audit.jsonl`).
+  - fields: `ts/mode/fallback_applied/reason/remote_error/job_id/duration_ms`.
+- Desktop package:
+  - `AIWF Dify Desktop Setup 1.1.6.exe`
+  - `AIWF Dify Desktop 1.1.6.exe`
+- Release note:
+  - `docs/release_notes_v1.1.6.md`
+ - Template pack manager:
+   - `ops/scripts/template_pack_manager.ps1` (`export/import/rollback`).
+ - Workflow breakpoint:
+   - payload supports `breakpoint_node_id` for run-to-node debugging.
+ - Workflow extension node:
+   - new deterministic `evidence_conflict_v1` node for claim stance conflict scoring.
+
+## 2.3) Desktop Deepening Patch (2026-02-25)
+- Content-level output gate:
+  - offline cleaning now computes content quality (`title_coverage/paragraph_coverage/coherent_paragraph_ratio/numeric_consistency`).
+  - when `content_quality_gate_enabled=true` and score below threshold (`min_content_score`, default 60), pipeline auto-switches to Markdown-only output.
+  - score/metrics written into `quality_report.md` and `output_gate_meta`.
+- Paper Markdown structure upgrade:
+  - PDF/DOCX to Markdown now restores heading levels for common academic sections and numbered headings.
+  - body keeps mixed heading + paragraph/bullet structure instead of flat bullets only.
+- Workflow observability upgrade:
+  - node run telemetry now includes `output_bytes` and normalized `error_kind`.
+  - Workflow Studio node-run table now shows output size and failure type.
+  - diagnostics aggregate includes `output_kb_avg` and `error_kinds`.
+- Office template engine v2 baseline:
+  - `office_slot_fill_v1` now supports `template_version` and `required_slots`.
+  - emits template validation report: `office_template_validation.json` with missing/empty slot analysis.
+  - workflow form/schema updated for new template fields.
+- Rust quality path deepening:
+  - `workflow_services` adds `computeTextQualityViaRust` (optional Rust operator `/operators/text_quality_v1` + JS fallback).
+  - `computeViaRust` now carries `metrics.text_quality`; AI audit and summary include this signal.
+- Regression baseline harness:
+  - new script: `apps/dify-desktop/scripts/regression_baseline.js`.
+  - new npm command: `npm run test:regression`.
+  - baseline config: `apps/dify-desktop/tests/fixtures/regression_baseline.json`.
+ - GUI local gate panel:
+   - one-click run + realtime logs for `test:unit / smoke / test:regression / test:regression:dirty / test:office-gate`.
+   - run lock + cancel support (prevents duplicate concurrent runs per window).
+   - failed rows now support open report directory + copy failure summary.
+   - pack-guard check in GUI: hard prompt if required gate items are not all passed.
+   - local gate history persisted at `userData/logs/local_gate_checks.jsonl`.
+   - IPC: `aiwf:runLocalGateCheck`, `aiwf:cancelLocalGateCheck`, `aiwf:getLocalGateRuntime`, `aiwf:getLocalGateSummary`, event `aiwf:localGateLog`.
+ - Local build guard and release export:
+   - GUI supports gated build run with hard precheck (`build:win:release:gated`, `build:win:installer:release:gated`).
+   - build run lock + cancel (`aiwf:getLocalBuildRuntime`, `aiwf:cancelLocalBuildScript`).
+   - build artifacts are auto-collected to desktop folder: `Desktop/AIWF_Builds`.
+   - one-click release report export (`aiwf:exportReleaseReport`) supports `md/json`.
+   - build history persisted at `userData/logs/local_build_runs.jsonl`.
 
 ## 3) Decoupled Templates / Profiles
 - Desktop office themes: `rules/templates/office_themes_desktop.json`
@@ -85,6 +155,38 @@
   - `AIWF_RUST_TASK_STORE_PATH`
   - `AIWF_RUST_TASK_TTL_SEC`
   - `AIWF_RUST_TASK_MAX`
+
+## 4.1) Quick Commands (Desktop)
+Run in `apps/dify-desktop`:
+- `npm run test:unit`  
+  unit tests for chiplet/runtime/adapter/core contracts.
+- `npm run smoke`  
+  minimal end-to-end offline smoke.
+- `npm run test:regression`  
+  baseline regression over normal fixtures (`tests/fixtures/regression_samples`).
+- `npm run test:regression:dirty`  
+  dirty-input regression over noisy fixtures (`tests/fixtures/regression_samples_dirty`).
+- `npm run test:office-gate`  
+  office artifact gate (docx/pptx/xlsx file-size threshold checks).
+- `npm run release:gate`  
+  run all desktop release checks in fixed order.
+  includes strict desktop artifact verification by default:
+  - recent `Desktop/AIWF_Builds/*.exe`
+  - recent `Desktop/AIWF_Builds/reports/release_report_*.md`
+  - recent `Desktop/AIWF_Builds/reports/release_report_*.json`
+  skip only for local debug with:
+  - `AIWF_SKIP_BUILD_ARTIFACT_CHECK=1`
+- `npm run release:verify-artifacts`
+  artifact-only gate (post-build verification for recent desktop exe + md/json reports).
+- `npm run build:win:release:gated`  
+  run pre-build test gate (artifact check skipped) -> build portable exe -> artifact-only gate.
+- `npm run build:win:installer:release:gated`  
+  run pre-build test gate (artifact check skipped) -> build nsis installer -> artifact-only gate.
+- `npm run test:build-e2e`  
+  real build e2e (default skipped).
+  enable with env:
+  - `AIWF_ENABLE_BUILD_E2E=1` for cancel-path real build test.
+  - `AIWF_BUILD_E2E_FULL=1` plus above for full build + desktop artifact/report validation.
 - Transform cache:
   - `AIWF_RUST_TRANSFORM_CACHE_ENABLED=true|false`
   - `AIWF_RUST_TRANSFORM_CACHE_TTL_SEC`
@@ -126,9 +228,19 @@
 6. `powershell -ExecutionPolicy Bypass -File .\ops\scripts\acceptance_desktop_real_sample.ps1`
 7. `powershell -ExecutionPolicy Bypass -File .\ops\scripts\acceptance_desktop_finance_template.ps1`
 
-Latest desktop real-sample acceptance run: **2026-02-22**, passed.
-Latest desktop finance-template acceptance run: **2026-02-22**, passed.
+Latest desktop real-sample acceptance run: **2026-02-25**, passed.
+Latest desktop finance-template acceptance run: **2026-02-25**, passed.
+Latest v1.1.6 release gate run: **2026-02-25**, passed (`ops/scripts/release_gate_v1_1_6.ps1`).
+Latest v1.1.6 baseline run: **2026-02-25**, passed (`ops/scripts/release_baseline_v1_1_6.ps1`).
 Latest full CI run: **2026-02-23**, passed (`ops/scripts/ci_check.ps1`, full path including package/contract/chaos/smoke).
+
+Latest v1.1.6 artifacts/reports:
+- release gate:
+  - `release/gate_v1.1.6/20260225_182131/release_gate_summary.json`
+  - `release/gate_v1.1.6/20260225_182131/release_gate_summary.md`
+- baseline:
+  - `release/v1.1.6/baseline_summary.json`
+  - `release/v1.1.6/clean_windows_checklist.md`
 
 Recent fixes (2026-02-23):
 - Fixed brittle workflow UI tests that assumed 6 default nodes; tests now assert against runtime default graph node count.
@@ -289,21 +401,47 @@ Recent rust/de-coupling upgrades (2026-02-24):
 - Low: ODBC mode still depends on external SQL availability despite fallback chain.
 - Low: observability templates are delivered, but still require environment-side datasource/alert-route binding.
 - Security action required: if historical commits previously contained local passwords, rotate credentials once and avoid reusing old secrets.
+- Low: if fallback is manually disabled (`enableOfflineFallback=false`) in backend mode, transient backend failures can still block job completion.
+- Low: release note/checklist docs should be kept in UTF-8 (BOM on Windows editors) to avoid mojibake when opened by legacy tools.
 
 ## 7) Recommended Handoff Sequence
 1. Run checklist in section 5.
 2. If using SQL mode, run migrations first:
    - `ops/scripts/db_migrate.ps1`
-3. If releasing installer/bundle:
+3. For desktop release gating:
+   - `ops/scripts/release_gate_v1_1_6.ps1`
+   - optional full baseline: `ops/scripts/release_baseline_v1_1_6.ps1`
+4. If releasing installer/bundle:
    - `ops/scripts/release_productize.ps1 -Version <x.y.z>`
-4. Validate desktop startup self-check in UI before first production run.
+5. Validate desktop startup self-check in UI before first production run.
+6. Run GUI manual verification with invalid backend URL (`http://127.0.0.1:19999`) to confirm auto fallback and audit logging.
 
-## 8) References
+## 8) Rollback
+1. Reinstall previous stable package (example: `AIWF Dify Desktop Setup 1.1.5.exe`).
+2. Keep user data for audit; do not delete `%APPDATA%\AIWF Dify Desktop\logs\run_mode_audit.jsonl`.
+3. If fallback behavior must be disabled temporarily, set GUI option `enableOfflineFallback=false` and save config.
+4. Re-run startup check and one acceptance sample before reopening to users.
+
+## 9) References
 - `docs/dify_desktop_app.md`
 - `docs/offline_delivery_minimal.md`
 - `docs/quickstart_backend.md`
 - `docs/project_audit_20260218.md`
+- `docs/release_notes_v1.1.6.md`
 - `docs/archive/`
+
+## 10) Latest Verification (2026-02-25)
+- run dir: `apps/dify-desktop`
+- passed:
+  - `node --check main_ipc.js`
+  - `node --check preload.js`
+  - `npm run smoke`
+  - `npm run test:unit`
+  - `npx playwright test tests/main-ui.spec.js -c playwright.workflow.config.js`
+  - `npm run release:gate`
+- note:
+  - project root `D:\AIWF` has no `package.json`; npm commands must be executed under `apps/dify-desktop`.
+
 
 
 

@@ -10,20 +10,27 @@ const QUALITY_GATE_PREFS_KEY = "aiwf.workflow.qualityGatePrefs.v1";
 
 const els = {
   palette: $("palette"),
+  paletteMode: $("paletteMode"),
+  paletteSearch: $("paletteSearch"),
   nodeType: $("nodeType"),
   workflowName: $("workflowName"),
   templateSelect: $("templateSelect"),
   templateParamsForm: $("templateParamsForm"),
   templateParams: $("templateParams"),
+  btnTemplateAcceptance: $("btnTemplateAcceptance"),
+  templateAcceptanceExportFormat: $("templateAcceptanceExportFormat"),
+  btnTemplateAcceptanceExport: $("btnTemplateAcceptanceExport"),
   btnApplyTemplate: $("btnApplyTemplate"),
   btnSaveTemplate: $("btnSaveTemplate"),
   inputFiles: $("inputFiles"),
   reportTitle: $("reportTitle"),
+  breakpointNodeId: $("breakpointNodeId"),
   exportCanonicalBundle: $("exportCanonicalBundle"),
   canonicalTitle: $("canonicalTitle"),
   aiEndpoint: $("aiEndpoint"),
   aiKey: $("aiKey"),
   aiModel: $("aiModel"),
+  btnUseDeepSeek: $("btnUseDeepSeek"),
   offlineBoundaryHint: $("offlineBoundaryHint"),
   rustEndpoint: $("rustEndpoint"),
   rustRequired: $("rustRequired"),
@@ -35,6 +42,12 @@ const els = {
   sandboxMaxRssMb: $("sandboxMaxRssMb"),
   sandboxMaxOutputBytes: $("sandboxMaxOutputBytes"),
   status: $("status"),
+  preflightSummary: $("preflightSummary"),
+  preflightRisk: $("preflightRisk"),
+  preflightRows: $("preflightRows"),
+  preflightFixSummary: $("preflightFixSummary"),
+  preflightFixRows: $("preflightFixRows"),
+  preflightExportFormat: $("preflightExportFormat"),
   nodeRuns: $("nodeRuns"),
   runHistoryRows: $("runHistoryRows"),
   queueRows: $("queueRows"),
@@ -51,6 +64,7 @@ const els = {
   appSchemaJson: $("appSchemaJson"),
   appRunParamsForm: $("appRunParamsForm"),
   appRunParams: $("appRunParams"),
+  publishRequirePreflight: $("publishRequirePreflight"),
   appRows: $("appRows"),
   timelineRunId: $("timelineRunId"),
   timelineRows: $("timelineRows"),
@@ -94,6 +108,9 @@ const els = {
   btnAdd: $("btnAdd"),
   btnReset: $("btnReset"),
   btnClear: $("btnClear"),
+  btnPreflight: $("btnPreflight"),
+  btnPreflightExport: $("btnPreflightExport"),
+  btnAutoFixGraph: $("btnAutoFixGraph"),
   btnRun: $("btnRun"),
   btnEnqueueRun: $("btnEnqueueRun"),
   btnQueueRefresh: $("btnQueueRefresh"),
@@ -342,7 +359,7 @@ const EDGE_HINTS_BY_NODE_TYPE = {
   manual_review: ["approved", "status", "review_key", "comment"],
   ai_audit: ["passed", "status", "reasons", "metrics_hash", "ai_hash"],
   ai_refine: ["ai_mode", "ai_text_chars", "detail"],
-  office_slot_fill_v1: ["template_kind", "slots", "binding_path"],
+  office_slot_fill_v1: ["template_kind", "template_version", "slots", "binding_path", "validation_path", "warnings"],
   compute_rust: ["engine", "rust_started", "metrics.sections", "metrics.bullets", "metrics.chars", "metrics.sha256"],
   clean_md: ["job_id", "ai_corpus_path", "rust_v2_used", "warnings"],
   md_output: ["artifact_id", "kind", "path", "sha256"],
@@ -368,7 +385,9 @@ const NODE_FORM_SCHEMAS = {
   ],
   office_slot_fill_v1: [
     { key: "template_kind", label: "模板类型(docx/pptx/xlsx)", type: "text" },
+    { key: "template_version", label: "模板版本", type: "text" },
     { key: "chart_source_node", label: "图表来源节点类型", type: "text" },
+    { key: "required_slots", label: "必填插槽(JSON数组)", type: "json" },
     { key: "slots", label: "插槽(JSON对象)", type: "json" },
   ],
   ai_strategy_v1: [
@@ -665,6 +684,12 @@ const NODE_FORM_SCHEMAS = {
     { key: "score_field", label: "异常分数字段", type: "text" },
     { key: "threshold", label: "阈值", type: "number" },
   ],
+  evidence_conflict_v1: [
+    { key: "rows", label: "输入行(JSON数组)", type: "json" },
+    { key: "claim_field", label: "论点字段", type: "text" },
+    { key: "stance_field", label: "立场字段", type: "text" },
+    { key: "source_field", label: "来源字段", type: "text" },
+  ],
   template_bind_v1: [
     { key: "template_text", label: "模板文本", type: "text" },
     { key: "data", label: "绑定数据(JSON对象)", type: "json" },
@@ -752,9 +777,50 @@ function setStatus(text, ok = true) {
   els.status.textContent = text;
 }
 
+const SIMPLE_NODE_TYPES = new Set([
+  "ingest_files",
+  "clean_md",
+  "ds_refine",
+  "ai_refine",
+  "ai_audit",
+  "manual_review",
+  "compute_rust",
+  "sql_chart_v1",
+  "office_slot_fill_v1",
+  "md_output",
+]);
+
+function resolveNodeCreateSpec(rawType) {
+  const t = String(rawType || "").trim().toLowerCase();
+  if (t === "ds_refine") {
+    return {
+      nodeType: "ai_refine",
+      label: "DS提炼",
+      config: {
+        ...defaultNodeConfig("ai_refine"),
+        reuse_existing: false,
+        provider_name: "DeepSeek",
+        ai_endpoint: String(els.aiEndpoint?.value || "").trim() || "https://api.deepseek.com/v1/chat/completions",
+        ai_api_key: String(els.aiKey?.value || "").trim(),
+        ai_model: String(els.aiModel?.value || "").trim() || "deepseek-chat",
+      },
+    };
+  }
+  return { nodeType: rawType, label: String(rawType || ""), config: null };
+}
+
 function renderPalette() {
   els.palette.innerHTML = "";
-  NODE_CATALOG.forEach((n) => {
+  const mode = String(els.paletteMode?.value || "simple").trim().toLowerCase();
+  const kw = String(els.paletteSearch?.value || "").trim().toLowerCase();
+  const list = NODE_CATALOG.filter((n) => {
+    const t = String(n?.type || "").trim().toLowerCase();
+    if (mode === "simple" && !SIMPLE_NODE_TYPES.has(t)) return false;
+    if (!kw) return true;
+    const hay = `${String(n?.name || "")} ${String(n?.type || "")} ${String(n?.desc || "")}`.toLowerCase();
+    return hay.includes(kw);
+  });
+  list.forEach((n) => {
     const item = document.createElement("div");
     const titleWrap = document.createElement("div");
     const title = document.createElement("strong");
@@ -802,6 +868,25 @@ function saveLocalTemplates(items) {
   try {
     window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
   } catch {}
+}
+
+function parseRunParamsLoose() {
+  try {
+    const raw = String(els.appRunParams?.value || "").trim();
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+function currentTemplateGovernance() {
+  return {
+    preflight_gate_required: els.publishRequirePreflight ? !!els.publishRequirePreflight.checked : true,
+    auto_fix_enabled: true,
+    acceptance_mode: "preflight_autofix_recheck_v1",
+  };
 }
 
 function allTemplates() {
@@ -1071,6 +1156,13 @@ function applySelectedTemplate() {
   store.importGraph(graph);
   selectedEdge = null;
   els.workflowName.value = store.state.graph.name || String(it.name || "模板流程");
+  if (it.governance && typeof it.governance === "object" && els.publishRequirePreflight) {
+    els.publishRequirePreflight.checked = it.governance.preflight_gate_required !== false;
+  }
+  if (it.runtime_defaults && typeof it.runtime_defaults === "object") {
+    els.appRunParams.value = JSON.stringify(it.runtime_defaults, null, 2);
+    syncRunParamsFormFromJson();
+  }
   renderAll();
   renderMigrationReport({ migrated: false });
   setStatus(`已应用模板: ${it.name || id}`, true);
@@ -1081,10 +1173,15 @@ function saveCurrentAsTemplate() {
   if (!name) return;
   const custom = loadLocalTemplates();
   const id = `custom_${Date.now()}`;
+  const runtimeDefaults = parseRunParamsLoose();
+  const governance = currentTemplateGovernance();
   custom.push({
     id,
     name,
     graph: graphPayload(),
+    template_spec_version: 1,
+    governance,
+    runtime_defaults: runtimeDefaults,
     created_at: new Date().toISOString(),
   });
   saveLocalTemplates(custom);
@@ -1277,7 +1374,10 @@ function renderRunHistoryRows(items = []) {
     const tdStatus = document.createElement("td");
     const tdOp = document.createElement("td");
     tdRun.textContent = String(it.run_id || "").slice(0, 10);
-    tdStatus.textContent = String(it.status || "");
+    const tplIssues = Array.isArray(it?.result?.template_validation)
+      ? it.result.template_validation.reduce((acc, x) => acc + (Array.isArray(x?.warnings) ? x.warnings.length : 0), 0)
+      : 0;
+    tdStatus.textContent = `${String(it.status || "")}${tplIssues > 0 ? ` | 模板告警:${tplIssues}` : ""}`;
     const nodeRuns = Array.isArray(it?.result?.node_runs) ? it.result.node_runs : [];
     const failedNodes = nodeRuns.filter((n) => String(n?.status || "") === "failed");
     const preferred = failedNodes.length ? failedNodes : nodeRuns;
@@ -1300,6 +1400,10 @@ function renderRunHistoryRows(items = []) {
     const btn = document.createElement("button");
     btn.className = "mini";
     btn.textContent = "续跑";
+    const btnRetryFailed = document.createElement("button");
+    btnRetryFailed.className = "mini";
+    btnRetryFailed.style.marginRight = "4px";
+    btnRetryFailed.textContent = "重试失败节点";
     const btnA = document.createElement("button");
     btnA.className = "mini";
     btnA.style.marginRight = "4px";
@@ -1323,7 +1427,19 @@ function renderRunHistoryRows(items = []) {
       await refreshReviewQueue();
       setStatus(out?.ok ? `续跑完成: ${it.run_id}` : `续跑失败: ${out?.error || "unknown"}`, !!out?.ok);
     };
-    tdOp.append(select, btnA, btnB, btn);
+    btnRetryFailed.onclick = async () => {
+      const failed = failedNodes[0];
+      if (!failed?.id) {
+        setStatus("该运行无失败节点", false);
+        return;
+      }
+      const out = await window.aiwfDesktop.replayWorkflowRun({ run_id: it.run_id, node_id: String(failed.id) }, {});
+      els.log.textContent = JSON.stringify(out, null, 2);
+      await refreshRunHistory();
+      await refreshReviewQueue();
+      setStatus(out?.ok ? `失败节点重试完成: ${it.run_id}` : `失败节点重试失败: ${out?.error || "unknown"}`, !!out?.ok);
+    };
+    tdOp.append(select, btnA, btnB, btnRetryFailed, btn);
     tr.append(tdRun, tdStatus, tdOp);
     els.runHistoryRows.appendChild(tr);
   });
@@ -1891,7 +2007,7 @@ function renderReviewRows(items = []) {
 
 function renderNodeRuns(nodeRuns) {
   if (!Array.isArray(nodeRuns) || nodeRuns.length === 0) {
-    els.nodeRuns.innerHTML = '<tr><td colspan="3" style="color:#74879b">未运行</td></tr>';
+    els.nodeRuns.innerHTML = '<tr><td colspan="5" style="color:#74879b">未运行</td></tr>';
     return;
   }
   els.nodeRuns.innerHTML = "";
@@ -1900,11 +2016,16 @@ function renderNodeRuns(nodeRuns) {
     const tdType = document.createElement("td");
     const tdStatus = document.createElement("td");
     const tdSec = document.createElement("td");
+    const tdBytes = document.createElement("td");
+    const tdErr = document.createElement("td");
     const sec = Number.isFinite(Number(n.seconds)) ? `${Number(n.seconds).toFixed(3)}s` : "-";
     tdType.textContent = String(n.type || "");
     tdStatus.textContent = String(n.status || "");
     tdSec.textContent = sec;
-    tr.append(tdType, tdStatus, tdSec);
+    const outBytes = Number.isFinite(Number(n.output_bytes)) ? Number(n.output_bytes) : 0;
+    tdBytes.textContent = outBytes > 0 ? `${(outBytes / 1024).toFixed(1)} KB` : "-";
+    tdErr.textContent = String(n.error_kind || "");
+    tr.append(tdType, tdStatus, tdSec, tdBytes, tdErr);
     els.nodeRuns.appendChild(tr);
   });
 }
@@ -1980,6 +2101,386 @@ async function fetchRustRuntimeStats() {
   } catch {
     return null;
   }
+}
+
+function focusNodeInCanvas(nodeId) {
+  const id = String(nodeId || "").trim();
+  if (!id) return;
+  const node = store.getNode(id);
+  if (!node) return;
+  canvas.setSelectedIds([id]);
+  renderAll();
+  const cx = Math.max(0, Number(node.x || 0) - Math.floor(els.canvasWrap.clientWidth * 0.35));
+  const cy = Math.max(0, Number(node.y || 0) - Math.floor(els.canvasWrap.clientHeight * 0.35));
+  els.canvasWrap.scrollTo({ left: cx, top: cy, behavior: "smooth" });
+}
+
+function computePreflightRisk(issues = []) {
+  const list = Array.isArray(issues) ? issues : [];
+  let risk = 0;
+  list.forEach((it) => {
+    const level = String(it?.level || "").toLowerCase();
+    const kind = String(it?.kind || "").toLowerCase();
+    if (level === "error") risk += kind === "io_contract" ? 35 : 28;
+    else risk += kind === "io_contract" ? 12 : 8;
+    const msg = String(it?.message || "").toLowerCase();
+    if (msg.includes("endpoint") && msg.includes("为空")) risk += 18;
+  });
+  const score = Math.max(0, Math.min(100, Math.round(risk)));
+  let level = "low";
+  let label = "低风险";
+  let color = "#087443";
+  if (score >= 70) {
+    level = "high";
+    label = "高风险";
+    color = "#b42318";
+  } else if (score >= 35) {
+    level = "medium";
+    label = "中风险";
+    color = "#7a4a00";
+  }
+  return { score, level, label, color };
+}
+
+function renderPreflightReport(report) {
+  const rep = report && typeof report === "object" ? report : { ok: true, issues: [] };
+  const issues = Array.isArray(rep.issues) ? rep.issues : [];
+  const errorCount = issues.filter((x) => String(x.level || "") === "error").length;
+  const warnCount = issues.filter((x) => String(x.level || "") === "warning").length;
+  const totalCount = issues.length;
+  const risk = rep.risk && typeof rep.risk === "object" ? rep.risk : computePreflightRisk(issues);
+  if (els.preflightSummary) {
+    els.preflightSummary.textContent = `预检结果: ${rep.ok ? "通过" : "未通过"} | 错误 ${errorCount} | 警告 ${warnCount} | 总计 ${totalCount}`;
+    els.preflightSummary.style.color = rep.ok ? "#087443" : "#b42318";
+  }
+  if (els.preflightRisk) {
+    els.preflightRisk.textContent = `风险等级: ${risk.label} (${risk.score}/100)`;
+    els.preflightRisk.style.color = risk.color;
+  }
+  if (!els.preflightRows) return;
+  els.preflightRows.innerHTML = "";
+  if (!issues.length) {
+    els.preflightRows.innerHTML = '<tr><td colspan="4" style="color:#74879b">暂无问题</td></tr>';
+    return;
+  }
+  issues.forEach((it) => {
+    const tr = document.createElement("tr");
+    const tdLevel = document.createElement("td");
+    const tdType = document.createElement("td");
+    const tdMsg = document.createElement("td");
+    const tdAct = document.createElement("td");
+    const level = String(it.level || "warning");
+    tdLevel.textContent = level === "error" ? "错误" : "警告";
+    tdLevel.style.color = level === "error" ? "#b42318" : "#7a4a00";
+    tdType.textContent = String(it.kind || "");
+    tdMsg.textContent = String(it.message || "");
+    const nodeId = String(it.node_id || "").trim();
+    if (nodeId) {
+      const btn = document.createElement("button");
+      btn.className = "mini";
+      btn.textContent = "定位节点";
+      btn.onclick = () => focusNodeInCanvas(nodeId);
+      tdAct.appendChild(btn);
+    } else {
+      tdAct.textContent = "-";
+    }
+    tr.append(tdLevel, tdType, tdMsg, tdAct);
+    els.preflightRows.appendChild(tr);
+  });
+}
+
+function renderAutoFixDiff(summary) {
+  const s = summary && typeof summary === "object" ? summary : null;
+  if (els.preflightFixSummary) {
+    if (!s || !s.changed) {
+      els.preflightFixSummary.textContent = "自动修复差异: 暂无";
+      els.preflightFixSummary.style.color = "#5e7389";
+    } else {
+      els.preflightFixSummary.textContent =
+        `自动修复差异: 重复连线 ${s.removed_dup_edges || 0}，自环 ${s.removed_self_loops || 0}，断裂连线 ${s.removed_broken_edges || 0}，孤立节点 ${s.removed_isolated_nodes || 0}`;
+      els.preflightFixSummary.style.color = "#087443";
+    }
+  }
+  if (!els.preflightFixRows) return;
+  els.preflightFixRows.innerHTML = "";
+  if (!s || !s.changed) {
+    els.preflightFixRows.innerHTML = '<tr><td colspan="2" style="color:#74879b">暂无</td></tr>';
+    return;
+  }
+  const groups = [
+    { key: "dup_edges", label: "重复连线", rows: Array.isArray(s.dup_edges) ? s.dup_edges : [] },
+    { key: "self_loops", label: "自环连线", rows: Array.isArray(s.self_loops) ? s.self_loops : [] },
+    { key: "broken_edges", label: "断裂连线", rows: Array.isArray(s.broken_edges) ? s.broken_edges : [] },
+    { key: "isolated_nodes", label: "孤立节点", rows: Array.isArray(s.isolated_nodes) ? s.isolated_nodes : [] },
+  ];
+  groups.forEach((g) => {
+    g.rows.slice(0, 30).forEach((it) => {
+      const tr = document.createElement("tr");
+      const tdType = document.createElement("td");
+      const tdDetail = document.createElement("td");
+      tdType.textContent = g.label;
+      if (g.key === "isolated_nodes") {
+        tdDetail.textContent = String(it?.id || "");
+      } else {
+        const from = String(it?.from || "");
+        const to = String(it?.to || "");
+        tdDetail.textContent = `${from} -> ${to}`;
+      }
+      tr.append(tdType, tdDetail);
+      els.preflightFixRows.appendChild(tr);
+    });
+  });
+  if (!els.preflightFixRows.children.length) {
+    els.preflightFixRows.innerHTML = '<tr><td colspan="2" style="color:#74879b">暂无</td></tr>';
+  }
+}
+
+function buildIoContractInput(operator, nodeConfig) {
+  const op = String(operator || "").trim();
+  const cfg = nodeConfig && typeof nodeConfig === "object" ? nodeConfig : {};
+  const firstInputFile = String((els.inputFiles?.value || "").split(/\r?\n/).map((s) => s.trim()).find(Boolean) || "");
+  if (op === "transform_rows_v2" || op === "transform_rows_v3" || op === "load_rows_v3") {
+    const input = {};
+    if (Array.isArray(cfg.rows) && cfg.rows.length) input.rows = cfg.rows;
+    else if (cfg.input_uri) input.input_uri = cfg.input_uri;
+    else if (firstInputFile) input.input_uri = firstInputFile;
+    else input.rows = [];
+    return input;
+  }
+  if (op === "finance_ratio_v1") return { rows: Array.isArray(cfg.rows) ? cfg.rows : [] };
+  if (op === "anomaly_explain_v1") {
+    return {
+      rows: Array.isArray(cfg.rows) ? cfg.rows : [],
+      score_field: String(cfg.score_field || "").trim(),
+    };
+  }
+  if (op === "stream_window_v2") {
+    return {
+      stream_key: String(cfg.stream_key || "").trim(),
+      event_time_field: String(cfg.event_time_field || "").trim(),
+    };
+  }
+  if (op === "plugin_operator_v1") return { plugin: String(cfg.plugin || "").trim() };
+  return cfg;
+}
+
+async function postRustOperator(endpoint, operatorPath, payload) {
+  const resp = await fetch(`${endpoint}${operatorPath}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!resp.ok) {
+    return { ok: false, status: resp.status, error: `HTTP ${resp.status}` };
+  }
+  const body = await resp.json();
+  return { ok: true, body };
+}
+
+function autoFixGraphStructure() {
+  const graph = store.exportGraph();
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes.slice() : [];
+  const edges = Array.isArray(graph?.edges) ? graph.edges.slice() : [];
+  const nodeIds = new Set(nodes.map((n) => String(n?.id || "")).filter(Boolean));
+  const cleanedEdges = [];
+  const edgeSeen = new Set();
+  let removedDup = 0;
+  let removedSelf = 0;
+  let removedBroken = 0;
+  const dupEdges = [];
+  const selfLoops = [];
+  const brokenEdges = [];
+  edges.forEach((e) => {
+    const from = String(e?.from || "").trim();
+    const to = String(e?.to || "").trim();
+    if (!from || !to || !nodeIds.has(from) || !nodeIds.has(to)) {
+      removedBroken += 1;
+      brokenEdges.push({ from, to });
+      return;
+    }
+    if (from === to) {
+      removedSelf += 1;
+      selfLoops.push({ from, to });
+      return;
+    }
+    const k = `${from}=>${to}`;
+    if (edgeSeen.has(k)) {
+      removedDup += 1;
+      dupEdges.push({ from, to });
+      return;
+    }
+    edgeSeen.add(k);
+    cleanedEdges.push(e);
+  });
+  const inDegree = new Map(nodes.map((n) => [String(n.id || ""), 0]));
+  const outDegree = new Map(nodes.map((n) => [String(n.id || ""), 0]));
+  cleanedEdges.forEach((e) => {
+    const from = String(e?.from || "");
+    const to = String(e?.to || "");
+    outDegree.set(from, (outDegree.get(from) || 0) + 1);
+    inDegree.set(to, (inDegree.get(to) || 0) + 1);
+  });
+  let removedIsolated = 0;
+  const isolatedNodes = [];
+  const cleanedNodes = nodes.filter((n) => {
+    const id = String(n?.id || "");
+    if (nodes.length <= 1) return true;
+    const isolated = (inDegree.get(id) || 0) === 0 && (outDegree.get(id) || 0) === 0;
+    if (isolated) {
+      removedIsolated += 1;
+      isolatedNodes.push({ id, type: String(n?.type || "") });
+    }
+    return !isolated;
+  });
+  store.importGraph({ ...graph, nodes: cleanedNodes, edges: cleanedEdges });
+  selectedEdge = null;
+  renderAll();
+  const moved = removedDup + removedSelf + removedBroken + removedIsolated;
+  return {
+    changed: moved > 0,
+    removed_dup_edges: removedDup,
+    removed_self_loops: removedSelf,
+    removed_broken_edges: removedBroken,
+    removed_isolated_nodes: removedIsolated,
+    dup_edges: dupEdges,
+    self_loops: selfLoops,
+    broken_edges: brokenEdges,
+    isolated_nodes: isolatedNodes,
+  };
+}
+
+async function runWorkflowPreflight() {
+  const graph = graphPayload();
+  const valid = validateGraph(graph);
+  const issues = [];
+  (valid.errors || []).forEach((msg) => issues.push({ level: "error", kind: "graph", message: String(msg) }));
+  (valid.warnings || []).forEach((msg) => issues.push({ level: "warning", kind: "graph", message: String(msg) }));
+
+  const endpoint = String(els.rustEndpoint?.value || "").trim().replace(/\/$/, "");
+  const rustNodes = (Array.isArray(graph?.nodes) ? graph.nodes : []).filter((n) => IO_CONTRACT_COMPATIBLE_OPERATORS.has(String(n?.type || "")));
+  if (!endpoint) {
+    if (rustNodes.length > 0 && els.rustRequired?.checked) {
+      issues.push({ level: "error", kind: "rust", message: "Rust Endpoint 为空，无法执行契约预检" });
+    }
+  } else if (rustNodes.length > 0) {
+    try {
+      const ops = Array.from(new Set(rustNodes.map((n) => String(n.type || ""))));
+      const capRes = await postRustOperator(endpoint, "/operators/capabilities_v1", { include_ops: ops });
+      if (!capRes.ok) {
+        issues.push({
+          level: els.rustRequired?.checked ? "error" : "warning",
+          kind: "rust",
+          message: `能力发现失败: ${capRes.error || "unknown"}`,
+        });
+      }
+    } catch (e) {
+      issues.push({
+        level: els.rustRequired?.checked ? "error" : "warning",
+        kind: "rust",
+        message: `能力发现异常: ${String(e)}`,
+      });
+    }
+
+    for (const n of rustNodes) {
+      const operator = String(n?.type || "");
+      const payload = {
+        run_id: `preflight_${Date.now()}`,
+        operator,
+        input: buildIoContractInput(operator, n?.config || {}),
+        strict: false,
+      };
+      try {
+        const out = await postRustOperator(endpoint, "/operators/io_contract_v1/validate", payload);
+        if (!out.ok) {
+          issues.push({
+            level: els.rustRequired?.checked ? "error" : "warning",
+            kind: "io_contract",
+            node_id: String(n?.id || ""),
+            message: `${operator} 契约校验请求失败: ${out.error || "unknown"}`,
+          });
+          continue;
+        }
+        const body = out.body || {};
+        const validContract = !!body.valid;
+        const errs = Array.isArray(body.errors) ? body.errors : [];
+        if (!validContract || errs.length) {
+          issues.push({
+            level: "error",
+            kind: "io_contract",
+            node_id: String(n?.id || ""),
+            message: `${operator} 契约不通过: ${errs.join("; ") || "unknown"}`,
+          });
+        }
+      } catch (e) {
+        issues.push({
+          level: els.rustRequired?.checked ? "error" : "warning",
+          kind: "io_contract",
+          node_id: String(n?.id || ""),
+          message: `${operator} 契约校验异常: ${String(e)}`,
+        });
+      }
+    }
+  }
+  const ok = issues.every((x) => String(x.level || "") !== "error");
+  const risk = computePreflightRisk(issues);
+  const report = { ok, issues, risk, ts: new Date().toISOString() };
+  lastPreflightReport = report;
+  renderPreflightReport(report);
+  return report;
+}
+
+async function exportPreflightReport() {
+  const report = lastPreflightReport || await runWorkflowPreflight();
+  const format = String(els.preflightExportFormat?.value || "md").trim().toLowerCase() === "json" ? "json" : "md";
+  const out = await window.aiwfDesktop.exportWorkflowPreflightReport({
+    report,
+    format,
+  });
+  if (!out?.ok) {
+    if (!out?.canceled) setStatus(`导出预检报告失败: ${out?.error || "unknown"}`, false);
+    return;
+  }
+  setStatus(`预检报告已导出: ${out.path}`, true);
+}
+
+async function runTemplateAcceptance() {
+  const id = String(els.templateSelect?.value || "").trim();
+  const tpl = allTemplates().find((x) => String(x.id || "") === id);
+  const before = await runWorkflowPreflight();
+  const fix = autoFixGraphStructure();
+  lastAutoFixSummary = fix;
+  renderAutoFixDiff(fix);
+  const after = await runWorkflowPreflight();
+  const accepted = !!after?.ok;
+  const report = {
+    ts: new Date().toISOString(),
+    template_id: id || "",
+    template_name: String(tpl?.name || ""),
+    accepted,
+    governance: currentTemplateGovernance(),
+    before,
+    auto_fix: fix,
+    after,
+  };
+  lastTemplateAcceptanceReport = report;
+  if (accepted) setStatus("模板验收通过", true);
+  else setStatus("模板验收未通过：仍有错误，请修复后重试", false);
+  if (els.log) els.log.textContent = JSON.stringify(report, null, 2);
+  return report;
+}
+
+async function exportTemplateAcceptanceReport() {
+  const report = lastTemplateAcceptanceReport || await runTemplateAcceptance();
+  const format = String(els.templateAcceptanceExportFormat?.value || "md").trim().toLowerCase() === "json" ? "json" : "md";
+  const out = await window.aiwfDesktop.exportWorkflowTemplateAcceptanceReport({
+    report,
+    format,
+  });
+  if (!out?.ok) {
+    if (!out?.canceled) setStatus(`导出模板验收报告失败: ${out?.error || "unknown"}`, false);
+    return;
+  }
+  setStatus(`模板验收报告已导出: ${out.path}`, true);
 }
 
 function graphPayload() {
@@ -2412,7 +2913,7 @@ function renderNodeConfigEditor() {
   renderIoMapEditor(node, cfg);
 }
 
-function runPayload() {
+function runPayload(extra = {}) {
   const graph = graphPayload();
   const isolatedTypes = String(els.chipletIsolatedTypes?.value || "")
     .split(/[;,]/)
@@ -2422,7 +2923,7 @@ function runPayload() {
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : d;
   };
-  return {
+  const base = {
     workflow_id: graph.workflow_id || "custom_v1",
     workflow: graph,
     params: {
@@ -2434,6 +2935,7 @@ function runPayload() {
       canonical_title: String(els.canonicalTitle.value || "").trim() || "AIWF 熟肉语料",
       ocr_lang: "chi_sim+eng",
     },
+    breakpoint_node_id: String(els.breakpointNodeId?.value || "").trim(),
     ai: {
       endpoint: String(els.aiEndpoint.value || "").trim(),
       api_key: String(els.aiKey.value || "").trim(),
@@ -2463,6 +2965,10 @@ function runPayload() {
       max_output_bytes: toNum(els.sandboxMaxOutputBytes?.value, 2000000),
     },
   };
+  const ext = extra && typeof extra === "object" ? extra : {};
+  const out = { ...base, ...ext };
+  out.params = { ...(base.params || {}), ...(ext.params || {}) };
+  return out;
 }
 
 function renderAll() {
@@ -2526,15 +3032,30 @@ async function loadFlow() {
 }
 
 async function runWorkflow() {
-  const graph = graphPayload();
-  const valid = validateGraph(graph);
-  if (!valid.ok) {
-    setStatus(`流程校验失败: ${valid.errors.join(" | ")}`, false);
+  const pre = await runWorkflowPreflight();
+  const strictOutputGate = true;
+  if (!pre.ok && !strictOutputGate) {
+    const errs = (pre.issues || []).filter((x) => String(x.level || "") === "error").map((x) => String(x.message || ""));
+    setStatus(`预检失败: ${errs.join(" | ")}`, false);
     return;
+  }
+  const warns = (pre.issues || []).filter((x) => String(x.level || "") === "warning").map((x) => String(x.message || ""));
+  if (warns.length) {
+    setStatus(`预检警告: ${warns.join(" | ")}`, true);
+  }
+  if (!pre.ok && strictOutputGate) {
+    setStatus("预检未通过，已启用严格产物门禁：本次仅输出 Markdown 熟肉。", true);
   }
   setStatus("工作流运行中...");
   try {
-    const out = await window.aiwfDesktop.runWorkflow(runPayload(), {});
+    const out = await window.aiwfDesktop.runWorkflow(runPayload({
+      params: {
+        strict_output_gate: strictOutputGate,
+        preflight_passed: !!pre.ok,
+        preflight_risk_score: Number(pre?.risk?.score || 0),
+        preflight_risk_label: String(pre?.risk?.label || ""),
+      },
+    }), {});
     els.log.textContent = JSON.stringify(out, null, 2);
     renderNodeRuns(out.node_runs || []);
     await refreshDiagnostics();
@@ -2547,16 +3068,31 @@ async function runWorkflow() {
 }
 
 async function enqueueWorkflowRun() {
-  const graph = graphPayload();
-  const valid = validateGraph(graph);
-  if (!valid.ok) {
-    setStatus(`流程校验失败: ${valid.errors.join(" | ")}`, false);
+  const pre = await runWorkflowPreflight();
+  const strictOutputGate = true;
+  if (!pre.ok && !strictOutputGate) {
+    const errs = (pre.issues || []).filter((x) => String(x.level || "") === "error").map((x) => String(x.message || ""));
+    setStatus(`预检失败: ${errs.join(" | ")}`, false);
     return;
+  }
+  const warns = (pre.issues || []).filter((x) => String(x.level || "") === "warning").map((x) => String(x.message || ""));
+  if (warns.length) {
+    setStatus(`预检警告: ${warns.join(" | ")}`, true);
+  }
+  if (!pre.ok && strictOutputGate) {
+    setStatus("预检未通过，入队任务将自动降级为 md_only。", true);
   }
   try {
     const out = await window.aiwfDesktop.enqueueWorkflowTask({
       label: String(els.workflowName?.value || "workflow_task"),
-      payload: runPayload(),
+      payload: runPayload({
+        params: {
+          strict_output_gate: strictOutputGate,
+          preflight_passed: !!pre.ok,
+          preflight_risk_score: Number(pre?.risk?.score || 0),
+          preflight_risk_label: String(pre?.risk?.label || ""),
+        },
+      }),
       cfg: {},
       priority: 100,
     });
@@ -2633,6 +3169,20 @@ const ONLINE_REQUIRED_NODE_TYPES = new Set([
   "ai_strategy_v1",
   "ai_call",
 ]);
+
+const IO_CONTRACT_COMPATIBLE_OPERATORS = new Set([
+  "transform_rows_v2",
+  "transform_rows_v3",
+  "load_rows_v3",
+  "finance_ratio_v1",
+  "anomaly_explain_v1",
+  "stream_window_v2",
+  "plugin_operator_v1",
+]);
+
+let lastPreflightReport = null;
+let lastAutoFixSummary = null;
+let lastTemplateAcceptanceReport = null;
 
 function refreshOfflineBoundaryHint() {
   if (!els.offlineBoundaryHint) return;
@@ -2988,6 +3538,14 @@ async function publishApp() {
     setStatus("应用名称不能为空", false);
     return;
   }
+  if (els.publishRequirePreflight?.checked) {
+    const pre = await runWorkflowPreflight();
+    if (!pre?.ok) {
+      const errs = (pre.issues || []).filter((x) => String(x.level || "") === "error").map((x) => String(x.message || ""));
+      setStatus(`发布阻断：预检未通过 (${errs.join(" | ")})`, false);
+      return;
+    }
+  }
   let schema = {};
   try {
     const fromForm = collectAppSchemaFromForm();
@@ -3001,6 +3559,13 @@ async function publishApp() {
     name,
     graph,
     params_schema: schema,
+    template_policy: {
+      version: 1,
+      governance: currentTemplateGovernance(),
+      runtime_defaults: parseRunParamsLoose(),
+      latest_preflight: lastPreflightReport || null,
+      latest_template_acceptance: lastTemplateAcceptanceReport || null,
+    },
   });
   setStatus(out?.ok ? "流程应用已发布" : `发布失败: ${out?.error || "unknown"}`, !!out?.ok);
   await refreshApps();
@@ -3370,14 +3935,16 @@ function renderCompareResult(out) {
 }
 
 els.btnAdd.addEventListener("click", () => {
-  const t = String(els.nodeType.value || "").trim();
-  if (!t) {
+  const raw = String(els.nodeType.value || "").trim();
+  if (!raw) {
     setStatus("节点类型不能为空", false);
     return;
   }
-  const id = store.addNode(t, 60, 60);
+  const spec = resolveNodeCreateSpec(raw);
+  const id = store.addNode(spec.nodeType, 60, 60, spec.config || undefined);
   canvas.setSelectedIds([id]);
   renderAll();
+  setStatus(`已添加节点: ${spec.label || spec.nodeType}`, true);
 });
 
 els.btnReset.addEventListener("click", () => {
@@ -3397,6 +3964,35 @@ els.btnClear.addEventListener("click", () => {
   setStatus("画布已清空", true);
 });
 
+if (els.btnPreflight) {
+  els.btnPreflight.addEventListener("click", async () => {
+    const out = await runWorkflowPreflight();
+    if (out.ok) {
+      const warns = (out.issues || []).filter((x) => String(x.level || "") === "warning").length;
+      setStatus(warns > 0 ? `预检通过（${warns} 条警告）` : "预检通过", true);
+    } else {
+      const errs = (out.issues || []).filter((x) => String(x.level || "") === "error").length;
+      setStatus(`预检失败（${errs} 条错误）`, false);
+    }
+  });
+}
+if (els.btnPreflightExport) els.btnPreflightExport.addEventListener("click", exportPreflightReport);
+if (els.btnAutoFixGraph) {
+  els.btnAutoFixGraph.addEventListener("click", async () => {
+    const out = autoFixGraphStructure();
+    lastAutoFixSummary = out;
+    renderAutoFixDiff(out);
+    if (!out.changed) {
+      setStatus("未发现可自动修复的问题", true);
+      return;
+    }
+    setStatus(
+      `自动修复完成: 重复连线-${out.removed_dup_edges}, 自环-${out.removed_self_loops}, 断裂连线-${out.removed_broken_edges}, 孤立节点-${out.removed_isolated_nodes}`,
+      true
+    );
+    await runWorkflowPreflight();
+  });
+}
 els.btnRun.addEventListener("click", runWorkflow);
 if (els.btnEnqueueRun) els.btnEnqueueRun.addEventListener("click", enqueueWorkflowRun);
 if (els.btnQueueRefresh) els.btnQueueRefresh.addEventListener("click", refreshQueue);
@@ -3471,7 +4067,19 @@ els.btnSaveFlow.addEventListener("click", saveFlow);
 els.btnLoadFlow.addEventListener("click", loadFlow);
 if (els.btnApplyTemplate) els.btnApplyTemplate.addEventListener("click", applySelectedTemplate);
 if (els.btnSaveTemplate) els.btnSaveTemplate.addEventListener("click", saveCurrentAsTemplate);
+if (els.btnTemplateAcceptance) els.btnTemplateAcceptance.addEventListener("click", runTemplateAcceptance);
+if (els.btnTemplateAcceptanceExport) els.btnTemplateAcceptanceExport.addEventListener("click", exportTemplateAcceptanceReport);
 if (els.templateSelect) els.templateSelect.addEventListener("change", renderTemplateParamsForm);
+if (els.paletteMode) els.paletteMode.addEventListener("change", renderPalette);
+if (els.paletteSearch) els.paletteSearch.addEventListener("input", renderPalette);
+if (els.btnUseDeepSeek) {
+  els.btnUseDeepSeek.addEventListener("click", () => {
+    if (els.aiEndpoint) els.aiEndpoint.value = "https://api.deepseek.com/v1/chat/completions";
+    if (els.aiModel) els.aiModel.value = "deepseek-chat";
+    refreshOfflineBoundaryHint();
+    setStatus("已填充 DeepSeek 接口参数（请确认 API Key）", true);
+  });
+}
 if (els.aiEndpoint) els.aiEndpoint.addEventListener("input", refreshOfflineBoundaryHint);
 if (els.btnAddInputMap) {
   els.btnAddInputMap.addEventListener("click", () => {
@@ -3699,8 +4307,9 @@ els.canvasWrap.addEventListener("dragover", (evt) => {
 
 els.canvasWrap.addEventListener("drop", (evt) => {
   evt.preventDefault();
-  const t = String(evt.dataTransfer.getData("text/plain") || "").trim();
-  if (!t) return;
+  const raw = String(evt.dataTransfer.getData("text/plain") || "").trim();
+  if (!raw) return;
+  const spec = resolveNodeCreateSpec(raw);
   const snapEnabled = !!els.snapGrid.checked;
   const grid = 24;
   const world = canvas.clientToWorld(evt.clientX, evt.clientY);
@@ -3708,10 +4317,10 @@ els.canvasWrap.addEventListener("drop", (evt) => {
   const rawY = world.y - 43;
   const x = snapEnabled ? Math.round(rawX / grid) * grid : rawX;
   const y = snapEnabled ? Math.round(rawY / grid) * grid : rawY;
-  const id = store.addNode(t, x, y);
+  const id = store.addNode(spec.nodeType, x, y, spec.config || undefined);
   canvas.setSelectedIds([id]);
   renderAll();
-  setStatus(`已拖入节点: ${t}`, true);
+  setStatus(`已拖入节点: ${spec.label || spec.nodeType}`, true);
 });
 
 renderPalette();
@@ -3749,6 +4358,8 @@ renderAuditRows([]);
 renderReviewHistoryRows([]);
 renderMigrationReport({ migrated: false });
 renderCompareResult({ ok: false, error: "暂无" });
+renderPreflightReport({ ok: true, issues: [] });
+renderAutoFixDiff(null);
 refreshDiagnostics();
 refreshRunHistory();
 refreshQueue();

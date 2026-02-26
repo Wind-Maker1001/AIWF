@@ -5,27 +5,70 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AIWF Workflow Studio</title>
   <style>
-    :root { --bg:#f2f5fa; --card:#fff; --line:#d8e1ec; --txt:#1f2d3d; --muted:#617486; --brand:#0b5ea8; --ok:#087443; --bad:#b42318; }
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--txt);font-family:"Segoe UI","Microsoft YaHei",sans-serif}
-    .wrap{padding:12px;display:grid;gap:10px}
-    .hero{background:linear-gradient(120deg,#103660,#0b5ea8,#0b7d67);color:#fff;padding:12px 14px;border-radius:10px}
-    .main{display:grid;grid-template-columns:300px 1fr 380px;gap:10px} @media(max-width:1380px){.main{grid-template-columns:1fr}}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-    .hd{padding:9px 10px;border-bottom:1px solid #e9eef6;font-weight:700}
+    :root{
+      --bg:#f4f8fd;
+      --layer-1:#f8fbff;
+      --layer-2:#ffffff;
+      --line:#d3ddea;
+      --line-strong:#b9c9dd;
+      --txt:#162438;
+      --muted:#4e6278;
+      --brand:#0f6cbd;
+      --brand-2:#115ea3;
+      --ok:#0f7b0f;
+      --bad:#b10e1c;
+      --radius:12px;
+      --shadow:0 8px 24px rgba(8,32,58,.08);
+      --shadow-soft:0 2px 10px rgba(8,32,58,.06);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;color:var(--txt);
+      font-family:"Segoe UI Variable Text","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+      background:
+        radial-gradient(1200px 560px at 0% -10%, #daeaff 0%, transparent 62%),
+        linear-gradient(180deg,#f7fbff,#f2f6fb);
+    }
+    .wrap{padding:14px;display:grid;gap:10px}
+    .hero{
+      position:relative;overflow:hidden;
+      background:linear-gradient(128deg,#0d2f4f 0%, #0f6cbd 58%, #1a8f6c 100%);
+      color:#fff;padding:14px 16px;border-radius:14px;box-shadow:var(--shadow)
+    }
+    .main{display:grid;grid-template-columns:320px 1fr 400px;gap:10px}
+    @media(max-width:1500px){.main{grid-template-columns:1fr}}
+    .card{
+      background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.88));
+      border:1px solid var(--line);
+      border-radius:12px;overflow:hidden;box-shadow:var(--shadow-soft);backdrop-filter:blur(8px)
+    }
+    .hd{padding:10px 11px;border-bottom:1px solid #e6edf6;background:linear-gradient(180deg,#f7fbff,#f2f7fd);font-weight:700}
     .bd{padding:10px}
-    .palette-item{border:1px solid #d9e4f1;background:#f6faff;border-radius:8px;padding:7px;margin-bottom:7px;cursor:grab}
+    .palette-item{
+      border:1px solid #d7e3f1;background:linear-gradient(180deg,#fafdff,#f2f8ff);
+      border-radius:9px;padding:7px;margin-bottom:7px;cursor:grab
+    }
     .palette-item:active{cursor:grabbing}
-    .btn{border:0;border-radius:8px;padding:8px 10px;color:#fff;background:var(--brand);cursor:pointer}
-    .btn.secondary{background:#5e748d}
-    .btn.danger{background:#9f2f2a}
+    .btn{
+      border:1px solid transparent;border-radius:9px;padding:8px 11px;color:#fff;
+      background:linear-gradient(180deg,var(--brand),var(--brand-2));cursor:pointer;font-weight:600;
+      box-shadow:0 2px 8px rgba(15,108,189,.22);transition:transform .08s ease, box-shadow .12s ease
+    }
+    .btn:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(15,108,189,.3)}
+    .btn.secondary{background:linear-gradient(180deg,#5d7189,#4f6277);box-shadow:0 2px 6px rgba(31,45,61,.18)}
+    .btn.danger{background:linear-gradient(180deg,#bd3b34,#a12f2a);box-shadow:0 2px 6px rgba(160,42,40,.22)}
     .btns{display:flex;gap:7px;flex-wrap:wrap}
     label{display:block;font-size:12px;color:var(--muted);margin:8px 0 3px}
-    input,textarea{width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px}
+    input,textarea,select{
+      width:100%;border:1px solid #d2dceb;border-radius:9px;padding:8px 9px;font-size:13px;
+      color:var(--txt);background:#fff;transition:border-color .15s ease, box-shadow .15s ease
+    }
+    input:focus,textarea:focus,select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(15,108,189,.18)}
     textarea{min-height:80px}
     .status{font-size:13px;min-height:18px;margin-top:6px}.ok{color:var(--ok)}.bad{color:var(--bad)}
     .canvas-wrap{
-      position:relative;height:680px;border:1px dashed #c7d5e5;border-radius:10px;overflow:auto;
-      background:#f8fbff;
+      position:relative;height:680px;border:1px solid #c8d7e8;border-radius:12px;overflow:auto;
+      background:#f8fbff;box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
     }
     .canvas-surface{
       position:relative;
@@ -33,8 +76,9 @@
       min-height:100%;
       background-color:#f8fbff;
       background-image:
-        linear-gradient(to right, rgba(126,154,184,0.18) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(126,154,184,0.18) 1px, transparent 1px);
+        linear-gradient(to right, rgba(117,146,176,0.18) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(117,146,176,0.18) 1px, transparent 1px),
+        radial-gradient(circle at 0 0, rgba(255,255,255,.6), rgba(248,251,255,.88));
       background-size:24px 24px;
     }
     .edges{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto;overflow:visible;z-index:1}
@@ -46,8 +90,8 @@
     .edge-hit{cursor:pointer;pointer-events:stroke}
     #nodesLayer{position:absolute;inset:0;z-index:2}
     .minimap-wrap{
-      position:absolute;right:10px;bottom:10px;z-index:4;background:rgba(255,255,255,0.9);
-      border:1px solid #d3dfec;border-radius:8px;padding:6px;box-shadow:0 2px 8px rgba(31,45,61,.12)
+      position:absolute;right:10px;bottom:10px;z-index:4;background:rgba(255,255,255,0.92);
+      border:1px solid #d3dfec;border-radius:9px;padding:6px;box-shadow:0 4px 12px rgba(31,45,61,.14)
     }
     .route-debug{
       position:absolute;left:10px;bottom:10px;z-index:4;
@@ -55,10 +99,16 @@
       border-radius:8px;padding:6px 8px;font-size:12px;font-family:Consolas, "Courier New", monospace;
       pointer-events:none
     }
-    #minimap{display:block;width:180px;height:120px;border-radius:4px;background:#eef4fb;cursor:pointer}
-    .node{position:absolute;width:210px;border:1px solid #cfe0f3;background:#fff;border-radius:10px;box-shadow:0 4px 10px rgba(31,45,61,0.08);user-select:none}
-    .node.selected{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.28),0 6px 14px rgba(31,45,61,0.12)}
-    .node-hd{padding:6px 8px;background:#eef5ff;border-bottom:1px solid #dbe8f7;display:flex;justify-content:space-between;align-items:center;cursor:move}
+    #minimap{display:block;width:180px;height:120px;border-radius:6px;background:#eef4fb;cursor:pointer}
+    .node{
+      position:absolute;width:224px;border:1px solid #cfe0f3;background:#fff;border-radius:12px;
+      box-shadow:0 4px 12px rgba(31,45,61,0.09);user-select:none
+    }
+    .node.selected{border-color:#f59e0b;box-shadow:0 0 0 2px rgba(245,158,11,.28),0 8px 16px rgba(31,45,61,.14)}
+    .node-hd{
+      padding:6px 8px;background:linear-gradient(180deg,#eef5ff,#e8f1fd);
+      border-bottom:1px solid #dbe8f7;display:flex;justify-content:space-between;align-items:center;cursor:move
+    }
     .node-hd strong{font-size:13px}
     .node-bd{padding:6px 8px;font-size:12px;color:#4f6378}
     .node-actions{display:flex;gap:5px}
@@ -68,20 +118,27 @@
     .port.in{left:-8px;top:50%;transform:translateY(-50%);background:#2f7db7}
     .port.out{right:-8px;top:50%;transform:translateY(-50%);background:#0b7d67}
     .port.in.target{box-shadow:0 0 0 3px rgba(47,125,183,0.25)}
-    .edge-line{pointer-events:none;transition:stroke .14s ease, stroke-width .14s ease}
+    .edge-line{pointer-events:none;transition:stroke .14s ease, stroke-width .14s ease, opacity .12s ease}
     .edge-line.active{stroke:#e67e22 !important;stroke-width:3}
     .edge-ghost{pointer-events:none}
     .hint{font-size:12px;color:#5e7389;margin-bottom:8px}
     .cfg-meta{font-size:12px;color:#5e7389;margin-bottom:6px}
     .cfg-mode{margin-bottom:6px}
-    .cfg-form{border:1px solid #d8e3ef;border-radius:8px;padding:8px;background:#f8fbff;max-height:280px;overflow:auto}
+    .cfg-form{
+      border:1px solid #d8e3ef;border-radius:9px;padding:8px;
+      background:linear-gradient(180deg,#fbfdff,#f4f8ff);max-height:280px;overflow:auto
+    }
     .cfg-field{margin-bottom:8px}
     .cfg-help{font-size:12px;color:#6a7f95}
     .cfg-text{min-height:220px;font-family:Consolas, "Courier New", monospace}
-    table{width:100%;border-collapse:collapse;font-size:12px}
+    table{width:100%;border-collapse:collapse;font-size:12px;background:#fff}
     th,td{border-bottom:1px solid #edf2f7;padding:6px;text-align:left}
     th{background:#f3f7fd;color:#53687e}
-    pre{margin:0;white-space:pre-wrap;word-break:break-word;background:#0f1720;color:#d9e6f6;border-radius:8px;padding:9px;min-height:160px}
+    pre{
+      margin:0;white-space:pre-wrap;word-break:break-word;
+      background:#0f1720;color:#d9e6f6;border-radius:9px;padding:9px;min-height:160px;
+      border:1px solid #1c2f45;
+    }
   </style>
 </head>
 <body>
@@ -94,6 +151,13 @@
       <article class="card">
         <div class="hd">节点库</div>
         <div class="bd">
+          <label>节点视图</label>
+          <select id="paletteMode">
+            <option value="simple" selected>简化模式（推荐）</option>
+            <option value="all">专家模式（全部节点）</option>
+          </select>
+          <label>节点搜索</label>
+          <input id="paletteSearch" placeholder="输入关键词筛选节点（如 提炼 / rust / 审核）" />
           <div id="palette"></div>
           <div class="btns">
             <button id="btnAdd" class="btn">添加所选节点</button>
@@ -116,10 +180,20 @@
             <button id="btnApplyTemplate" class="btn secondary">应用模板</button>
             <button id="btnSaveTemplate" class="btn secondary">保存为模板</button>
           </div>
+          <div class="btns" style="margin-top:6px">
+            <button id="btnTemplateAcceptance" class="btn secondary">模板验收</button>
+            <select id="templateAcceptanceExportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:6px 8px;font-size:12px">
+              <option value="md">Markdown</option>
+              <option value="json">JSON</option>
+            </select>
+            <button id="btnTemplateAcceptanceExport" class="btn secondary">导出验收报告</button>
+          </div>
           <label>输入文件（每行一个）</label>
           <textarea id="inputFiles"></textarea>
           <label>报告标题</label>
           <input id="reportTitle" value="Workflow 任务" />
+          <label>断点节点ID（可选，仅运行到该节点）</label>
+          <input id="breakpointNodeId" placeholder="例如: n3" />
           <label><input id="exportCanonicalBundle" type="checkbox" style="width:auto;margin-right:6px" />导出熟肉包（Markdown + metadata + lineage）</label>
           <label>熟肉标题</label>
           <input id="canonicalTitle" value="AIWF 熟肉语料" />
@@ -129,6 +203,9 @@
           <input id="aiKey" />
           <label>外部 AI Model</label>
           <input id="aiModel" placeholder="deepseek-chat" />
+          <div class="btns" style="margin-top:6px">
+            <button id="btnUseDeepSeek" class="btn secondary">一键填充 DeepSeek</button>
+          </div>
           <div id="offlineBoundaryHint" class="cfg-help" style="margin-top:6px;color:#7a4a00;background:#fff7e6;border:1px solid #f2d39b;border-radius:8px;padding:8px">
             离线能力边界：仅本地清洗/计算/模板渲染节点可离线运行；AI 相关节点需外部 API。
           </div>
@@ -154,6 +231,8 @@
           <input id="sandboxMaxOutputBytes" value="2000000" />
           <label><input id="snapGrid" type="checkbox" checked style="width:auto;margin-right:6px" />拖拽吸附网格</label>
           <div class="btns" style="margin-top:8px">
+            <button id="btnPreflight" class="btn secondary">运行前预检</button>
+            <button id="btnAutoFixGraph" class="btn secondary">自动修复图结构</button>
             <button id="btnRun" class="btn">运行</button>
             <button id="btnEnqueueRun" class="btn secondary">加入队列</button>
             <button id="btnQueueRefresh" class="btn secondary">刷新队列</button>
@@ -199,6 +278,28 @@
       <article class="card">
         <div class="hd">节点配置与运行状态</div>
         <div class="bd">
+          <div class="cfg-form" style="margin-bottom:8px">
+            <div class="cfg-help">预检报告（点击“定位节点”可跳转到画布）</div>
+            <div id="preflightSummary" class="cfg-meta">未执行预检</div>
+            <div id="preflightRisk" class="cfg-meta">风险等级: -</div>
+            <div class="btns" style="margin:6px 0 8px">
+              <select id="preflightExportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:6px 8px;font-size:12px">
+                <option value="md">Markdown</option>
+                <option value="json">JSON</option>
+              </select>
+              <button id="btnPreflightExport" class="btn secondary">导出预检报告</button>
+            </div>
+            <table>
+              <thead><tr><th>级别</th><th>类型</th><th>说明</th><th>操作</th></tr></thead>
+              <tbody id="preflightRows"><tr><td colspan="4" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+            <div style="height:8px"></div>
+            <div id="preflightFixSummary" class="cfg-meta">自动修复差异: 暂无</div>
+            <table>
+              <thead><tr><th>变更类型</th><th>详情</th></tr></thead>
+              <tbody id="preflightFixRows"><tr><td colspan="2" style="color:#74879b">暂无</td></tr></tbody>
+            </table>
+          </div>
           <div class="cfg-meta" id="selectedNodeInfo">未选中节点</div>
           <div class="cfg-meta" id="selectedEdgeInfo">未选中连线</div>
           <div class="cfg-form" id="edgeConfigForm">
@@ -299,8 +400,8 @@
             <button id="btnReviewsRefresh" class="btn secondary">刷新审核队列</button>
           </div>
           <table>
-            <thead><tr><th>节点</th><th>状态</th><th>耗时</th></tr></thead>
-            <tbody id="nodeRuns"><tr><td colspan="3" style="color:#74879b">未运行</td></tr></tbody>
+            <thead><tr><th>节点</th><th>状态</th><th>耗时</th><th>输出体积</th><th>失败类型</th></tr></thead>
+            <tbody id="nodeRuns"><tr><td colspan="5" style="color:#74879b">未运行</td></tr></tbody>
           </table>
           <div style="height:8px"></div>
           <table>
@@ -372,6 +473,7 @@
             </div>
             <label>运行参数(JSON)</label>
             <textarea id="appRunParams" style="min-height:80px" placeholder='{"title":"示例任务"}'></textarea>
+            <label><input id="publishRequirePreflight" type="checkbox" checked style="width:auto;margin-right:6px" />发布前必须预检通过</label>
             <div class="btns" style="margin-top:6px">
               <button id="btnPublishApp" class="btn secondary">发布应用</button>
               <button id="btnAppsRefresh" class="btn secondary">刷新应用</button>

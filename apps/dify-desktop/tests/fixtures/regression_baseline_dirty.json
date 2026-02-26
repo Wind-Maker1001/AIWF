@@ -1,0 +1,10 @@
+﻿{
+  "min_quality_score": 20,
+  "max_gibberish_ratio": 1,
+  "min_artifacts": 4,
+  "case_expectations": {
+    "dirty_01_qmark_dense.txt": { "expect_filtered_noise": true, "min_warnings": 1 },
+    "dirty_03_mojibake.txt": { "min_warnings": 1 },
+    "dirty_06_qmark_mix.txt": { "min_warnings": 1 }
+  }
+}

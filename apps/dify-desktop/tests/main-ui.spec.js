@@ -52,3 +52,80 @@ test("save/load config keeps cleaning template", async () => {
   expect(result.savedTemplate).toBe("finance_report_v1");
   await electronApp.close();
 });
+
+test("gate panel one-click run updates dashboard", async () => {
+  const { electronApp, page } = await openMain();
+  await expect(page.locator("#btnGateAll")).toBeVisible();
+
+  await page.evaluate(() => {
+    window.runGateAll = async () => {
+      const status = document.getElementById("status");
+      const passed = document.getElementById("gatePassed");
+      if (passed) passed.textContent = "5";
+      if (status) {
+        status.className = "status ok";
+        status.textContent = "一键全跑通过（5/5）";
+      }
+    };
+  });
+
+  await page.click("#btnGateAll");
+  await expect(page.locator("#status")).toContainText("一键全跑通过");
+  await expect(page.locator("#gatePassed")).toContainText("5");
+  await electronApp.close();
+});
+
+test("build buttons helper toggles expected controls", async () => {
+  const { electronApp, page } = await openMain();
+  await expect(page.locator("#btnBuildPortable")).toBeVisible();
+
+  const state = await page.evaluate(async () => {
+    setBuildButtonsDisabled(true);
+    const blocked = {
+      portableDisabled: document.getElementById("btnBuildPortable").disabled,
+      installerDisabled: document.getElementById("btnBuildInstaller").disabled,
+      cancelDisabled: document.getElementById("btnBuildCancel").disabled,
+    };
+
+    setBuildButtonsDisabled(false);
+    const released = {
+      portableDisabled: document.getElementById("btnBuildPortable").disabled,
+      installerDisabled: document.getElementById("btnBuildInstaller").disabled,
+      cancelDisabled: document.getElementById("btnBuildCancel").disabled,
+    };
+    return { blocked, released };
+  });
+
+  expect(state.blocked.portableDisabled).toBeTruthy();
+  expect(state.blocked.installerDisabled).toBeTruthy();
+  expect(state.blocked.cancelDisabled).toBeFalsy();
+
+  expect(state.released.portableDisabled).toBeFalsy();
+  expect(state.released.installerDisabled).toBeFalsy();
+  expect(state.released.cancelDisabled).toBeTruthy();
+  await electronApp.close();
+});
+
+test("cancel build action updates status", async () => {
+  const { electronApp, page } = await openMain();
+  await expect(page.locator("#btnBuildCancel")).toBeVisible();
+
+  await page.click("#btnBuildCancel");
+  await expect(page.locator("#status")).toContainText("取消打包");
+  await electronApp.close();
+});
+
+test("export release report action updates status", async () => {
+  const { electronApp, page } = await openMain();
+  await expect(page.locator("#btnExportReleaseMd")).toBeVisible();
+
+  const result = await page.evaluate(async () => {
+    await exportReleaseReport("md");
+    return {
+      status: document.getElementById("status").textContent || "",
+    };
+  });
+
+  expect(result.status.includes("发布报告已导出") || result.status.includes("导出发布报告失败")).toBeTruthy();
+  await electronApp.close();
+});

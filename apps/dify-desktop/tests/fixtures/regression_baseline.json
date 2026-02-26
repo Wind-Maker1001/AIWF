@@ -1,0 +1,6 @@
+{
+  "min_quality_score": 50,
+  "max_gibberish_ratio": 0.35,
+  "min_artifacts": 4
+}
+

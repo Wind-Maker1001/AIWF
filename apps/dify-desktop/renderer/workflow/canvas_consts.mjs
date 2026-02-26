@@ -1,5 +1,5 @@
-const NODE_W = 210;
-const NODE_H = 88;
+const NODE_W = 224;
+const NODE_H = 92;
 
 export {
   NODE_W,

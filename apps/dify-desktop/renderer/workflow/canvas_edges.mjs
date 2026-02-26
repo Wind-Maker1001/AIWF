@@ -32,7 +32,7 @@ function renderEdgesLayer(ctx) {
   marker.setAttribute('orient', 'auto-start-reverse');
   const tip = svgEl('path');
   tip.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
-  tip.setAttribute('fill', '#2c70b1');
+  tip.setAttribute('fill', '#0f6cbd');
   marker.append(tip);
 
   const glow = svgEl('filter');
@@ -121,8 +121,8 @@ function renderEdgesLayer(ctx) {
     const stroke = svgEl('path');
     stroke.setAttribute('d', d);
     stroke.setAttribute('fill', 'none');
-    stroke.setAttribute('stroke', '#2f7bc2');
-    stroke.setAttribute('stroke-width', '2.4');
+    stroke.setAttribute('stroke', '#0f6cbd');
+    stroke.setAttribute('stroke-width', '2.6');
     stroke.setAttribute('marker-end', 'url(#arrowHead)');
     stroke.setAttribute('class', 'edge-line');
     stroke.setAttribute('filter', 'url(#edgeGlow)');
@@ -171,7 +171,7 @@ function renderEdgesLayer(ctx) {
       const ghost = svgEl('path');
       ghost.setAttribute('d', ensureEdgePath(orthogonalLanePath(a, b, []), a, b));
       ghost.setAttribute('fill', 'none');
-      ghost.setAttribute('stroke', '#0b7d67');
+      ghost.setAttribute('stroke', '#107c66');
       ghost.setAttribute('stroke-width', '2.2');
       ghost.setAttribute('stroke-dasharray', '6 4');
       ghost.setAttribute('class', 'edge-ghost');

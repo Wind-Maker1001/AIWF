@@ -9,6 +9,8 @@ Choose one path:
 Related docs:
 - Desktop app details: `docs/dify_desktop_app.md`
 - Dify local integration: `docs/dify_local_integration.md`
+- Dify baseline script: `ops/scripts/dify_integration_baseline.ps1`
+- Dify failover script: `ops/scripts/dify_run_with_offline_fallback.ps1`
 - Dify adapter v1: `docs/dify_adapter_v1.md`
 - Rust extension operators v1: `docs/rust_extension_ops_v1.md`
 - Rust new-ops perf gate: `docs/perf_gate_new_ops.md`

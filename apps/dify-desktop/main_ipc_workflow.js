@@ -93,6 +93,13 @@
     fs.writeFileSync(fp, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
   }
 
+  function resolveOutputRoot(cfg = null) {
+    const c = cfg && typeof cfg === "object" ? cfg : loadConfig();
+    const fromCfg = String(c?.outputRoot || "").trim();
+    if (fromCfg) return fromCfg;
+    return path.join(app.getPath("documents"), "AIWF-Offline");
+  }
+
   function appendDiagnostics(run) {
     try {
       const payload = {
@@ -897,7 +904,7 @@
           const out = attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
             config: merged,
-            outputRoot: path.join(app.getPath("documents"), "AIWF-Offline"),
+            outputRoot: resolveOutputRoot(merged),
             nodeCache: createNodeCacheApi(),
           }), effectivePayload || {});
           appendDiagnostics(out);
@@ -1382,6 +1389,45 @@
     return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/><title>AIWF 运行对比报告</title><style>body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;padding:16px;color:#1f2d3d}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d8e1ec;padding:6px 8px;font-size:13px}th{background:#f3f7fd;text-align:left}</style></head><body><h2>AIWF 运行对比报告</h2><p>生成时间: ${new Date().toISOString()}<br/>Run A: ${s.run_a || "-"}<br/>Run B: ${s.run_b || "-"}<br/>变化节点数: ${Number(s.changed_nodes || 0)}</p><table><thead><tr><th>节点</th><th>状态A</th><th>状态B</th><th>耗时A(s)</th><th>耗时B(s)</th><th>Δ(s)</th></tr></thead><tbody>${tr}</tbody></table></body></html>`;
   }
 
+  function renderPreflightMarkdown(rep) {
+    const r = rep && typeof rep === "object" ? rep : {};
+    const issues = Array.isArray(r.issues) ? r.issues : [];
+    const risk = r && typeof r.risk === "object" ? r.risk : null;
+    const lines = [];
+    lines.push("# AIWF 运行前预检报告");
+    lines.push("");
+    lines.push(`- 生成时间: ${new Date().toISOString()}`);
+    lines.push(`- 预检时间: ${String(r.ts || "") || "-"}`);
+    lines.push(`- 是否通过: ${r.ok ? "true" : "false"}`);
+    if (risk) lines.push(`- 风险等级: ${String(risk.label || "")} (${Number(risk.score || 0)}/100)`);
+    lines.push(`- 问题数: ${issues.length}`);
+    lines.push("");
+    lines.push("| 级别 | 类型 | 节点ID | 说明 |");
+    lines.push("|---|---|---|---|");
+    issues.forEach((it) => {
+      lines.push(`| ${String(it.level || "")} | ${String(it.kind || "")} | ${String(it.node_id || "")} | ${String(it.message || "").replace(/\|/g, "\\|")} |`);
+    });
+    return `${lines.join("\n")}\n`;
+  }
+
+  function renderTemplateAcceptanceMarkdown(rep) {
+    const r = rep && typeof rep === "object" ? rep : {};
+    const before = r.before && typeof r.before === "object" ? r.before : {};
+    const after = r.after && typeof r.after === "object" ? r.after : {};
+    const fix = r.auto_fix && typeof r.auto_fix === "object" ? r.auto_fix : {};
+    const lines = [];
+    lines.push("# AIWF 模板验收报告");
+    lines.push("");
+    lines.push(`- 生成时间: ${new Date().toISOString()}`);
+    lines.push(`- 模板ID: ${String(r.template_id || "-")}`);
+    lines.push(`- 模板名称: ${String(r.template_name || "-")}`);
+    lines.push(`- 验收结论: ${r.accepted ? "通过" : "未通过"}`);
+    lines.push(`- 预检前: ${before.ok ? "通过" : "未通过"} / 风险 ${Number(before?.risk?.score || 0)}/100`);
+    lines.push(`- 预检后: ${after.ok ? "通过" : "未通过"} / 风险 ${Number(after?.risk?.score || 0)}/100`);
+    lines.push(`- 自动修复: 重复连线 ${Number(fix.removed_dup_edges || 0)}，自环 ${Number(fix.removed_self_loops || 0)}，断裂连线 ${Number(fix.removed_broken_edges || 0)}，孤立节点 ${Number(fix.removed_isolated_nodes || 0)}`);
+    return `${lines.join("\n")}\n`;
+  }
+
   ipcMain.handle("aiwf:openWorkflowStudio", async () => {
     createWorkflowWindow();
     return { ok: true };
@@ -1393,7 +1439,7 @@
     const out = attachQualityGate(await runMinimalWorkflow({
       payload: effectivePayload,
       config: merged,
-      outputRoot: path.join(app.getPath("documents"), "AIWF-Offline"),
+      outputRoot: resolveOutputRoot(merged),
       nodeCache: createNodeCacheApi(),
     }), effectivePayload || {});
     appendDiagnostics(out);
@@ -1451,7 +1497,7 @@
       const out = attachQualityGate(await runMinimalWorkflow({
         payload: effectivePayload,
         config: merged,
-        outputRoot: path.join(app.getPath("documents"), "AIWF-Offline"),
+        outputRoot: resolveOutputRoot(merged),
         nodeCache: createNodeCacheApi(),
       }), effectivePayload || {});
       appendDiagnostics(out);
@@ -1500,6 +1546,77 @@
       const content = format === "html" ? renderCompareHtml(out) : renderCompareMarkdown(out);
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       fs.writeFileSync(filePath, content, "utf8");
+      return { ok: true, path: filePath, format };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:exportWorkflowPreflightReport", async (_evt, req) => {
+    try {
+      const report = req?.report && typeof req.report === "object" ? req.report : {};
+      const format = String(req?.format || "md").trim().toLowerCase() === "json" ? "json" : "md";
+      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      let filePath = "";
+      if (req?.mock && req?.path && allowMockIo) {
+        filePath = String(req.path);
+      } else {
+        const defaultName = `aiwf_preflight_${Date.now()}.${format}`;
+        const pick = await dialog.showSaveDialog({
+          title: "导出预检报告",
+          defaultPath: path.join(app.getPath("documents"), defaultName),
+          filters: format === "json" ? [{ name: "JSON", extensions: ["json"] }] : [{ name: "Markdown", extensions: ["md"] }],
+          properties: ["createDirectory", "showOverwriteConfirmation"],
+        });
+        if (pick.canceled || !pick.filePath) return { ok: false, canceled: true };
+        filePath = pick.filePath;
+      }
+      const content = format === "json"
+        ? `${JSON.stringify(report, null, 2)}\n`
+        : renderPreflightMarkdown(report);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, content, "utf8");
+      appendAudit("preflight_export", {
+        format,
+        path: filePath,
+        issue_count: Array.isArray(report?.issues) ? report.issues.length : 0,
+      });
+      return { ok: true, path: filePath, format };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  ipcMain.handle("aiwf:exportWorkflowTemplateAcceptanceReport", async (_evt, req) => {
+    try {
+      const report = req?.report && typeof req.report === "object" ? req.report : {};
+      const format = String(req?.format || "md").trim().toLowerCase() === "json" ? "json" : "md";
+      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      let filePath = "";
+      if (req?.mock && req?.path && allowMockIo) {
+        filePath = String(req.path);
+      } else {
+        const defaultName = `aiwf_template_acceptance_${Date.now()}.${format}`;
+        const pick = await dialog.showSaveDialog({
+          title: "导出模板验收报告",
+          defaultPath: path.join(app.getPath("documents"), defaultName),
+          filters: format === "json" ? [{ name: "JSON", extensions: ["json"] }] : [{ name: "Markdown", extensions: ["md"] }],
+          properties: ["createDirectory", "showOverwriteConfirmation"],
+        });
+        if (pick.canceled || !pick.filePath) return { ok: false, canceled: true };
+        filePath = pick.filePath;
+      }
+      const content = format === "json"
+        ? `${JSON.stringify(report, null, 2)}\n`
+        : renderTemplateAcceptanceMarkdown(report);
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, content, "utf8");
+      appendAudit("template_acceptance_export", {
+        format,
+        path: filePath,
+        template_id: String(report?.template_id || ""),
+        accepted: !!report?.accepted,
+      });
       return { ok: true, path: filePath, format };
     } catch (e) {
       return { ok: false, error: String(e) };
@@ -1596,7 +1713,7 @@
           const out = attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
             config: merged,
-            outputRoot: path.join(app.getPath("documents"), "AIWF-Offline"),
+            outputRoot: resolveOutputRoot(merged),
             nodeCache: createNodeCacheApi(),
           }), effectivePayload || {});
           appendDiagnostics(out);
@@ -1795,7 +1912,7 @@
       const out = attachQualityGate(await runMinimalWorkflow({
         payload: effectivePayload,
         config: merged,
-        outputRoot: path.join(app.getPath("documents"), "AIWF-Offline"),
+        outputRoot: resolveOutputRoot(merged),
         nodeCache: createNodeCacheApi(),
       }), effectivePayload || {});
       appendDiagnostics(out);
@@ -2149,4 +2266,5 @@
 module.exports = {
   registerWorkflowIpc,
 };
+
 

@@ -66,6 +66,10 @@ function createBridgeSupport({ path, fork }) {
     return runOfflineTaskInWorker("precheck", payload, outRoot);
   }
 
+  function runOfflinePreviewInWorker(payload, outRoot) {
+    return runOfflineTaskInWorker("preview", payload, outRoot);
+  }
+
   async function runViaBaseApi(payload, cfg) {
     const base = String(cfg.baseUrl || "http://127.0.0.1:18080").replace(/\/$/, "");
     const req = normalizeDifyRequest(payload || {});
@@ -132,6 +136,7 @@ function createBridgeSupport({ path, fork }) {
   return {
     runOfflineCleaningInWorker,
     runOfflinePrecheckInWorker,
+    runOfflinePreviewInWorker,
     runViaBaseApi,
     baseHealth,
     getTaskStoreStatus,

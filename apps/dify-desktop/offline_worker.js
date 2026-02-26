@@ -1,4 +1,4 @@
-const { runOfflineCleaning, runOfflinePrecheck } = require("./offline_engine");
+const { runOfflineCleaning, runOfflinePrecheck, runOfflineDebatePreview } = require("./offline_engine");
 
 process.on("message", async (msg) => {
   try {
@@ -7,6 +7,8 @@ process.on("message", async (msg) => {
     let result = null;
     if (task === "precheck") {
       result = await runOfflinePrecheck(payload);
+    } else if (task === "preview") {
+      result = await runOfflineDebatePreview(payload);
     } else {
       result = await runOfflineCleaning(payload);
     }

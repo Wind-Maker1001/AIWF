@@ -1,4 +1,4 @@
-const fs = require("fs");
+﻿const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const { nowIso, sha256Text, summarizeCorpus } = require("./workflow_utils");
@@ -56,6 +56,48 @@ function tryStartRustService() {
   return { ok: false, path: "" };
 }
 
+async function computeTextQualityViaRust(corpusText, options = {}) {
+  const base = String(options.rust_endpoint || "http://127.0.0.1:18082").replace(/\/$/, "");
+  if (!isLocalEndpoint(base) && !canUseNetworkEgress()) {
+    return { score: 0, mode: "egress_blocked", fallback: true };
+  }
+  try {
+    const resp = await fetch(`${base}/operators/text_quality_v1`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: String(corpusText || "") }),
+    });
+    if (!resp.ok) throw new Error(`rust_http_${resp.status}`);
+    const j = await resp.json();
+    const out = j?.result || j?.quality || j;
+    if (!out || typeof out !== "object") throw new Error("invalid_text_quality");
+    const score = Number(out.score || out.quality_score || 0);
+    return {
+      ...out,
+      score: Number.isFinite(score) ? score : 0,
+      mode: "rust_http",
+      fallback: false,
+    };
+  } catch {
+    const text = String(corpusText || "");
+    const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+    const latin = (text.match(/[A-Za-z]/g) || []).length;
+    const repl = (text.match(/\uFFFD|�/g) || []).length;
+    const readable = cjk + latin;
+    const total = Math.max(1, text.length);
+    let score = 100;
+    score -= Math.min(50, (repl / total) * 400);
+    score -= readable < 80 ? 20 : 0;
+    return {
+      score: Math.max(0, Number(score.toFixed(2))),
+      mode: "js_fallback",
+      fallback: true,
+      readable_chars: readable,
+      replacement_chars: repl,
+    };
+  }
+}
+
 async function computeViaRust(corpusText, options = {}) {
   const base = String(options.rust_endpoint || "http://127.0.0.1:18082").replace(/\/$/, "");
   const strict = options.rust_required !== false;
@@ -74,7 +116,8 @@ async function computeViaRust(corpusText, options = {}) {
     }
     const j = await resp.json();
     if (!j?.ok || !j?.metrics) throw new Error("rust_invalid_response");
-    return j.metrics;
+    const textQuality = await computeTextQualityViaRust(corpusText, { rust_endpoint: base, rust_required: false });
+    return { ...j.metrics, text_quality: textQuality };
   };
 
   try {
@@ -87,7 +130,6 @@ async function computeViaRust(corpusText, options = {}) {
           const healthy = await checkRustHealth(base);
           if (healthy) break;
         } catch {}
-        // eslint-disable-next-line no-await-in-loop
         await sleep(500);
       }
       try {
@@ -100,7 +142,14 @@ async function computeViaRust(corpusText, options = {}) {
     }
   }
 
-  return { metrics: summarizeCorpus(corpusText), mode: "js_fallback", started: false };
+  return {
+    metrics: {
+      ...summarizeCorpus(corpusText),
+      text_quality: await computeTextQualityViaRust(corpusText, { rust_endpoint: base, rust_required: false }),
+    },
+    mode: "js_fallback",
+    started: false,
+  };
 }
 
 function buildFallbackRefine(corpusText, metrics) {
@@ -108,9 +157,12 @@ function buildFallbackRefine(corpusText, metrics) {
   const bullets = lines.filter((x) => x.startsWith("- ")).slice(0, 12).map((x) => x.replace(/^- /, ""));
   const out = [];
   out.push("以下为基于算法清洗结果生成的提炼摘要（未调用外部 AI）：");
-  out.push(`- 语料段落数: ${metrics.sections}`);
-  out.push(`- 语料要点数: ${metrics.bullets}`);
+  out.push(`- 语料分段数: ${metrics.sections}`);
+  out.push(`- 要点条目数: ${metrics.bullets}`);
   out.push(`- 字符数: ${metrics.chars}`);
+  if (metrics?.text_quality && typeof metrics.text_quality === "object") {
+    out.push(`- 文本质量分: ${Number(metrics.text_quality.score || 0).toFixed(1)} (${String(metrics.text_quality.mode || "unknown")})`);
+  }
   out.push("- 核心要点:");
   bullets.forEach((b, i) => out.push(`${i + 1}. ${b}`));
   return out.join("\n");
@@ -129,7 +181,7 @@ async function callExternalAi(payload, corpusText, metrics) {
   }
   const prompt = [
     "你是严谨的信息提炼助手。",
-    "只允许提炼输入语料，不得编造数据，不得新增数字结论。",
+    "只允许基于输入语料提炼，不得编造数据，不得新增数字结论。",
     `语料哈希: ${metrics.sha256}`,
     "",
     String(corpusText || "").slice(0, 120000),
@@ -165,6 +217,10 @@ function auditAiText(aiText, metrics) {
   if (t.length < 80) reasons.push("AI 输出过短，信息不足");
   if (/捏造|编造|虚构|猜测/i.test(t)) reasons.push("AI 输出包含不合规表述");
   if (!t.includes("证据") && !t.includes("要点")) reasons.push("AI 输出缺少“证据/要点”结构");
+  const tq = metrics?.text_quality;
+  if (tq && Number.isFinite(Number(tq.score)) && Number(tq.score) < 50) {
+    reasons.push(`输入语料质量偏低(${Number(tq.score).toFixed(1)})，建议先提升清洗质量`);
+  }
   return {
     passed: reasons.length === 0,
     reasons,
@@ -189,6 +245,10 @@ function writeWorkflowSummary(summaryPath, context) {
   lines.push(`- chars: ${context.metrics?.chars || 0}`);
   lines.push(`- cjk: ${context.metrics?.cjk || 0}`);
   lines.push(`- latin: ${context.metrics?.latin || 0}`);
+  if (context.metrics?.text_quality) {
+    lines.push(`- text_quality_score: ${Number(context.metrics.text_quality.score || 0).toFixed(1)}`);
+    lines.push(`- text_quality_mode: ${String(context.metrics.text_quality.mode || "unknown")}`);
+  }
   lines.push("");
   lines.push("## AI 审核");
   if (!context.audit?.reasons?.length) lines.push("- 无阻断问题。");
@@ -202,6 +262,7 @@ function writeWorkflowSummary(summaryPath, context) {
 
 module.exports = {
   computeViaRust,
+  computeTextQualityViaRust,
   callExternalAi,
   auditAiText,
   writeWorkflowSummary,

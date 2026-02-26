@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("aiwfDesktop", {
   health: (cfg) => ipcRenderer.invoke("aiwf:health", cfg),
   listCleaningTemplates: () => ipcRenderer.invoke("aiwf:listCleaningTemplates"),
   precheckCleaning: (payload, cfg) => ipcRenderer.invoke("aiwf:precheckCleaning", payload, cfg),
+  previewDebateStyle: (payload, cfg) => ipcRenderer.invoke("aiwf:previewDebateStyle", payload, cfg),
   runCleaning: (payload, cfg) => ipcRenderer.invoke("aiwf:runCleaning", payload, cfg),
   runWorkflow: (payload, cfg) => ipcRenderer.invoke("aiwf:runWorkflow", payload, cfg),
   enqueueWorkflowTask: (req) => ipcRenderer.invoke("aiwf:enqueueWorkflowTask", req),
@@ -23,6 +24,8 @@ contextBridge.exposeInMainWorld("aiwfDesktop", {
   publishWorkflowApp: (req) => ipcRenderer.invoke("aiwf:publishWorkflowApp", req),
   listWorkflowApps: (req) => ipcRenderer.invoke("aiwf:listWorkflowApps", req),
   runWorkflowApp: (req, cfg) => ipcRenderer.invoke("aiwf:runWorkflowApp", req, cfg),
+  exportWorkflowPreflightReport: (req) => ipcRenderer.invoke("aiwf:exportWorkflowPreflightReport", req),
+  exportWorkflowTemplateAcceptanceReport: (req) => ipcRenderer.invoke("aiwf:exportWorkflowTemplateAcceptanceReport", req),
   getWorkflowRunTimeline: (req) => ipcRenderer.invoke("aiwf:getWorkflowRunTimeline", req),
   getWorkflowFailureSummary: (req) => ipcRenderer.invoke("aiwf:getWorkflowFailureSummary", req),
   getWorkflowSandboxAlerts: (req) => ipcRenderer.invoke("aiwf:getWorkflowSandboxAlerts", req),
@@ -53,6 +56,10 @@ contextBridge.exposeInMainWorld("aiwfDesktop", {
   loadWorkflow: (opts) => ipcRenderer.invoke("aiwf:loadWorkflow", opts),
   openWorkflowStudio: () => ipcRenderer.invoke("aiwf:openWorkflowStudio"),
   openPath: (p) => ipcRenderer.invoke("aiwf:openPath", p),
+  getLatestArtifactsDir: () => ipcRenderer.invoke("aiwf:getLatestArtifactsDir"),
+  getSamplePoolInfo: (cfg) => ipcRenderer.invoke("aiwf:getSamplePoolInfo", cfg),
+  samplePoolAddFiles: (paths, cfg) => ipcRenderer.invoke("aiwf:samplePoolAddFiles", paths, cfg),
+  samplePoolClear: (cfg) => ipcRenderer.invoke("aiwf:samplePoolClear", cfg),
   logRouteMetrics: (payload) => ipcRenderer.invoke("aiwf:logRouteMetrics", payload),
   getRouteMetricsSummary: () => ipcRenderer.invoke("aiwf:getRouteMetricsSummary"),
   inspectEncoding: (paths) => ipcRenderer.invoke("aiwf:inspectEncoding", paths),
@@ -62,6 +69,29 @@ contextBridge.exposeInMainWorld("aiwfDesktop", {
   checkRuntime: () => ipcRenderer.invoke("aiwf:checkRuntime"),
   startupSelfCheck: (cfg) => ipcRenderer.invoke("aiwf:startupSelfCheck", cfg),
   getTaskStoreStatus: (cfg) => ipcRenderer.invoke("aiwf:getTaskStoreStatus", cfg),
+  runLocalGateCheck: (req) => ipcRenderer.invoke("aiwf:runLocalGateCheck", req),
+  getLocalGateSummary: (req) => ipcRenderer.invoke("aiwf:getLocalGateSummary", req),
+  getLocalGateRuntime: () => ipcRenderer.invoke("aiwf:getLocalGateRuntime"),
+  cancelLocalGateCheck: () => ipcRenderer.invoke("aiwf:cancelLocalGateCheck"),
+  getBuildGuardStatus: () => ipcRenderer.invoke("aiwf:getBuildGuardStatus"),
+  runLocalBuildScript: (req) => ipcRenderer.invoke("aiwf:runLocalBuildScript", req),
+  getLocalBuildRuntime: () => ipcRenderer.invoke("aiwf:getLocalBuildRuntime"),
+  cancelLocalBuildScript: () => ipcRenderer.invoke("aiwf:cancelLocalBuildScript"),
+  exportReleaseReport: (req) => ipcRenderer.invoke("aiwf:exportReleaseReport", req),
+  onLocalGateLog: (handler) => {
+    const h = (_evt, payload) => {
+      try { handler && handler(payload); } catch {}
+    };
+    ipcRenderer.on("aiwf:localGateLog", h);
+    return () => ipcRenderer.removeListener("aiwf:localGateLog", h);
+  },
+  onLocalBuildLog: (handler) => {
+    const h = (_evt, payload) => {
+      try { handler && handler(payload); } catch {}
+    };
+    ipcRenderer.on("aiwf:localBuildLog", h);
+    return () => ipcRenderer.removeListener("aiwf:localBuildLog", h);
+  },
   getDroppedFilePath: (file) => {
     try {
       const p = webUtils.getPathForFile(file);

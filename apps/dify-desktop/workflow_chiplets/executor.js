@@ -187,6 +187,7 @@ async function executeWorkflowDag({
   let failed = null;
 
   const resume = ctx?.payload?.resume || {};
+  const breakpointNodeId = String(ctx?.payload?.breakpoint_node_id || "").trim();
   const resumeFrom = String(resume.node_id || "");
   const resumeCache = resume.outputs && typeof resume.outputs === "object" ? resume.outputs : {};
   const resumeAncestors = collectAncestors(incomingFrom, resumeFrom);
@@ -238,6 +239,15 @@ async function executeWorkflowDag({
           progressed = true;
         }
       }
+    }
+  }
+
+  function stopByBreakpoint(hitNodeId) {
+    for (const [id] of byId.entries()) {
+      if (id === hitNodeId) continue;
+      if (done.has(id) || running.has(id)) continue;
+      removeReady(id);
+      skipNode(id, "breakpoint_stop");
     }
   }
 
@@ -316,8 +326,12 @@ async function executeWorkflowDag({
         try { cacheApi.set(cacheKey, output); } catch {}
       }
       onNodeSuccess?.(node, output);
-      scheduleChildren(nodeId, output, true);
-      pruneIfUnreachable();
+      if (breakpointNodeId && nodeId === breakpointNodeId) {
+        stopByBreakpoint(nodeId);
+      } else {
+        scheduleChildren(nodeId, output, true);
+        pruneIfUnreachable();
+      }
     } catch (e) {
       if (!failed) failed = e;
       onNodeFailure?.(node, e);

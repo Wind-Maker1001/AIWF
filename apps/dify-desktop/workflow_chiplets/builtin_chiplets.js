@@ -81,6 +81,82 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
     return defaultOn ? "process" : "none";
   }
 
+  function extractNumericTokens(text) {
+    const src = String(text || "");
+    const out = [];
+    const rx = /[-+]?\d+(?:[.,]\d+)?%?/g;
+    let m = null;
+    while ((m = rx.exec(src))) {
+      const raw = String(m[0] || "");
+      const norm = raw.replace(/,/g, "");
+      if (!norm) continue;
+      out.push(norm);
+    }
+    return out;
+  }
+
+  function hasCitationMarkers(text) {
+    const s = String(text || "");
+    if (!s.trim()) return false;
+    if (/\[[0-9]{1,3}\]/.test(s)) return true;
+    if (/(来源|出处|source|reference)[:：]/i.test(s)) return true;
+    if (/https?:\/\/\S+/i.test(s)) return true;
+    if (/（[^）]{0,28}(来源|出处)[^）]{0,28}）/.test(s)) return true;
+    return false;
+  }
+
+  function compareMetricCore(base = {}, now = {}) {
+    const keys = ["sections", "bullets", "chars", "cjk", "latin"];
+    const diffs = [];
+    for (const k of keys) {
+      const a = Number(base?.[k] || 0);
+      const b = Number(now?.[k] || 0);
+      const d = Math.abs(a - b);
+      if (d > 0) diffs.push({ key: k, base: a, now: b, delta: d });
+    }
+    return diffs;
+  }
+
+  function looksLikeDataFile(p) {
+    const s = String(p || "").trim().toLowerCase();
+    if (!s) return false;
+    return /\.(csv|tsv|xlsx|xls|json|jsonl|parquet|feather|orc|db|sqlite|sql)$/i.test(s);
+  }
+
+  function hasRowsLikeOutput(nodeOutputs) {
+    if (!nodeOutputs || typeof nodeOutputs !== "object") return false;
+    const values = Array.isArray(nodeOutputs) ? nodeOutputs : Object.values(nodeOutputs);
+    for (const v of values) {
+      if (!v || typeof v !== "object") continue;
+      if (Array.isArray(v.rows) && v.rows.length > 0) return true;
+      if (v.detail && typeof v.detail === "object" && Array.isArray(v.detail.rows) && v.detail.rows.length > 0) return true;
+      if (Array.isArray(v.left_rows) && v.left_rows.length > 0) return true;
+      if (Array.isArray(v.right_rows) && v.right_rows.length > 0) return true;
+    }
+    return false;
+  }
+
+  function shouldBlockAiOnData(ctx, node) {
+    const payloadAi = ctx?.payload?.ai && typeof ctx.payload.ai === "object" ? ctx.payload.ai : {};
+    const cfg = node?.config && typeof node.config === "object" ? node.config : {};
+    const allowOnData = cfg.allow_ai_on_data === true || payloadAi.allow_on_data === true;
+    if (allowOnData) return { block: false, reason: "" };
+    const strict = payloadAi.no_hallucination_data !== false;
+    if (!strict) return { block: false, reason: "" };
+    const filesFromCtx = Array.isArray(ctx?.files) ? ctx.files : [];
+    const filesFromPayload = collectFiles(ctx?.payload || {});
+    const fileList = Array.from(new Set([...filesFromCtx, ...filesFromPayload]));
+    const dataFileHit = fileList.find((f) => looksLikeDataFile(f));
+    const dataRowsHit = hasRowsLikeOutput(ctx?.nodeOutputs);
+    if (dataFileHit || dataRowsHit) {
+      return {
+        block: true,
+        reason: dataFileHit ? `data_file_detected:${String(dataFileHit)}` : "rows_detected_in_upstream_outputs",
+      };
+    }
+    return { block: false, reason: "" };
+  }
+
   async function callRustOperator(base, operatorPath, body, required, timeoutMs, operatorName) {
     const resp = await fetch(`${base}${operatorPath}`, {
       method: "POST",
@@ -615,6 +691,54 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
       threshold: 0.8,
     }, 57),
   );
+  registry.register("evidence_conflict_v1", {
+    id: "chiplet.evidence_conflict_v1",
+    priority: 56,
+    timeout_ms: 60000,
+    retries: 0,
+    async run(_ctx, node) {
+      const cfg = node?.config && typeof node.config === "object" ? node.config : {};
+      const rows = Array.isArray(cfg.rows) ? cfg.rows : [];
+      const claimField = String(cfg.claim_field || "claim");
+      const stanceField = String(cfg.stance_field || "stance");
+      const sourceField = String(cfg.source_field || "source");
+      const byClaim = new Map();
+      rows.forEach((r) => {
+        const claim = String(r?.[claimField] || "").trim().toLowerCase();
+        if (!claim) return;
+        const stance = String(r?.[stanceField] || "").trim().toLowerCase();
+        const source = String(r?.[sourceField] || "").trim();
+        if (!byClaim.has(claim)) byClaim.set(claim, { support: 0, oppose: 0, neutral: 0, sources: new Set() });
+        const it = byClaim.get(claim);
+        if (/(support|赞成|支持|yes|true|pro)/i.test(stance)) it.support += 1;
+        else if (/(oppose|反对|质疑|no|false|con)/i.test(stance)) it.oppose += 1;
+        else it.neutral += 1;
+        if (source) it.sources.add(source);
+      });
+      const conflicts = [];
+      for (const [claim, v] of byClaim.entries()) {
+        if (v.support > 0 && v.oppose > 0) {
+          conflicts.push({
+            claim,
+            support: v.support,
+            oppose: v.oppose,
+            neutral: v.neutral,
+            source_count: v.sources.size,
+            conflict_score: Number((Math.min(v.support, v.oppose) / Math.max(1, v.support + v.oppose)).toFixed(4)),
+          });
+        }
+      }
+      conflicts.sort((a, b) => b.conflict_score - a.conflict_score);
+      return {
+        ok: true,
+        status: "done",
+        operator: "evidence_conflict_v1",
+        conflict_count: conflicts.length,
+        total_claims: byClaim.size,
+        conflicts,
+      };
+    },
+  });
   registry.register(
     "template_bind_v1",
     makeRustNodeChiplet("template_bind_v1", "/operators/template_bind_v1", {
@@ -987,6 +1111,8 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
       const sourceType = String(cfg.chart_source_node || "sql_chart_v1").trim() || "sql_chart_v1";
       const chart = nodeOutputByType(ctx, sourceType) || {};
       const slots = cfg.slots && typeof cfg.slots === "object" && !Array.isArray(cfg.slots) ? { ...cfg.slots } : {};
+      const templateVersion = String(cfg.template_version || "v1");
+      const requiredSlots = Array.isArray(cfg.required_slots) ? cfg.required_slots.map((x) => String(x || "").trim()).filter(Boolean) : ["chart_main"];
       if (!slots.chart_main) {
         slots.chart_main = {
           categories: Array.isArray(chart?.categories) ? chart.categories : [],
@@ -996,18 +1122,47 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
       const artifactRoot = path.join(ctx.outputRoot, ctx.runId, "artifacts");
       fs.mkdirSync(artifactRoot, { recursive: true });
       const bindingPath = path.join(artifactRoot, "office_slot_binding.json");
+      const validationPath = path.join(artifactRoot, "office_template_validation.json");
+      const missingSlots = requiredSlots.filter((k) => !(k in slots));
+      const emptySlots = requiredSlots.filter((k) => {
+        const v = slots[k];
+        if (v === null || v === undefined) return true;
+        if (Array.isArray(v)) return v.length === 0;
+        if (typeof v === "object") return Object.keys(v).length === 0;
+        return String(v).trim() === "";
+      });
       const payload = {
         run_id: String(ctx.runId || ""),
         workflow_id: String(ctx.workflowId || ""),
         template_kind: String(cfg.template_kind || "pptx"),
+        template_version: templateVersion,
+        required_slots: requiredSlots,
         slots,
       };
       fs.writeFileSync(bindingPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+      const validation = {
+        ok: missingSlots.length === 0,
+        run_id: String(ctx.runId || ""),
+        workflow_id: String(ctx.workflowId || ""),
+        template_kind: payload.template_kind,
+        template_version: templateVersion,
+        required_slots: requiredSlots,
+        missing_slots: missingSlots,
+        empty_slots: emptySlots,
+        checked_at: new Date().toISOString(),
+      };
+      fs.writeFileSync(validationPath, `${JSON.stringify(validation, null, 2)}\n`, "utf8");
+      const warnings = [];
+      if (missingSlots.length > 0) warnings.push(`missing_slots:${missingSlots.join(",")}`);
+      if (emptySlots.length > 0) warnings.push(`empty_slots:${emptySlots.join(",")}`);
       return {
         ok: true,
         template_kind: payload.template_kind,
+        template_version: templateVersion,
         slots,
         binding_path: bindingPath,
+        validation_path: validationPath,
+        warnings,
       };
     },
   });
@@ -1018,6 +1173,10 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
     timeout_ms: Number(process.env.AIWF_CHIPLET_AI_TIMEOUT_MS || 240000),
     retries: 0,
     async run(ctx, node) {
+      const dataGuard = shouldBlockAiOnData(ctx, node);
+      if (dataGuard.block) {
+        throw new Error(`ai_for_data_blocked:${dataGuard.reason}`);
+      }
       const cfg = node?.config && typeof node.config === "object" ? node.config : {};
       const providers = Array.isArray(cfg.providers) && cfg.providers.length
         ? cfg.providers
@@ -1092,7 +1251,17 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
     timeout_ms: Number(process.env.AIWF_CHIPLET_AI_TIMEOUT_MS || 240000),
     retries: Number(process.env.AIWF_CHIPLET_AI_RETRIES || 1),
     async run(ctx, node) {
+      const dataGuard = shouldBlockAiOnData(ctx, node);
+      if (dataGuard.block) {
+        throw new Error(`ai_for_data_blocked:${dataGuard.reason}`);
+      }
       const cfg = node?.config && typeof node.config === "object" ? node.config : {};
+      const payloadAi = ctx?.payload?.ai && typeof ctx.payload.ai === "object" ? { ...ctx.payload.ai } : {};
+      if (cfg.ai_endpoint) payloadAi.endpoint = String(cfg.ai_endpoint);
+      if (cfg.ai_api_key) payloadAi.api_key = String(cfg.ai_api_key);
+      if (cfg.ai_model) payloadAi.model = String(cfg.ai_model);
+      if (cfg.provider_name) payloadAi.name = String(cfg.provider_name);
+      const refinePayload = { ...(ctx?.payload || {}), ai: payloadAi };
       if (cfg.reuse_existing !== false && ctx.aiText) {
         return {
           ai_mode: "reuse_existing",
@@ -1110,7 +1279,7 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
       if (isolationLevel !== "none") {
         try {
           refined = await runIsolatedTask("ai_refine", {
-            workflowPayload: ctx.payload,
+            workflowPayload: refinePayload,
             corpusText,
             metrics,
             isolation_level: isolationLevel,
@@ -1120,17 +1289,18 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
           refined.isolation_level = isolationLevel;
         } catch (e) {
           if (isolationLevel === "sandbox") throw e;
-          refined = await callExternalAi(ctx.payload, corpusText, metrics);
+          refined = await callExternalAi(refinePayload, corpusText, metrics);
           refined.isolated = false;
           refined.isolation_level = "none";
           refined.isolation_error = String(e);
         }
       } else {
-        refined = await callExternalAi(ctx.payload, corpusText, metrics);
+        refined = await callExternalAi(refinePayload, corpusText, metrics);
         refined.isolated = false;
         refined.isolation_level = "none";
       }
       ctx.aiText = refined.text || "";
+      ctx.aiTextSource = "ai_refine";
       return {
         ai_mode: refined.reason,
         ai_text_chars: ctx.aiText.length,
@@ -1147,8 +1317,74 @@ function registerBuiltinWorkflowChiplets(registry, deps) {
     priority: 60,
     timeout_ms: 60000,
     retries: 0,
-    async run(ctx) {
-      ctx.audit = auditAiText(ctx.aiText || "", ctx.metrics || summarizeCorpus(ctx.corpusText || ""));
+    async run(ctx, node) {
+      const cfg = node?.config && typeof node.config === "object" ? node.config : {};
+      const numericLock = cfg.numeric_lock !== false;
+      const citationRequired = cfg.citation_required !== false;
+      const recalcVerify = cfg.recalc_verify !== false;
+      const allowedNewNumbers = Number.isFinite(Number(cfg.max_new_numbers))
+        ? Math.max(0, Math.floor(Number(cfg.max_new_numbers)))
+        : 0;
+
+      const aiText = String(ctx.aiText || "");
+      const corpusText = String(ctx.corpusText || "");
+      const metrics = ctx.metrics || summarizeCorpus(corpusText);
+      const reasonsExtra = [];
+
+      if (numericLock) {
+        const baseNums = new Set(extractNumericTokens(corpusText));
+        const aiNums = extractNumericTokens(aiText);
+        const newNums = aiNums.filter((x) => !baseNums.has(x));
+        if (newNums.length > allowedNewNumbers) {
+          reasonsExtra.push(`numeric_lock_failed:new_numbers=${newNums.slice(0, 10).join(",")}`);
+        }
+      }
+
+      if (citationRequired && !hasCitationMarkers(aiText)) {
+        reasonsExtra.push("citation_required_failed:no_citation_markers");
+      }
+
+      let recalc = null;
+      if (recalcVerify) {
+        const options = {
+          run_id: ctx.runId,
+          rust_endpoint: ctx?.payload?.rust?.endpoint,
+          rust_required: ctx?.payload?.rust?.required !== false,
+        };
+        try {
+          recalc = await computeViaRust(corpusText, options);
+          const recalcMetrics = recalc?.metrics || summarizeCorpus(corpusText);
+          const metricDiffs = compareMetricCore(metrics, recalcMetrics);
+          const maxAllowedMetricDelta = Number.isFinite(Number(cfg.max_metric_delta))
+            ? Math.max(0, Math.floor(Number(cfg.max_metric_delta)))
+            : 0;
+          const hardDiff = metricDiffs.filter((d) => Number(d.delta) > maxAllowedMetricDelta);
+          if (hardDiff.length > 0) {
+            reasonsExtra.push(`recalc_verify_failed:${hardDiff.map((d) => `${d.key}:${d.base}->${d.now}`).join("|")}`);
+          }
+          ctx.metrics = recalcMetrics;
+        } catch (e) {
+          reasonsExtra.push(`recalc_verify_error:${String(e)}`);
+        }
+      }
+
+      ctx.audit = auditAiText(aiText, ctx.metrics || metrics);
+      if (reasonsExtra.length) {
+        ctx.audit.passed = false;
+        ctx.audit.reasons = Array.isArray(ctx.audit.reasons) ? [...ctx.audit.reasons, ...reasonsExtra] : reasonsExtra;
+      }
+      ctx.audit.constraints = {
+        numeric_lock: numericLock,
+        citation_required: citationRequired,
+        recalc_verify: recalcVerify,
+      };
+      ctx.audit.recalc = recalc && typeof recalc === "object"
+        ? {
+            mode: recalc.mode || "",
+            started: !!recalc.started,
+            metrics: recalc.metrics || null,
+          }
+        : null;
       if (!ctx.audit.passed) throw new Error(ctx.audit.reasons.join("; "));
       return ctx.audit;
     },

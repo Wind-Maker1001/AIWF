@@ -37,6 +37,57 @@ Dify request header must include: `X-API-Key: YOUR_STRONG_KEY`.
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_bridge_smoke.ps1
 ```
 
+## 3.1 Baseline (Health + Replay)
+
+Use the baseline script for a full local integration sanity check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_integration_baseline.ps1
+```
+
+Dry-run mode (validate script wiring without sending HTTP):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_integration_baseline.ps1 -DryRun
+```
+
+Replay payload example file:
+- `ops/config/dify_run_cleaning.payload.example.json`
+
+Single-step scripts (optional):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_health_check.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_replay_run_cleaning.ps1
+```
+
+Production check (retry + timeout + alert log):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_integration_production_check.ps1 -MaxRetries 3 -TimeoutSec 180
+```
+
+Fallback policy options (desktop/base_api mode):
+- `smart` (default): fallback for timeout/network/server/not-ok
+- `smart_strict`: fallback only for timeout/network/5xx
+- `always`: always fallback when primary path not successful
+- `never`: disable fallback
+
+Run with automatic offline fallback (primary Dify bridge fails -> local desktop offline cleaning):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_run_with_offline_fallback.ps1
+```
+
+Disable fallback in production check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_integration_production_check.ps1 -EnableOfflineFallback:$false
+```
+
+HTTP node template doc:
+- `docs/dify_workflow_http_node_template.md`
+
 ## 4. Configure Dify Workflow HTTP Node
 
 Method: `POST`  

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
+﻿const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const { execFileSync, fork } = require("child_process");
@@ -29,7 +29,7 @@ const { runMinimalWorkflow } = loadWorkflowEngine();
 
 const config = createConfigSupport({ app, fs, path });
 const runtime = createRuntimeSupport({ app, fs, path, execFileSync, fork, iconv });
-const windows = createWindowSupport({ app, BrowserWindow, Menu, shell, path });
+const windows = createWindowSupport({ app, BrowserWindow, Menu, shell, path, loadConfig: config.loadConfig });
 
 registerIpcHandlers({
   app,
@@ -43,10 +43,12 @@ registerIpcHandlers({
   baseHealth: runtime.baseHealth,
   runOfflineCleaningInWorker: runtime.runOfflineCleaningInWorker,
   runOfflinePrecheckInWorker: runtime.runOfflinePrecheckInWorker,
+  runOfflinePreviewInWorker: runtime.runOfflinePreviewInWorker,
   runViaBaseApi: runtime.runViaBaseApi,
   listCleaningTemplates,
   routeMetricsLogPath: config.routeMetricsLogPath,
   routeMetricsSummaryPath: config.routeMetricsSummaryPath,
+  runModeAuditLogPath: config.runModeAuditLogPath,
   rotateLogIfNeeded: config.rotateLogIfNeeded,
   createWorkflowWindow: windows.createWorkflowWindow,
   runMinimalWorkflow,
@@ -71,3 +73,4 @@ app.on("activate", () => {
 process.on("uncaughtException", (e) => {
   dialog.showErrorBox("AIWF Desktop Error", String(e));
 });
+

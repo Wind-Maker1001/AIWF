@@ -332,6 +332,16 @@ function createOfflineIngest(deps = {}) {
     }
 
     const issues = [];
+    const textRows = mappedRows
+      .map((r) => String(r?.text || "").trim())
+      .filter((t) => t.length > 0);
+    const longTextRows = textRows.filter((t) => t.length >= 40);
+    const coherentRows = longTextRows.filter((t) => /[。！？!?；;.]$/.test(t) || t.length >= 90);
+    const contentPrecheck = {
+      text_row_ratio: mappedRows.length > 0 ? Number((textRows.length / mappedRows.length).toFixed(6)) : 0,
+      long_paragraph_ratio: textRows.length > 0 ? Number((longTextRows.length / textRows.length).toFixed(6)) : 0,
+      coherent_paragraph_ratio: longTextRows.length > 0 ? Number((coherentRows.length / longTextRows.length).toFixed(6)) : 0,
+    };
     if (missingRequired.length > 0) {
       issues.push(`缺少必填字段: ${missingRequired.join("、")}`);
     }
@@ -340,6 +350,13 @@ function createOfflineIngest(deps = {}) {
     }
     if (!qualityGateOk && qualityGateError) {
       issues.push(`质量门禁预检未通过: ${qualityGateError}`);
+    }
+    const contentGateEnabled = toBool(ruleParam(params, "precheck_content_gate_enabled"), false);
+    if (contentGateEnabled && contentPrecheck.long_paragraph_ratio < 0.2) {
+      issues.push(`正文段落比例偏低: ${(contentPrecheck.long_paragraph_ratio * 100).toFixed(1)}%`);
+    }
+    if (contentGateEnabled && contentPrecheck.coherent_paragraph_ratio < 0.5) {
+      issues.push(`段落连贯性偏低: ${(contentPrecheck.coherent_paragraph_ratio * 100).toFixed(1)}%`);
     }
 
     const suggestions = [];
@@ -351,6 +368,9 @@ function createOfflineIngest(deps = {}) {
     }
     if (!qualityGateOk) {
       suggestions.push("请先修复预检问题，再执行正式生成。");
+    }
+    if (contentPrecheck.long_paragraph_ratio < 0.2 || contentPrecheck.coherent_paragraph_ratio < 0.5) {
+      suggestions.push("建议先进行论文正文抽取（去注释/去参考文献）后再做 Office 产物。");
     }
     if (issues.length === 0) {
       suggestions.push("预检通过，可以直接执行开始生成。");
@@ -370,6 +390,8 @@ function createOfflineIngest(deps = {}) {
       amount_convert_rate_required: Number(requiredAmountConvertRate.toFixed(6)),
       invalid_ratio: Number(invalidRatio.toFixed(6)),
       quality: q,
+      content_precheck: contentPrecheck,
+      content_gate_enabled: contentGateEnabled,
       quality_gate_ok: qualityGateOk,
       quality_gate_error: qualityGateError,
       ok: issues.length === 0,

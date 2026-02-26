@@ -1,0 +1,10 @@
+{
+  "owner": "dify",
+  "actor": "dify",
+  "ruleset_version": "v1",
+  "params": {
+    "office_lang": "zh",
+    "office_theme": "debate_plus",
+    "office_quality_mode": "high"
+  }
+}

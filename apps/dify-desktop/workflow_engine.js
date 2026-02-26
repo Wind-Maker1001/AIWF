@@ -28,6 +28,7 @@ const { loadExternalChiplets } = require("./workflow_chiplets/external_loader");
 
 function buildWorkflowDiagnostics(nodeRuns = []) {
   const byType = {};
+  const errorKinds = {};
   for (const n of nodeRuns) {
     const t = String(n?.type || "unknown");
     if (!byType[t]) {
@@ -38,6 +39,8 @@ function buildWorkflowDiagnostics(nodeRuns = []) {
         seconds_avg: 0,
         attempts_total: 0,
         rust_v2_used_runs: 0,
+        output_bytes_total: 0,
+        output_kb_avg: 0,
       };
     }
     byType[t].runs += 1;
@@ -45,15 +48,20 @@ function buildWorkflowDiagnostics(nodeRuns = []) {
     byType[t].seconds_total += Number(n?.seconds || 0);
     byType[t].attempts_total += Number(n?.telemetry?.attempts || 1);
     if (n?.output?.rust_v2_used === true) byType[t].rust_v2_used_runs += 1;
+    byType[t].output_bytes_total += Number(n?.output_bytes || 0);
+    const ek = String(n?.error_kind || "").trim();
+    if (ek) errorKinds[ek] = (errorKinds[ek] || 0) + 1;
   }
   Object.values(byType).forEach((v) => {
     v.seconds_avg = v.runs > 0 ? Number((v.seconds_total / v.runs).toFixed(3)) : 0;
+    v.output_kb_avg = v.runs > 0 ? Number(((v.output_bytes_total / v.runs) / 1024).toFixed(2)) : 0;
     v.seconds_total = Number(v.seconds_total.toFixed(3));
   });
   return {
     generated_at: new Date().toISOString(),
     node_count: nodeRuns.length,
     chiplets: byType,
+    error_kinds: errorKinds,
   };
 }
 
@@ -146,6 +154,14 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
 
     const artifacts = [...(ctx.cleanResult?.artifacts || [])];
     if (ctx.workflowSummaryArtifact) artifacts.push(ctx.workflowSummaryArtifact);
+    const nodeOutputs = ctx.nodeOutputs && typeof ctx.nodeOutputs === "object" ? ctx.nodeOutputs : {};
+    const templateValidation = Object.entries(nodeOutputs)
+      .map(([nodeId, out]) => ({
+        node_id: String(nodeId || ""),
+        validation_path: String(out?.validation_path || ""),
+        warnings: Array.isArray(out?.warnings) ? out.warnings : [],
+      }))
+      .filter((x) => x.validation_path || x.warnings.length > 0);
     return {
       ok: true,
       workflow_id: graph.workflow_id,
@@ -158,7 +174,8 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       artifacts,
       clean_job_id: ctx.cleanResult?.job_id || null,
       warnings: ctx.cleanResult?.warnings || [],
-      node_outputs: ctx.nodeOutputs || {},
+      node_outputs: nodeOutputs,
+      template_validation: templateValidation,
       pending_reviews: ctx.manualReviewRequests || [],
       workflow: graph,
       diagnostics: buildWorkflowDiagnostics(orderedNodeRuns),

@@ -22,6 +22,11 @@ Output:
 2. Drag raw files into task queue (or fill input paths manually).
 3. Click `模板预检` (recommended), then click `开始生成`.
 
+Sample pool (for acceptance):
+- In GUI, use `样本池（验收专用）` drop area.
+- Drag files into this box; files are copied to `输出目录\sample_pool`.
+- You can keep adding samples over time; acceptance is no longer hardcoded.
+
 Recommended settings:
 - `office_theme=assignment` for coursework deliverables.
 - `office_theme=debate_plus` for debate materials.
@@ -42,7 +47,8 @@ Output artifacts:
 - `deck.pptx`
 
 Default output root:
-- `文档\AIWF-Offline\<job_id>\artifacts`
+- `E:\Desktop_Real\AIWF\<job_id>\artifacts` (if `E:\Desktop_Real` exists)
+- else `桌面\AIWF_Builds\<job_id>\artifacts`
 
 ### 2.1 Finance Template Quickstart (`finance_report_v1`)
 
@@ -144,3 +150,36 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_stability_v1_1_5.
 产出：
 - `release\stability_v1.1.5\stability_summary.json`
 - `release\stability_v1.1.5\stability_summary.md`
+
+## 8. 真实样本验收 / 成品质量门禁 / 一键发布
+
+在 `apps/dify-desktop` 下执行：
+
+```powershell
+npm run test:office-gate
+npm run acceptance:real
+npm run release:oneclick
+```
+
+说明：
+- `test:office-gate`:
+  校验 `xlsx/docx/pptx` 成品结构（图表数量、sheet、标题/表格、幻灯片和可视化元素）。
+- `acceptance:real`:
+  用真实样本生成验收包，默认输出到 `E:\Desktop_Real\AIWF\reports`。
+- `release:oneclick`:
+  执行 `python/openpyxl` 依赖检查 + 发布门禁 + 验收 + 安装包构建。
+
+可选环境变量：
+- `AIWF_ACCEPTANCE_INPUT_DIR`：真实样本目录
+- `AIWF_ACCEPTANCE_OUTPUT_ROOT`：验收输出目录
+- `AIWF_ACCEPTANCE_LIMIT`：样本数量上限（默认 6）
+- `AIWF_ACCEPTANCE_LOCK=1`：启用“固定样本清单”（默认开启）
+- `AIWF_ACCEPTANCE_MANIFEST`：固定样本清单文件路径（默认 `输出目录\reports\acceptance_manifest.json`）
+- `AIWF_ONECLICK_WITH_ACCEPTANCE=0`：一键发布时跳过验收
+- `AIWF_ONECLICK_BUILD_SCRIPT`：覆盖构建脚本（默认 `build:win:installer:release:gated`）
+
+门禁阈值（可调）：
+- `AIWF_GATE_XLSX_MIN_CHARTS`
+- `AIWF_GATE_DOCX_MAX_BAD_CHAR_RATIO`
+- `AIWF_GATE_DOCX_MAX_QMARK_RATIO`
+- `AIWF_GATE_DOCX_MIN_CJK_RATIO`

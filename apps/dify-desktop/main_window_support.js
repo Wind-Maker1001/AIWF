@@ -1,4 +1,4 @@
-﻿function createWindowSupport({ app, BrowserWindow, Menu, shell, path }) {
+﻿function createWindowSupport({ app, BrowserWindow, Menu, shell, path, loadConfig }) {
   function createWorkflowWindow(options = {}) {
     const debugApi = !!options.debugApi;
     const win = new BrowserWindow({
@@ -24,7 +24,7 @@
       submenu: [
         { label: "打开 Workflow Studio", click: () => createWorkflowWindow() },
         { label: "打开配置目录", click: () => shell.openPath(app.getPath("userData")) },
-        { label: "打开输出目录", click: () => shell.openPath(path.join(app.getPath("documents"), "AIWF-Offline")) },
+        { label: "打开输出目录", click: () => shell.openPath((() => { try { const cfg = typeof loadConfig === "function" ? loadConfig() : null; const fromCfg = String(cfg?.outputRoot || "").trim(); if (fromCfg) return fromCfg; } catch {} return path.join(app.getPath("desktop"), "AIWF_Builds"); })()) },
       ],
     }];
     Menu.setApplicationMenu(Menu.buildFromTemplate(tpl));
@@ -79,4 +79,5 @@
 }
 
 module.exports = { createWindowSupport };
+
 

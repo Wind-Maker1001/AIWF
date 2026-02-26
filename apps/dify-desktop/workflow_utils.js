@@ -88,7 +88,22 @@ function finalizeNode(node, ok, output, error) {
     node.output = output || null;
     node.telemetry = null;
   }
+  try {
+    node.output_bytes = Buffer.byteLength(JSON.stringify(node.output || null), "utf8");
+  } catch {
+    node.output_bytes = 0;
+  }
   node.error = error ? String(error) : null;
+  if (node.error) {
+    const msg = String(node.error || "").toLowerCase();
+    if (msg.includes("timeout")) node.error_kind = "timeout";
+    else if (msg.includes("quality_gate")) node.error_kind = "quality_gate";
+    else if (msg.includes("contract")) node.error_kind = "io_contract";
+    else if (msg.includes("manual_review")) node.error_kind = "manual_review";
+    else node.error_kind = "runtime";
+  } else {
+    node.error_kind = "";
+  }
 }
 
 function nodeOutputByType(ctx, type) {

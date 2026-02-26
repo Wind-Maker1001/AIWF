@@ -186,8 +186,42 @@ function stripInlineCitations(text) {
   return normalizeLineText(s);
 }
 
+function normalizeAcademicLine(text) {
+  let s = normalizeLineText(text);
+  // Remove standalone footnote markers and common superscript-like numeric tails.
+  s = s.replace(/\s*[†‡*]+\s*$/g, "");
+  s = s.replace(/\s*\(\s*\d{1,2}\s*\)\s*$/g, "");
+  s = s.replace(/\s*\[\s*\d{1,2}\s*\]\s*$/g, "");
+  // Repair simple line-wrap hyphenation in OCR/PDF extraction.
+  s = s.replace(/([A-Za-z])-\s+([A-Za-z])/g, "$1$2");
+  // Drop obvious editorial noise.
+  s = s.replace(/\b(preprint|accepted manuscript|all rights reserved)\b/gi, "");
+  return normalizeLineText(s);
+}
+
 function cleanAcademicChunksDetailed(chunks, filePath) {
-  const src = Array.isArray(chunks) ? chunks : [];
+  const srcRaw = Array.isArray(chunks) ? chunks : [];
+  const src = [];
+  // Merge line-broken paragraphs produced by PDF/OCR extraction.
+  for (let i = 0; i < srcRaw.length; i += 1) {
+    let cur = normalizeAcademicLine(srcRaw[i]);
+    if (!cur) continue;
+    while (i + 1 < srcRaw.length) {
+      const next = normalizeAcademicLine(srcRaw[i + 1]);
+      if (!next) {
+        i += 1;
+        continue;
+      }
+      const curLooksHeading = isReferenceSectionTitle(cur) || isNonBodySectionTitle(cur) || /^(\d+(\.\d+){0,3}\s+|[（(]?[一二三四五六七八九十]+[)）、.]\s*)/.test(cur);
+      const nextLooksHeading = isReferenceSectionTitle(next) || isNonBodySectionTitle(next) || /^(\d+(\.\d+){0,3}\s+|[（(]?[一二三四五六七八九十]+[)）、.]\s*)/.test(next);
+      const curEnds = /[。！？!?；;:]$/.test(cur);
+      const shouldJoin = !curLooksHeading && !nextLooksHeading && !curEnds && cur.length <= 140 && next.length <= 140;
+      if (!shouldJoin) break;
+      cur = normalizeLineText(`${cur} ${next}`);
+      i += 1;
+    }
+    src.push(cur);
+  }
   const cleaned = [];
   const stats = {
     source_file: filePath,
@@ -202,7 +236,7 @@ function cleanAcademicChunksDetailed(chunks, filePath) {
   let stopBody = false;
   for (const raw of src) {
     if (stopBody) break;
-    const line = normalizeLineText(raw);
+    const line = normalizeAcademicLine(raw);
     if (!line) continue;
     if (isReferenceSectionTitle(line) || isNonBodySectionTitle(line)) {
       stats.stop_section_hit = true;
@@ -213,7 +247,7 @@ function cleanAcademicChunksDetailed(chunks, filePath) {
       stats.removed_reference_lines += 1;
       continue;
     }
-    const stripped = stripInlineCitations(line);
+    const stripped = normalizeAcademicLine(stripInlineCitations(line));
     if (stripped !== line) stats.inline_citation_cleaned_lines += 1;
     if (!stripped) continue;
     if (isLikelyNoiseLine(stripped)) {
@@ -239,7 +273,7 @@ function cleanAcademicChunksDetailed(chunks, filePath) {
     return { chunks: dedup, stats };
   }
   const fallback = src
-    .map((x) => normalizeLineText(stripInlineCitations(x)))
+    .map((x) => normalizeAcademicLine(stripInlineCitations(x)))
     .filter((x) => x && x.length >= 10)
     .slice(0, 5000);
   stats.kept_chunks = fallback.length;
@@ -308,6 +342,18 @@ function safeFileStem(name) {
 function buildPaperMarkdown(filePath, sourceType, chunks) {
   const body = cleanAcademicChunks(chunks, filePath);
   const title = pickPaperTitle(body, filePath);
+  const detectHeadingLevel = (line) => {
+    const s = normalizeLineText(line);
+    if (!s || s.length > 80) return 0;
+    if (/^(摘要|abstract|引言|introduction|结论|conclusion|讨论|discussion|方法|method|results?|结果|背景|background)[:：]?$/i.test(s)) return 2;
+    if (/^\d+(\.\d+){0,3}\s+/.test(s)) {
+      const depth = (s.match(/\./g) || []).length + 2;
+      return Math.min(4, Math.max(2, depth));
+    }
+    if (/^[（(]?[一二三四五六七八九十]+[)）、.]\s*/.test(s)) return 3;
+    if (/^[A-Z][A-Z\s]{4,40}$/.test(s)) return 2;
+    return 0;
+  };
   const lines = [];
   lines.push(`# ${title}`);
   lines.push("");
@@ -316,9 +362,23 @@ function buildPaperMarkdown(filePath, sourceType, chunks) {
   lines.push(`- chunk_count: ${body.length}`);
   lines.push("");
   lines.push("## Body");
+  let prevHeading = false;
   for (const c of body) {
     const t = normalizeLineText(c);
     if (!t) continue;
+    const lvl = detectHeadingLevel(t);
+    if (lvl > 0) {
+      lines.push(`${"#".repeat(lvl)} ${t.replace(/^(\d+(\.\d+){0,3}\s+|[（(]?[一二三四五六七八九十]+[)）、.]\s*)/, "").trim()}`);
+      lines.push("");
+      prevHeading = true;
+      continue;
+    }
+    if (prevHeading) {
+      lines.push(t);
+      lines.push("");
+      prevHeading = false;
+      continue;
+    }
     lines.push(`- ${t}`);
   }
   lines.push("");
@@ -329,8 +389,8 @@ function chunksFromMarkdown(mdText) {
   return String(mdText || "")
     .replace(/^\uFEFF/, "")
     .split(/\r?\n/)
-    .map((line) => line.replace(/^\s*[-*]\s+/, "").trim())
-    .filter((line) => line && !line.startsWith("#") && !/^source_(file|type):/i.test(line) && !/^chunk_count:/i.test(line))
+    .map((line) => line.replace(/^\s*[-*]\s+/, "").replace(/^#{1,6}\s+/, "").trim())
+    .filter((line) => line && !/^source_(file|type):/i.test(line) && !/^chunk_count:/i.test(line) && !/^body$/i.test(line))
     .map(normalizeLineText)
     .filter((x) => x.length >= 6);
 }
@@ -414,6 +474,15 @@ function writeAiCorpusMarkdown(filePath, records) {
 function writeQualityReport(filePath, rows, warnings, records, options = {}) {
   const paperRecords = Array.isArray(options?.paperRecords) ? options.paperRecords : [];
   const fidelity = options?.fidelity || {};
+  const qualityScore = options?.qualityScore && typeof options.qualityScore === "object"
+    ? options.qualityScore
+    : null;
+  const contentQuality = options?.contentQuality && typeof options.contentQuality === "object"
+    ? options.contentQuality
+    : null;
+  const outputGateMeta = options?.outputGateMeta && typeof options.outputGateMeta === "object"
+    ? options.outputGateMeta
+    : null;
   const totalRows = Array.isArray(rows) ? rows.length : 0;
   const badRows = (rows || []).filter((r) => isLikelyCorruptedText(String(r.text || "")));
   const gibberishRatio = totalRows > 0 ? badRows.length / totalRows : 0;
@@ -432,6 +501,16 @@ function writeQualityReport(filePath, rows, warnings, records, options = {}) {
   lines.push(`- 行数: ${totalRows}`);
   lines.push(`- 告警数: ${Array.isArray(warnings) ? warnings.length : 0}`);
   lines.push(`- 模式: ${fidelity.enabled ? "text_fidelity" : "standard"}`);
+  if (qualityScore) {
+    lines.push(`- 总体质量分(0-100): ${Number(qualityScore.score || 0).toFixed(1)} (${String(qualityScore.level || "unknown")})`);
+  }
+  if (contentQuality) {
+    lines.push(`- 内容质量分(0-100): ${Number(contentQuality.score || 0).toFixed(1)} (${String(contentQuality.level || "unknown")})`);
+    lines.push(`- 内容门禁: ${contentQuality.pass ? "通过" : "未通过"}`);
+  }
+  if (outputGateMeta && Number.isFinite(Number(outputGateMeta.filtered_question_mark_rows || 0))) {
+    lines.push(`- 问号密集过滤行: ${Number(outputGateMeta.filtered_question_mark_rows || 0)}`);
+  }
   if (fidelity.enabled && Array.isArray(fidelity.reasons) && fidelity.reasons.length > 0) {
     lines.push(`- 降级原因: ${fidelity.reasons.join("; ")}`);
   }
@@ -442,6 +521,12 @@ function writeQualityReport(filePath, rows, warnings, records, options = {}) {
   lines.push(`- 参考/注释剔除率(reference_prune_rate): ${(referencePruneRate * 100).toFixed(1)}%`);
   lines.push(`- 引文清洗触发率(citation_cleaned_rate): ${rawChunks > 0 ? ((citeCleaned / rawChunks) * 100).toFixed(1) : "0.0"}%`);
   lines.push(`- 章节完整度(section_integrity_rate): ${(sectionIntegrityRate * 100).toFixed(1)}%`);
+  if (contentQuality && contentQuality.metrics) {
+    lines.push(`- 标题覆盖率(title_coverage): ${(Number(contentQuality.metrics.title_coverage || 0) * 100).toFixed(1)}%`);
+    lines.push(`- 段落覆盖率(paragraph_coverage): ${(Number(contentQuality.metrics.paragraph_coverage || 0) * 100).toFixed(1)}%`);
+    lines.push(`- 段落连贯率(coherent_paragraph_ratio): ${(Number(contentQuality.metrics.coherent_paragraph_ratio || 0) * 100).toFixed(1)}%`);
+    lines.push(`- 数字一致性(numeric_consistency): ${(Number(contentQuality.metrics.numeric_consistency || 0) * 100).toFixed(1)}%`);
+  }
   lines.push("");
   lines.push("## 文件级检查");
   const hasLayerRecords = Array.isArray(records) && records.length > 0;
