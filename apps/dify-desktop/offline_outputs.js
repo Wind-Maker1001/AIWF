@@ -9,6 +9,7 @@ const {
   normalizeLineText,
   isLikelyCorruptedText,
   looksLikeReferenceEntry,
+  rowTextForQuality,
 } = require("./offline_paper");
 
 function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOfficeLayout }) {
@@ -26,7 +27,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     const removedRows = [];
     let filtered = 0;
     list.forEach((r) => {
-      const t = String(r?.text || "");
+      const t = rowTextForQuality(r);
       if (isQuestionMarkHeavy(t)) {
         filtered += 1;
         removedRows.push(r);
@@ -75,7 +76,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     let sourceWithTitle = 0;
     bySource.forEach((items) => {
       const top = items.slice(0, 8);
-      if (top.some((r) => looksLikeTitleLine(r?.text || ""))) sourceWithTitle += 1;
+      if (top.some((r) => looksLikeTitleLine(rowTextForQuality(r)))) sourceWithTitle += 1;
     });
 
     let paraCount = 0;
@@ -83,7 +84,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     let numericRows = 0;
     let numericGood = 0;
     list.forEach((r) => {
-      const t = normalizeLineText(String(r?.text || ""));
+      const t = rowTextForQuality(r);
       if (!t) return;
       if (t.length >= 40 && !isLikelyCorruptedText(t) && !looksLikeReferenceEntry(t)) {
         paraCount += 1;
@@ -136,8 +137,11 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   function computeOfficeQualityScore(rows, quality = {}, warnings = [], options = {}) {
     const total = Array.isArray(rows) ? rows.length : 0;
     if (total <= 0) return { score: 0, level: "poor", reasons: ["empty_rows"] };
-    const bad = rows.filter((r) => isLikelyCorruptedText(String(r.text || ""))).length;
-    const gibberishRatio = bad / total;
+    const evalRows = rows
+      .map((r) => rowTextForQuality(r))
+      .filter((t) => String(t || "").length >= 4);
+    const bad = evalRows.filter((t) => isLikelyCorruptedText(t)).length;
+    const gibberishRatio = evalRows.length > 0 ? (bad / evalRows.length) : 0;
     const invalidRatio = Number(quality.input_rows || 0) > 0
       ? Number(quality.invalid_rows || 0) / Number(quality.input_rows || 1)
       : 0;
@@ -207,6 +211,22 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     const padBottom = Number.isFinite(Number(opts.pad_bottom)) ? Math.max(0, Number(opts.pad_bottom)) : 0.06;
     const avail = Math.max(0, Number(maxHeight || 0) - padTop - padBottom - headerRows * rowHeight);
     return Math.max(1, Math.floor(avail / rowHeight));
+  }
+
+  function resolveVisualPack(theme, isStrong) {
+    const primary = isStrong ? "005FB8" : String(theme?.primary || "0F6CBD");
+    const secondary = isStrong ? "083B7A" : String(theme?.secondary || primary || "115EA3");
+    return {
+      accent_primary: primary,
+      accent_secondary: secondary,
+      panel_fill: isStrong ? "FFE3F0FE" : "FFEAF3FB",
+      card_fill: isStrong ? "FFEAF3FF" : "FFF2F8FF",
+      border: isStrong ? "FFBFD3EA" : "FFD6E4F5",
+      zebra: isStrong ? "FFF2F7FD" : "FFF7FAFD",
+      chrome_fill: isStrong ? "F6FAFF" : "FFFFFF",
+      chrome_transparency: isStrong ? 12 : 24,
+      chrome_line: isStrong ? "C7DCF4" : "DCEBFA",
+    };
   }
 
   function pickIllustrationImage(rows, options = {}) {
@@ -405,7 +425,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     const out = [];
     const used = new Set();
     for (const r of rows || []) {
-      const text = normalizeLineText(String(r?.text || ""), 560);
+      const text = normalizeLineText(rowTextForQuality(r), 560);
       if (!text || text.length < 16) continue;
       const key = text.slice(0, 160).toLowerCase();
       if (used.has(key)) continue;
@@ -482,7 +502,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     }
 
     const trusted = rows
-      .filter((r) => !isLikelyCorruptedText(String(r.text || "")))
+      .filter((r) => !isLikelyCorruptedText(rowTextForQuality(r)))
       .slice(0, 1500);
     const sampleText = trusted.map((r) => Object.values(r).join(" ")).join("\n");
     const cnyCount = (sampleText.match(/¥|￥|人民币|CNY/gi) || []).length;
@@ -510,7 +530,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     for (const r of rows || []) {
       const sourceType = String(r.source_type || "");
       if (!["pdf", "pdf_ocr", "docx", "txt", "image_ocr", "pdf_md", "pdf_ocr_md", "docx_md", "pdf_md_fallback"].includes(sourceType)) continue;
-      const text = cleanOfficeText(r.text || "", 240);
+      const text = cleanOfficeText(rowTextForQuality(r), 240);
       if (text.length < 40) continue;
       if (isLikelyCorruptedText(text)) continue;
       if (isQuestionMarkHeavy(text)) continue;
@@ -532,7 +552,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       for (const r of rows || []) {
         const sourceType = String(r.source_type || "");
         if (!["pdf", "pdf_ocr", "docx", "txt", "image_ocr", "pdf_md", "pdf_ocr_md", "docx_md", "pdf_md_fallback"].includes(sourceType)) continue;
-        const text = cleanOfficeText(r.text || "", 240);
+        const text = cleanOfficeText(rowTextForQuality(r), 240);
         if (text.length < 40 || isLikelyCorruptedText(text) || looksLikeReferenceEntry(text)) continue;
         if (isQuestionMarkHeavy(text)) continue;
         const key = text.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, "");
@@ -680,12 +700,13 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   async function writeXlsx(filePath, rows, quality, warnings, options = {}) {
     const theme = resolveOfficeTheme(options.office_theme);
     const isStrong = /fluent_ms_strong/i.test(String(options.office_theme || ""));
-    const accentPrimary = isStrong ? "005FB8" : String(theme.primary || "0F6CBD");
-    const accentSecondary = isStrong ? "083B7A" : String(theme.secondary || theme.primary || "115EA3");
-    const lightPanelFill = isStrong ? "FFE3F0FE" : "FFEAF3FB";
-    const lightCardFill = isStrong ? "FFEAF3FF" : "FFF2F8FF";
-    const borderColor = isStrong ? "FFBFD3EA" : "FFD6E4F5";
-    const zebraFill = isStrong ? "FFF2F7FD" : "FFF7FAFD";
+    const visual = resolveVisualPack(theme, isStrong);
+    const accentPrimary = visual.accent_primary;
+    const accentSecondary = visual.accent_secondary;
+    const lightPanelFill = visual.panel_fill;
+    const lightCardFill = visual.card_fill;
+    const borderColor = visual.border;
+    const zebraFill = visual.zebra;
     const layout = typeof resolveOfficeLayout === "function" ? resolveOfficeLayout(options.office_theme) : {};
     const highQuality = String(options.office_quality_mode || "high").toLowerCase() !== "standard";
     const fontName = resolveOfficeFont(options, warnings);
@@ -733,6 +754,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     if (isDebateStyleTemplate(options)) {
       const ws = getSheet(String(layout.xlsx_data_sheet_name || "Sheet1")) || wb.addWorksheet("Sheet1");
       resetSheet(ws);
+      ws.properties = { defaultRowHeight: 22 };
       ws.views = [{ state: "frozen", ySplit: 1 }];
       ws.columns = [
         { width: 4 }, { width: 16 }, { width: 24 }, { width: 30 },
@@ -765,6 +787,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     } else {
       const ws = getSheet(String(layout.xlsx_data_sheet_name || "cleaned")) || wb.addWorksheet("cleaned");
       resetSheet(ws);
+      ws.properties = { defaultRowHeight: 20 };
       const keys = rows.length > 0 ? unionColumns(rows) : ["id", "amount", "text"];
       const visualCols = Math.max(keys.length, 14);
       ws.columns = Array.from({ length: visualCols }).map((_, i) => ({ width: i < keys.length ? 23 : 15 }));
@@ -909,8 +932,9 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       }
     }
 
-    const summary = getSheet(String(layout.xlsx_summary_sheet_name || "summary")) || wb.addWorksheet("summary");
+      const summary = getSheet(String(layout.xlsx_summary_sheet_name || "summary")) || wb.addWorksheet("summary");
     resetSheet(summary);
+    summary.properties = { defaultRowHeight: 20 };
     summary.addRow(["指标", "数值"]);
     summary.getRow(1).eachCell((cell) => {
       cell.font = { name: fontName, bold: true, color: { argb: "FFFFFFFF" } };
@@ -933,7 +957,10 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     if (Number.isFinite(Number(gate.filtered_question_mark_rows))) summary.addRow(["过滤问号密集行", Number(gate.filtered_question_mark_rows)]);
     summary.columns = [{ width: 22 }, { width: 24 }];
     for (let i = 2; i <= summary.rowCount; i += 1) {
-      summary.getRow(i).eachCell((cell) => { cell.font = { name: fontName }; });
+      summary.getRow(i).eachCell((cell) => {
+        cell.font = { name: fontName };
+        if (i % 2 === 0) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: zebraFill } };
+      });
     }
 
     const chartData = getSheet("chart_data") || wb.addWorksheet("chart_data");
@@ -992,8 +1019,9 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   async function writeDocx(filePath, jobId, reportTitle, rows, quality, warnings, options = {}) {
     const theme = resolveOfficeTheme(options.office_theme);
     const isStrong = /fluent_ms_strong/i.test(String(options.office_theme || ""));
-    const docxGlassFill = isStrong ? "DDEBFB" : "EAF3FB";
-    const docxStripFill = isStrong ? "EAF3FF" : "F2F8FF";
+    const visual = resolveVisualPack(theme, isStrong);
+    const docxGlassFill = (visual.panel_fill || "FFEAF3FB").slice(2);
+    const docxStripFill = (visual.card_fill || "FFF2F8FF").slice(2);
     const layout = typeof resolveOfficeLayout === "function" ? resolveOfficeLayout(options.office_theme) : {};
     const highQuality = String(options.office_quality_mode || "high").toLowerCase() !== "standard";
     const fontName = resolveOfficeFont(options, warnings);
@@ -1169,7 +1197,16 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       warnings.slice(0, 30).forEach((w) => children.push(new Paragraph({ children: [new TextRun({ text: `- ${w}`, font: fontName })] })));
     }
 
-    const doc = new Document({ sections: [{ children }] });
+    const doc = new Document({
+      sections: [{
+        properties: {
+          page: {
+            margin: { top: 900, right: 900, bottom: 900, left: 900 },
+          },
+        },
+        children,
+      }],
+    });
     const buf = await Packer.toBuffer(doc);
     fs.writeFileSync(filePath, buf);
   }
@@ -1177,11 +1214,12 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   async function writePptx(filePath, reportTitle, rows, quality, warnings, options = {}) {
     const theme = resolveOfficeTheme(options.office_theme);
     const isStrong = /fluent_ms_strong/i.test(String(options.office_theme || ""));
-    const accentPrimary = isStrong ? "005FB8" : String(theme.primary || "0F6CBD");
-    const accentSecondary = isStrong ? "083B7A" : String(theme.secondary || theme.primary || "115EA3");
-    const chromeCardFill = isStrong ? "F6FAFF" : "FFFFFF";
-    const chromeCardTrans = isStrong ? 12 : 24;
-    const chromeLine = isStrong ? "C7DCF4" : "DCEBFA";
+    const visual = resolveVisualPack(theme, isStrong);
+    const accentPrimary = visual.accent_primary;
+    const accentSecondary = visual.accent_secondary;
+    const chromeCardFill = visual.chrome_fill;
+    const chromeCardTrans = visual.chrome_transparency;
+    const chromeLine = visual.chrome_line;
     const layout = typeof resolveOfficeLayout === "function" ? resolveOfficeLayout(options.office_theme) : {};
     const highQuality = String(options.office_quality_mode || "high").toLowerCase() !== "standard";
     const fontFace = resolveOfficeFont(options, warnings);
@@ -1199,7 +1237,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
     const addFluentChrome = (slide, title = "") => {
       slide.background = { color: theme.bg };
       slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 0.18, fill: { color: accentPrimary }, line: { color: accentPrimary } });
-      slide.addShape(pptx.ShapeType.roundRect, { x: 0.45, y: 0.92, w: 12.35, h: 5.55, fill: { color: chromeCardFill, transparency: chromeCardTrans }, line: { color: chromeLine } });
+      slide.addShape(pptx.ShapeType.roundRect, { x: 0.45, y: 0.92, w: 12.35, h: 5.55, fill: { color: chromeCardFill, transparency: chromeCardTrans }, line: { color: chromeLine }, radius: 0.12 });
       slide.addShape(pptx.ShapeType.roundRect, { x: 11.5, y: -0.7, w: 2.4, h: 2.0, fill: { color: "E8F3FB", transparency: isStrong ? 0 : 10 }, line: { color: "E8F3FB" } });
       if (title) slide.addText(title, { x: 0.5, y: 0.38, w: 8.0, h: 0.5, fontSize: isStrong ? 23 : 22, bold: true, color: accentPrimary, fontFace });
     };
@@ -1479,7 +1517,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       lines.push(`### ${src}`);
       lines.push(`- 提取片段数: ${items.length}`);
       const snippets = items
-        .map((r) => normalizeLineText(r.text || ""))
+        .map((r) => normalizeLineText(rowTextForQuality(r)))
         .filter((t) => t.length >= 30)
         .slice(0, 8);
       if (snippets.length === 0) {
@@ -1511,7 +1549,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
       list.forEach((r, i) => {
         const src = path.basename(String(r?.source_file || ""));
         const no = String(r?.row_no ?? "");
-        const text = normalizeLineText(String(r?.text || "")).slice(0, 300);
+        const text = normalizeLineText(rowTextForQuality(r)).slice(0, 300);
         lines.push(`## ${i + 1}. ${src}${no ? `#${no}` : ""}`);
         lines.push(`- source_type: ${String(r?.source_type || "")}`);
         lines.push(`- text: ${text}`);

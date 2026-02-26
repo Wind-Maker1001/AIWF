@@ -148,6 +148,21 @@ function isLikelyCorruptedText(text) {
   return false;
 }
 
+function rowTextForQuality(row) {
+  const r = row && typeof row === "object" ? row : {};
+  const direct = normalizeLineText(String(r.text || ""));
+  if (direct) return direct;
+  const ignore = new Set(["source_file", "source_type", "row_no", "amount"]);
+  const parts = [];
+  Object.keys(r).forEach((k) => {
+    if (ignore.has(String(k || "").trim())) return;
+    const v = normalizeLineText(String(r[k] ?? ""));
+    if (!v) return;
+    parts.push(v);
+  });
+  return normalizeLineText(parts.join(" | "));
+}
+
 function isReferenceSectionTitle(line) {
   const s = normalizeLineText(line).toLowerCase();
   if (!s) return false;
@@ -484,8 +499,11 @@ function writeQualityReport(filePath, rows, warnings, records, options = {}) {
     ? options.outputGateMeta
     : null;
   const totalRows = Array.isArray(rows) ? rows.length : 0;
-  const badRows = (rows || []).filter((r) => isLikelyCorruptedText(String(r.text || "")));
-  const gibberishRatio = totalRows > 0 ? badRows.length / totalRows : 0;
+  const evalRows = (rows || [])
+    .map((r) => ({ row: r, text: rowTextForQuality(r) }))
+    .filter((x) => String(x.text || "").length >= 4);
+  const badRows = evalRows.filter((x) => isLikelyCorruptedText(String(x.text || "")));
+  const gibberishRatio = evalRows.length > 0 ? badRows.length / evalRows.length : 0;
   const rawChunks = paperRecords.reduce((a, r) => a + Number(r.raw_chunk_count || 0), 0);
   const keptChunks = paperRecords.reduce((a, r) => a + Number(r.chunk_count || 0), 0);
   const refRemoved = paperRecords.reduce((a, r) => a + Number(r.removed_reference_lines || 0), 0);
@@ -516,6 +534,7 @@ function writeQualityReport(filePath, rows, warnings, records, options = {}) {
   }
   lines.push("");
   lines.push("## Markdown 质量指标");
+  lines.push(`- 可评估行数(text_evaluable_rows): ${evalRows.length}/${totalRows}`);
   lines.push(`- 抽取率(extraction_rate): ${(extractionRate * 100).toFixed(1)}%`);
   lines.push(`- 乱码疑似率(gibberish_ratio): ${(gibberishRatio * 100).toFixed(1)}%`);
   lines.push(`- 参考/注释剔除率(reference_prune_rate): ${(referencePruneRate * 100).toFixed(1)}%`);
@@ -564,8 +583,9 @@ function writeQualityReport(filePath, rows, warnings, records, options = {}) {
   }
   lines.push("## 行级异常");
   lines.push(`- 乱码疑似行数: ${badRows.length}`);
-  badRows.slice(0, 20).forEach((r, i) => {
-    lines.push(`${i + 1}. [${path.basename(String(r.source_file || ""))}] ${normalizeLineText(String(r.text || "")).slice(0, 200)}`);
+  badRows.slice(0, 20).forEach((x, i) => {
+    const r = x.row || {};
+    lines.push(`${i + 1}. [${path.basename(String(r.source_file || ""))}] ${normalizeLineText(String(x.text || "")).slice(0, 200)}`);
   });
   lines.push("");
   fs.writeFileSync(filePath, `\uFEFF${lines.join("\n")}\n`, "utf8");
@@ -576,6 +596,7 @@ module.exports = {
   splitPdfTextToEvidence,
   scorePdfExtractText,
   isLikelyCorruptedText,
+  rowTextForQuality,
   looksLikeReferenceEntry,
   materializePaperMarkdown,
   writePaperMarkdownIndex,
