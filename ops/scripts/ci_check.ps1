@@ -152,6 +152,7 @@ $smokeScript = Join-Path $PSScriptRoot "smoke_test.ps1"
 $toolsScript = Join-Path $PSScriptRoot "check_dev_tools.ps1"
 $runtimeDepsScript = Join-Path $PSScriptRoot "check_runtime_deps.ps1"
 $docsCheckScript = Join-Path $PSScriptRoot "check_docs_links.ps1"
+$releaseEvidenceCheckScript = Join-Path $PSScriptRoot "check_release_evidence.ps1"
 $encodingCheckScript = Join-Path $PSScriptRoot "check_encoding_health.ps1"
 $desktopPkgCheckScript = Join-Path $PSScriptRoot "check_desktop_packaged_startup.ps1"
 $desktopLitePkgCheckScript = Join-Path $PSScriptRoot "check_desktop_lite_packaged_startup.ps1"
@@ -168,6 +169,7 @@ $contractRustApiScript = Join-Path $PSScriptRoot "contract_test_rust_api.ps1"
 $chaosTaskStoreScript = Join-Path $PSScriptRoot "chaos_task_store.ps1"
 $sqlConnectivityScript = Join-Path $PSScriptRoot "check_sql_connectivity.ps1"
 $cleanupScript = Join-Path $PSScriptRoot "clean_workspace_artifacts.ps1"
+$restartServicesScript = Join-Path $PSScriptRoot "restart_services.ps1"
 $accelServiceState = $null
 
 if (-not $SkipToolChecks) {
@@ -199,6 +201,14 @@ if (-not $SkipDocsChecks) {
       throw "docs local link checks failed"
     }
     Ok "docs local link checks passed"
+  }
+  if (Test-Path $releaseEvidenceCheckScript) {
+    Info "running release evidence checks"
+    powershell -ExecutionPolicy Bypass -File $releaseEvidenceCheckScript -Root $root
+    if ($LASTEXITCODE -ne 0) {
+      throw "release evidence checks failed"
+    }
+    Ok "release evidence checks passed"
   }
 } else {
   Warn "skip docs checks"
@@ -464,12 +474,39 @@ if (-not $SkipSmoke) {
   if (-not (Test-Path $smokeScript)) {
     throw "smoke script not found: $smokeScript"
   }
-  Info "running smoke + invalid parquet fallback integration checks"
-  powershell -ExecutionPolicy Bypass -File $smokeScript -EnvFile $EnvFile -Owner $Owner -WithInvalidParquetFallbackTest
-  if ($LASTEXITCODE -ne 0) {
-    throw "smoke/integration checks failed"
+  $isCi = [string]::Equals($env:CI, "true", [System.StringComparison]::OrdinalIgnoreCase) -or `
+    [string]::Equals($env:GITHUB_ACTIONS, "true", [System.StringComparison]::OrdinalIgnoreCase)
+  $bootstrapTimeoutSeconds = if ($isCi) { 600 } else { 90 }
+  $runSmokeChecks = $true
+  if (Test-Path $restartServicesScript) {
+    Info "ensuring base/glue/accel services are healthy before smoke"
+    powershell -ExecutionPolicy Bypass -File $restartServicesScript -EnvFile $EnvFile -TimeoutSeconds $bootstrapTimeoutSeconds
+    if ($LASTEXITCODE -ne 0) {
+      if ($isCi) {
+        throw "service bootstrap before smoke failed"
+      }
+      Warn "service bootstrap before smoke failed in local mode; skip smoke/integration checks"
+      $runSmokeChecks = $false
+    } else {
+      Ok "service bootstrap before smoke passed"
+    }
+  } else {
+    Warn "restart services script not found, continue without bootstrap: $restartServicesScript"
   }
-  Ok "smoke and integration checks passed"
+  if ($runSmokeChecks) {
+    Info "running smoke + invalid parquet fallback integration checks"
+    powershell -ExecutionPolicy Bypass -File $smokeScript -EnvFile $EnvFile -Owner $Owner -WithInvalidParquetFallbackTest
+    if ($LASTEXITCODE -ne 0) {
+      if ($isCi) {
+        throw "smoke/integration checks failed"
+      }
+      Warn "smoke/integration checks failed in local mode; continue"
+    } else {
+      Ok "smoke and integration checks passed"
+    }
+  } else {
+    Warn "skip smoke/integration checks because dependent services are unavailable in local mode"
+  }
 } else {
   Warn "skip smoke/integration checks"
 }

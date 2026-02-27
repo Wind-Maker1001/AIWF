@@ -4,7 +4,9 @@ import com.aiwf.base.db.AiWfDao;
 import com.aiwf.base.service.JobStatusService;
 import com.aiwf.base.service.JsonUtil;
 import jakarta.validation.constraints.NotBlank;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
@@ -77,15 +79,30 @@ public class CallbackController {
 
     // ---- Artifacts ----
 
+    private static String requiredString(Map<String, Object> body, String key) {
+        if (body == null || !body.containsKey(key)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "missing required field: " + key);
+        }
+        Object v = body.get(key);
+        if (v == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "missing required field: " + key);
+        }
+        String s = String.valueOf(v).trim();
+        if (s.isEmpty() || "null".equalsIgnoreCase(s)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid required field: " + key);
+        }
+        return s;
+    }
+
     @PostMapping(value = "/jobs/{jobId}/artifacts/register", consumes = {"application/json", "*/*"})
     public Map<String, Object> registerArtifact(
             @PathVariable @NotBlank String jobId,
             @RequestParam(defaultValue = "glue") String actor,
             @RequestBody Map<String, Object> body
     ) {
-        String artifactId = String.valueOf(body.get("artifact_id"));
-        String kind = String.valueOf(body.get("kind"));   // csv/xlsx/docx/pptx/powerbi/...
-        String path = String.valueOf(body.get("path"));   // Recommended: <AIWF_BUS>\\jobs\\<id>\\artifacts\\...
+        String artifactId = requiredString(body, "artifact_id");
+        String kind = requiredString(body, "kind");   // csv/xlsx/docx/pptx/powerbi/...
+        String path = requiredString(body, "path");   // Recommended: <AIWF_BUS>\\jobs\\<id>\\artifacts\\...
         String sha256 = body.get("sha256") == null ? null : String.valueOf(body.get("sha256"));
         String bindingJson = body.get("binding_json") == null ? null : JsonUtil.toJson(body.get("binding_json"));
 

@@ -127,24 +127,24 @@ Rationale:
 Useful gate override:
 - force arrow speed gate at any scale: `-EnforceArrowAlways`
 
-## 8. Rust v2 Operator Quick Checks
+## 8. Rust Operator Quick Checks
 
 ```powershell
 cd D:\AIWF
 
-# join_rows_v2
-Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/join_rows_v2" -Method Post -ContentType "application/json" -Body (@{
-  run_id = "verify_join_v2"
+# join_rows_v1
+Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/join_rows_v1" -Method Post -ContentType "application/json" -Body (@{
+  run_id = "verify_join_v1"
   left_rows = @(@{id=1;k="a";lv=10}, @{id=2;k="b";lv=20})
   right_rows = @(@{rid=9;k="a";rv=99}, @{rid=8;k="c";rv=88})
-  left_on = @("k")
-  right_on = @("k")
+  left_on = "k"
+  right_on = "k"
   join_type = "full"
 } | ConvertTo-Json -Depth 10)
 
-# aggregate_rows_v2
-Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/aggregate_rows_v2" -Method Post -ContentType "application/json" -Body (@{
-  run_id = "verify_agg_v2"
+# aggregate_rows_v1
+Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/aggregate_rows_v1" -Method Post -ContentType "application/json" -Body (@{
+  run_id = "verify_agg_v1"
   rows = @(@{g="x";amount=10}, @{g="x";amount=20}, @{g="x";amount=30})
   group_by = @("g")
   aggregates = @(
@@ -153,12 +153,9 @@ Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/aggregate_rows_v2" -Met
   )
 } | ConvertTo-Json -Depth 10)
 
-# schema_registry_v1 infer + get
-Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/schema_registry_v1/infer" -Method Post -ContentType "application/json" -Body (@{
-  name="orders";version="v1";rows=@(@{id="1";amount="12.3";active="true"})
-} | ConvertTo-Json -Depth 10)
-Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/schema_registry_v1/get" -Method Post -ContentType "application/json" -Body (@{
-  name="orders";version="v1"
+# schema_infer_v1
+Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/schema_infer_v1" -Method Post -ContentType "application/json" -Body (@{
+  run_id="verify_schema_v1";rows=@(@{id="1";amount="12.3";active="true"})
 } | ConvertTo-Json -Depth 10)
 ```
 

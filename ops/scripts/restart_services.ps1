@@ -33,16 +33,13 @@ function Stop-PortListeners([int[]]$Ports) {
   }
 }
 
-function Wait-Health([string]$Url, [string]$Kind, [datetime]$Deadline) {
-  while((Get-Date) -lt $Deadline){
-    try {
-      $r = Invoke-RestMethod $Url -Method Get -TimeoutSec 5
-      if ($Kind -eq "base" -and $r.status -eq "UP") { return $true }
-      if ($Kind -eq "glue" -and $r.ok -eq $true) { return $true }
-      if ($Kind -eq "accel" -and $r.ok -eq $true) { return $true }
-    } catch {}
-    Start-Sleep -Seconds 2
-  }
+function Test-Health([string]$Url, [string]$Kind) {
+  try {
+    $r = Invoke-RestMethod $Url -Method Get -TimeoutSec 5
+    if ($Kind -eq "base" -and $r.status -eq "UP") { return $true }
+    if ($Kind -eq "glue" -and $r.ok -eq $true) { return $true }
+    if ($Kind -eq "accel" -and $r.ok -eq $true) { return $true }
+  } catch {}
   return $false
 }
 
@@ -53,9 +50,16 @@ Start-Process powershell -WindowStyle Hidden -ArgumentList "-ExecutionPolicy Byp
 Start-Process powershell -WindowStyle Hidden -ArgumentList "-ExecutionPolicy Bypass -File `"$root\ops\scripts\run_base_java.ps1`" -EnvFile `"$EnvFile`""
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-$okBase = Wait-Health "http://127.0.0.1:18080/actuator/health" "base" $deadline
-$okGlue = Wait-Health "http://127.0.0.1:18081/health" "glue" $deadline
-$okAccel = Wait-Health "http://127.0.0.1:18082/health" "accel" $deadline
+$okBase = $false
+$okGlue = $false
+$okAccel = $false
+while ((Get-Date) -lt $deadline) {
+  if (-not $okBase) { $okBase = Test-Health "http://127.0.0.1:18080/actuator/health" "base" }
+  if (-not $okGlue) { $okGlue = Test-Health "http://127.0.0.1:18081/health" "glue" }
+  if (-not $okAccel) { $okAccel = Test-Health "http://127.0.0.1:18082/health" "accel" }
+  if ($okBase -and $okGlue -and $okAccel) { break }
+  Start-Sleep -Seconds 2
+}
 
 if ($okBase -and $okGlue -and $okAccel) {
   Ok "all services are healthy"

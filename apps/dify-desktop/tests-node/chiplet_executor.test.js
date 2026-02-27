@@ -48,3 +48,35 @@ test("executor schedules ready nodes by chiplet priority", async () => {
   }
   assert.deepEqual(order, ["high", "low"]);
 });
+
+test("executor surfaces structured failure from runner", async () => {
+  const registry = new WorkflowChipletRegistry();
+  registry.register("type_fail", {
+    id: "chiplet.fail.v1",
+    timeout_ms: 1000,
+    async run() {
+      throw new Error("boom");
+    },
+  });
+  const graph = {
+    workflow_id: "w_fail",
+    nodes: [{ id: "n1", type: "type_fail" }],
+    edges: [],
+  };
+  const failed = [];
+  await assert.rejects(
+    executeWorkflowDag({
+      graph,
+      registry,
+      ctx: { runId: "r1", workflowId: "w_fail", payload: {} },
+      buildEnvelope,
+      onNodeFailure(node, err) {
+        failed.push({ id: node.id, code: err.code, kind: err.kind });
+      },
+    }),
+    /boom/
+  );
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].code, "node_execution_failed");
+  assert.equal(failed[0].kind, "runtime");
+});

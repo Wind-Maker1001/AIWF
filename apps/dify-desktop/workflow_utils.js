@@ -93,16 +93,31 @@ function finalizeNode(node, ok, output, error) {
   } catch {
     node.output_bytes = 0;
   }
-  node.error = error ? String(error) : null;
+  const errMsg = error
+    ? String(
+      (error && typeof error === "object" && typeof error.message === "string")
+        ? error.message
+        : error
+    )
+    : null;
+  node.error = errMsg;
+  node.error_code = error && typeof error === "object" && error.code ? String(error.code) : "";
+  node.error_retryable = !!(error && typeof error === "object" && error.retryable === true);
   if (node.error) {
-    const msg = String(node.error || "").toLowerCase();
-    if (msg.includes("timeout")) node.error_kind = "timeout";
-    else if (msg.includes("quality_gate")) node.error_kind = "quality_gate";
-    else if (msg.includes("contract")) node.error_kind = "io_contract";
-    else if (msg.includes("manual_review")) node.error_kind = "manual_review";
-    else node.error_kind = "runtime";
+    if (error && typeof error === "object" && error.kind) {
+      node.error_kind = String(error.kind);
+    } else {
+      const msg = String(node.error || "").toLowerCase();
+      if (msg.includes("timeout")) node.error_kind = "timeout";
+      else if (msg.includes("quality_gate")) node.error_kind = "quality_gate";
+      else if (msg.includes("contract")) node.error_kind = "io_contract";
+      else if (msg.includes("manual_review")) node.error_kind = "manual_review";
+      else node.error_kind = "runtime";
+    }
   } else {
     node.error_kind = "";
+    node.error_code = "";
+    node.error_retryable = false;
   }
 }
 

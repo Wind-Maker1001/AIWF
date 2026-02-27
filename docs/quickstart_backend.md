@@ -206,7 +206,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipDocsChe
 Use release packaging script with default hard gates:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.6
 ```
 
 Default release gates include:
@@ -217,9 +217,9 @@ Default release gates include:
 Optional skip flags (debug only):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4 -SkipSqlConnectivityGate
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4 -SkipRoutingBenchGate
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4 -SkipRustTransformBenchGate
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.6 -SkipSqlConnectivityGate
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.6 -SkipRoutingBenchGate
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.6 -SkipRustTransformBenchGate
 ```
 
 ## 9. Common Issues

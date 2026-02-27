@@ -31,8 +31,8 @@
 - `check_desktop_packaged_startup.ps1`：通过
 - `dify_run_with_offline_fallback.ps1`（故障注入）：通过
 - 门禁汇总：
-  - `release/gate_v1.1.6/20260225_182131/release_gate_summary.json`
-  - `release/gate_v1.1.6/20260225_182131/release_gate_summary.md`
+  - `release/gate_v1.1.6/<timestamp>/release_gate_summary.json`
+  - `release/gate_v1.1.6/<timestamp>/release_gate_summary.md`
 
 ### 交付产物
 - 安装包：`AIWF Dify Desktop Setup 1.1.6.exe`
@@ -67,8 +67,8 @@
 - `check_desktop_packaged_startup.ps1`: pass
 - `dify_run_with_offline_fallback.ps1` (fault injection): pass
 - Gate reports:
-  - `release/gate_v1.1.6/20260225_182131/release_gate_summary.json`
-  - `release/gate_v1.1.6/20260225_182131/release_gate_summary.md`
+  - `release/gate_v1.1.6/<timestamp>/release_gate_summary.json`
+  - `release/gate_v1.1.6/<timestamp>/release_gate_summary.md`
 
 ### Deliverables
 - Installer: `AIWF Dify Desktop Setup 1.1.6.exe`

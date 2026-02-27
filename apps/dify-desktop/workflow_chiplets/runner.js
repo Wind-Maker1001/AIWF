@@ -1,6 +1,9 @@
 const {
   validateEnvelope,
   validateChipletOutput,
+  createChipletError,
+  normalizeChipletError,
+  toError,
 } = require("./contract");
 
 const CIRCUIT = new Map();
@@ -12,7 +15,10 @@ function sleep(ms) {
 function withTimeout(promise, ms, label) {
   const timeout = Math.max(1000, Number(ms) || 180000);
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`chiplet timeout: ${label}`)), timeout);
+    const timer = setTimeout(
+      () => reject(createChipletError("runner_timeout", `chiplet timeout: ${label}`, { node_type: String(label || "") })),
+      timeout
+    );
     Promise.resolve(promise)
       .then((v) => resolve(v))
       .catch((e) => reject(e))
@@ -34,7 +40,10 @@ function checkCircuit(nodeType, chiplet) {
   if (!chiplet?.circuit?.enabled) return;
   const st = circuitState(nodeType, chiplet.id);
   if (Date.now() < st.opened_until) {
-    throw new Error(`chiplet circuit open: ${nodeType}`);
+    throw createChipletError("circuit_open", `chiplet circuit open: ${nodeType}`, {
+      node_type: String(nodeType || ""),
+      chiplet_id: String(chiplet?.id || ""),
+    });
   }
 }
 
@@ -92,13 +101,15 @@ async function runWithRetry({ chiplet, nodeType, ctx, node, env }) {
       }
     }
   }
-  throw lastErr || new Error(`chiplet failed: ${nodeType}`);
+  throw toError(normalizeChipletError(lastErr || new Error(`chiplet failed: ${nodeType}`)));
 }
 
 async function runChipletNode({ registry, node, ctx, envelope }) {
   const t = String(node?.type || "").trim();
   const chiplet = registry.resolve(t);
-  if (!chiplet) throw new Error(`unsupported node type: ${t}`);
+  if (!chiplet) {
+    throw createChipletError("unsupported_node_type", `unsupported node type: ${t}`, { node_type: t });
+  }
   checkCircuit(t, chiplet);
   const env = envelope || {};
   validateEnvelope(env, node);

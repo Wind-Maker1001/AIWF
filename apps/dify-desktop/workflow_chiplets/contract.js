@@ -1,4 +1,18 @@
 const CHIPLET_SCHEMA_VERSION = "aiwf.chiplet.v1";
+const CHIPLET_ERROR_SCHEMA_VERSION = "aiwf.chiplet.error.v1";
+
+const CHIPLET_ERROR_CATALOG = {
+  unsupported_node_type: { kind: "routing", retryable: false },
+  envelope_missing: { kind: "contract", retryable: false },
+  envelope_invalid_version: { kind: "contract", retryable: false },
+  envelope_missing_field: { kind: "contract", retryable: false },
+  envelope_node_mismatch: { kind: "contract", retryable: false },
+  output_invalid: { kind: "contract", retryable: false },
+  runner_timeout: { kind: "timeout", retryable: true },
+  circuit_open: { kind: "circuit", retryable: true },
+  node_execution_failed: { kind: "runtime", retryable: true },
+  workflow_incomplete: { kind: "runtime", retryable: false },
+};
 
 function buildEnvelope(base = {}) {
   return {
@@ -15,20 +29,31 @@ function buildEnvelope(base = {}) {
 }
 
 function validateEnvelope(envelope, node) {
-  if (!envelope || typeof envelope !== "object") throw new Error("chiplet envelope missing");
+  if (!envelope || typeof envelope !== "object") {
+    throw createChipletError("envelope_missing", "chiplet envelope missing");
+  }
   if (String(envelope.schema_version || "") !== CHIPLET_SCHEMA_VERSION) {
-    throw new Error(`unsupported chiplet schema_version: ${String(envelope.schema_version || "")}`);
+    throw createChipletError(
+      "envelope_invalid_version",
+      `unsupported chiplet schema_version: ${String(envelope.schema_version || "")}`
+    );
   }
   const required = ["run_id", "workflow_id", "node_id", "node_type"];
   for (const k of required) {
-    if (!String(envelope[k] || "").trim()) throw new Error(`chiplet envelope missing ${k}`);
+    if (!String(envelope[k] || "").trim()) {
+      throw createChipletError("envelope_missing_field", `chiplet envelope missing ${k}`, { field: k });
+    }
   }
   if (node && String(node.id || "") !== String(envelope.node_id || "")) {
-    throw new Error("chiplet envelope node_id mismatch");
+    throw createChipErrorNodeMismatch("node_id");
   }
   if (node && String(node.type || "") !== String(envelope.node_type || "")) {
-    throw new Error("chiplet envelope node_type mismatch");
+    throw createChipErrorNodeMismatch("node_type");
   }
+}
+
+function createChipErrorNodeMismatch(field) {
+  return createChipletError("envelope_node_mismatch", `chiplet envelope ${field} mismatch`, { field });
 }
 
 function assertString(value, label) {
@@ -114,19 +139,82 @@ function validateByNodeType(out, nodeType) {
 
 function validateChipletOutput(out, nodeType) {
   if (!out || typeof out !== "object" || Array.isArray(out)) {
-    throw new Error("chiplet output must be an object");
+    throw createChipletError("output_invalid", "chiplet output must be an object");
   }
   try {
     JSON.stringify(out);
   } catch {
-    throw new Error("chiplet output must be JSON-serializable");
+    throw createChipletError("output_invalid", "chiplet output must be JSON-serializable");
   }
-  validateByNodeType(out, nodeType);
+  try {
+    validateByNodeType(out, nodeType);
+  } catch (e) {
+    throw createChipletError("output_invalid", String(e && e.message ? e.message : e));
+  }
+}
+
+function createChipletError(code, message, details = {}) {
+  const c = String(code || "node_execution_failed");
+  const meta = CHIPLET_ERROR_CATALOG[c] || CHIPLET_ERROR_CATALOG.node_execution_failed;
+  const err = new Error(String(message || c));
+  err.name = "ChipletContractError";
+  err.schema_version = CHIPLET_ERROR_SCHEMA_VERSION;
+  err.code = c;
+  err.kind = String(meta.kind || "runtime");
+  err.retryable = meta.retryable !== false;
+  err.details = details && typeof details === "object" ? { ...details } : {};
+  return err;
+}
+
+function normalizeChipletError(error, fallbackCode = "node_execution_failed") {
+  if (error && typeof error === "object" && error.code && error.kind && error.message) {
+    return {
+      schema_version: String(error.schema_version || CHIPLET_ERROR_SCHEMA_VERSION),
+      code: String(error.code),
+      kind: String(error.kind),
+      retryable: error.retryable !== false,
+      message: String(error.message),
+      details: error.details && typeof error.details === "object" ? { ...error.details } : {},
+    };
+  }
+  const raw = String(error && error.message ? error.message : error || "");
+  const lower = raw.toLowerCase();
+  let code = String(fallbackCode || "node_execution_failed");
+  if (lower.includes("timeout")) code = "runner_timeout";
+  else if (lower.includes("circuit open")) code = "circuit_open";
+  else if (lower.includes("unsupported node type")) code = "unsupported_node_type";
+  else if (lower.includes("envelope")) code = "envelope_missing";
+  else if (lower.includes("output")) code = "output_invalid";
+  const meta = CHIPLET_ERROR_CATALOG[code] || CHIPLET_ERROR_CATALOG.node_execution_failed;
+  return {
+    schema_version: CHIPLET_ERROR_SCHEMA_VERSION,
+    code,
+    kind: String(meta.kind || "runtime"),
+    retryable: meta.retryable !== false,
+    message: raw || code,
+    details: {},
+  };
+}
+
+function toError(normalized) {
+  const n = normalized && typeof normalized === "object" ? normalized : {};
+  const err = new Error(String(n.message || "chiplet error"));
+  err.name = "ChipletRuntimeError";
+  err.schema_version = String(n.schema_version || CHIPLET_ERROR_SCHEMA_VERSION);
+  err.code = String(n.code || "node_execution_failed");
+  err.kind = String(n.kind || "runtime");
+  err.retryable = n.retryable !== false;
+  err.details = n.details && typeof n.details === "object" ? { ...n.details } : {};
+  return err;
 }
 
 module.exports = {
   CHIPLET_SCHEMA_VERSION,
+  CHIPLET_ERROR_SCHEMA_VERSION,
   buildEnvelope,
   validateEnvelope,
   validateChipletOutput,
+  createChipletError,
+  normalizeChipletError,
+  toError,
 };

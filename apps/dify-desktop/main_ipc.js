@@ -2,6 +2,7 @@
 const { registerWorkflowIpc } = require("./main_ipc_workflow");
 const { registerRuntimeIpc } = require("./main_ipc_runtime");
 const { spawn } = require("child_process");
+const os = require("os");
 
 function registerIpcHandlers(ctx) {
   const {
@@ -108,6 +109,35 @@ function registerIpcHandlers(ctx) {
     const eDesktop = "E:\\Desktop_Real";
     if (fs.existsSync(eDesktop)) return path.join(eDesktop, "AIWF");
     return path.join(app.getPath("desktop"), "AIWF_Builds");
+  }
+  function normalizeAbsPath(p) {
+    return path.resolve(String(p || "").trim());
+  }
+  function isPathWithin(childPath, rootPath) {
+    try {
+      const child = normalizeAbsPath(childPath).toLowerCase();
+      const root = normalizeAbsPath(rootPath).toLowerCase();
+      return child === root || child.startsWith(`${root}${path.sep.toLowerCase()}`);
+    } catch {
+      return false;
+    }
+  }
+  function trustedRoots(cfg = null) {
+    const merged = cfg && typeof cfg === "object" ? cfg : loadConfig();
+    return [
+      resolveOutputRoot(merged),
+      app.getPath("documents"),
+      app.getPath("desktop"),
+      app.getPath("userData"),
+      os.tmpdir(),
+    ];
+  }
+  function isTrustedPath(p, cfg = null) {
+    const raw = String(p || "").trim();
+    if (!raw) return false;
+    if (!path.isAbsolute(raw)) return false;
+    const roots = trustedRoots(cfg);
+    return roots.some((r) => isPathWithin(raw, r));
   }
   function buildDesktopOutputDir(cfg = null) {
     return resolveOutputRoot(cfg);
@@ -465,8 +495,10 @@ function registerIpcHandlers(ctx) {
   });
 
   ipcMain.handle("aiwf:openPath", async (_evt, p) => {
-    if (!p) return { ok: false };
-    await shell.openPath(String(p));
+    const candidate = String(p || "").trim();
+    if (!candidate) return { ok: false, error: "path_required" };
+    if (!isTrustedPath(candidate)) return { ok: false, error: "path_not_allowed" };
+    await shell.openPath(candidate);
     return { ok: true };
   });
   ipcMain.handle("aiwf:getLatestArtifactsDir", async () => {

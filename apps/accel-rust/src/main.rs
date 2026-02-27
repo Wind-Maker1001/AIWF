@@ -13707,6 +13707,37 @@ fn validate_where_clause(s: &str) -> Result<String, String> {
     Ok(t.to_string())
 }
 
+fn validate_readonly_query(query: &str) -> Result<String, String> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Err("query is empty".to_string());
+    }
+    if q.contains(';') {
+        return Err("query contains ';' which is not allowed".to_string());
+    }
+    let lower = q.to_lowercase();
+    if !lower.starts_with("select ") {
+        return Err("only SELECT query is allowed".to_string());
+    }
+    let banned = [
+        " insert ",
+        " update ",
+        " delete ",
+        " drop ",
+        " alter ",
+        " create ",
+        " truncate ",
+        " exec ",
+        " execute ",
+        " attach ",
+        " pragma ",
+    ];
+    if banned.iter().any(|kw| lower.contains(kw)) {
+        return Err("query contains forbidden keyword".to_string());
+    }
+    Ok(q.to_string())
+}
+
 fn utc_now_iso() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let ts = SystemTime::now()
@@ -16057,8 +16088,9 @@ fn load_parquet_payload_rows(
 }
 
 fn load_sqlite_rows(db_path: &str, query: &str, limit: usize) -> Result<Vec<Value>, String> {
+    let safe_query = validate_readonly_query(query)?;
     let conn = SqliteConnection::open(db_path).map_err(|e| format!("sqlite open: {e}"))?;
-    let q = format!("{query} LIMIT {}", limit);
+    let q = format!("{safe_query} LIMIT {}", limit);
     let mut stmt = conn
         .prepare(&q)
         .map_err(|e| format!("sqlite prepare: {e}"))?;
@@ -16077,8 +16109,9 @@ fn load_sqlite_rows(db_path: &str, query: &str, limit: usize) -> Result<Vec<Valu
 }
 
 fn load_sqlserver_rows(conn_str: &str, query: &str, limit: usize) -> Result<Vec<Value>, String> {
+    let safe_query = validate_readonly_query(query)?;
     let cfg = parse_sqlserver_conn_str(conn_str);
-    let q = format!("SET NOCOUNT ON; SELECT TOP {limit} * FROM ({query}) x FOR JSON PATH;");
+    let q = format!("SET NOCOUNT ON; SELECT TOP {limit} * FROM ({safe_query}) x FOR JSON PATH;");
     let out = run_sqlcmd_query(&cfg, &q)?;
     let s = out.trim();
     if s.is_empty() {

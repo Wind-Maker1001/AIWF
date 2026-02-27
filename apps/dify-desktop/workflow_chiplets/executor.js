@@ -1,5 +1,6 @@
 const { runChipletNode } = require("./runner");
 const crypto = require("crypto");
+const { normalizeChipletError, toError } = require("./contract");
 
 function maxParallel() {
   const n = Number(process.env.AIWF_CHIPLET_MAX_PARALLEL || "2");
@@ -333,8 +334,10 @@ async function executeWorkflowDag({
         pruneIfUnreachable();
       }
     } catch (e) {
-      if (!failed) failed = e;
-      onNodeFailure?.(node, e);
+      const normalized = normalizeChipletError(e);
+      const wrapped = toError(normalized);
+      if (!failed) failed = wrapped;
+      onNodeFailure?.(node, wrapped);
     } finally {
       running.delete(nodeId);
     }
@@ -357,7 +360,9 @@ async function executeWorkflowDag({
   }
 
   if (failed) throw failed;
-  if (done.size !== total) throw new Error("workflow execute incomplete");
+  if (done.size !== total) {
+    throw toError(normalizeChipletError(new Error("workflow execute incomplete"), "workflow_incomplete"));
+  }
   ctx.nodeOutputs = Object.fromEntries(nodeOutputs);
 }
 

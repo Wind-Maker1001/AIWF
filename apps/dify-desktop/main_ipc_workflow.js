@@ -115,6 +115,52 @@
     if (fromCfg) return fromCfg;
     return path.join(app.getPath("documents"), "AIWF-Offline");
   }
+  function normalizeWorkflowConfig(cfg = null) {
+    const base = cfg && typeof cfg === "object" ? cfg : {};
+    return {
+      ...base,
+      __app_is_packaged: !!app.isPackaged,
+    };
+  }
+  function isMockIoAllowed() {
+    return !app.isPackaged;
+  }
+  function normalizeAbsPath(p) {
+    return path.resolve(String(p || "").trim());
+  }
+  function isPathWithin(childPath, rootPath) {
+    try {
+      const child = normalizeAbsPath(childPath).toLowerCase();
+      const root = normalizeAbsPath(rootPath).toLowerCase();
+      return child === root || child.startsWith(`${root}${path.sep.toLowerCase()}`);
+    } catch {
+      return false;
+    }
+  }
+  function mockIoRoots(cfg = null) {
+    const merged = cfg && typeof cfg === "object" ? cfg : loadConfig();
+    const roots = [
+      workflowStoreDir(),
+      resolveOutputRoot(merged),
+      app.getPath("documents"),
+      app.getPath("desktop"),
+      app.getPath("userData"),
+    ];
+    const tmp = String(process.env.TEMP || process.env.TMP || "").trim();
+    if (tmp) roots.push(tmp);
+    return Array.from(new Set(roots.map((x) => normalizeAbsPath(x))));
+  }
+  function resolveMockFilePath(p, cfg = null) {
+    const raw = String(p || "").trim();
+    if (!raw) return { ok: false, error: "mock_path_required" };
+    if (!path.isAbsolute(raw)) return { ok: false, error: "mock_path_must_be_absolute" };
+    const abs = normalizeAbsPath(raw);
+    const roots = mockIoRoots(cfg);
+    if (!roots.some((r) => isPathWithin(abs, r))) {
+      return { ok: false, error: "mock_path_not_allowed" };
+    }
+    return { ok: true, path: abs };
+  }
 
   function appendDiagnostics(run) {
     try {
@@ -944,7 +990,7 @@
         next.started_at = nowIso();
         saveWorkflowQueue(items);
         const promise = (async () => {
-          const merged = { ...loadConfig(), ...(next.cfg || {}) };
+          const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(next.cfg || {}) });
           const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(next.payload || {}));
           const out = attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
@@ -1536,7 +1582,7 @@
   });
 
   ipcMain.handle("aiwf:runWorkflow", async (_evt, payload, cfg) => {
-    const merged = { ...loadConfig(), ...(cfg || {}) };
+    const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });
     const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(payload || {}));
     const out = attachQualityGate(await runMinimalWorkflow({
       payload: effectivePayload,
@@ -1606,7 +1652,7 @@
           outputs: found?.result?.node_outputs || {},
         },
       };
-      const merged = { ...loadConfig(), ...(found.config || {}), ...(cfg || {}) };
+      const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(found.config || {}), ...(cfg || {}) });
       const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(replayPayload));
       const out = attachQualityGate(await runMinimalWorkflow({
         payload: effectivePayload,
@@ -1683,10 +1729,12 @@
       const format = String(req?.format || "md").trim().toLowerCase() === "html" ? "html" : "md";
       const out = buildRunCompare(runA, runB);
       if (!out?.ok) return out;
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
-        filePath = String(req.path);
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const defaultName = `aiwf_compare_${runA.slice(0, 8)}_${runB.slice(0, 8)}.${format}`;
         const pick = await dialog.showSaveDialog({
@@ -1765,10 +1813,12 @@
       if (!id) return { ok: false, error: "id required" };
       const hit = listTemplateMarketplace(5000).find((x) => String(x?.id || "") === id);
       if (!hit) return { ok: false, error: "template pack not found" };
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
-        filePath = String(req.path);
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const pick = await dialog.showSaveDialog({
           title: "导出模板包",
@@ -1833,10 +1883,12 @@
     try {
       const report = req?.report && typeof req.report === "object" ? req.report : {};
       const format = String(req?.format || "md").trim().toLowerCase() === "json" ? "json" : "md";
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
-        filePath = String(req.path);
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const defaultName = `aiwf_preflight_${Date.now()}.${format}`;
         const pick = await dialog.showSaveDialog({
@@ -1868,10 +1920,12 @@
     try {
       const report = req?.report && typeof req.report === "object" ? req.report : {};
       const format = String(req?.format || "md").trim().toLowerCase() === "json" ? "json" : "md";
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
-        filePath = String(req.path);
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const defaultName = `aiwf_template_acceptance_${Date.now()}.${format}`;
         const pick = await dialog.showSaveDialog({
@@ -1914,10 +1968,12 @@
   ipcMain.handle("aiwf:exportManualReviewHistory", async (_evt, req) => {
     try {
       const items = filterReviewHistory(listReviewHistory(5000), req?.filter || {});
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
-        filePath = String(req.path);
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const out = await dialog.showSaveDialog({
           title: "导出审核历史",
@@ -1985,7 +2041,7 @@
               outputs: found?.result?.node_outputs || {},
             },
           };
-          const merged = { ...loadConfig(), ...(found.config || {}) };
+          const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(found.config || {}) });
           const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(replayPayload));
           const out = attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
@@ -2184,7 +2240,7 @@
       const mergedPayload = req?.payload && typeof req.payload === "object" ? { ...req.payload } : {};
       mergedPayload.workflow = applyTemplateParams(item.graph || {}, params);
       if (!mergedPayload.workflow.workflow_id) mergedPayload.workflow.workflow_id = item.workflow_id || "custom";
-      const merged = { ...loadConfig(), ...(cfg || {}), ...(req?.cfg || {}) };
+      const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}), ...(req?.cfg || {}) });
       const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(mergedPayload));
       const out = attachQualityGate(await runMinimalWorkflow({
         payload: effectivePayload,
@@ -2315,10 +2371,12 @@
         : sandboxAlertDedupWindowSec(req || {});
       const format = String(req?.format || "md").trim().toLowerCase() === "json" ? "json" : "md";
       const data = sandboxAlerts(limit, thresholds, dedupWindowSec);
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
-        filePath = String(req.path);
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const defaultName = `aiwf_sandbox_audit_${Date.now()}.${format}`;
         const pick = await dialog.showSaveDialog({
@@ -2360,10 +2418,12 @@
   ipcMain.handle("aiwf:exportWorkflowSandboxPreset", async (_evt, req) => {
     try {
       const preset = req?.preset && typeof req.preset === "object" ? req.preset : {};
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
-        filePath = String(req.path);
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const pick = await dialog.showSaveDialog({
           title: "导出Sandbox预设",
@@ -2386,10 +2446,12 @@
 
   ipcMain.handle("aiwf:importWorkflowSandboxPreset", async (_evt, req) => {
     try {
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePaths = [];
       if (req?.mock && req?.path && allowMockIo) {
-        filePaths = [String(req.path)];
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePaths = [safe.path];
       } else {
         const out = await dialog.showOpenDialog({
           title: "导入Sandbox预设",
@@ -2427,10 +2489,12 @@
       const format = String(req?.format || "md").trim().toLowerCase() === "json" ? "json" : "md";
       const filter = req?.filter && typeof req.filter === "object" ? req.filter : {};
       const items = listQualityGateReports(limit, filter);
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
-        filePath = String(req.path);
+        const safe = resolveMockFilePath(req.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const defaultName = `aiwf_quality_gate_${Date.now()}.${format}`;
         const pick = await dialog.showSaveDialog({
@@ -2474,7 +2538,7 @@
   ipcMain.handle("aiwf:saveWorkflow", async (_evt, graph, name, opts) => {
     try {
       const options = opts && typeof opts === "object" ? opts : {};
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       const safeName = String(name || "workflow")
         .replace(/[\\/:*?"<>|]/g, "_")
         .replace(/\s+/g, "_")
@@ -2482,7 +2546,9 @@
       let canceled = false;
       let filePath = "";
       if (options.mock && options.path && allowMockIo) {
-        filePath = String(options.path);
+        const safe = resolveMockFilePath(options.path);
+        if (!safe.ok) return safe;
+        filePath = safe.path;
       } else {
         const out = await dialog.showSaveDialog({
           title: "保存流程",
@@ -2515,11 +2581,13 @@
   ipcMain.handle("aiwf:loadWorkflow", async (_evt, opts) => {
     try {
       const options = opts && typeof opts === "object" ? opts : {};
-      const allowMockIo = (!app.isPackaged) || String(process.env.AIWF_ENABLE_MOCK_IO || "").trim() === "1";
+      const allowMockIo = isMockIoAllowed();
       let canceled = false;
       let filePaths = [];
       if (options.mock && options.path && allowMockIo) {
-        filePaths = [String(options.path)];
+        const safe = resolveMockFilePath(options.path);
+        if (!safe.ok) return safe;
+        filePaths = [safe.path];
       } else {
         const out = await dialog.showOpenDialog({
           title: "加载流程",
@@ -2543,5 +2611,4 @@
 module.exports = {
   registerWorkflowIpc,
 };
-
 
