@@ -23,7 +23,8 @@ param(
   [switch]$SkipContractTests,
   [switch]$SkipChaosChecks,
   [switch]$SkipSmoke,
-  [switch]$SkipSqlConnectivityGate
+  [switch]$SkipSqlConnectivityGate,
+  [switch]$SkipNativeWinuiSmoke
   ,
   [switch]$SkipPostCleanup
 )
@@ -168,6 +169,7 @@ $secretScanScript = Join-Path $PSScriptRoot "secret_scan.ps1"
 $contractRustApiScript = Join-Path $PSScriptRoot "contract_test_rust_api.ps1"
 $chaosTaskStoreScript = Join-Path $PSScriptRoot "chaos_task_store.ps1"
 $sqlConnectivityScript = Join-Path $PSScriptRoot "check_sql_connectivity.ps1"
+$nativeWinuiSmokeScript = Join-Path $PSScriptRoot "check_native_winui_smoke.ps1"
 $cleanupScript = Join-Path $PSScriptRoot "clean_workspace_artifacts.ps1"
 $restartServicesScript = Join-Path $PSScriptRoot "restart_services.ps1"
 $accelServiceState = $null
@@ -710,6 +712,26 @@ if (-not $SkipRustNewOpsBenchGate) {
   Ok "rust new-ops benchmark gate passed"
 } else {
   Warn "skip rust new-ops benchmark gate"
+}
+
+if (-not $SkipNativeWinuiSmoke) {
+  if (-not (Test-Path $nativeWinuiSmokeScript)) {
+    throw "native winui smoke script not found: $nativeWinuiSmokeScript"
+  }
+  $isCi = [string]::Equals($env:CI, "true", [System.StringComparison]::OrdinalIgnoreCase) -or `
+    [string]::Equals($env:GITHUB_ACTIONS, "true", [System.StringComparison]::OrdinalIgnoreCase)
+  if ($isCi) {
+    Warn "skip native winui smoke in CI environment"
+  } else {
+    Info "running native winui smoke check"
+    powershell -ExecutionPolicy Bypass -File $nativeWinuiSmokeScript -Root $root
+    if ($LASTEXITCODE -ne 0) {
+      throw "native winui smoke check failed"
+    }
+    Ok "native winui smoke check passed"
+  }
+} else {
+  Warn "skip native winui smoke check"
 }
 
 Stop-AccelRustService $accelServiceState

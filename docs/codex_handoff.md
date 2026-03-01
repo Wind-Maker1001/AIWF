@@ -132,3 +132,40 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
   2. land first pages: run config, run trigger, artifact/result list;
   3. wire minimal bridge endpoints: `GET /health`, `POST /run-cleaning`;
   4. add a minimal native GUI smoke verification script/check and append result to this handoff.
+
+## 12) Native WinUI MVP Progress (2026-03-01)
+
+### 12.1 Local stability diagnosis (5 runs)
+- Diagnostic bundle: `release/diagnostics/local_stability_5runs/`
+- Command pattern (5 rounds):
+  - `restart_services.ps1 -TimeoutSeconds 120`
+  - `smoke_test.ps1 -WithInvalidParquetFallbackTest`
+- Result:
+  - 5/5 failed at base health (`/actuator/health` returns `503`), while glue/accel healthy.
+- Root cause (config-level):
+  - local `dev.env` uses placeholder SQL password for base-java path, so base health stays `DOWN`.
+  - Evidence summary: `release/diagnostics/local_stability_5runs/summary.json`
+
+### 12.2 WinUI runnable MVP landed
+- Added native solution/project:
+  - `apps/dify-native-winui/AIWF.Native.WinUI.sln`
+  - `apps/dify-native-winui/src/WinUI3Bootstrap/WinUI3Bootstrap.csproj`
+- Added WinUI MVP pages/features in one main shell:
+  - run config inputs
+  - run trigger buttons (`Check Health`, `Run Cleaning`)
+  - artifact list + raw response panel
+- Wired minimal bridge endpoints:
+  - `GET /health`
+  - `POST /run-cleaning`
+
+### 12.3 Native smoke check
+- Added script:
+  - `ops/scripts/check_native_winui_smoke.ps1`
+- Added CI-check integration:
+  - `ops/scripts/ci_check.ps1` now includes native smoke step
+  - behavior: local run executes; CI env skips with warning by default.
+- Latest verification:
+  - Build command:
+    - `MSBuild.exe AIWF.Native.WinUI.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64`
+  - Runtime check:
+    - `WinUI3Bootstrap.exe` stays alive for 8s (pass), then terminated by script.

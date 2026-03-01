@@ -2,20 +2,35 @@
 
 This folder is the starting point for migrating the desktop GUI from Electron web UI to a native WinUI 3 shell.
 
-## Current scope in this commit
+## Current scope
 
 - Native migration scaffold and architecture notes
 - IPC bridge contract draft for integrating existing AIWF runtime services
-- Initial WinUI 3 project skeleton files (not compiled in this environment)
+- WinUI 3 MVP shell with:
+  - run configuration inputs
+  - run trigger buttons
+  - artifacts/result panel
+- Minimal bridge integration:
+  - `GET /health`
+  - `POST /run-cleaning`
 
-## Why not fully runnable yet
+## Build and smoke
 
-The current machine does not have a .NET SDK installed, so project creation/build cannot be executed yet.
+Build (VS MSBuild):
 
-Required toolchain:
+```powershell
+"D:\Environments\Microsoft Visual Studio\insiders\MSBuild\Current\Bin\amd64\MSBuild.exe" `
+  .\AIWF.Native.WinUI.sln `
+  /t:Restore,Build `
+  /p:Configuration=Release `
+  /p:Platform=x64
+```
 
-- .NET SDK 8.0+
-- Windows App SDK / WinUI 3 workload (Visual Studio 2022 or equivalent)
+Smoke check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_smoke.ps1
+```
 
 ## Planned migration order
 
