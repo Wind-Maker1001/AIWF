@@ -112,3 +112,23 @@ Additional hardening:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
 ```
+
+## 10) Native GUI Environment Confirmation (2026-02-27)
+- Windows machine now has a launchable VS Insiders instance:
+  - `D:\Environments\Microsoft Visual Studio\insiders`
+  - state verified as complete and launchable.
+- Desktop workloads confirmed installed on that instance:
+  - `.NET desktop development`
+  - `Desktop development with C++`
+- WinUI readiness confirmation:
+  - user confirmed WinUI blank app template is available in VS new-project flow.
+  - this is the practical go/no-go signal for continuing native GUI implementation.
+
+## 11) Restart-CLI Continuation Point
+- Current branch: `feat/native-winui-bootstrap`
+- Working tree status at last checkpoint: clean (latest pushed commit: `7b1c1c7`).
+- Immediate next execution order after reopening CLI:
+  1. create/build a runnable WinUI solution under `apps/dify-native-winui` (`.sln/.csproj`);
+  2. land first pages: run config, run trigger, artifact/result list;
+  3. wire minimal bridge endpoints: `GET /health`, `POST /run-cleaning`;
+  4. add a minimal native GUI smoke verification script/check and append result to this handoff.
