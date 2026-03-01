@@ -8,6 +8,17 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Err($m){ Write-Host "[ERR ] $m" -ForegroundColor Red }
+function IsTrueLike([string]$v) {
+  if ([string]::IsNullOrWhiteSpace($v)) { return $false }
+  $x = $v.Trim()
+  return [string]::Equals($x, "1", [System.StringComparison]::OrdinalIgnoreCase) -or `
+    [string]::Equals($x, "true", [System.StringComparison]::OrdinalIgnoreCase) -or `
+    [string]::Equals($x, "yes", [System.StringComparison]::OrdinalIgnoreCase)
+}
+function IsPlaceholderPassword([string]$v) {
+  if ([string]::IsNullOrWhiteSpace($v)) { return $false }
+  return $v -match "^__SET_.*__$"
+}
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $EnvFile) {
@@ -36,6 +47,22 @@ if (-not (Get-Command mvn -ErrorAction SilentlyContinue)) {
 $validateScript = Join-Path $root "ops\scripts\validate_env.ps1"
 if (Test-Path $validateScript) {
   powershell -ExecutionPolicy Bypass -File $validateScript -EnvFile $EnvFile
+}
+
+$trustedPref = [string]$env:AIWF_SQL_TRUSTED
+$password = [string]$env:AIWF_SQL_PASSWORD
+$useTrusted = (IsTrueLike $trustedPref) -or [string]::IsNullOrWhiteSpace($password) -or (IsPlaceholderPassword $password)
+if ($useTrusted) {
+  $env:AIWF_SQL_AUTH_SUFFIX = ";integratedSecurity=true;authenticationScheme=NativeAuthentication"
+  $env:AIWF_SQL_USER = ""
+  $env:AIWF_SQL_PASSWORD = ""
+  Info "base-java SQL auth mode: trusted (integrated security)"
+} else {
+  if (IsPlaceholderPassword $password) {
+    throw "AIWF_SQL_PASSWORD is placeholder; set real password or enable trusted auth"
+  }
+  $env:AIWF_SQL_AUTH_SUFFIX = ""
+  Info "base-java SQL auth mode: sql_user"
 }
 
 Set-Location $ProjectDir

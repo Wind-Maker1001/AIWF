@@ -169,3 +169,17 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
     - `MSBuild.exe AIWF.Native.WinUI.sln /t:Restore,Build /p:Configuration=Release /p:Platform=x64`
   - Runtime check:
     - `WinUI3Bootstrap.exe` stays alive for 8s (pass), then terminated by script.
+
+### 12.4 Base-java local readiness follow-up (2026-03-01)
+- Implemented compatibility update:
+  - `apps/base-java/src/main/resources/application.yaml`
+    - supports optional `${AIWF_SQL_AUTH_SUFFIX}` in datasource URL.
+  - `ops/scripts/run_base_java.ps1`
+    - when SQL password is placeholder/empty (or `AIWF_SQL_TRUSTED=true`), switch base-java to trusted auth env (`integratedSecurity=true;authenticationScheme=NativeAuthentication`).
+- Current local status:
+  - `restart_services.ps1` still reports `base healthy=False` while `glue/accel=True`.
+  - observed state: Java process listens on `18080` but `/actuator/health` may timeout.
+- Next debug entrypoint:
+  1. run base-java in foreground with dedicated port to capture full startup stack;
+  2. verify Windows integrated auth native dependency for MSSQL JDBC on current machine;
+  3. if unavailable, switch local `dev.env` to explicit SQL user/password instead of placeholder.
