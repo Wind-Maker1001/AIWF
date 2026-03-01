@@ -54,7 +54,12 @@ $okBase = $false
 $okGlue = $false
 $okAccel = $false
 while ((Get-Date) -lt $deadline) {
-  if (-not $okBase) { $okBase = Test-Health "http://127.0.0.1:18080/actuator/health" "base" }
+  if (-not $okBase) {
+    $okBase = Test-Health "http://127.0.0.1:18080/actuator/health/liveness" "base"
+    if (-not $okBase) {
+      $okBase = Test-Health "http://127.0.0.1:18080/actuator/health" "base"
+    }
+  }
   if (-not $okGlue) { $okGlue = Test-Health "http://127.0.0.1:18081/health" "glue" }
   if (-not $okAccel) { $okAccel = Test-Health "http://127.0.0.1:18082/health" "accel" }
   if ($okBase -and $okGlue -and $okAccel) { break }

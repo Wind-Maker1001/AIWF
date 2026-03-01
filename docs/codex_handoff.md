@@ -177,9 +177,16 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
   - `ops/scripts/run_base_java.ps1`
     - when SQL password is placeholder/empty (or `AIWF_SQL_TRUSTED=true`), switch base-java to trusted auth env (`integratedSecurity=true;authenticationScheme=NativeAuthentication`).
 - Current local status:
-  - `restart_services.ps1` still reports `base healthy=False` while `glue/accel=True`.
-  - observed state: Java process listens on `18080` but `/actuator/health` may timeout.
+  - health probe path for bootstrap switched to liveness:
+    - `restart_services.ps1` and `smoke_test.ps1` now probe `GET /actuator/health/liveness` first (fallback to `/actuator/health`).
+  - this avoids startup false-negative caused by DB health blocking.
+- Root-cause confirmed for prior timeout:
+  - `/actuator/health` could block in `DataSourceHealthIndicator` while SQL Server JDBC login hangs.
+  - evidence bundle: `release/diagnostics/base_timeout_diag/` (thread dump shows `SQLServerConnection.login` on request thread).
+- Auth policy hardening:
+  - `run_base_java.ps1` no longer auto-switches to trusted auth when password is placeholder.
+  - trusted auth now requires explicit `AIWF_SQL_TRUSTED=true`.
+  - otherwise, script fails fast with clear error requiring real `AIWF_SQL_PASSWORD`.
 - Next debug entrypoint:
-  1. run base-java in foreground with dedicated port to capture full startup stack;
-  2. verify Windows integrated auth native dependency for MSSQL JDBC on current machine;
-  3. if unavailable, switch local `dev.env` to explicit SQL user/password instead of placeholder.
+  1. set local `AIWF_SQL_PASSWORD` to real app-user password and rerun `restart_services + smoke_test`;
+  2. if you need trusted auth path, validate Java MSSQL integrated-auth native dependency on this machine first.

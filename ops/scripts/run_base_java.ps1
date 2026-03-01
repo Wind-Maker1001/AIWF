@@ -51,15 +51,15 @@ if (Test-Path $validateScript) {
 
 $trustedPref = [string]$env:AIWF_SQL_TRUSTED
 $password = [string]$env:AIWF_SQL_PASSWORD
-$useTrusted = (IsTrueLike $trustedPref) -or [string]::IsNullOrWhiteSpace($password) -or (IsPlaceholderPassword $password)
+$useTrusted = (IsTrueLike $trustedPref)
 if ($useTrusted) {
   $env:AIWF_SQL_AUTH_SUFFIX = ";integratedSecurity=true;authenticationScheme=NativeAuthentication"
   $env:AIWF_SQL_USER = ""
   $env:AIWF_SQL_PASSWORD = ""
   Info "base-java SQL auth mode: trusted (integrated security)"
 } else {
-  if (IsPlaceholderPassword $password) {
-    throw "AIWF_SQL_PASSWORD is placeholder; set real password or enable trusted auth"
+  if ([string]::IsNullOrWhiteSpace($password) -or (IsPlaceholderPassword $password)) {
+    throw "AIWF_SQL_PASSWORD is missing/placeholder. Set real SQL password or enable AIWF_SQL_TRUSTED=true explicitly."
   }
   $env:AIWF_SQL_AUTH_SUFFIX = ""
   Info "base-java SQL auth mode: sql_user"

@@ -103,7 +103,13 @@ $glue = if ($env:AIWF_GLUE_URL) { $env:AIWF_GLUE_URL } else { "http://127.0.0.1:
 Info "base=$base"
 Info "glue=$glue"
 
-$h1 = Invoke-WithRetry -Label "base health" -Action { Invoke-RestMethod "$base/actuator/health" -Method Get }
+$h1 = $null
+try {
+  $h1 = Invoke-WithRetry -Label "base liveness" -Action { Invoke-RestMethod "$base/actuator/health/liveness" -Method Get }
+} catch {
+  Warn "base liveness probe unavailable, fallback to /actuator/health: $($_.Exception.Message)"
+  $h1 = Invoke-WithRetry -Label "base health" -Action { Invoke-RestMethod "$base/actuator/health" -Method Get }
+}
 $h2 = Invoke-WithRetry -Label "glue health" -Action { Invoke-RestMethod "$glue/health" -Method Get }
 $h3 = Invoke-WithRetry -Label "base->glue health" -Action { Invoke-RestMethod "$base/api/v1/jobs/glue/health" -Method Get }
 Ok "health checks passed"
