@@ -8,6 +8,18 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Err($m){ Write-Host "[ERR ] $m" -ForegroundColor Red }
+function Import-DotEnv([string]$Path) {
+  if (-not (Test-Path $Path)) { return }
+  Get-Content $Path | ForEach-Object {
+    $line = $_.Trim()
+    if ($line -eq "" -or $line.StartsWith("#")) { return }
+    $idx = $line.IndexOf('=')
+    if ($idx -le 0) { return }
+    $k = $line.Substring(0, $idx).Trim()
+    $v = $line.Substring($idx + 1).Trim().Trim('"').Trim("'")
+    [System.Environment]::SetEnvironmentVariable($k, $v, "Process")
+  }
+}
 function IsTrueLike([string]$v) {
   if ([string]::IsNullOrWhiteSpace($v)) { return $false }
   $x = $v.Trim()
@@ -34,6 +46,7 @@ if (-not (Test-Path $ProjectDir)) {
 
 if (Test-Path $EnvFile) {
   $env:AIWF_ENV_FILE = $EnvFile
+  Import-DotEnv $EnvFile
   Info "AIWF_ENV_FILE=$EnvFile"
 } else {
   Info "env file not found, continuing: $EnvFile"
