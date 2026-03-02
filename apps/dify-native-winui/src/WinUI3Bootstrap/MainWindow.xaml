@@ -109,7 +109,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="WorkspaceNavButton" Click="OnWorkspaceNavClick" Content="工作台" UseSystemFocusVisuals="True" MinHeight="40" Padding="16,0" MinWidth="140">
+                    <Button x:Name="WorkspaceNavButton" Click="OnWorkspaceNavClick" Content="工作台" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
@@ -118,7 +118,7 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
                         </Button.Resources>
                     </Button>
-                    <Button x:Name="CanvasNavButton" Click="OnCanvasNavClick" Content="画布" UseSystemFocusVisuals="True" MinHeight="40" Padding="16,0" MinWidth="140">
+                    <Button x:Name="CanvasNavButton" Click="OnCanvasNavClick" Content="画布" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
@@ -127,7 +127,7 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
                         </Button.Resources>
                     </Button>
-                    <Button x:Name="ResultNavButton" Click="OnResultNavClick" Content="结果" UseSystemFocusVisuals="True" MinHeight="40" Padding="16,0" MinWidth="140">
+                    <Button x:Name="ResultNavButton" Click="OnResultNavClick" Content="结果" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
@@ -139,7 +139,7 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="QuickHealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="True" MinHeight="40" Padding="16,0" MinWidth="120">
+                    <Button x:Name="QuickHealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
@@ -147,7 +147,7 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
                         </Button.Resources>
                     </Button>
-                    <Button x:Name="QuickRunButton" Click="OnRunCleaningClick" Content="运行" UseSystemFocusVisuals="True" MinHeight="40" Padding="16,0" MinWidth="120">
+                    <Button x:Name="QuickRunButton" Click="OnRunCleaningClick" Content="运行" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
@@ -296,17 +296,18 @@
                             <TextBlock Text="独立可视化工作区" Style="{StaticResource CanvasSectionSubtitleStyle}" />
                         </StackPanel>
                         <ScrollViewer Grid.Column="2"
-                                      HorizontalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Hidden"
                                       HorizontalScrollMode="Auto"
                                       VerticalScrollBarVisibility="Disabled"
                                       VerticalScrollMode="Disabled"
                                       ZoomMode="Disabled">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Button x:Name="ResetCanvasViewButton" Click="OnResetCanvasViewClick" Content="重置视图" Style="{StaticResource CanvasSecondaryButtonStyle}" />
-                                <Button x:Name="SaveCanvasButton" Click="OnSaveCanvasClick" Content="保存画布" Style="{StaticResource CanvasSecondaryButtonStyle}" />
-                                <Button x:Name="LoadCanvasButton" Click="OnLoadCanvasClick" Content="加载画布" Style="{StaticResource CanvasSecondaryButtonStyle}" />
-                                <Button x:Name="NewCanvasButton" Click="OnNewCanvasClick" Content="新建画布" Style="{StaticResource CanvasSecondaryButtonStyle}" />
-                                <Button x:Name="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}">
+                                <Button x:Name="ResetCanvasViewButton" Click="OnResetCanvasViewClick" Content="定位节点流" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                <Button x:Name="SaveCanvasButton" Click="OnSaveCanvasClick" Content="保存画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                <Button x:Name="LoadCanvasButton" Click="OnLoadCanvasClick" Content="加载画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                <Button x:Name="NewCanvasButton" Click="OnNewCanvasClick" Content="新建画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                <Button x:Name="ClearCanvasButton" Click="OnClearCanvasClick" Content="清空画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                <Button x:Name="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False">
                                     <Button.Resources>
                                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
                                         <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
@@ -317,7 +318,7 @@
                                     </Button.Resources>
                                 </Button>
                                 <Border Width="1" Height="28" VerticalAlignment="Center" Background="#33A1A1AA" Margin="2,0" />
-                                <Button x:Name="CanvasZoomOutButton" Click="OnCanvasZoomOutClick" Content="−" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" />
+                                <Button x:Name="CanvasZoomOutButton" Click="OnCanvasZoomOutClick" Content="−" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" IsTabStop="False" UseSystemFocusVisuals="False" />
                                 <Border MinWidth="46"
                                         MinHeight="32"
                                         CornerRadius="8"
@@ -346,8 +347,8 @@
                                                  LostFocus="OnCanvasZoomEditTextBoxLostFocus" />
                                     </Grid>
                                 </Border>
-                                <Button x:Name="CanvasZoomInButton" Click="OnCanvasZoomInClick" Content="+" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" />
-                                <Button x:Name="CanvasFitButton" Click="OnCanvasFitClick" Content="Fit" MinHeight="32" Padding="10,0" FontWeight="SemiBold" Background="#FFC62828" Foreground="#FFFFFFFF" BorderBrush="#FF991B1B" />
+                                <Button x:Name="CanvasZoomInButton" Click="OnCanvasZoomInClick" Content="+" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                <Button x:Name="CanvasFitButton" Click="OnCanvasFitClick" Content="Fit" MinHeight="32" Padding="10,0" FontWeight="SemiBold" Background="#FFC62828" Foreground="#FFFFFFFF" BorderBrush="#FF991B1B" IsTabStop="False" UseSystemFocusVisuals="False" />
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
@@ -393,9 +394,17 @@
                                             <Canvas x:Name="CanvasGridLayer" IsHitTestVisible="False" />
                                             <Canvas x:Name="WorkspaceCanvas" />
                                         </Grid>
+                                        <Border x:Name="CanvasMarqueeSelectionBox"
+                                                Visibility="Collapsed"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top"
+                                                IsHitTestVisible="False"
+                                                BorderThickness="1"
+                                                BorderBrush="#FFC62828"
+                                                Background="#22C62828" />
                                         <StackPanel x:Name="CanvasHintPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsHitTestVisible="False">
                                             <TextBlock Text="画布交互区" FontSize="20" FontWeight="SemiBold" Foreground="#FF374151" HorizontalAlignment="Center" />
-                                            <TextBlock Text="拖动画布 / 拖动节点 / 滚轮缩放" Foreground="#FF6B7280" HorizontalAlignment="Center" />
+                                            <TextBlock Text="左键框选 / 空格+拖拽平移 / 滚轮缩放" Foreground="#FF6B7280" HorizontalAlignment="Center" />
                                         </StackPanel>
                                     </Grid>
                                 </Grid>

@@ -5,6 +5,8 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Shapes;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Input;
+using System.Numerics;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -39,6 +41,12 @@ public sealed partial class MainWindow : Window
     private bool _didSetInitialCanvasView;
     private bool _isCanvasStacked;
     private bool _isCanvasPanning;
+    private bool _isMarqueeSelecting;
+    private bool _isSpaceHeld;
+    private bool _isPointerPanningMode;
+    private long _lastSpaceKeyTickMs;
+    private uint _marqueePointerId;
+    private Point _marqueeStartPoint;
     private Point _panStartPoint;
     private double _panStartTranslateX;
     private double _panStartTranslateY;
@@ -66,6 +74,7 @@ public sealed partial class MainWindow : Window
     private Border? _cleanNode;
     private Border? _outputNode;
     private Border? _selectedNode;
+    private readonly HashSet<Border> _multiSelectedNodes = new();
     private ConnectionEdge? _selectedConnection;
     private readonly List<Border> _artifactNodes = new();
     private readonly List<ConnectionEdge> _connections = new();
@@ -73,6 +82,11 @@ public sealed partial class MainWindow : Window
     private readonly MenuFlyout _canvasBlankFlyout = new();
     private readonly MenuFlyout _canvasNodeFlyout = new();
     private readonly MenuFlyout _canvasConnectionFlyout = new();
+    private readonly Flyout _addNodeFlyout = new();
+    private Border? _addNodeFlyoutRoot;
+    private StackPanel? _addNodeFlyoutStack;
+    private ScrollViewer? _addNodeFlyoutScroller;
+    private readonly List<Grid> _addNodeFlyoutGroupGrids = new();
     private Border? _contextNode;
     private ConnectionEdge? _contextConnection;
     private Point _contextCanvasPoint;
@@ -93,6 +107,7 @@ public sealed partial class MainWindow : Window
     private IntPtr _windowHandle;
     private IntPtr _previousWndProc;
     private WndProcDelegate? _wndProcDelegate;
+    private Point _lastNodeSpawnPoint;
 
     private const double CanvasMinScale = 0.6;
     private const double CanvasMaxScale = 2.4;
@@ -101,6 +116,9 @@ public sealed partial class MainWindow : Window
     private const double CanvasExtendThreshold = 800;
     private const double DefaultCanvasWidth = 3200;
     private const double DefaultCanvasHeight = 2200;
+    private const double MaxCanvasWidth = 14000;
+    private const double MaxCanvasHeight = 10000;
+    private readonly bool _showCanvasGrid = false;
     private const int MinWindowWidth = 900;
     private const int MinWindowHeight = 620;
     private const string DefaultInlineStatusText = "就绪";
@@ -108,6 +126,9 @@ public sealed partial class MainWindow : Window
     private static readonly TimeSpan NeutralStatusDuration = TimeSpan.FromMilliseconds(1500);
     private double _canvasWidth = DefaultCanvasWidth;
     private double _canvasHeight = DefaultCanvasHeight;
+    private double _gridBuiltWidth = -1;
+    private double _gridBuiltHeight = -1;
+    private bool _didPrewarmCanvasSection;
     private static readonly string CanvasStateFilePath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "AIWF",
@@ -157,6 +178,33 @@ public sealed partial class MainWindow : Window
         public required Line Line { get; init; }
     }
 
+    private sealed class NodeTemplate
+    {
+        public required string KeyPrefix { get; init; }
+        public required string Title { get; init; }
+        public required string Subtitle { get; init; }
+        public Symbol Icon { get; init; } = Symbol.Page;
+        public string? Group { get; init; }
+    }
+
+    private static readonly List<NodeTemplate> QuickNodeTemplates = new()
+    {
+        new NodeTemplate { KeyPrefix = "create-job", Title = "新建任务", Subtitle = "开始一次新的处理", Icon = Symbol.Add, Group = "基础操作" },
+        new NodeTemplate { KeyPrefix = "run-cleaning", Title = "开始清洗", Subtitle = "执行清洗流程", Icon = Symbol.Play, Group = "基础操作" },
+        new NodeTemplate { KeyPrefix = "check-steps", Title = "查看进度", Subtitle = "看每一步执行状态", Icon = Symbol.Clock, Group = "基础操作" },
+        new NodeTemplate { KeyPrefix = "check-files", Title = "查看文件", Subtitle = "看生成了哪些结果文件", Icon = Symbol.Document, Group = "基础操作" },
+        new NodeTemplate { KeyPrefix = "check-job", Title = "查看状态", Subtitle = "看任务当前状态", Icon = Symbol.View, Group = "基础操作" },
+        new NodeTemplate { KeyPrefix = "one-click", Title = "一键清洗", Subtitle = "一键执行并返回结果", Icon = Symbol.Accept, Group = "基础操作" },
+
+        new NodeTemplate { KeyPrefix = "process", Title = "数据处理", Subtitle = "整理和清洗字段", Icon = Symbol.Switch, Group = "数据处理" },
+        new NodeTemplate { KeyPrefix = "load", Title = "数据加载", Subtitle = "读取或写入数据", Icon = Symbol.Upload, Group = "数据处理" },
+        new NodeTemplate { KeyPrefix = "join", Title = "数据合并", Subtitle = "按条件合并两组数据", Icon = Symbol.Shuffle, Group = "数据处理" },
+        new NodeTemplate { KeyPrefix = "summary", Title = "数据汇总", Subtitle = "分组统计结果", Icon = Symbol.AllApps, Group = "数据处理" },
+        new NodeTemplate { KeyPrefix = "quality", Title = "质量检查", Subtitle = "检查异常和质量问题", Icon = Symbol.Important, Group = "数据处理" },
+
+        new NodeTemplate { KeyPrefix = "custom", Title = "空白节点", Subtitle = "自定义名称和说明", Icon = Symbol.Page, Group = "其他" }
+    };
+
     private sealed class CanvasSnapshot
     {
         public double CanvasWidth { get; set; }
@@ -189,7 +237,9 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         InitializeWindowMinimumTrackingSize();
         InitializeCanvasContextMenus();
+        InitializeAddNodeFlyout();
         InitializeKeyboardAccelerators();
+        InitializeCanvasKeyStateTracking();
         var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         if (dispatcherQueue is not null)
         {
@@ -237,6 +287,7 @@ public sealed partial class MainWindow : Window
         try
         {
             InitializeCanvasWorkspace();
+            PrewarmCanvasSection();
         }
         catch (Exception ex)
         {
@@ -276,6 +327,8 @@ public sealed partial class MainWindow : Window
 
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
+        _isSpaceHeld = false;
+        _isPointerPanningMode = false;
         if (_windowHandle == IntPtr.Zero || _previousWndProc == IntPtr.Zero)
         {
             return;
@@ -395,6 +448,51 @@ public sealed partial class MainWindow : Window
         rootElement.KeyboardAccelerators.Add(accelerator);
     }
 
+    private void InitializeCanvasKeyStateTracking()
+    {
+        if (Content is not FrameworkElement rootElement)
+        {
+            return;
+        }
+
+        rootElement.KeyDown += (_, args) =>
+        {
+            if (args.Key == Windows.System.VirtualKey.Space)
+            {
+                _isSpaceHeld = true;
+                _lastSpaceKeyTickMs = Environment.TickCount64;
+                if (_activeSection == NavSection.Canvas && !IsTextInputFocused())
+                {
+                    args.Handled = true;
+                }
+            }
+        };
+        rootElement.KeyUp += (_, args) =>
+        {
+            if (args.Key == Windows.System.VirtualKey.Space)
+            {
+                _isSpaceHeld = false;
+                _lastSpaceKeyTickMs = Environment.TickCount64;
+                if (_activeSection == NavSection.Canvas && !IsTextInputFocused())
+                {
+                    args.Handled = true;
+                }
+            }
+        };
+    }
+
+    private Brush? TryGetResourceBrush(string key)
+    {
+        if (Content is FrameworkElement root
+            && root.Resources.TryGetValue(key, out var value)
+            && value is Brush brush)
+        {
+            return brush;
+        }
+
+        return null;
+    }
+
     private bool IsTextInputFocused()
     {
         var root = Content as FrameworkElement;
@@ -449,6 +547,218 @@ public sealed partial class MainWindow : Window
         {
             deleteEdgeItem.IsEnabled = _contextConnection is not null;
         };
+    }
+
+    private void InitializeAddNodeFlyout()
+    {
+        _addNodeFlyoutGroupGrids.Clear();
+        var root = new Border
+        {
+            Width = 560,
+            MaxHeight = 720,
+            Padding = new Thickness(10, 8, 10, 10),
+            CornerRadius = new CornerRadius(14),
+            BorderThickness = new Thickness(0),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x00, 0x00, 0x00, 0x00)),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xEE, 0xF3, 0xF4, 0xF6))
+        };
+
+        var layoutGrid = new Grid
+        {
+            RowSpacing = 8
+        };
+        layoutGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layoutGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        var headerPanel = new StackPanel
+        {
+            Spacing = 2
+        };
+        headerPanel.Children.Add(new TextBlock
+        {
+            Text = "添加节点",
+            FontSize = 21,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x11, 0x11, 0x11))
+        });
+        headerPanel.Children.Add(new TextBlock
+        {
+            Text = "选择一个动作放到当前画布",
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x4B, 0x55, 0x63))
+        });
+
+        var stack = new StackPanel
+        {
+            Spacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var groups = QuickNodeTemplates.GroupBy(static t => t.Group ?? string.Empty).ToList();
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var group = groups[i];
+            if (i > 0)
+            {
+                stack.Children.Add(new Border
+                {
+                    Height = 1,
+                    Margin = new Thickness(0, 6, 0, 6),
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x22, 0x11, 0x11, 0x11))
+                });
+            }
+
+            stack.Children.Add(new Border
+            {
+                Padding = new Thickness(2, 0, 0, 0),
+                Child = new TextBlock
+                {
+                    Text = string.IsNullOrWhiteSpace(group.Key) ? "其他" : group.Key,
+                    FontSize = 14,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x6B, 0x72, 0x80))
+                }
+            });
+
+            var grid = new Grid
+            {
+                ColumnSpacing = 2,
+                RowSpacing = 4,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            _addNodeFlyoutGroupGrids.Add(grid);
+
+            var idx = 0;
+            foreach (var template in group)
+            {
+                if (idx % 2 == 0)
+                {
+                    grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                }
+
+                var btn = CreateAddNodePanelButton(template);
+                Grid.SetRow(btn, idx / 2);
+                Grid.SetColumn(btn, idx % 2);
+                grid.Children.Add(btn);
+                idx++;
+            }
+
+            while ((idx % 2) != 0)
+            {
+                var spacer = new Border { Opacity = 0, Height = 68 };
+                Grid.SetRow(spacer, idx / 2);
+                Grid.SetColumn(spacer, idx % 2);
+                grid.Children.Add(spacer);
+                idx++;
+            }
+            stack.Children.Add(grid);
+        }
+
+        var scroller = new ScrollViewer
+        {
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            ZoomMode = ZoomMode.Disabled,
+            IsHorizontalRailEnabled = false,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Content = stack
+        };
+
+        Grid.SetRow(headerPanel, 0);
+        Grid.SetRow(scroller, 1);
+        layoutGrid.Children.Add(headerPanel);
+        layoutGrid.Children.Add(scroller);
+        root.Child = layoutGrid;
+
+        _addNodeFlyoutRoot = root;
+        _addNodeFlyoutStack = stack;
+        _addNodeFlyoutScroller = scroller;
+        _addNodeFlyout.Content = root;
+        _addNodeFlyout.Placement = Microsoft.UI.Xaml.Controls.Primitives.FlyoutPlacementMode.BottomEdgeAlignedLeft;
+        _addNodeFlyout.Opened += (_, _) => ForceHideAddNodeFlyoutHorizontalBar();
+        _addNodeFlyout.FlyoutPresenterStyle = new Style(typeof(FlyoutPresenter))
+        {
+            Setters =
+            {
+                new Setter(Control.BackgroundProperty, new SolidColorBrush(Windows.UI.Color.FromArgb(0x00, 0x00, 0x00, 0x00))),
+                new Setter(Control.BorderBrushProperty, new SolidColorBrush(Windows.UI.Color.FromArgb(0x00, 0x00, 0x00, 0x00))),
+                new Setter(Control.BorderThicknessProperty, new Thickness(0)),
+                new Setter(Control.PaddingProperty, new Thickness(0))
+            }
+        };
+    }
+
+    private Button CreateAddNodePanelButton(NodeTemplate template)
+    {
+        var title = new TextBlock
+        {
+            Text = template.Title,
+            FontSize = 16,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x11, 0x11, 0x11)),
+            TextWrapping = TextWrapping.WrapWholeWords,
+            MaxLines = 1
+        };
+        var subtitle = new TextBlock
+        {
+            Text = template.Subtitle,
+            FontSize = 13,
+            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x6B, 0x72, 0x80)),
+            TextWrapping = TextWrapping.WrapWholeWords,
+            MaxLines = 2
+        };
+        var content = new StackPanel { Spacing = 2 };
+        content.Children.Add(title);
+        content.Children.Add(subtitle);
+
+        var btn = new Button
+        {
+            Content = content,
+            Tag = template,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Padding = new Thickness(12, 6, 12, 6),
+            MinHeight = 72,
+            Height = 72,
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x66, 0xD1, 0xD5, 0xDB))
+        };
+        btn.Click += OnAddNodeTemplateClick;
+        return btn;
+    }
+
+    private void ForceHideAddNodeFlyoutHorizontalBar()
+    {
+        if (_addNodeFlyoutScroller is null)
+        {
+            return;
+        }
+
+        CollapseHorizontalScrollBars(_addNodeFlyoutScroller);
+    }
+
+    private static void CollapseHorizontalScrollBars(DependencyObject root)
+    {
+        if (root is Microsoft.UI.Xaml.Controls.Primitives.ScrollBar bar
+            && bar.Orientation == Orientation.Horizontal)
+        {
+            bar.Visibility = Visibility.Collapsed;
+            bar.IsHitTestVisible = false;
+            bar.Height = 0;
+            return;
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            CollapseHorizontalScrollBars(child);
+        }
     }
 
     private void ConfigureSystemBackdrop()
@@ -894,6 +1204,26 @@ public sealed partial class MainWindow : Window
         PlaySectionEntrance(activeElement);
     }
 
+    private void PrewarmCanvasSection()
+    {
+        if (_didPrewarmCanvasSection)
+        {
+            return;
+        }
+
+        _didPrewarmCanvasSection = true;
+        var shouldRestoreCollapsed = _activeSection != NavSection.Canvas;
+        var oldOpacity = CanvasSectionGrid.Opacity;
+        CanvasSectionGrid.Opacity = 0;
+        CanvasSectionGrid.Visibility = Visibility.Visible;
+        CanvasSectionGrid.UpdateLayout();
+        CanvasSectionGrid.Opacity = oldOpacity;
+        if (shouldRestoreCollapsed)
+        {
+            CanvasSectionGrid.Visibility = Visibility.Collapsed;
+        }
+    }
+
     private static void ApplyNavButtonState(Button button, bool active)
     {
         button.FontWeight = active ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
@@ -1109,24 +1439,47 @@ public sealed partial class MainWindow : Window
         }
 
         ClampCanvasTransform();
-        BuildCanvasGrid();
         UpdateCanvasZoomIndicator();
     }
 
-    private void BuildCanvasGrid()
+    private void BuildCanvasGrid(bool force = false)
     {
         WorkspaceCanvas.Width = _canvasWidth;
         WorkspaceCanvas.Height = _canvasHeight;
         CanvasGridLayer.Width = _canvasWidth;
         CanvasGridLayer.Height = _canvasHeight;
+        CanvasGridLayer.Visibility = _showCanvasGrid ? Visibility.Visible : Visibility.Collapsed;
+
+        var sameExtent = Math.Abs(_gridBuiltWidth - _canvasWidth) < 0.1
+            && Math.Abs(_gridBuiltHeight - _canvasHeight) < 0.1;
+        if (!_showCanvasGrid)
+        {
+            if (CanvasGridLayer.Children.Count > 0)
+            {
+                CanvasGridLayer.Children.Clear();
+            }
+            _gridBuiltWidth = _canvasWidth;
+            _gridBuiltHeight = _canvasHeight;
+            return;
+        }
+
+        if (!force && sameExtent && CanvasGridLayer.Children.Count > 0)
+        {
+            return;
+        }
 
         CanvasGridLayer.Children.Clear();
-        for (var x = 0.0; x <= _canvasWidth; x += CanvasGridSize)
+        var gridStep = CanvasGridSize;
+        while ((_canvasWidth / gridStep) > 700 || (_canvasHeight / gridStep) > 500)
         {
-            var isMajor = (x % (CanvasGridSize * 5)) == 0;
-            var stroke = isMajor
-                ? Windows.UI.Color.FromArgb(0x33, 0x55, 0x55, 0x55)
-                : Windows.UI.Color.FromArgb(0x14, 0x55, 0x55, 0x55);
+            gridStep *= 2;
+        }
+        var majorEvery = gridStep * 5;
+        var majorBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0x55, 0x55, 0x55));
+        var minorBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x14, 0x55, 0x55, 0x55));
+        for (var x = 0.0; x <= _canvasWidth; x += gridStep)
+        {
+            var isMajor = (x % majorEvery) == 0;
             CanvasGridLayer.Children.Add(new Line
             {
                 X1 = x,
@@ -1134,16 +1487,13 @@ public sealed partial class MainWindow : Window
                 X2 = x,
                 Y2 = _canvasHeight,
                 StrokeThickness = isMajor ? 1.1 : 1,
-                Stroke = new SolidColorBrush(stroke)
+                Stroke = isMajor ? majorBrush : minorBrush
             });
         }
 
-        for (var y = 0.0; y <= _canvasHeight; y += CanvasGridSize)
+        for (var y = 0.0; y <= _canvasHeight; y += gridStep)
         {
-            var isMajor = (y % (CanvasGridSize * 5)) == 0;
-            var stroke = isMajor
-                ? Windows.UI.Color.FromArgb(0x33, 0x55, 0x55, 0x55)
-                : Windows.UI.Color.FromArgb(0x14, 0x55, 0x55, 0x55);
+            var isMajor = (y % majorEvery) == 0;
             CanvasGridLayer.Children.Add(new Line
             {
                 X1 = 0,
@@ -1151,9 +1501,12 @@ public sealed partial class MainWindow : Window
                 X2 = _canvasWidth,
                 Y2 = y,
                 StrokeThickness = isMajor ? 1.1 : 1,
-                Stroke = new SolidColorBrush(stroke)
+                Stroke = isMajor ? majorBrush : minorBrush
             });
         }
+
+        _gridBuiltWidth = _canvasWidth;
+        _gridBuiltHeight = _canvasHeight;
     }
 
     private void SeedCanvasNodes()
@@ -1165,6 +1518,7 @@ public sealed partial class MainWindow : Window
         _cleanNode = null;
         _outputNode = null;
         _selectedNode = null;
+        _multiSelectedNodes.Clear();
         _selectedConnection = null;
     }
 
@@ -1206,10 +1560,12 @@ public sealed partial class MainWindow : Window
             MinHeight = 96,
             BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x66, 0xC6, 0x28, 0x28)),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+            CornerRadius = new CornerRadius(14),
+            Background = TryGetResourceBrush("CardAcrylicBrush") ?? new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
             Padding = new Thickness(12)
         };
+        card.Shadow = new ThemeShadow();
+        card.Translation = new Vector3(0, 0, 14);
 
         var inputConnector = new Ellipse
         {
@@ -1273,6 +1629,24 @@ public sealed partial class MainWindow : Window
         card.PointerReleased += OnCanvasNodePointerReleased;
         card.PointerCanceled += OnCanvasNodePointerReleased;
         card.RightTapped += OnCanvasNodeRightTapped;
+        card.PointerEntered += (_, _) =>
+        {
+            if (_draggingNode == card)
+            {
+                return;
+            }
+
+            card.Translation = new Vector3(0, 0, 20);
+        };
+        card.PointerExited += (_, _) =>
+        {
+            if (_draggingNode == card)
+            {
+                return;
+            }
+
+            card.Translation = new Vector3(0, 0, 14);
+        };
 
         Canvas.SetLeft(card, left);
         Canvas.SetTop(card, top);
@@ -1546,7 +1920,15 @@ public sealed partial class MainWindow : Window
     private void SelectNode(Border? node)
     {
         _selectedNode = node;
+        _multiSelectedNodes.Clear();
         _selectedConnection = null;
+        ApplyNodeSelectionVisuals();
+        UpdateConnectionVisuals();
+        UpdateNodePropertyPanel();
+    }
+
+    private void ApplyNodeSelectionVisuals()
+    {
         foreach (var child in WorkspaceCanvas.Children)
         {
             if (child is not Border border || border.Tag is not CanvasNodeTag)
@@ -1554,33 +1936,21 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
-            var isActive = border == node;
+            var isActive = border == _selectedNode || _multiSelectedNodes.Contains(border);
             border.BorderThickness = isActive ? new Thickness(2) : new Thickness(1);
             border.BorderBrush = new SolidColorBrush(
                 isActive
                     ? Windows.UI.Color.FromArgb(0xFF, 0xC6, 0x28, 0x28)
                     : Windows.UI.Color.FromArgb(0x66, 0xC6, 0x28, 0x28));
         }
-
-        UpdateConnectionVisuals();
-        UpdateNodePropertyPanel();
     }
 
     private void SelectConnection(ConnectionEdge? edge)
     {
         _selectedConnection = edge;
         _selectedNode = null;
-        foreach (var child in WorkspaceCanvas.Children)
-        {
-            if (child is not Border border || border.Tag is not CanvasNodeTag)
-            {
-                continue;
-            }
-
-            border.BorderThickness = new Thickness(1);
-            border.BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x66, 0xC6, 0x28, 0x28));
-        }
-
+        _multiSelectedNodes.Clear();
+        ApplyNodeSelectionVisuals();
         UpdateConnectionVisuals();
         UpdateNodePropertyPanel();
     }
@@ -1612,6 +1982,18 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (_multiSelectedNodes.Count > 0)
+        {
+            CanvasSelectionInfoTextBlock.Text = $"已框选：{_multiSelectedNodes.Count} 个节点";
+            NodeTitleTextBox.Text = string.Empty;
+            NodeSubtitleTextBox.Text = string.Empty;
+            NodeTitleTextBox.IsEnabled = false;
+            NodeSubtitleTextBox.IsEnabled = false;
+            DeleteNodeButton.IsEnabled = true;
+            DeleteConnectionButton.IsEnabled = false;
+            return;
+        }
+
         if (_selectedNode?.Tag is not CanvasNodeTag tag)
         {
             CanvasSelectionInfoTextBlock.Text = "未选中内容";
@@ -1635,24 +2017,115 @@ public sealed partial class MainWindow : Window
 
     private void OnAddNodeClick(object sender, RoutedEventArgs e)
     {
-        var viewportWidth = Math.Max(CanvasViewport.ActualWidth, 600);
-        var viewportHeight = Math.Max(CanvasViewport.ActualHeight, 420);
-        var scale = Math.Max(CanvasTransform.ScaleX, 0.001);
-        var centerX = ((viewportWidth * 0.5) - CanvasTransform.TranslateX) / scale;
-        var centerY = ((viewportHeight * 0.5) - CanvasTransform.TranslateY) / scale;
-        var nodeName = $"节点 {_customNodeCounter++}";
+        PrepareAddNodeFlyoutLayout();
+        var viewportWidth = Math.Max(CanvasViewport.ActualWidth, 360);
+        var viewportHeight = Math.Max(CanvasViewport.ActualHeight, 280);
+        var popupWidth = _addNodeFlyoutRoot?.Width ?? 500;
+        var popupHeight = _addNodeFlyoutRoot?.Height > 0 ? _addNodeFlyoutRoot.Height : (_addNodeFlyoutRoot?.MaxHeight ?? 560);
+        var anchor = new Point(12, 12);
+        if (sender is FrameworkElement element)
+        {
+            try
+            {
+                var transform = element.TransformToVisual(CanvasViewport);
+                anchor = transform.TransformPoint(new Point(0, element.ActualHeight + 6));
+            }
+            catch
+            {
+                anchor = new Point(12, 12);
+            }
+        }
+
+        var x = Math.Clamp(anchor.X, 8, Math.Max(8, viewportWidth - popupWidth - 8));
+        var y = Math.Clamp(anchor.Y, 8, Math.Max(8, viewportHeight - popupHeight - 8));
+        _addNodeFlyout.ShowAt(CanvasViewport, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions
+        {
+            Position = new Point(x, y)
+        });
+    }
+
+    private void PrepareAddNodeFlyoutLayout()
+    {
+        if (_addNodeFlyoutRoot is null)
+        {
+            return;
+        }
+
+        var viewportWidth = Math.Max(CanvasViewport.ActualWidth, 360);
+        var viewportHeight = Math.Max(CanvasViewport.ActualHeight, 280);
+        var targetWidth = Math.Clamp(viewportWidth - 16, 420, 620);
+        var targetHeight = Math.Clamp(viewportHeight - 16, 260, 760);
+        _addNodeFlyoutRoot.Width = targetWidth;
+        _addNodeFlyoutRoot.MaxHeight = targetHeight;
+        _addNodeFlyoutRoot.Height = targetHeight;
+
+        var stackWidth = Math.Max(320, targetWidth - 44);
+        if (_addNodeFlyoutStack is not null)
+        {
+            _addNodeFlyoutStack.Width = stackWidth;
+        }
+
+        if (_addNodeFlyoutScroller is not null)
+        {
+            _addNodeFlyoutScroller.Width = Math.Max(320, targetWidth - 20);
+            _addNodeFlyoutScroller.Height = Math.Max(140, targetHeight - 86);
+        }
+
+        for (var i = 0; i < _addNodeFlyoutGroupGrids.Count; i++)
+        {
+            _addNodeFlyoutGroupGrids[i].Width = stackWidth;
+        }
+    }
+
+    private void OnAddNodeTemplateClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: NodeTemplate template })
+        {
+            return;
+        }
+        _addNodeFlyout.Hide();
+        SpawnNodeFromTemplate(template);
+    }
+
+    private void SpawnNodeFromTemplate(NodeTemplate template)
+    {
+        var (centerX, centerY) = GetCanvasViewportCenter();
+        var x = SnapToGrid(centerX - 110);
+        var y = SnapToGrid(centerY - 48);
+
+        if (Math.Abs(_lastNodeSpawnPoint.X - x) < 1 && Math.Abs(_lastNodeSpawnPoint.Y - y) < 1)
+        {
+            x = SnapToGrid(x + 40);
+            y = SnapToGrid(y + 40);
+        }
+
+        _lastNodeSpawnPoint = new Point(x, y);
+        var isBlank = string.Equals(template.KeyPrefix, "custom", StringComparison.OrdinalIgnoreCase);
+        var title = isBlank ? $"节点 {_customNodeCounter++}" : template.Title;
+        var subtitle = isBlank ? "请输入说明" : template.Subtitle;
+        var keyPrefix = string.IsNullOrWhiteSpace(template.KeyPrefix) ? "node" : template.KeyPrefix;
         var node = CreateCanvasNode(
-            $"node-{Guid.NewGuid():N}",
-            nodeName,
-            "请输入说明",
-            SnapToGrid(centerX - 110),
-            SnapToGrid(centerY - 48),
+            $"{keyPrefix}-{Guid.NewGuid():N}",
+            title,
+            subtitle,
+            x,
+            y,
             isUserNode: true);
         WorkspaceCanvas.Children.Add(node);
         SelectNode(node);
         DismissCanvasHint();
         EnsureCanvasExtentForViewportAndNodes();
         RequestCanvasAutosave();
+    }
+
+    private (double x, double y) GetCanvasViewportCenter()
+    {
+        var viewportWidth = Math.Max(CanvasViewport.ActualWidth, 600);
+        var viewportHeight = Math.Max(CanvasViewport.ActualHeight, 420);
+        var scale = Math.Max(CanvasTransform.ScaleX, 0.001);
+        var centerX = ((viewportWidth * 0.5) - CanvasTransform.TranslateX) / scale;
+        var centerY = ((viewportHeight * 0.5) - CanvasTransform.TranslateY) / scale;
+        return (centerX, centerY);
     }
 
     private void OnSaveCanvasClick(object sender, RoutedEventArgs e)
@@ -1668,6 +2141,12 @@ public sealed partial class MainWindow : Window
     private void OnNewCanvasClick(object sender, RoutedEventArgs e)
     {
         CreateNewCanvas();
+    }
+
+    private void OnClearCanvasClick(object sender, RoutedEventArgs e)
+    {
+        CreateNewCanvas();
+        SetInlineStatus("画布已清空。", InlineStatusTone.Success);
     }
 
     private void CreateNewCanvas()
@@ -2115,6 +2594,7 @@ public sealed partial class MainWindow : Window
         _dragStartNodeLeft = Canvas.GetLeft(node);
         _dragStartNodeTop = Canvas.GetTop(node);
         _nodeMovedDuringDrag = false;
+        SetCanvasManipulationEnabled(false);
         node.CapturePointer(e.Pointer);
         DismissCanvasHint();
         e.Handled = true;
@@ -2168,6 +2648,7 @@ public sealed partial class MainWindow : Window
         _draggingNode = null;
         _draggingNodePointerId = 0;
         _nodeMovedDuringDrag = false;
+        SetCanvasManipulationEnabled(true);
         e.Handled = true;
     }
 
@@ -2183,18 +2664,91 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        SelectConnection(null);
-
-        var properties = e.GetCurrentPoint(CanvasViewport).Properties;
+        var point = e.GetCurrentPoint(CanvasViewport);
+        var properties = point.Properties;
+        var deviceType = point.PointerDeviceType;
         if (!properties.IsLeftButtonPressed && !properties.IsMiddleButtonPressed && !properties.IsRightButtonPressed)
         {
             return;
         }
 
+        var isTouch = string.Equals(deviceType.ToString(), "Touch", StringComparison.OrdinalIgnoreCase);
+        if (isTouch)
+        {
+            // Touch pan/zoom is handled by manipulation events.
+            return;
+        }
+
+        var spacePressed = IsSpacePressed();
+        if (properties.IsLeftButtonPressed && !properties.IsMiddleButtonPressed && !properties.IsRightButtonPressed)
+        {
+            if (spacePressed)
+            {
+                BeginCanvasPanning(e);
+                return;
+            }
+
+            BeginMarqueeSelection(e);
+            e.Handled = true;
+            return;
+        }
+
+        if (properties.IsMiddleButtonPressed)
+        {
+            BeginCanvasPanning(e);
+            return;
+        }
+
+        if (properties.IsRightButtonPressed)
+        {
+            SelectConnection(null);
+        }
+    }
+
+    private bool IsSpacePressed()
+    {
+        var state = InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Space);
+        var isDown = (state & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+        if (!isDown && _isSpaceHeld)
+        {
+            // Recover from missed KeyUp when focus moved.
+            _isSpaceHeld = false;
+        }
+
+        return isDown || _isSpaceHeld;
+    }
+
+    private bool IsSpaceClickSuppressed()
+    {
+        if (_activeSection != NavSection.Canvas)
+        {
+            return false;
+        }
+
+        var elapsed = Environment.TickCount64 - _lastSpaceKeyTickMs;
+        return elapsed >= 0 && elapsed <= 220;
+    }
+
+    private void SetCanvasManipulationEnabled(bool enabled)
+    {
+        CanvasViewport.ManipulationMode = enabled
+            ? ManipulationModes.TranslateX
+              | ManipulationModes.TranslateY
+              | ManipulationModes.Scale
+              | ManipulationModes.TranslateInertia
+              | ManipulationModes.ScaleInertia
+            : ManipulationModes.None;
+    }
+
+    private void BeginCanvasPanning(PointerRoutedEventArgs e)
+    {
+        SelectConnection(null);
         _isCanvasPanning = true;
+        _isPointerPanningMode = true;
         _panStartPoint = e.GetCurrentPoint(CanvasViewport).Position;
         _panStartTranslateX = CanvasTransform.TranslateX;
         _panStartTranslateY = CanvasTransform.TranslateY;
+        SetCanvasManipulationEnabled(false);
         CanvasViewport.CapturePointer(e.Pointer);
         BeginCanvasViewportInteraction();
         DismissCanvasHint();
@@ -2215,6 +2769,13 @@ public sealed partial class MainWindow : Window
                 _connectionPreviewLine.Y2 = end.Y;
                 e.Handled = true;
             }
+            return;
+        }
+
+        if (_isMarqueeSelecting && e.Pointer.PointerId == _marqueePointerId)
+        {
+            UpdateMarqueeSelection(e.GetCurrentPoint(CanvasViewport).Position);
+            e.Handled = true;
             return;
         }
 
@@ -2240,17 +2801,111 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (_isMarqueeSelecting && e.Pointer.PointerId == _marqueePointerId)
+        {
+            EndMarqueeSelection();
+            e.Handled = true;
+            return;
+        }
+
         if (!_isCanvasPanning)
         {
             return;
         }
 
         _isCanvasPanning = false;
+        _isPointerPanningMode = false;
         CanvasViewport.ReleasePointerCaptures();
-        ClampCanvasTransform();
-        EnsureCanvasExtentForViewportAndNodes();
+        SetCanvasManipulationEnabled(true);
         EndCanvasViewportInteraction();
         e.Handled = true;
+    }
+
+    private void BeginMarqueeSelection(PointerRoutedEventArgs e)
+    {
+        _isMarqueeSelecting = true;
+        _isCanvasPanning = false;
+        _isPointerPanningMode = false;
+        _marqueePointerId = e.Pointer.PointerId;
+        _marqueeStartPoint = e.GetCurrentPoint(CanvasViewport).Position;
+        _selectedConnection = null;
+        _selectedNode = null;
+        _multiSelectedNodes.Clear();
+        ApplyNodeSelectionVisuals();
+        UpdateConnectionVisuals();
+        UpdateNodePropertyPanel();
+        CanvasMarqueeSelectionBox.Visibility = Visibility.Visible;
+        CanvasMarqueeSelectionBox.Margin = new Thickness(_marqueeStartPoint.X, _marqueeStartPoint.Y, 0, 0);
+        CanvasMarqueeSelectionBox.Width = 0;
+        CanvasMarqueeSelectionBox.Height = 0;
+        SetCanvasManipulationEnabled(false);
+        CanvasViewport.CapturePointer(e.Pointer);
+        DismissCanvasHint();
+    }
+
+    private void UpdateMarqueeSelection(Point currentViewportPoint)
+    {
+        var left = Math.Min(_marqueeStartPoint.X, currentViewportPoint.X);
+        var top = Math.Min(_marqueeStartPoint.Y, currentViewportPoint.Y);
+        var width = Math.Abs(currentViewportPoint.X - _marqueeStartPoint.X);
+        var height = Math.Abs(currentViewportPoint.Y - _marqueeStartPoint.Y);
+
+        CanvasMarqueeSelectionBox.Margin = new Thickness(left, top, 0, 0);
+        CanvasMarqueeSelectionBox.Width = width;
+        CanvasMarqueeSelectionBox.Height = height;
+
+        var scale = Math.Max(CanvasTransform.ScaleX, 0.001);
+        var contentLeft = (left - CanvasTransform.TranslateX) / scale;
+        var contentTop = (top - CanvasTransform.TranslateY) / scale;
+        var contentRight = ((left + width) - CanvasTransform.TranslateX) / scale;
+        var contentBottom = ((top + height) - CanvasTransform.TranslateY) / scale;
+
+        var rect = new Rect(contentLeft, contentTop, Math.Max(0, contentRight - contentLeft), Math.Max(0, contentBottom - contentTop));
+        _multiSelectedNodes.Clear();
+        foreach (var node in GetCanvasNodeBorders())
+        {
+            if (node.Tag is not CanvasNodeTag tag || !tag.IsUserNode)
+            {
+                continue;
+            }
+
+            var nodeLeft = Canvas.GetLeft(node);
+            var nodeTop = Canvas.GetTop(node);
+            var nodeWidth = node.ActualWidth > 1 ? node.ActualWidth : node.Width;
+            var nodeHeight = node.ActualHeight > 1 ? node.ActualHeight : Math.Max(node.MinHeight, 96);
+            var nodeRect = new Rect(nodeLeft, nodeTop, Math.Max(1, nodeWidth), Math.Max(1, nodeHeight));
+            if (RectIntersects(nodeRect, rect))
+            {
+                _multiSelectedNodes.Add(node);
+            }
+        }
+
+        ApplyNodeSelectionVisuals();
+        UpdateNodePropertyPanel();
+    }
+
+    private static bool RectIntersects(Rect a, Rect b)
+    {
+        var aRight = a.X + a.Width;
+        var aBottom = a.Y + a.Height;
+        var bRight = b.X + b.Width;
+        var bBottom = b.Y + b.Height;
+        return a.X < bRight && aRight > b.X && a.Y < bBottom && aBottom > b.Y;
+    }
+
+    private void EndMarqueeSelection()
+    {
+        _isMarqueeSelecting = false;
+        _marqueePointerId = 0;
+        CanvasViewport.ReleasePointerCaptures();
+        SetCanvasManipulationEnabled(true);
+        CanvasMarqueeSelectionBox.Visibility = Visibility.Collapsed;
+        CanvasMarqueeSelectionBox.Width = 0;
+        CanvasMarqueeSelectionBox.Height = 0;
+        if (_multiSelectedNodes.Count > 0)
+        {
+            SetInlineStatus($"已框选 {_multiSelectedNodes.Count} 个节点，按 Delete 可删除。", InlineStatusTone.Success);
+        }
     }
 
     private void OnCanvasPointerWheelChanged(object sender, PointerRoutedEventArgs e)
@@ -2272,12 +2927,24 @@ public sealed partial class MainWindow : Window
 
     private void OnCanvasManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
     {
+        if (_isMarqueeSelecting || _draggingNode is not null || _isCreatingConnection || _isPointerPanningMode)
+        {
+            e.Handled = true;
+            return;
+        }
+
         BeginCanvasViewportInteraction();
         DismissCanvasHint();
     }
 
     private void OnCanvasManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
     {
+        if (_isMarqueeSelecting || _draggingNode is not null || _isCreatingConnection || _isPointerPanningMode)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Delta.Scale != 0 && Math.Abs(e.Delta.Scale - 1) > 0.001)
         {
             ApplyCanvasScale(e.Position, e.Delta.Scale);
@@ -2290,8 +2957,12 @@ public sealed partial class MainWindow : Window
 
     private void OnCanvasManipulationCompleted(object sender, ManipulationCompletedRoutedEventArgs e)
     {
-        ClampCanvasTransform();
-        EnsureCanvasExtentForViewportAndNodes();
+        if (_isMarqueeSelecting || _draggingNode is not null || _isCreatingConnection || _isPointerPanningMode)
+        {
+            e.Handled = true;
+            return;
+        }
+
         EndCanvasViewportInteraction();
     }
 
@@ -2427,14 +3098,54 @@ public sealed partial class MainWindow : Window
 
     private void FitCanvasToNodes()
     {
-        var nodes = GetCanvasNodeBorders().ToList();
+        var allNodes = GetCanvasNodeBorders().ToList();
+        var userNodes = allNodes
+            .Where(x => x.Tag is CanvasNodeTag tag && tag.IsUserNode)
+            .ToList();
+        var nodes = userNodes.Count > 0 ? userNodes : allNodes;
         if (nodes.Count == 0)
         {
             ResetCanvasView();
-            ClampCanvasTransform();
             UpdateCanvasZoomIndicator();
             SetInlineStatus("画布为空，已重置视图。", InlineStatusTone.Neutral);
             return;
+        }
+
+        // Ignore extreme outliers so accidental far-away nodes don't fling the camera.
+        if (nodes.Count >= 4)
+        {
+            var centersX = nodes.Select(n =>
+            {
+                var l = Canvas.GetLeft(n);
+                var w = n.ActualWidth > 0 ? n.ActualWidth : n.Width;
+                return l + (Math.Max(w, 1) * 0.5);
+            }).OrderBy(v => v).ToList();
+            var centersY = nodes.Select(n =>
+            {
+                var t = Canvas.GetTop(n);
+                var h = n.ActualHeight > 0 ? n.ActualHeight : Math.Max(n.MinHeight, 96);
+                return t + (Math.Max(h, 1) * 0.5);
+            }).OrderBy(v => v).ToList();
+            var lowIndex = (int)Math.Floor((centersX.Count - 1) * 0.1);
+            var highIndex = (int)Math.Ceiling((centersX.Count - 1) * 0.9);
+            var minCx = centersX[Math.Clamp(lowIndex, 0, centersX.Count - 1)];
+            var maxCx = centersX[Math.Clamp(highIndex, 0, centersX.Count - 1)];
+            var minCy = centersY[Math.Clamp(lowIndex, 0, centersY.Count - 1)];
+            var maxCy = centersY[Math.Clamp(highIndex, 0, centersY.Count - 1)];
+            var filtered = nodes.Where(n =>
+            {
+                var l = Canvas.GetLeft(n);
+                var t = Canvas.GetTop(n);
+                var w = n.ActualWidth > 0 ? n.ActualWidth : n.Width;
+                var h = n.ActualHeight > 0 ? n.ActualHeight : Math.Max(n.MinHeight, 96);
+                var cx = l + (Math.Max(w, 1) * 0.5);
+                var cy = t + (Math.Max(h, 1) * 0.5);
+                return cx >= minCx && cx <= maxCx && cy >= minCy && cy <= maxCy;
+            }).ToList();
+            if (filtered.Count >= 2)
+            {
+                nodes = filtered;
+            }
         }
 
         var minLeft = double.MaxValue;
@@ -2457,79 +3168,20 @@ public sealed partial class MainWindow : Window
         var contentHeight = Math.Max(1.0, maxBottom - minTop);
         var viewportWidth = Math.Max(CanvasViewport.ActualWidth, 1.0);
         var viewportHeight = Math.Max(CanvasViewport.ActualHeight, 1.0);
-        const double padding = 72;
+        const double padding = 64;
         var availableWidth = Math.Max(80.0, viewportWidth - (padding * 2));
         var availableHeight = Math.Max(80.0, viewportHeight - (padding * 2));
         var scaleX = availableWidth / contentWidth;
         var scaleY = availableHeight / contentHeight;
         var targetScale = Math.Clamp(Math.Min(scaleX, scaleY), CanvasMinScale, CanvasMaxScale);
-        var logicalPadding = padding / targetScale;
-        var halfViewWidth = viewportWidth / (2 * targetScale);
-        var halfViewHeight = viewportHeight / (2 * targetScale);
-
-        var centerX = minLeft + (contentWidth * 0.5);
-        var centerY = minTop + (contentHeight * 0.5);
-        var minCenterX = halfViewWidth + logicalPadding;
-        var minCenterY = halfViewHeight + logicalPadding;
-        var shiftX = 0.0;
-        var shiftY = 0.0;
-        if (centerX < minCenterX)
-        {
-            shiftX = Math.Ceiling((minCenterX - centerX) / CanvasGridSize) * CanvasGridSize;
-        }
-        if (centerY < minCenterY)
-        {
-            shiftY = Math.Ceiling((minCenterY - centerY) / CanvasGridSize) * CanvasGridSize;
-        }
-        if (shiftX > 0 || shiftY > 0)
-        {
-            foreach (var child in WorkspaceCanvas.Children)
-            {
-                if (child is not FrameworkElement element)
-                {
-                    continue;
-                }
-
-                Canvas.SetLeft(element, Canvas.GetLeft(element) + shiftX);
-                Canvas.SetTop(element, Canvas.GetTop(element) + shiftY);
-            }
-
-            minLeft += shiftX;
-            maxRight += shiftX;
-            minTop += shiftY;
-            maxBottom += shiftY;
-            centerX += shiftX;
-            centerY += shiftY;
-            _canvasWidth += shiftX;
-            _canvasHeight += shiftY;
-        }
-
-        var neededWidth = Math.Max(maxRight + logicalPadding, centerX + halfViewWidth + logicalPadding);
-        var neededHeight = Math.Max(maxBottom + logicalPadding, centerY + halfViewHeight + logicalPadding);
-        var didGrow = false;
-        while (_canvasWidth < neededWidth)
-        {
-            _canvasWidth += CanvasExtendChunk;
-            didGrow = true;
-        }
-        while (_canvasHeight < neededHeight)
-        {
-            _canvasHeight += CanvasExtendChunk;
-            didGrow = true;
-        }
-        if (didGrow)
-        {
-            BuildCanvasGrid();
-            UpdateAllConnections();
-        }
-
         CanvasTransform.ScaleX = targetScale;
         CanvasTransform.ScaleY = targetScale;
+        var centerX = minLeft + (contentWidth * 0.5);
+        var centerY = minTop + (contentHeight * 0.5);
         CanvasTransform.TranslateX = (viewportWidth * 0.5) - (centerX * targetScale);
         CanvasTransform.TranslateY = (viewportHeight * 0.5) - (centerY * targetScale);
-        ClampCanvasTransform();
         UpdateCanvasZoomIndicator();
-        SetInlineStatus("已适配所有节点到当前视图。", InlineStatusTone.Success);
+        SetInlineStatus("已定位至节点流。", InlineStatusTone.Success);
     }
 
     private void UpdateCanvasZoomIndicator()
@@ -2801,32 +3453,27 @@ public sealed partial class MainWindow : Window
 
         var shiftX = 0.0;
         var shiftY = 0.0;
-        if (extendLeft)
+        if (extendLeft && _canvasWidth < MaxCanvasWidth)
         {
-            shiftX = CanvasExtendChunk;
-            _canvasWidth += CanvasExtendChunk;
+            shiftX = Math.Min(CanvasExtendChunk, MaxCanvasWidth - _canvasWidth);
         }
-        if (extendTop)
+        if (extendTop && _canvasHeight < MaxCanvasHeight)
         {
-            shiftY = CanvasExtendChunk;
-            _canvasHeight += CanvasExtendChunk;
+            shiftY = Math.Min(CanvasExtendChunk, MaxCanvasHeight - _canvasHeight);
         }
-        if (extendRight)
+        var growRight = 0.0;
+        if (extendRight && _canvasWidth < MaxCanvasWidth)
         {
-            _canvasWidth += CanvasExtendChunk;
+            growRight = Math.Min(CanvasExtendChunk, MaxCanvasWidth - _canvasWidth - shiftX);
         }
-        if (extendBottom)
+        var growBottom = 0.0;
+        if (extendBottom && _canvasHeight < MaxCanvasHeight)
         {
-            _canvasHeight += CanvasExtendChunk;
+            growBottom = Math.Min(CanvasExtendChunk, MaxCanvasHeight - _canvasHeight - shiftY);
         }
-        if (shiftX > 0)
-        {
-            _canvasWidth += shiftX;
-        }
-        if (shiftY > 0)
-        {
-            _canvasHeight += shiftY;
-        }
+
+        _canvasWidth += shiftX + growRight;
+        _canvasHeight += shiftY + growBottom;
 
         if (shiftX > 0 || shiftY > 0)
         {
@@ -2852,10 +3499,13 @@ public sealed partial class MainWindow : Window
 
     private void OnResetCanvasViewClick(object sender, RoutedEventArgs e)
     {
-        ResetCanvasView();
-        ClampCanvasTransform();
-        UpdateCanvasZoomIndicator();
-        SetInlineStatus("已重置画布视图。", InlineStatusTone.Success);
+        if (IsSpaceClickSuppressed())
+        {
+            return;
+        }
+
+        FitCanvasToNodes();
+        SetInlineStatus("已定位到节点流。", InlineStatusTone.Success);
     }
 
     private void ResetCanvasView()
@@ -2904,6 +3554,33 @@ public sealed partial class MainWindow : Window
 
     private bool DeleteSelectedUserNode()
     {
+        if (_multiSelectedNodes.Count > 0)
+        {
+            var removed = 0;
+            foreach (var node in _multiSelectedNodes.ToList())
+            {
+                if (node.Tag is not CanvasNodeTag multiTag || !multiTag.IsUserNode)
+                {
+                    continue;
+                }
+
+                RemoveConnectionsForNode(node);
+                WorkspaceCanvas.Children.Remove(node);
+                removed++;
+            }
+
+            _multiSelectedNodes.Clear();
+            _selectedNode = null;
+            ApplyNodeSelectionVisuals();
+            UpdateNodePropertyPanel();
+            if (removed > 0)
+            {
+                SetInlineStatus($"已删除 {removed} 个节点。", InlineStatusTone.Success);
+                RequestCanvasAutosave();
+                return true;
+            }
+        }
+
         if (_selectedNode is null || _selectedNode.Tag is not CanvasNodeTag tag || !tag.IsUserNode)
         {
             return false;
