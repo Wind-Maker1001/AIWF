@@ -35,6 +35,42 @@
                 <Setter Property="CornerRadius" Value="14" />
                 <Setter Property="Padding" Value="12" />
             </Style>
+            <Style TargetType="Button">
+                <Setter Property="CornerRadius" Value="9" />
+                <Setter Property="MinHeight" Value="40" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+            </Style>
+            <Style x:Key="CanvasSectionTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="#FF111111" />
+            </Style>
+            <Style x:Key="CanvasSectionSubtitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Foreground" Value="#FF4B5563" />
+            </Style>
+            <Style x:Key="CanvasFieldLabelStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Foreground" Value="#FF374151" />
+            </Style>
+            <Style x:Key="CanvasSecondaryButtonStyle" TargetType="Button">
+                <Setter Property="CornerRadius" Value="9" />
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Padding" Value="12,0" />
+                <Setter Property="Background" Value="#FFF8FAFC" />
+                <Setter Property="BorderBrush" Value="#FFD1D5DB" />
+                <Setter Property="Foreground" Value="#FF111111" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+            </Style>
+            <Style x:Key="CanvasPrimaryButtonStyle" TargetType="Button">
+                <Setter Property="CornerRadius" Value="9" />
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Padding" Value="14,0" />
+                <Setter Property="Background" Value="#FFC62828" />
+                <Setter Property="BorderBrush" Value="#FF991B1B" />
+                <Setter Property="Foreground" Value="#FFFFFFFF" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+            </Style>
         </Grid.Resources>
 
         <Grid.RowDefinitions>
@@ -74,6 +110,15 @@
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button x:Name="WorkspaceNavButton" Click="OnWorkspaceNavClick" Content="工作台" UseSystemFocusVisuals="True" MinHeight="40" Padding="16,0" MinWidth="140">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF111111" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFBD5D5" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
+                        </Button.Resources>
+                    </Button>
+                    <Button x:Name="CanvasNavButton" Click="OnCanvasNavClick" Content="画布" UseSystemFocusVisuals="True" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
@@ -172,6 +217,10 @@
                         <Border x:Name="ParamsCard" Grid.Column="1" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="运行参数" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock Text="Job ID" />
+                                <TextBox x:Name="JobIdTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="smoke" />
+                                <TextBlock Text="Flow" />
+                                <TextBox x:Name="FlowTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="cleaning" />
                                 <TextBlock Text="报告标题" />
                                 <TextBox x:Name="ReportTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="Native WinUI Smoke Report" />
                                 <TextBlock Text="输入 CSV 路径（可选）" />
@@ -215,10 +264,219 @@
                                 <Border BorderBrush="#33222222" BorderThickness="1" CornerRadius="10" Background="{StaticResource PanelAcrylicBrush}" Padding="10">
                                     <TextBlock x:Name="StatusTextBlock" Text="就绪" TextWrapping="Wrap" Foreground="#FF111111" />
                                 </Border>
+                                <Border BorderBrush="#33222222" BorderThickness="1" CornerRadius="10" Background="{StaticResource PanelAcrylicBrush}" Padding="10">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="运行说明" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock x:Name="RunReferenceTextBlock" Text="-" TextWrapping="Wrap" Foreground="#FF111111" />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
+
                     </Grid>
                 </ScrollViewer>
+            </Grid>
+
+            <Grid x:Name="CanvasSectionGrid">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="12" Padding="10">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="4" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="#FFC62828" CornerRadius="2" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="画布" Style="{StaticResource CanvasSectionTitleStyle}" />
+                            <TextBlock Text="独立可视化工作区" Style="{StaticResource CanvasSectionSubtitleStyle}" />
+                        </StackPanel>
+                        <ScrollViewer Grid.Column="2"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      HorizontalScrollMode="Auto"
+                                      VerticalScrollBarVisibility="Disabled"
+                                      VerticalScrollMode="Disabled"
+                                      ZoomMode="Disabled">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Button x:Name="ResetCanvasViewButton" Click="OnResetCanvasViewClick" Content="重置视图" Style="{StaticResource CanvasSecondaryButtonStyle}" />
+                                <Button x:Name="SaveCanvasButton" Click="OnSaveCanvasClick" Content="保存画布" Style="{StaticResource CanvasSecondaryButtonStyle}" />
+                                <Button x:Name="LoadCanvasButton" Click="OnLoadCanvasClick" Content="加载画布" Style="{StaticResource CanvasSecondaryButtonStyle}" />
+                                <Button x:Name="NewCanvasButton" Click="OnNewCanvasClick" Content="新建画布" Style="{StaticResource CanvasSecondaryButtonStyle}" />
+                                <Button x:Name="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}">
+                                    <Button.Resources>
+                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
+                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
+                                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF" />
+                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF6E1111" />
+                                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF6E1111" />
+                                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#FFFFFFFF" />
+                                    </Button.Resources>
+                                </Button>
+                                <Border Width="1" Height="28" VerticalAlignment="Center" Background="#33A1A1AA" Margin="2,0" />
+                                <Button x:Name="CanvasZoomOutButton" Click="OnCanvasZoomOutClick" Content="−" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" />
+                                <Border MinWidth="46"
+                                        MinHeight="32"
+                                        CornerRadius="8"
+                                        Background="#FFF9FAFB"
+                                        BorderBrush="#FFD1D5DB"
+                                        BorderThickness="1"
+                                        VerticalAlignment="Center"
+                                        Tapped="OnCanvasZoomPercentTapped">
+                                    <Grid>
+                                        <TextBlock x:Name="CanvasZoomTextBlock"
+                                                   Text="100%"
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Center"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#FF111111" />
+                                        <TextBox x:Name="CanvasZoomEditTextBox"
+                                                 Visibility="Collapsed"
+                                                 MinWidth="52"
+                                                 Height="28"
+                                                 HorizontalContentAlignment="Center"
+                                                 TextAlignment="Center"
+                                                 BorderThickness="0"
+                                                 Background="#00FFFFFF"
+                                                 KeyDown="OnCanvasZoomEditTextBoxKeyDown"
+                                                 LostFocus="OnCanvasZoomEditTextBoxLostFocus" />
+                                    </Grid>
+                                </Border>
+                                <Button x:Name="CanvasZoomInButton" Click="OnCanvasZoomInClick" Content="+" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" />
+                                <Button x:Name="CanvasFitButton" Click="OnCanvasFitClick" Content="Fit" MinHeight="32" Padding="10,0" FontWeight="SemiBold" Background="#FFC62828" Foreground="#FFFFFFFF" BorderBrush="#FF991B1B" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="1" Margin="0,10,0,0" Style="{StaticResource CardBorderStyle}" Padding="12">
+                    <Grid>
+                        <Grid x:Name="CanvasSplitLayoutGrid" ColumnSpacing="12" RowSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="CanvasLeftColumn" Width="3*" MinWidth="520" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition x:Name="CanvasRightColumn" Width="2*" MinWidth="280" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition x:Name="CanvasLayoutRow0" Height="*" />
+                                <RowDefinition x:Name="CanvasLayoutRow1" Height="0" />
+                                <RowDefinition x:Name="CanvasLayoutRow2" Height="0" />
+                            </Grid.RowDefinitions>
+
+                            <Border x:Name="CanvasEditorPane" Grid.Column="0" Grid.Row="0" BorderBrush="#33C62828" BorderThickness="1" CornerRadius="12" Background="{StaticResource PanelAcrylicBrush}" Padding="10">
+                                <Grid RowSpacing="10">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="0" />
+                                    </Grid.RowDefinitions>
+                                    <Grid x:Name="CanvasViewport"
+                                          Grid.Row="0"
+                                          MinHeight="320"
+                                          Background="#10FFFFFF"
+                                          ManipulationMode="TranslateX,TranslateY,Scale,TranslateInertia,ScaleInertia"
+                                          PointerPressed="OnCanvasPointerPressed"
+                                          PointerMoved="OnCanvasPointerMoved"
+                                          PointerReleased="OnCanvasPointerReleased"
+                                          PointerCanceled="OnCanvasPointerReleased"
+                                          PointerWheelChanged="OnCanvasPointerWheelChanged"
+                                          ManipulationStarted="OnCanvasManipulationStarted"
+                                          ManipulationDelta="OnCanvasManipulationDelta"
+                                          ManipulationCompleted="OnCanvasManipulationCompleted">
+                                        <Grid x:Name="CanvasContentHost" RenderTransformOrigin="0,0">
+                                            <Grid.RenderTransform>
+                                                <CompositeTransform x:Name="CanvasTransform" />
+                                            </Grid.RenderTransform>
+                                            <Canvas x:Name="CanvasGridLayer" IsHitTestVisible="False" />
+                                            <Canvas x:Name="WorkspaceCanvas" />
+                                        </Grid>
+                                        <StackPanel x:Name="CanvasHintPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsHitTestVisible="False">
+                                            <TextBlock Text="画布交互区" FontSize="20" FontWeight="SemiBold" Foreground="#FF374151" HorizontalAlignment="Center" />
+                                            <TextBlock Text="拖动画布 / 拖动节点 / 滚轮缩放" Foreground="#FF6B7280" HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Grid x:Name="CanvasSplitHandle"
+                                  Grid.Column="1"
+                                  Grid.Row="0"
+                                  Background="{x:Null}">
+                                <Border x:Name="CanvasSplitGrip"
+                                        Width="12"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Stretch"
+                                        Background="#01000000"
+                                        RenderTransformOrigin="0.5,0.5"
+                                        PointerPressed="OnCanvasSplitHandlePointerPressed"
+                                        PointerMoved="OnCanvasSplitHandlePointerMoved"
+                                        PointerReleased="OnCanvasSplitHandlePointerReleased"
+                                        PointerCanceled="OnCanvasSplitHandlePointerReleased">
+                                    <Border.RenderTransform>
+                                        <CompositeTransform x:Name="CanvasSplitGripTransform" />
+                                    </Border.RenderTransform>
+                                    <Border Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#55C62828" CornerRadius="3" IsHitTestVisible="False" />
+                                </Border>
+                            </Grid>
+
+                            <Grid x:Name="CanvasStackSplitHandle"
+                                  Grid.Column="0"
+                                  Grid.ColumnSpan="3"
+                                  Grid.Row="1"
+                                  Background="{x:Null}"
+                                  Visibility="Collapsed">
+                                <Border x:Name="CanvasStackSplitGrip"
+                                        Height="12"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Center"
+                                        Background="#01000000"
+                                        RenderTransformOrigin="0.5,0.5"
+                                        PointerPressed="OnCanvasStackSplitHandlePointerPressed"
+                                        PointerMoved="OnCanvasStackSplitHandlePointerMoved"
+                                        PointerReleased="OnCanvasStackSplitHandlePointerReleased"
+                                        PointerCanceled="OnCanvasStackSplitHandlePointerReleased">
+                                    <Border.RenderTransform>
+                                        <CompositeTransform x:Name="CanvasStackSplitGripTransform" />
+                                    </Border.RenderTransform>
+                                    <Border Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#55C62828" CornerRadius="3" IsHitTestVisible="False" />
+                                </Border>
+                            </Grid>
+
+                            <Border x:Name="CanvasPropertyPane" Grid.Column="2" Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" CornerRadius="12" Background="{StaticResource PanelAcrylicBrush}" Padding="12">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="节点属性" Style="{StaticResource CanvasSectionTitleStyle}" />
+                                        <TextBlock x:Name="CanvasSelectionInfoTextBlock" Text="未选中节点" Style="{StaticResource CanvasSectionSubtitleStyle}" />
+                                        <TextBlock Text="名称" Style="{StaticResource CanvasFieldLabelStyle}" />
+                                        <TextBox x:Name="NodeTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeTitleChanged" IsEnabled="False" />
+                                        <TextBlock Text="说明" Style="{StaticResource CanvasFieldLabelStyle}" />
+                                        <TextBox x:Name="NodeSubtitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeSubtitleChanged" IsEnabled="False" />
+                                        <Button x:Name="DeleteNodeButton" Click="OnDeleteNodeClick" Content="删除节点" MinHeight="42" IsEnabled="False">
+                                            <Button.Resources>
+                                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFEE2E2" />
+                                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
+                                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF7F1D1D" />
+                                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFECACA" />
+                                                <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF991B1B" />
+                                            </Button.Resources>
+                                        </Button>
+                                        <Button x:Name="DeleteConnectionButton" Click="OnDeleteConnectionClick" Content="删除连线" MinHeight="42" IsEnabled="False">
+                                            <Button.Resources>
+                                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
+                                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
+                                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE5E7EB" />
+                                                <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
+                                            </Button.Resources>
+                                        </Button>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
             </Grid>
 
             <Grid x:Name="ResultsSectionGrid">
@@ -264,14 +522,14 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="产物" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <TextBlock Text="输出文件" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
                                     <Border Grid.Column="1" CornerRadius="999" Padding="10,4" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}">
                                         <TextBlock x:Name="ArtifactsCountTextBlock" Text="0 项" Foreground="#FF4B5563" />
                                     </Border>
                                 </Grid>
                                 <ListView x:Name="ArtifactsListView" Height="320" MinHeight="320" />
-                                <TextBlock Text="原始响应" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                <TextBox x:Name="RawResponseTextBox" Height="220" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" />
+                                <TextBlock Text="原始响应" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" Visibility="Collapsed" />
+                                <TextBox x:Name="RawResponseTextBox" Height="220" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" Visibility="Collapsed" />
                             </StackPanel>
                         </Border>
 
@@ -288,7 +546,7 @@
                                     </Border>
                                 </Grid>
 
-                                <Grid ColumnSpacing="8">
+                                <Grid ColumnSpacing="8" Visibility="Collapsed">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
@@ -337,14 +595,16 @@
 
                                 <Border BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="10" Padding="10">
                                     <StackPanel Spacing="8">
-                                        <TextBlock Text="作业 ID" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="JobIdTextBlock" Text="-" TextWrapping="Wrap" />
-                                        <TextBlock Text="摘要" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock Text="作业 ID" FontWeight="SemiBold" Foreground="#FF374151" Visibility="Collapsed" />
+                                        <TextBlock x:Name="JobIdTextBlock" Text="-" TextWrapping="Wrap" Visibility="Collapsed" />
+                                        <TextBlock Text="自动重试" FontWeight="SemiBold" Foreground="#FF374151" Visibility="Collapsed" />
+                                        <TextBlock x:Name="RetryInfoTextBlock" Text="未重试" TextWrapping="Wrap" Visibility="Collapsed" />
+                                        <TextBlock Text="结果说明" FontWeight="SemiBold" Foreground="#FF374151" />
                                         <TextBlock x:Name="RunResultTextBlock" Text="-" TextWrapping="Wrap" />
-                                        <TextBlock Text="运行模式" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="RunModeTextBlock" Text="-" TextWrapping="Wrap" />
-                                        <TextBlock Text="耗时（ms）" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="DurationTextBlock" Text="-" TextWrapping="Wrap" />
+                                        <TextBlock Text="运行模式" FontWeight="SemiBold" Foreground="#FF374151" Visibility="Collapsed" />
+                                        <TextBlock x:Name="RunModeTextBlock" Text="-" TextWrapping="Wrap" Visibility="Collapsed" />
+                                        <TextBlock Text="耗时（ms）" FontWeight="SemiBold" Foreground="#FF374151" Visibility="Collapsed" />
+                                        <TextBlock x:Name="DurationTextBlock" Text="-" TextWrapping="Wrap" Visibility="Collapsed" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
