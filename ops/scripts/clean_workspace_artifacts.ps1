@@ -26,6 +26,7 @@ function Act($m){ if($DryRun){ Write-Host "[DRY ] $m" -ForegroundColor Yellow } 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $desktopDist = Join-Path $root "apps\dify-desktop\dist"
 $desktopLiteDist = Join-Path $root "apps\dify-desktop\dist-lite"
+$desktopRoot = Join-Path $root "apps\dify-desktop"
 $logsDir = Join-Path $root "ops\logs"
 $accelTargetDir = Join-Path $root "apps\accel-rust\target"
 $accelNestedGitDir = Join-Path $root "apps\accel-rust\.git"
@@ -88,6 +89,16 @@ if (Test-Path $desktopLiteDist) {
     }
     if (-not $DryRun) { Ok "old lite installers cleaned" }
   }
+}
+
+if (Test-Path $desktopRoot) {
+  Get-ChildItem $desktopRoot -Directory -Filter "node_modules_stale_*" -ErrorAction SilentlyContinue | ForEach-Object {
+    Act "remove stale desktop deps: $($_.FullName)"
+    if (-not $DryRun) {
+      Remove-Item $_.FullName -Recurse -Force
+    }
+  }
+  if (-not $DryRun) { Ok "desktop stale dependency backups cleaned" }
 }
 
 if ($RemoveLogs -and (Test-Path $logsDir)) {

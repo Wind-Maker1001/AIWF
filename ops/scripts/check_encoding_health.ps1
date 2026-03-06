@@ -14,7 +14,19 @@ if (-not $Root) {
 }
 
 $includeExt = @(".js",".cjs",".mjs",".ts",".tsx",".py",".java",".rs",".md",".sql",".yaml",".yml",".json",".html",".css",".ps1")
-$excludeSeg = @("\.git\", "\node_modules\", "\dist\", "\dist-lite\", "\target\", "\.venv\", "\release\offline_bundle_", "\tmp\")
+$excludeSeg = @(
+  "\.git\",
+  "\node_modules\",
+  "\node_modules_stale_",
+  "\dist\",
+  "\dist-lite\",
+  "\target\",
+  "\.venv\",
+  "\bin\",
+  "\obj\",
+  "\release\offline_bundle_",
+  "\tmp\"
+)
 
 function IsExcluded([string]$p) {
   foreach ($seg in $excludeSeg) {

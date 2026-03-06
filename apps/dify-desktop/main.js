@@ -25,6 +25,19 @@ function loadWorkflowEngine() {
   throw new Error(`Failed to load workflow_engine.js\n${errors.join("\n")}`);
 }
 
+function writeBootMarker() {
+  const markerPath = String(process.env.AIWF_BOOT_MARKER_PATH || "").trim();
+  if (!markerPath) return;
+  try {
+    fs.mkdirSync(path.dirname(markerPath), { recursive: true });
+    fs.writeFileSync(markerPath, `${JSON.stringify({
+      pid: process.pid,
+      ts: new Date().toISOString(),
+      argv: process.argv.slice(1),
+    })}\n`, "utf8");
+  } catch {}
+}
+
 const { runMinimalWorkflow } = loadWorkflowEngine();
 
 const config = createConfigSupport({ app, fs, path });
@@ -62,7 +75,10 @@ registerIpcHandlers({
   getTaskStoreStatus: runtime.getTaskStoreStatus,
 });
 
-app.whenReady().then(() => windows.bootFromArgv(process.argv));
+app.whenReady().then(() => {
+  windows.bootFromArgv(process.argv);
+  writeBootMarker();
+});
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });

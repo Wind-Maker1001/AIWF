@@ -21,6 +21,10 @@ $DesktopDir = (Resolve-Path $DesktopDir).Path
 
 Push-Location $DesktopDir
 try {
+  $bootMarker = Join-Path $env:TEMP "aiwf_desktop_lite_boot_marker.json"
+  Remove-Item $bootMarker -Force -ErrorAction SilentlyContinue
+  $prevBootMarker = $env:AIWF_BOOT_MARKER_PATH
+  $proc = $null
   Info "building desktop lite unpacked app"
   $builderCli = Join-Path $DesktopDir "node_modules\electron-builder\out\cli\cli.js"
   if (-not (Test-Path $builderCli)) {
@@ -73,16 +77,25 @@ try {
   }
 
   Info "starting lite unpacked desktop executable"
+  $env:AIWF_BOOT_MARKER_PATH = $bootMarker
   $proc = Start-Process -FilePath $exe.FullName -ArgumentList "--workflow" -PassThru
   Start-Sleep -Seconds $BootWaitSec
 
   if ($proc.HasExited) {
     throw "desktop lite process exited too early with code: $($proc.ExitCode)"
   }
+  if (-not (Test-Path $bootMarker)) {
+    throw "desktop lite process did not complete startup boot marker handshake"
+  }
 
   Stop-Process -Id $proc.Id -Force
   Ok "desktop lite packaged startup check passed"
 }
 finally {
+  if ($proc -and -not $proc.HasExited) {
+    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+  }
+  if ($null -eq $prevBootMarker) { Remove-Item Env:AIWF_BOOT_MARKER_PATH -ErrorAction SilentlyContinue } else { $env:AIWF_BOOT_MARKER_PATH = $prevBootMarker }
+  Remove-Item $bootMarker -Force -ErrorAction SilentlyContinue
   Pop-Location
 }
