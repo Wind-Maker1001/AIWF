@@ -84,6 +84,16 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+      - name: Install ODBC build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unixodbc-dev
+
+      - name: Install ODBC build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install unixodbc
+
       - name: Run Rust tests
         working-directory: ./apps/accel-rust
         run: cargo test -q
