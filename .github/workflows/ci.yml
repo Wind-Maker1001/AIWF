@@ -1,4 +1,4 @@
-name: CI
+name: Quick CI
 
 on:
   push:
@@ -13,6 +13,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -37,10 +42,10 @@ jobs:
             python -m pip install -r .\requirements.txt
           }
 
-      - name: Run local CI checks (without smoke)
+      - name: Run quick CI profile
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipSmoke
+          powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick
 
   cross-platform-check:
     strategy:
@@ -93,6 +98,6 @@ jobs:
         working-directory: ./apps/glue-python
         run: python -m unittest discover -s tests -v
 
-      - name: Run routing benchmark
+      - name: Run desktop unit tests
         working-directory: ./apps/dify-desktop
-        run: npm run bench:routing
+        run: npm run test:unit

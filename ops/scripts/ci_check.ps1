@@ -1,6 +1,8 @@
 param(
   [string]$EnvFile = "",
   [string]$Owner = "local",
+  [ValidateSet("Default","Quick","Full")]
+  [string]$CiProfile = "Default",
   [switch]$SkipToolChecks,
   [switch]$SkipDocsChecks,
   [switch]$SkipEncodingChecks,
@@ -35,6 +37,47 @@ $ErrorActionPreference = "Stop"
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
+function ApplyCiProfile([string]$ProfileName, [hashtable]$BoundParams) {
+  $normalized = "default"
+  if (-not [string]::IsNullOrWhiteSpace($ProfileName)) {
+    $normalized = $ProfileName.Trim().ToLowerInvariant()
+  }
+  if ($normalized -eq "default") { return }
+
+  Info "using ci profile: $normalized"
+  if ($normalized -eq "full") { return }
+
+  if ($normalized -ne "quick") {
+    throw "unsupported ci profile: $ProfileName"
+  }
+
+  $quickSkipParams = @(
+    "SkipRegressionQuality",
+    "SkipDesktopRealSampleAcceptance",
+    "SkipDesktopFinanceTemplateAcceptance",
+    "SkipDesktopStress",
+    "SkipRoutingBench",
+    "SkipAsyncBench",
+    "SkipRustTransformBenchGate",
+    "SkipRustNewOpsBenchGate",
+    "SkipContractTests",
+    "SkipChaosChecks",
+    "SkipSmoke",
+    "SkipNativeWinuiSmoke"
+  )
+
+  $applied = @()
+  foreach ($paramName in $quickSkipParams) {
+    if ($BoundParams.ContainsKey($paramName)) { continue }
+    Set-Variable -Name $paramName -Value $true -Scope Script
+    $applied += $paramName
+  }
+
+  if ($applied.Count -gt 0) {
+    $labels = $applied | ForEach-Object { ($_ -replace "^Skip", "") }
+    Info ("quick profile auto-skips: {0}" -f ($labels -join ", "))
+  }
+}
 function WithMavenJvmFlags([scriptblock]$Action) {
   $prev = $env:MAVEN_OPTS
   $flag = "-XX:+EnableDynamicAgentLoading"
@@ -142,6 +185,7 @@ function Stop-AccelRustService($State) {
 }
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+ApplyCiProfile -ProfileName $CiProfile -BoundParams $PSBoundParameters
 if (-not $EnvFile) {
   $EnvFile = Join-Path $root "ops\config\dev.env"
 }
@@ -364,6 +408,113 @@ if (-not $SkipDesktopUiTests) {
   if (-not (Test-Path $desktopDir)) {
     throw "dify-desktop dir not found: $desktopDir"
   }
+  $desktopDepsReady = `
+    (Test-Path (Join-Path $desktopDir "node_modules\exceljs\package.json")) -and `
+    (Test-Path (Join-Path $desktopDir "node_modules\iconv-lite\package.json")) -and `
+    (Test-Path (Join-Path $desktopDir "node_modules\@playwright\test\package.json")) -and `
+    (Test-Path (Join-Path $desktopDir "node_modules\electron-builder\package.json")) -and `
+    (Test-Path (Join-Path $desktopDir "node_modules\app-builder-bin\package.json")) -and `
+    (Test-Path (Join-Path $desktopDir "node_modules\electron\package.json")) -and `
+    (Test-Path (Join-Path $desktopDir "node_modules\electron\dist\electron.exe"))
+
+  if (-not $desktopDepsReady) {
+    $desktopElectronInstall = Join-Path $desktopDir "node_modules\electron\install.js"
+    $desktopElectronExe = Join-Path $desktopDir "node_modules\electron\dist\electron.exe"
+    $desktopAppBuilderBin = Join-Path $desktopDir "node_modules\app-builder-bin\package.json"
+    $desktopPlaywrightPkg = Join-Path $desktopDir "node_modules\@playwright\test\package.json"
+    $desktopElectronBuilderPkg = Join-Path $desktopDir "node_modules\electron-builder\package.json"
+
+    if ((Test-Path $desktopPlaywrightPkg) -and (Test-Path $desktopElectronBuilderPkg)) {
+      if (-not (Test-Path $desktopAppBuilderBin)) {
+        Info "repairing desktop app-builder-bin dependency"
+        Push-Location $desktopDir
+        try {
+          npm install --no-save --prefer-offline --no-audit --fund=false --progress=false app-builder-bin@5.0.0-alpha.12
+        }
+        finally {
+          Pop-Location
+        }
+        if ($LASTEXITCODE -ne 0) {
+          Warn "desktop app-builder-bin repair failed"
+        } else {
+          Ok "desktop app-builder-bin repaired"
+        }
+      }
+
+      if ((Test-Path $desktopElectronInstall) -and (-not (Test-Path $desktopElectronExe))) {
+        Info "repairing desktop electron runtime"
+        Push-Location $desktopDir
+        try {
+          node .\node_modules\electron\install.js
+        }
+        finally {
+          Pop-Location
+        }
+        if ($LASTEXITCODE -ne 0) {
+          Warn "desktop electron runtime repair failed"
+        } else {
+          Ok "desktop electron runtime repaired"
+        }
+      }
+    }
+
+    $desktopDepsReady = `
+      (Test-Path (Join-Path $desktopDir "node_modules\exceljs\package.json")) -and `
+      (Test-Path (Join-Path $desktopDir "node_modules\iconv-lite\package.json")) -and `
+      (Test-Path (Join-Path $desktopDir "node_modules\@playwright\test\package.json")) -and `
+      (Test-Path (Join-Path $desktopDir "node_modules\electron-builder\package.json")) -and `
+      (Test-Path (Join-Path $desktopDir "node_modules\app-builder-bin\package.json")) -and `
+      (Test-Path (Join-Path $desktopDir "node_modules\electron\package.json")) -and `
+      (Test-Path (Join-Path $desktopDir "node_modules\electron\dist\electron.exe"))
+  }
+
+  if (-not $desktopDepsReady) {
+    Info "installing desktop dependencies (including devDependencies)"
+    $nodeModulesDir = Join-Path $desktopDir "node_modules"
+    if (Test-Path $nodeModulesDir) {
+      $staleDir = Join-Path $desktopDir ("node_modules_stale_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
+      try {
+        Rename-Item $nodeModulesDir $staleDir -ErrorAction Stop
+        Warn "desktop node_modules moved aside: $staleDir"
+      }
+      catch {
+        Warn "desktop node_modules rename skipped: $($_.Exception.Message)"
+      }
+    }
+
+    $installOk = $false
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+      Push-Location $desktopDir
+      try {
+        $env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+        try {
+          npm ci --include=dev --prefer-offline --no-audit --fund=false --progress=false
+        }
+        finally {
+          Remove-Item Env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD -ErrorAction SilentlyContinue
+        }
+      }
+      finally {
+        Pop-Location
+      }
+      if ($LASTEXITCODE -eq 0) {
+        $installOk = $true
+        break
+      }
+      if ($attempt -lt 3) {
+        Warn "desktop dependency install attempt $attempt failed, retrying..."
+        Start-Sleep -Seconds (5 * $attempt)
+      }
+    }
+    if (-not $installOk) {
+      throw "desktop dependency install failed"
+    }
+    Ok "desktop dependencies installed"
+  }
+  else {
+    Ok "desktop dependencies already present"
+  }
+
   Info "running desktop unit tests"
   Push-Location $desktopDir
   try {

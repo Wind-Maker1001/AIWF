@@ -11,10 +11,16 @@ on:
         description: "env file path (optional, defaults inside script)"
         required: false
         default: ""
+      ci_profile:
+        description: "ci profile to run"
+        required: false
+        default: "Full"
       run_full_integration:
         description: "run smoke + fallback integration checks (requires SQL Server and local services prerequisites)"
         required: false
         default: "false"
+  schedule:
+    - cron: "0 18 * * *"
 
 jobs:
   full-check:
@@ -43,23 +49,39 @@ jobs:
             python -m pip install -r .\requirements.txt
           }
 
-      - name: Run full local CI checks (includes smoke + fallback integration)
+      - name: Run selected local CI profile
         shell: pwsh
         run: |
+          $eventName = "${{ github.event_name }}"
+          $isSchedule = $eventName -eq "schedule"
+
           $owner = "${{ github.event.inputs.owner }}"
+          if (-not $owner -or $owner.Trim().Length -eq 0) {
+            $owner = if ($isSchedule) { "nightly" } else { "ci" }
+          }
+
           $envFile = "${{ github.event.inputs.env_file }}"
+
+          $profile = "${{ github.event.inputs.ci_profile }}"
+          if (-not $profile -or $profile.Trim().Length -eq 0) {
+            $profile = "Full"
+          }
+
           $full = "${{ github.event.inputs.run_full_integration }}"
+          if (-not $full -or $full.Trim().Length -eq 0) {
+            $full = if ($isSchedule) { "true" } else { "false" }
+          }
 
           if ($envFile -and $envFile.Trim().Length -gt 0) {
             if ($full -eq "true") {
-              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -EnvFile $envFile
+              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -EnvFile $envFile -CiProfile $profile
             } else {
-              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -EnvFile $envFile -SkipSmoke
+              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -EnvFile $envFile -CiProfile $profile -SkipSmoke
             }
           } else {
             if ($full -eq "true") {
-              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner
+              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -CiProfile $profile
             } else {
-              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -SkipSmoke
+              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -CiProfile $profile -SkipSmoke
             }
           }

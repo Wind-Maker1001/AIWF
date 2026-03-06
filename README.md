@@ -62,7 +62,18 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1 -WithInvalidParquetFallbackTest
 ```
 
-## One-Command Local Verification
+## Local Verification
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick
+```
+
+Quick profile keeps the fast gates:
+- docs, secret, encoding, and sync checks
+- Rust / Java / Python / desktop unit tests
+- desktop packaged startup checks
+
+Run the full profile when you need acceptance, smoke, contract, chaos, and benchmark gates:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
