@@ -4,6 +4,11 @@ bus_fallback/
 # Persistent artifacts may be large; keep if you want versioning
 lake/artifacts/
 lake/datasets/
+!lake/datasets/
+!lake/datasets/regression_v1_1/
+!lake/datasets/regression_v1_1/expectations.json
+!lake/datasets/regression_v1_1/raw_finance.csv
+!lake/datasets/regression_v1_1/raw_debate.jsonl
 lake/evidence/
 
 # Python

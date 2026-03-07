@@ -1,0 +1,6 @@
+﻿id,amount,biz_date,category
+1,"1,200.56",2026/02/16,policy
+2,99.1,2026-02-17,economy
+2,99.1,2026-02-17,economy
+3,-6,2026-02-18,policy
+bad,10,2026-02-18,misc
