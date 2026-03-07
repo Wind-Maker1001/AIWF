@@ -97,6 +97,12 @@ Manual dispatch from local PowerShell:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\dispatch_full_integration_self_hosted.ps1 -Wait
 ```
 
+Query the latest branch and nightly CI status:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\get_ci_status.ps1
+```
+
 ## Key Endpoints
 
 - `base-java`: `GET /actuator/health`
