@@ -28,10 +28,30 @@ jobs:
       - self-hosted
       - windows
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        env:
-          PATH: C:\Windows\system32;C:\Windows;C:\Windows\System32\WindowsPowerShell\v1.0\
+      - name: Prepare workspace from local mirror
+        shell: pwsh
+        run: |
+          $source = "D:\AIWF"
+          $dest = $env:GITHUB_WORKSPACE
+          $sha = "${{ github.sha }}"
+
+          if (-not (Test-Path (Join-Path $source ".git"))) {
+            throw "Local mirror not found: $source"
+          }
+
+          git -C $source cat-file -e "$sha^{commit}"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Local mirror is missing commit $sha"
+          }
+
+          git -C $source worktree remove --force $dest 2>$null
+          git -C $source worktree prune
+
+          if (Test-Path $dest) {
+            Remove-Item -Recurse -Force $dest
+          }
+
+          git -C $source worktree add --force $dest $sha
 
       - name: Verify tools
         shell: pwsh
