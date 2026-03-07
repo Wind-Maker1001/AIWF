@@ -91,6 +91,12 @@ This runs:
 - Manual full runs accept `ci_profile=Full` and `run_full_integration=true`.
 - Self-hosted full runs now write the local transcript path into the job summary instead of uploading an artifact. The transcript itself stays on the runner workspace under `ops/logs/ci`.
 
+Manual dispatch from local PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dispatch_full_integration_self_hosted.ps1 -Wait
+```
+
 ## Key Endpoints
 
 - `base-java`: `GET /actuator/health`
