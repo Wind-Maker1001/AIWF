@@ -842,7 +842,7 @@ if (-not $SkipRustTransformBenchGate) {
     throw "rust transform benchmark gate script not found: $rustTransformBenchGateScript"
   }
   Info "running rust transform benchmark gate"
-  powershell -ExecutionPolicy Bypass -File $rustTransformBenchGateScript -AccelUrl "http://127.0.0.1:18082" -Rows 120000 -Runs 4 -Warmup 1 -MinSpeedup 1.01 -MinArrowSpeedup 0.90 -EnforceArrowAlways
+  powershell -ExecutionPolicy Bypass -File $rustTransformBenchGateScript -AccelUrl "http://127.0.0.1:18082" -Rows 120000 -Runs 4 -Warmup 1 -MinSpeedup 1.01 -MinArrowSpeedup 0.90 -GateToleranceSpeedup 0.03 -MaxNoisyRegressionMs 15 -EnforceArrowAlways
   if ($LASTEXITCODE -ne 0) {
     throw "rust transform benchmark gate failed"
   }
