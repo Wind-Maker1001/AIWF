@@ -1,16 +1,33 @@
 ﻿const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const ExcelJS = require("exceljs");
-const { Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, TextRun, WidthType, ImageRun } = require("docx");
-const PptxGenJS = require("pptxgenjs");
-const imageSize = require("image-size");
 const {
   normalizeLineText,
   isLikelyCorruptedText,
   looksLikeReferenceEntry,
   rowTextForQuality,
 } = require("./offline_paper");
+
+function createLazyModuleLoader(moduleName) {
+  let cached = null;
+  let loadError = null;
+  return function loadModule() {
+    if (cached) return cached;
+    if (loadError) throw loadError;
+    try {
+      cached = require(moduleName);
+      return cached;
+    } catch (e) {
+      loadError = e;
+      throw e;
+    }
+  };
+}
+
+const getExcelJSModule = createLazyModuleLoader("exceljs");
+const getDocxModule = createLazyModuleLoader("docx");
+const getPptxGenJSModule = createLazyModuleLoader("pptxgenjs");
+const getImageSizeModule = createLazyModuleLoader("image-size");
 
 function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOfficeLayout }) {
   function isQuestionMarkHeavy(text) {
@@ -170,6 +187,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   }
   function readImageSize(filePath) {
     try {
+      const imageSize = getImageSizeModule();
       if (typeof imageSize === "function") return imageSize(filePath);
       if (imageSize && typeof imageSize.imageSize === "function") return imageSize.imageSize(filePath);
       if (imageSize && typeof imageSize.default === "function") return imageSize.default(filePath);
@@ -700,6 +718,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   }
 
   async function writeXlsx(filePath, rows, quality, warnings, options = {}) {
+    const ExcelJS = getExcelJSModule();
     const theme = resolveOfficeTheme(options.office_theme);
     const themeName = String(options.office_theme || "").toLowerCase();
     const isStrong = /fluent_ms_strong/i.test(themeName);
@@ -1006,6 +1025,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   }
 
   function makeTableRowsForDocx(rows, cols, fontName, maxRows = 20, headerFill = "EAF3FB") {
+    const { Paragraph, TableRow, TableCell, TextRun } = getDocxModule();
     const head = new TableRow({
       children: cols.map((k) => new TableCell({
         shading: { fill: headerFill, color: "auto", type: "clear" },
@@ -1021,6 +1041,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   }
 
   async function writeDocx(filePath, jobId, reportTitle, rows, quality, warnings, options = {}) {
+    const { Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, TextRun, WidthType, ImageRun } = getDocxModule();
     const theme = resolveOfficeTheme(options.office_theme);
     const themeName = String(options.office_theme || "").toLowerCase();
     const isStrong = /fluent_ms_strong/i.test(themeName);
@@ -1218,6 +1239,7 @@ function createOfflineOutputs({ resolveOfficeTheme, resolveOfficeFont, resolveOf
   }
 
   async function writePptx(filePath, reportTitle, rows, quality, warnings, options = {}) {
+    const PptxGenJS = getPptxGenJSModule();
     const theme = resolveOfficeTheme(options.office_theme);
     const themeName = String(options.office_theme || "").toLowerCase();
     const isStrong = /fluent_ms_strong/i.test(themeName);

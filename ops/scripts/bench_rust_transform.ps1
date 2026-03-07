@@ -3,6 +3,7 @@ param(
   [int]$Rows = 50000,
   [int]$Runs = 3,
   [int]$Warmup = 1,
+  [int]$Seed = 42,
   [string]$OutDir = "",
   [switch]$UpdateProfile,
   [string]$ProfilePath = "",
@@ -32,22 +33,25 @@ import time
 import statistics
 import tempfile
 import os
-from random import randint
+import random
 import requests
 
 base = sys.argv[1].rstrip("/")
 rows_n = int(sys.argv[2])
 runs = int(sys.argv[3])
 warmup = int(sys.argv[4])
-out_json = sys.argv[5]
+seed = int(sys.argv[5])
+out_json = sys.argv[6]
+
+random.seed(seed)
 
 url = base + "/operators/transform_rows_v2"
 rows = []
 for i in range(rows_n):
     rid = i % (rows_n // 2 + 1)
-    amount = randint(1, 1000)
-    qty = randint(1, 20)
-    score = randint(1, 10000) / 100.0
+    amount = random.randint(1, 1000)
+    qty = random.randint(1, 20)
+    score = random.randint(1, 10000) / 100.0
     active = "true" if (i % 3 != 0) else "false"
     rows.append({
         "id": str(rid),
@@ -131,8 +135,10 @@ def bench(engine):
       "runs": len(records),
       "rows_out": records[-1]["rows_out"],
       "seconds_avg": round(statistics.mean(secs), 4),
+      "seconds_median": round(statistics.median(secs), 4),
       "seconds_p95": round(sorted(secs)[max(0, int(len(secs)*0.95)-1)], 4),
       "rust_latency_ms_avg": round(statistics.mean(lat), 2) if lat else None,
+      "rust_latency_ms_median": round(statistics.median(lat), 2) if lat else None,
       "records": records,
     }
 
@@ -144,6 +150,7 @@ try:
     speedup_arrow = (row["seconds_avg"] / col_arrow["seconds_avg"]) if col_arrow["seconds_avg"] > 0 else None
     out = {
       "ok": True,
+      "seed": seed,
       "rows_in": rows_n,
       "warmup": warmup,
       "runs": runs,
@@ -166,8 +173,8 @@ finally:
 Set-Content -Path $tmp -Encoding UTF8 -Value $py
 try {
   $jsonPath = Join-Path $runDir "benchmark.json"
-  Info "running rust transform benchmark compare rows=$Rows runs=$Runs warmup=$Warmup"
-  $raw = & python $tmp $AccelUrl $Rows $Runs $Warmup $jsonPath
+  Info "running rust transform benchmark compare rows=$Rows runs=$Runs warmup=$Warmup seed=$Seed"
+  $raw = & python $tmp $AccelUrl $Rows $Runs $Warmup $Seed $jsonPath
   if ($LASTEXITCODE -ne 0) { throw "benchmark failed" }
   $res = $raw | ConvertFrom-Json
   if (-not $res.ok) { throw "rust transform benchmark returned not ok" }
@@ -201,10 +208,15 @@ try {
   $lines += "- Rows: $Rows"
   $lines += "- Runs: $Runs"
   $lines += "- Warmup: $Warmup"
+  $lines += "- Seed: $Seed"
   $lines += ""
   $lines += "## Summary"
   $lines += "- row_v1 seconds_avg: $($res.row_v1.seconds_avg)"
+  $lines += "- row_v1 seconds_median: $($res.row_v1.seconds_median)"
   $lines += "- columnar_v1 seconds_avg: $($res.columnar_v1.seconds_avg)"
+  $lines += "- columnar_v1 seconds_median: $($res.columnar_v1.seconds_median)"
+  $lines += "- columnar_arrow_v1 seconds_avg: $($res.columnar_arrow_v1.seconds_avg)"
+  $lines += "- columnar_arrow_v1 seconds_median: $($res.columnar_arrow_v1.seconds_median)"
   $lines += "- speedup_x (row/columnar_v1): $($res.speedup_x)"
   $lines += "- speedup_arrow_x (row/columnar_arrow_v1): $($res.speedup_arrow_x)"
   if ($null -ne $res.auto_decision_hit_rate) {
@@ -216,14 +228,17 @@ try {
   $lines += ""
   $lines += "## Rust Latency"
   $lines += "- row_v1 rust_latency_ms_avg: $($res.row_v1.rust_latency_ms_avg)"
+  $lines += "- row_v1 rust_latency_ms_median: $($res.row_v1.rust_latency_ms_median)"
   $lines += "- columnar_v1 rust_latency_ms_avg: $($res.columnar_v1.rust_latency_ms_avg)"
+  $lines += "- columnar_v1 rust_latency_ms_median: $($res.columnar_v1.rust_latency_ms_median)"
   $lines += "- columnar_arrow_v1 rust_latency_ms_avg: $($res.columnar_arrow_v1.rust_latency_ms_avg)"
+  $lines += "- columnar_arrow_v1 rust_latency_ms_median: $($res.columnar_arrow_v1.rust_latency_ms_median)"
   Set-Content -Path $md -Value ($lines -join [Environment]::NewLine) -Encoding UTF8
 
   Copy-Item $jsonPath (Join-Path $OutDir "latest.json") -Force
   Copy-Item $md (Join-Path $OutDir "latest.md") -Force
   $historyPath = Join-Path $OutDir "history.jsonl"
-  Add-Content -Path $historyPath -Encoding UTF8 -Value ($res | ConvertTo-Json -Compress)
+  Add-Content -Path $historyPath -Encoding UTF8 -Value ($res | ConvertTo-Json -Depth 12 -Compress)
 
   if ($UpdateProfile) {
     $history = @()

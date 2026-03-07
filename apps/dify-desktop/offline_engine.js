@@ -3,11 +3,6 @@ const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const { Readable } = require("stream");
-const ExcelJS = require("exceljs");
-const mammoth = require("mammoth");
-const pdfParseMod = require("pdf-parse");
-const imageSize = require("image-size");
-const { v4: uuidv4 } = require("uuid");
 const { readTextFileSmart } = require("./offline_text");
 const {
   listInstalledFonts: listInstalledRuntimeFonts,
@@ -251,6 +246,23 @@ function sha256File(p) {
   return h.digest("hex");
 }
 
+function makeJobId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID().replace(/-/g, "");
+  }
+  const uuid = getUuidModule();
+  if (uuid && typeof uuid.v4 === "function") {
+    return uuid.v4().replace(/-/g, "");
+  }
+  throw new Error("no uuid generator available");
+}
+
+function isMissingNodeModuleError(err) {
+  if (!err) return false;
+  if (String(err.code || "") === "MODULE_NOT_FOUND") return true;
+  return /Cannot find module/i.test(String(err.message || err));
+}
+
 function normalizeCell(v) {
   if (v === null || v === undefined) return "";
   return String(v).trim();
@@ -264,6 +276,52 @@ function normalizeAmount(v) {
   if (!Number.isFinite(n)) return null;
   return Math.round(n * 100) / 100;
 }
+
+function createLazyModuleLoader(moduleName) {
+  let cached = null;
+  let loadError = null;
+  return function loadModule() {
+    if (cached) return cached;
+    if (loadError) throw loadError;
+    try {
+      cached = require(moduleName);
+      return cached;
+    } catch (e) {
+      loadError = e;
+      throw e;
+    }
+  };
+}
+
+const getExcelJSModule = createLazyModuleLoader("exceljs");
+const getMammothModule = createLazyModuleLoader("mammoth");
+const getImageSizeModule = createLazyModuleLoader("image-size");
+const getPdfParseModule = createLazyModuleLoader("pdf-parse");
+const getUuidModule = createLazyModuleLoader("uuid");
+
+const ExcelJS = {};
+Object.defineProperty(ExcelJS, "Workbook", {
+  enumerable: true,
+  get() {
+    return getExcelJSModule().Workbook;
+  },
+});
+
+const mammoth = {
+  extractRawText(...args) {
+    return getMammothModule().extractRawText(...args);
+  },
+};
+
+const imageSize = {
+  imageSize(...args) {
+    const mod = getImageSizeModule();
+    if (typeof mod === "function") return mod(...args);
+    if (mod && typeof mod.imageSize === "function") return mod.imageSize(...args);
+    if (mod && typeof mod.default === "function") return mod.default(...args);
+    throw new Error("unsupported image-size module shape");
+  },
+};
 
 function resolveOfficeFont(params = {}, warnings = []) {
   const lang = String(params.office_lang || "zh").toLowerCase();
@@ -314,15 +372,16 @@ const OFFLINE_INGEST = createOfflineIngest({
 });
 
 async function extractPdfTextFromBuffer(buf) {
-  if (typeof pdfParseMod === "function") {
-    const out = await pdfParseMod(buf);
+  const pdfParse = getPdfParseModule();
+  if (typeof pdfParse === "function") {
+    const out = await pdfParse(buf);
     return String((out && out.text) || "");
   }
-  if (pdfParseMod && typeof pdfParseMod.default === "function") {
-    const out = await pdfParseMod.default(buf);
+  if (pdfParse && typeof pdfParse.default === "function") {
+    const out = await pdfParse.default(buf);
     return String((out && out.text) || "");
   }
-  const PDFParse = pdfParseMod && pdfParseMod.PDFParse;
+  const PDFParse = pdfParse && pdfParse.PDFParse;
   if (typeof PDFParse === "function") {
     let parser = null;
     try {
@@ -463,7 +522,7 @@ async function runOfflineCleaning(payload) {
   const reportTitle = normalizeReportTitle(params.report_title || payload?.report_title || "", "辩论资料库");
   let mdOnly = params.md_only === true || String(params.output_format || "").toLowerCase() === "md";
 
-  const jobId = uuidv4().replace(/-/g, "");
+  const jobId = makeJobId();
   const outRoot = payload?.output_root || path.join(process.cwd(), "offline-jobs");
   const jobRoot = path.join(outRoot, jobId);
   const artDir = path.join(jobRoot, "artifacts");
@@ -598,19 +657,26 @@ async function runOfflineCleaning(payload) {
     outputGateMeta: outputGateMeta,
   });
   if (!mdOnly) {
-    const officeFiltered = filterRowsForOffice(rows);
-    const officeRows = Array.isArray(officeFiltered?.rows) ? officeFiltered.rows : rows;
-    const filteredCount = Number(officeFiltered?.filtered || 0);
-    const filteredRemovedRows = Array.isArray(officeFiltered?.removedRows) ? officeFiltered.removedRows : [];
-    if (filteredCount > 0) warnings.push(`已过滤 ${filteredCount} 行“问号密度过高”文本，避免 Office 成品出现乱码片段。`);
-    outputGateMeta.filtered_question_mark_rows = filteredCount;
-    if (filteredRemovedRows.length > 0) {
-      await writeFilteredNoiseMarkdown(filteredNoisePath, filteredRemovedRows);
-      filteredNoiseWritten = true;
+    try {
+      const officeFiltered = filterRowsForOffice(rows);
+      const officeRows = Array.isArray(officeFiltered?.rows) ? officeFiltered.rows : rows;
+      const filteredCount = Number(officeFiltered?.filtered || 0);
+      const filteredRemovedRows = Array.isArray(officeFiltered?.removedRows) ? officeFiltered?.removedRows : [];
+      if (filteredCount > 0) warnings.push(`已过滤 ${filteredCount} 行“问号密度过高”文本，避免 Office 成品出现乱码片段。`);
+      outputGateMeta.filtered_question_mark_rows = filteredCount;
+      if (filteredRemovedRows.length > 0) {
+        await writeFilteredNoiseMarkdown(filteredNoisePath, filteredRemovedRows);
+        filteredNoiseWritten = true;
+      }
+      await writeXlsx(xlsxPath, officeRows, quality, warnings, { ...params, output_gate_meta: outputGateMeta });
+      await writeDocx(docxPath, jobId, reportTitle, officeRows, quality, warnings, { ...params, output_gate_meta: outputGateMeta });
+      await writePptx(pptxPath, reportTitle, officeRows, quality, warnings, { ...params, output_gate_meta: outputGateMeta });
+    } catch (e) {
+      if (!isMissingNodeModuleError(e)) throw e;
+      mdOnly = true;
+      outputGateMeta.office_dependency_fallback = true;
+      warnings.push(`Office 生成依赖缺失，已回退为仅输出 Markdown: ${String(e.message || e)}`);
     }
-    await writeXlsx(xlsxPath, officeRows, quality, warnings, { ...params, output_gate_meta: outputGateMeta });
-    await writeDocx(docxPath, jobId, reportTitle, officeRows, quality, warnings, { ...params, output_gate_meta: outputGateMeta });
-    await writePptx(pptxPath, reportTitle, officeRows, quality, warnings, { ...params, output_gate_meta: outputGateMeta });
   }
 
   const artifacts = [];

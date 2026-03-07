@@ -4,6 +4,11 @@ bus_fallback/
 # Persistent artifacts may be large; keep if you want versioning
 lake/artifacts/
 lake/datasets/
+!lake/datasets/
+!lake/datasets/regression_v1_1/
+!lake/datasets/regression_v1_1/expectations.json
+!lake/datasets/regression_v1_1/raw_finance.csv
+!lake/datasets/regression_v1_1/raw_debate.jsonl
 lake/evidence/
 
 # Python
@@ -26,6 +31,8 @@ apps/dify-desktop/dist-lite/
 apps/dify-desktop/test-results/
 apps/dify-native-winui/src/WinUI3Bootstrap/bin/
 apps/dify-native-winui/src/WinUI3Bootstrap/obj/
+apps/dify-native-winui/tests/**/bin/
+apps/dify-native-winui/tests/**/obj/
 
 # Local runtime/build artifacts
 tmp/

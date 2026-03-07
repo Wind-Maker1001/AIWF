@@ -62,7 +62,18 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1 -WithInvalidParquetFallbackTest
 ```
 
-## One-Command Local Verification
+## Local Verification
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick
+```
+
+Quick profile keeps the fast gates:
+- docs, secret, encoding, and sync checks
+- Rust / Java / Python / desktop unit tests
+- desktop packaged startup checks
+
+Run the full profile when you need acceptance, smoke, contract, chaos, and benchmark gates:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
@@ -72,6 +83,32 @@ This runs:
 - `accel-rust` tests
 - `glue-python` unit tests
 - smoke + invalid parquet fallback integration check
+
+## GitHub Actions
+
+- `Quick CI` runs on push / pull request for fast feedback.
+- `Full Integration (Self-Hosted)` is intended for the Windows self-hosted runner and also runs nightly at `18:00 UTC`.
+- Manual full runs accept `ci_profile=Full` and `run_full_integration=true`.
+- Self-hosted full runs now write the local transcript path into the job summary instead of uploading an artifact. The transcript itself stays on the runner workspace under `ops/logs/ci`.
+- GitHub scheduled workflows run from the default branch (`master`). Before this branch is merged, use the manual dispatch helper to validate current-branch full CI.
+
+Manual dispatch from local PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\dispatch_full_integration_self_hosted.ps1 -Wait
+```
+
+Query the latest branch and nightly CI status:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\get_ci_status.ps1
+```
+
+Verify the current branch end-to-end (wait for `Quick CI`, then ensure `Full Integration (Self-Hosted)` is green for the same head):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\verify_branch_ci.ps1
+```
 
 ## Key Endpoints
 

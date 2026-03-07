@@ -1,0 +1,9 @@
+﻿{
+  "acceptance": {
+    "cleaning_min_output_rows": 2,
+    "cleaning_max_invalid_rows": 2,
+    "preprocess_min_output_rows": 3,
+    "preprocess_required_fields": ["claim_text", "source_url"],
+    "preprocess_max_required_missing_ratio": 0.0
+  }
+}

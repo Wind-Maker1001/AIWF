@@ -228,14 +228,13 @@ public sealed partial class MainWindow
             var y = Math.Max(0, node.Y);
             maxX = Math.Max(maxX, x + 320);
             maxY = Math.Max(maxY, y + 220);
-            var border = CreateCanvasNode(
+            var border = AddCanvasNode(
                 node.NodeKey,
                 string.IsNullOrWhiteSpace(node.Title) ? "节点" : node.Title,
                 node.Subtitle ?? string.Empty,
                 x,
                 y,
                 isUserNode: node.IsUserNode);
-            WorkspaceCanvas.Children.Add(border);
             map[node.NodeKey] = border;
         }
 
