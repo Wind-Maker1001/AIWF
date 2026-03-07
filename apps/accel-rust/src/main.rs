@@ -6,11 +6,10 @@ use arrow_ord::sort::{SortColumn, SortOptions, lexsort_to_indices};
 use arrow_schema::{DataType, Field, Schema};
 use arrow_select::take::take;
 use axum::{
-    Json, Router,
+    Json,
     extract::{Path as AxPath, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STD;
@@ -39,7 +38,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env, fs,
     io::{BufRead, BufReader, Read, Write},
-    net::SocketAddr,
     path::{Path, PathBuf},
     process::Command,
     sync::{
@@ -55,102 +53,20 @@ use wasmtime::{
     Engine as WasmEngine, Linker as WasmLinker, Module as WasmModule, Store as WasmStore,
 };
 
-#[derive(Clone)]
-struct AppState {
-    service: String,
-    tasks: Arc<Mutex<HashMap<String, TaskState>>>,
-    metrics: Arc<Mutex<ServiceMetrics>>,
-    task_cfg: Arc<Mutex<TaskStoreConfig>>,
-    cancel_flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
-    tenant_running: Arc<Mutex<HashMap<String, usize>>>,
-    idempotency_index: Arc<Mutex<HashMap<String, String>>>,
-    transform_cache: Arc<Mutex<HashMap<String, TransformCacheEntry>>>,
-    schema_registry: Arc<Mutex<HashMap<String, Value>>>,
-}
+use accel_rust::{
+    app_state::{
+        AppState, ServiceMetrics, TaskState, TaskStoreConfig, TransformCacheEntry,
+        TransformRowsResp, TransformRowsStats,
+    },
+    config::{ServerBind, allow_egress_enabled, is_local_endpoint},
+    metrics::{
+        acquire_file_lock, load_metrics_v2_samples, observe_operator_latency_v2,
+        percentile_from_sorted, release_file_lock,
+    },
+};
 
-#[derive(Clone, Serialize, Deserialize)]
-struct TaskState {
-    task_id: String,
-    tenant_id: String,
-    operator: String,
-    status: String,
-    created_at: String,
-    updated_at: String,
-    result: Option<Value>,
-    error: Option<String>,
-    idempotency_key: String,
-    attempts: u32,
-}
-
-#[derive(Clone)]
-struct TaskStoreConfig {
-    ttl_sec: u64,
-    max_tasks: usize,
-    store_path: Option<PathBuf>,
-    remote_enabled: bool,
-    backend: String,
-    base_api_url: Option<String>,
-    base_api_key: Option<String>,
-    sql_host: String,
-    sql_port: u16,
-    sql_db: String,
-    sql_user: Option<String>,
-    sql_password: Option<String>,
-    sql_use_windows_auth: bool,
-}
-
-#[derive(Default)]
-struct ServiceMetrics {
-    transform_rows_v2_calls: u64,
-    transform_rows_v2_errors: u64,
-    transform_rows_v2_success_total: u64,
-    transform_rows_v2_columnar_calls: u64,
-    transform_rows_v2_columnar_success_total: u64,
-    transform_rows_v2_latency_ms_sum: u128,
-    transform_rows_v2_latency_ms_max: u128,
-    transform_rows_v2_output_rows_sum: u64,
-    text_preprocess_v2_calls: u64,
-    text_preprocess_v2_errors: u64,
-    task_store_remote_ok: bool,
-    task_store_remote_probe_failures: u64,
-    task_store_remote_last_probe_epoch: u64,
-    task_cancel_requested_total: u64,
-    task_cancel_effective_total: u64,
-    task_flag_cleanup_total: u64,
-    tasks_active: i64,
-    task_retry_total: u64,
-    tenant_reject_total: u64,
-    quota_reject_total: u64,
-    latency_le_10ms: u64,
-    latency_le_50ms: u64,
-    latency_le_200ms: u64,
-    latency_gt_200ms: u64,
-    transform_cache_hit_total: u64,
-    transform_cache_miss_total: u64,
-    transform_cache_evict_total: u64,
-    join_rows_v2_calls: u64,
-    aggregate_rows_v2_calls: u64,
-    quality_check_v2_calls: u64,
-    schema_registry_register_total: u64,
-    schema_registry_get_total: u64,
-    schema_registry_infer_total: u64,
-    transform_rows_v3_calls: u64,
-    join_rows_v3_calls: u64,
-    aggregate_rows_v3_calls: u64,
-    quality_check_v3_calls: u64,
-    load_rows_v3_calls: u64,
-    schema_registry_v2_calls: u64,
-    udf_wasm_v1_calls: u64,
-    operator_latency_samples: HashMap<String, Vec<u128>>,
-}
-
-#[derive(Clone)]
-struct TransformCacheEntry {
-    resp: TransformRowsResp,
-    expires_at_epoch: u64,
-    last_hit_epoch: u64,
-    hits: u64,
-}
+mod http;
+use http::routes::build_router;
 
 #[derive(Serialize)]
 struct HealthResp {
@@ -1222,33 +1138,6 @@ struct ComputeResp {
     metrics: ComputeMetrics,
 }
 
-#[derive(Clone, Serialize)]
-struct TransformRowsStats {
-    input_rows: usize,
-    output_rows: usize,
-    invalid_rows: usize,
-    filtered_rows: usize,
-    duplicate_rows_removed: usize,
-    latency_ms: u128,
-}
-
-#[derive(Clone, Serialize)]
-struct TransformRowsResp {
-    ok: bool,
-    operator: String,
-    status: String,
-    run_id: Option<String>,
-    trace_id: String,
-    rows: Vec<Value>,
-    quality: Value,
-    gate_result: Value,
-    stats: TransformRowsStats,
-    rust_v2_used: bool,
-    schema_hint: Option<Value>,
-    aggregate: Option<Value>,
-    audit: Value,
-}
-
 #[derive(Clone)]
 enum FilterOp {
     Exists,
@@ -1347,11 +1236,7 @@ struct OfficeGenInfo {
 #[tokio::main]
 async fn main() {
     init_observability();
-    let host = env::var("AIWF_ACCEL_RUST_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let port = env::var("AIWF_ACCEL_RUST_PORT")
-        .ok()
-        .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(18082);
+    let bind = ServerBind::from_env();
 
     let task_cfg = resolve_task_store_backend(task_store_config_from_env());
     if task_cfg.remote_enabled && task_cfg.backend == "odbc" {
@@ -1377,8 +1262,8 @@ async fn main() {
 
     let app = build_router(state);
 
-    let addr: SocketAddr = format!("{host}:{port}")
-        .parse()
+    let addr = bind
+        .socket_addr()
         .expect("invalid AIWF_ACCEL_RUST_HOST/AIWF_ACCEL_RUST_PORT");
 
     info!("[accel-rust] listening on http://{addr}");
@@ -1453,25 +1338,6 @@ fn init_observability() {
     }
 }
 
-fn env_truthy(name: &str) -> bool {
-    env::var(name)
-        .ok()
-        .map(|v| {
-            let t = v.trim().to_ascii_lowercase();
-            matches!(t.as_str(), "1" | "true" | "yes" | "on")
-        })
-        .unwrap_or(false)
-}
-
-fn allow_egress_enabled() -> bool {
-    env_truthy("AIWF_ALLOW_EGRESS") || env_truthy("AIWF_ALLOW_CLOUD_LLM")
-}
-
-fn is_local_endpoint(endpoint: &str) -> bool {
-    let s = endpoint.trim();
-    s.contains("127.0.0.1") || s.contains("localhost") || s.contains("[::1]")
-}
-
 fn init_remote_task_store_probe(state: &AppState) {
     let cfg = current_task_cfg(state);
     let metrics = Arc::clone(&state.metrics);
@@ -1509,314 +1375,6 @@ fn init_remote_task_store_probe(state: &AppState) {
             }
         }
     });
-}
-
-fn build_router(state: AppState) -> Router {
-    Router::new()
-        .route("/health", get(health))
-        .route("/metrics", get(metrics))
-        .route("/admin/reload_runtime_config", post(reload_runtime_config))
-        .route("/operators/cleaning", post(cleaning_operator))
-        .route("/operators/compute_metrics", post(compute_metrics_operator))
-        .route(
-            "/operators/transform_rows_v2",
-            post(transform_rows_v2_operator),
-        )
-        .route(
-            "/operators/transform_rows_v3",
-            post(transform_rows_v3_operator),
-        )
-        .route(
-            "/operators/transform_rows_v2/cache_stats",
-            get(transform_rows_v2_cache_stats_operator),
-        )
-        .route(
-            "/operators/transform_rows_v2/cache_clear",
-            post(transform_rows_v2_cache_clear_operator),
-        )
-        .route(
-            "/operators/transform_rows_v2/stream",
-            post(transform_rows_v2_stream_operator),
-        )
-        .route(
-            "/operators/transform_rows_v2/submit",
-            post(transform_rows_v2_submit_operator),
-        )
-        .route(
-            "/operators/text_preprocess_v2",
-            post(text_preprocess_v2_operator),
-        )
-        .route("/operators/join_rows_v1", post(join_rows_v1_operator))
-        .route("/operators/join_rows_v2", post(join_rows_v2_operator))
-        .route("/operators/join_rows_v3", post(join_rows_v3_operator))
-        .route(
-            "/operators/normalize_schema_v1",
-            post(normalize_schema_v1_operator),
-        )
-        .route(
-            "/operators/entity_extract_v1",
-            post(entity_extract_v1_operator),
-        )
-        .route(
-            "/operators/aggregate_rows_v1",
-            post(aggregate_rows_v1_operator),
-        )
-        .route(
-            "/operators/aggregate_rows_v2",
-            post(aggregate_rows_v2_operator),
-        )
-        .route(
-            "/operators/aggregate_rows_v3",
-            post(aggregate_rows_v3_operator),
-        )
-        .route(
-            "/operators/quality_check_v1",
-            post(quality_check_v1_operator),
-        )
-        .route(
-            "/operators/quality_check_v2",
-            post(quality_check_v2_operator),
-        )
-        .route(
-            "/operators/quality_check_v3",
-            post(quality_check_v3_operator),
-        )
-        .route(
-            "/operators/aggregate_pushdown_v1",
-            post(aggregate_pushdown_v1_operator),
-        )
-        .route("/operators/plugin_exec_v1", post(plugin_exec_v1_operator))
-        .route(
-            "/operators/plugin_health_v1",
-            post(plugin_health_v1_operator),
-        )
-        .route(
-            "/operators/plugin_registry_v1",
-            post(plugin_registry_v1_operator),
-        )
-        .route(
-            "/operators/plugin_operator_v1",
-            post(plugin_operator_v1_operator),
-        )
-        .route(
-            "/operators/rules_compile_v1",
-            post(rules_compile_v1_operator),
-        )
-        .route(
-            "/operators/rules_package_v1/publish",
-            post(rules_package_publish_v1_operator),
-        )
-        .route(
-            "/operators/rules_package_v1/get",
-            post(rules_package_get_v1_operator),
-        )
-        .route("/operators/load_rows_v1", post(load_rows_v1_operator))
-        .route("/operators/load_rows_v2", post(load_rows_v2_operator))
-        .route("/operators/load_rows_v3", post(load_rows_v3_operator))
-        .route("/operators/save_rows_v1", post(save_rows_v1_operator))
-        .route(
-            "/operators/schema_registry_v1/register",
-            post(schema_registry_register_v1_operator),
-        )
-        .route(
-            "/operators/schema_registry_v1/get",
-            post(schema_registry_get_v1_operator),
-        )
-        .route(
-            "/operators/schema_registry_v1/infer",
-            post(schema_registry_infer_v1_operator),
-        )
-        .route(
-            "/operators/schema_registry_v2/register",
-            post(schema_registry_register_v2_operator),
-        )
-        .route(
-            "/operators/schema_registry_v2/get",
-            post(schema_registry_get_v2_operator),
-        )
-        .route(
-            "/operators/schema_registry_v2/infer",
-            post(schema_registry_infer_v2_operator),
-        )
-        .route(
-            "/operators/schema_registry_v2/check_compat",
-            post(schema_registry_check_compat_v2_operator),
-        )
-        .route(
-            "/operators/schema_registry_v2/suggest_migration",
-            post(schema_registry_suggest_migration_v2_operator),
-        )
-        .route("/operators/udf_wasm_v1/apply", post(udf_wasm_v1_operator))
-        .route("/operators/time_series_v1", post(time_series_v1_operator))
-        .route("/operators/stats_v1", post(stats_v1_operator))
-        .route(
-            "/operators/entity_linking_v1",
-            post(entity_linking_v1_operator),
-        )
-        .route(
-            "/operators/table_reconstruct_v1",
-            post(table_reconstruct_v1_operator),
-        )
-        .route(
-            "/operators/feature_store_v1/upsert",
-            post(feature_store_upsert_v1_operator),
-        )
-        .route(
-            "/operators/feature_store_v1/get",
-            post(feature_store_get_v1_operator),
-        )
-        .route("/operators/lineage_v2", post(lineage_v2_operator))
-        .route(
-            "/operators/rule_simulator_v1",
-            post(rule_simulator_v1_operator),
-        )
-        .route(
-            "/operators/constraint_solver_v1",
-            post(constraint_solver_v1_operator),
-        )
-        .route(
-            "/operators/chart_data_prep_v1",
-            post(chart_data_prep_v1_operator),
-        )
-        .route("/operators/diff_audit_v1", post(diff_audit_v1_operator))
-        .route(
-            "/operators/vector_index_v1/build",
-            post(vector_index_build_v1_operator),
-        )
-        .route(
-            "/operators/vector_index_v1/search",
-            post(vector_index_search_v1_operator),
-        )
-        .route(
-            "/operators/evidence_rank_v1",
-            post(evidence_rank_v1_operator),
-        )
-        .route(
-            "/operators/fact_crosscheck_v1",
-            post(fact_crosscheck_v1_operator),
-        )
-        .route(
-            "/operators/timeseries_forecast_v1",
-            post(timeseries_forecast_v1_operator),
-        )
-        .route(
-            "/operators/finance_ratio_v1",
-            post(finance_ratio_v1_operator),
-        )
-        .route(
-            "/operators/anomaly_explain_v1",
-            post(anomaly_explain_v1_operator),
-        )
-        .route(
-            "/operators/template_bind_v1",
-            post(template_bind_v1_operator),
-        )
-        .route(
-            "/operators/provenance_sign_v1",
-            post(provenance_sign_v1_operator),
-        )
-        .route(
-            "/operators/stream_state_v1/save",
-            post(stream_state_save_v1_operator),
-        )
-        .route(
-            "/operators/stream_state_v1/load",
-            post(stream_state_load_v1_operator),
-        )
-        .route("/operators/query_lang_v1", post(query_lang_v1_operator))
-        .route(
-            "/operators/columnar_eval_v1",
-            post(columnar_eval_v1_operator),
-        )
-        .route(
-            "/operators/stream_window_v1",
-            post(stream_window_v1_operator),
-        )
-        .route(
-            "/operators/stream_window_v2",
-            post(stream_window_v2_operator),
-        )
-        .route("/operators/sketch_v1", post(sketch_v1_operator))
-        .route(
-            "/operators/runtime_stats_v1",
-            post(runtime_stats_v1_operator),
-        )
-        .route("/operators/capabilities_v1", post(capabilities_v1_operator))
-        .route(
-            "/operators/io_contract_v1/validate",
-            post(io_contract_v1_operator),
-        )
-        .route(
-            "/operators/failure_policy_v1",
-            post(failure_policy_v1_operator),
-        )
-        .route(
-            "/operators/incremental_plan_v1",
-            post(incremental_plan_v1_operator),
-        )
-        .route(
-            "/operators/tenant_isolation_v1",
-            post(tenant_isolation_v1_operator),
-        )
-        .route(
-            "/operators/operator_policy_v1",
-            post(operator_policy_v1_operator),
-        )
-        .route(
-            "/operators/optimizer_adaptive_v2",
-            post(optimizer_adaptive_v2_operator),
-        )
-        .route(
-            "/operators/vector_index_v2/build",
-            post(vector_index_build_v2_operator),
-        )
-        .route(
-            "/operators/vector_index_v2/search",
-            post(vector_index_search_v2_operator),
-        )
-        .route(
-            "/operators/vector_index_v2/eval",
-            post(vector_index_eval_v2_operator),
-        )
-        .route(
-            "/operators/stream_reliability_v1",
-            post(stream_reliability_v1_operator),
-        )
-        .route(
-            "/operators/lineage_provenance_v1",
-            post(lineage_provenance_v1_operator),
-        )
-        .route(
-            "/operators/contract_regression_v1",
-            post(contract_regression_v1_operator),
-        )
-        .route(
-            "/operators/perf_baseline_v1",
-            post(perf_baseline_v1_operator),
-        )
-        .route("/operators/window_rows_v1", post(window_rows_v1_operator))
-        .route("/operators/optimizer_v1", post(optimizer_v1_operator))
-        .route("/operators/join_rows_v4", post(join_rows_v4_operator))
-        .route(
-            "/operators/aggregate_rows_v4",
-            post(aggregate_rows_v4_operator),
-        )
-        .route(
-            "/operators/quality_check_v4",
-            post(quality_check_v4_operator),
-        )
-        .route("/operators/lineage_v3", post(lineage_v3_operator))
-        .route("/operators/parquet_io_v2", post(parquet_io_v2_operator))
-        .route("/operators/stream_state_v2", post(stream_state_v2_operator))
-        .route("/operators/udf_wasm_v2/apply", post(udf_wasm_v2_operator))
-        .route("/operators/explain_plan_v1", post(explain_plan_v1_operator))
-        .route("/operators/explain_plan_v2", post(explain_plan_v2_operator))
-        .route("/metrics_v2", get(metrics_v2))
-        .route("/metrics_v2/prom", get(metrics_v2_prom))
-        .route("/workflow/run", post(workflow_run_operator))
-        .route("/tasks/{task_id}", get(get_task_operator))
-        .route("/tasks/{task_id}/cancel", post(cancel_task_operator))
-        .with_state(state)
 }
 
 fn current_task_cfg(state: &AppState) -> TaskStoreConfig {
@@ -1964,29 +1522,6 @@ async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
     (StatusCode::OK, body)
 }
 
-fn observe_operator_latency_v2(metrics: &Arc<Mutex<ServiceMetrics>>, op: &str, latency_ms: u128) {
-    if let Ok(mut m) = metrics.lock() {
-        let entry = m
-            .operator_latency_samples
-            .entry(op.to_string())
-            .or_insert_with(Vec::new);
-        entry.push(latency_ms);
-        if entry.len() > 2048 {
-            let drop_n = entry.len().saturating_sub(2048);
-            entry.drain(0..drop_n);
-        }
-        let _ = persist_metrics_v2_samples(&m.operator_latency_samples);
-    }
-}
-
-fn percentile_from_sorted(vals: &[u128], p: f64) -> u128 {
-    if vals.is_empty() {
-        return 0;
-    }
-    let pos = ((vals.len() - 1) as f64 * p.clamp(0.0, 1.0)).round() as usize;
-    vals[pos.min(vals.len() - 1)]
-}
-
 async fn metrics_v2(State(state): State<AppState>) -> impl IntoResponse {
     let mut out = BTreeMap::new();
     if let Ok(m) = state.metrics.lock() {
@@ -2040,33 +1575,6 @@ async fn metrics_v2_prom(State(state): State<AppState>) -> impl IntoResponse {
         }
     }
     (StatusCode::OK, lines.join("\n"))
-}
-
-fn persist_metrics_v2_samples(samples: &HashMap<String, Vec<u128>>) -> Result<(), String> {
-    let p = metrics_v2_store_path();
-    let lock = acquire_file_lock(&p)?;
-    if let Some(parent) = p.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("create metrics dir: {e}"))?;
-    }
-    let s = serde_json::to_string_pretty(samples).map_err(|e| format!("serialize metrics: {e}"))?;
-    let out = fs::write(&p, s).map_err(|e| format!("write metrics store: {e}"));
-    release_file_lock(&lock);
-    out
-}
-
-fn load_metrics_v2_samples() -> HashMap<String, Vec<u128>> {
-    let p = metrics_v2_store_path();
-    if let Ok(lock) = acquire_file_lock(&p) {
-        let out = (|| {
-            let Ok(txt) = fs::read_to_string(&p) else {
-                return HashMap::new();
-            };
-            serde_json::from_str::<HashMap<String, Vec<u128>>>(&txt).unwrap_or_default()
-        })();
-        release_file_lock(&lock);
-        return out;
-    }
-    HashMap::new()
 }
 
 async fn cleaning_operator(Json(req): Json<CleaningReq>) -> impl IntoResponse {
@@ -7503,39 +7011,6 @@ fn schema_registry_store_path() -> PathBuf {
         .filter(|s| !s.trim().is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| Path::new(".").join("tmp").join("schema_registry.json"))
-}
-
-fn metrics_v2_store_path() -> PathBuf {
-    env::var("AIWF_METRICS_V2_PATH")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| Path::new(".").join("tmp").join("metrics_v2.json"))
-}
-
-fn acquire_file_lock(base_path: &Path) -> Result<PathBuf, String> {
-    let lock = base_path.with_extension("lock");
-    if let Some(parent) = lock.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("create lock dir: {e}"))?;
-    }
-    for _ in 0..100 {
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&lock)
-        {
-            Ok(_) => return Ok(lock),
-            Err(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
-        }
-    }
-    Err(format!(
-        "acquire file lock timeout: {}",
-        lock.to_string_lossy()
-    ))
-}
-
-fn release_file_lock(lock_path: &Path) {
-    let _ = fs::remove_file(lock_path);
 }
 
 fn load_schema_registry_store() -> HashMap<String, Value> {
