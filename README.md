@@ -90,6 +90,7 @@ This runs:
 - `Full Integration (Self-Hosted)` is intended for the Windows self-hosted runner and also runs nightly at `18:00 UTC`.
 - Manual full runs accept `ci_profile=Full` and `run_full_integration=true`.
 - Self-hosted full runs now write the local transcript path into the job summary instead of uploading an artifact. The transcript itself stays on the runner workspace under `ops/logs/ci`.
+- GitHub scheduled workflows run from the default branch (`master`). Before this branch is merged, use the manual dispatch helper to validate current-branch full CI.
 
 Manual dispatch from local PowerShell:
 

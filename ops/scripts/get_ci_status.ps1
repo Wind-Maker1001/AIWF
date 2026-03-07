@@ -8,6 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
+function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
 
 function Invoke-GitCapture {
   param(
@@ -108,6 +109,8 @@ $token = Get-GitHubToken
 $headers = New-GitHubHeaders -Token $token
 
 Info ("querying CI status for {0}@{1}" -f $branchName, $headSha)
+$repoMeta = Invoke-RestMethod -Uri ("https://api.github.com/repos/{0}" -f $repoSlug) -Headers $headers -Method Get
+$defaultBranch = [string]$repoMeta.default_branch
 $branchRuns = Invoke-RestMethod -Uri ("https://api.github.com/repos/{0}/actions/runs?branch={1}&per_page={2}" -f $repoSlug, $branchName, [Math]::Max(1, $PerPage)) -Headers $headers -Method Get
 $scheduledFullRuns = Invoke-RestMethod -Uri ("https://api.github.com/repos/{0}/actions/workflows/full-integration-self-hosted.yml/runs?event=schedule&per_page={1}" -f $repoSlug, [Math]::Max(1, $PerPage)) -Headers $headers -Method Get
 
@@ -118,10 +121,22 @@ if ($null -eq $quickRun) {
 $manualFullForHeadRun = Select-LatestRun -Runs @($branchRuns.workflow_runs) -Name "Full Integration (Self-Hosted)" -Event "workflow_dispatch" -HeadSha $headSha
 $manualFullLatestRun = Select-LatestRun -Runs @($branchRuns.workflow_runs) -Name "Full Integration (Self-Hosted)" -Event "workflow_dispatch"
 $scheduledFullRun = Select-LatestRun -Runs @($scheduledFullRuns.workflow_runs) -Name "Full Integration (Self-Hosted)" -Event "schedule"
+$scheduledFullNote = if ($null -ne $scheduledFullRun) {
+  ""
+} elseif (-not [string]::IsNullOrWhiteSpace($defaultBranch) -and -not [string]::Equals($branchName, $defaultBranch, [System.StringComparison]::OrdinalIgnoreCase)) {
+  "Nightly schedule runs on the default branch only. Current branch '$branchName' will not produce ScheduledFull until merged into '$defaultBranch'. Use dispatch_full_integration_self_hosted.ps1 for branch validation."
+} else {
+  "No scheduled Full Integration run has been recorded yet for the default branch."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($scheduledFullNote)) {
+  Warn $scheduledFullNote
+}
 
 [pscustomobject]@{
   Repo = $repoSlug
   Branch = $branchName
+  DefaultBranch = $defaultBranch
   HeadSha = $headSha
   QuickCi = if ($null -eq $quickRun) {
     $null
@@ -175,4 +190,5 @@ $scheduledFullRun = Select-LatestRun -Runs @($scheduledFullRuns.workflow_runs) -
       Url = $scheduledFullRun.html_url
     }
   }
+  ScheduledFullNote = $scheduledFullNote
 }
