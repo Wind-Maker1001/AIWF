@@ -241,16 +241,21 @@ jobs:
           }
 
           $proc = Start-Process -FilePath "powershell" -ArgumentList $ciArgs -WorkingDirectory $env:GITHUB_WORKSPACE -NoNewWindow -Wait -PassThru -RedirectStandardOutput $ciLog -RedirectStandardError $ciStdErr
-          if (Test-Path $ciLog) {
-            Get-Content $ciLog | ForEach-Object { Write-Host $_ }
-          }
-          if ((Test-Path $ciStdErr) -and ((Get-Item $ciStdErr).Length -gt 0)) {
-            Write-Host ""
-            Write-Host "[stderr]"
-            Get-Content $ciStdErr | ForEach-Object { Write-Host $_ }
-          }
           if ($proc.ExitCode -ne 0) {
+            if (Test-Path $ciLog) {
+              Write-Host "[stdout tail]"
+              Get-Content $ciLog -Tail 200 | ForEach-Object { Write-Host $_ }
+            }
+            if ((Test-Path $ciStdErr) -and ((Get-Item $ciStdErr).Length -gt 0)) {
+              Write-Host ""
+              Write-Host "[stderr tail]"
+              Get-Content $ciStdErr -Tail 200 | ForEach-Object { Write-Host $_ }
+            }
             exit $proc.ExitCode
+          }
+          Write-Host ("CI transcript saved to {0}" -f $ciLog)
+          if ((Test-Path $ciStdErr) -and ((Get-Item $ciStdErr).Length -gt 0)) {
+            Write-Host ("CI stderr transcript saved to {0}" -f $ciStdErr)
           }
 
       - name: Upload CI transcript
