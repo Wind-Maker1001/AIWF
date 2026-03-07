@@ -30,6 +30,7 @@ jobs:
     steps:
       - name: Prepare workspace from local mirror
         shell: powershell
+        working-directory: ${{ runner.workspace }}
         run: |
           $source = "D:\AIWF"
           $dest = $env:GITHUB_WORKSPACE
