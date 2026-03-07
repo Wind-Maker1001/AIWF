@@ -1,12 +1,27 @@
 const fs = require("fs");
 const { TextDecoder } = require("util");
-const iconv = require("iconv-lite");
+
+let iconv = null;
+let iconvLoadError = null;
+
+function getIconvModule() {
+  if (iconv) return iconv;
+  if (iconvLoadError) return null;
+  try {
+    iconv = require("iconv-lite");
+    return iconv;
+  } catch (e) {
+    iconvLoadError = e;
+    return null;
+  }
+}
 
 function decodeBufferWithEncoding(buf, encoding) {
   const enc = String(encoding || "").toLowerCase();
   if (enc === "gb18030" || enc === "gbk") {
     try {
-      return iconv.decode(buf, enc);
+      const codec = getIconvModule();
+      return codec ? codec.decode(buf, enc) : buf.toString("utf8");
     } catch {
       return "";
     }

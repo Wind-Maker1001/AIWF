@@ -3,8 +3,14 @@ const assert = require("node:assert/strict");
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
-const iconv = require("iconv-lite");
 const { createRuntimeSupport } = require("../main_runtime_support");
+
+const iconv = {
+  decode(buf, enc) {
+    if (enc === "gb18030") return Buffer.from(buf).toString("utf8");
+    return Buffer.from(buf).toString(enc);
+  },
+};
 
 function buildSupport(tempRoot) {
   return createRuntimeSupport({
