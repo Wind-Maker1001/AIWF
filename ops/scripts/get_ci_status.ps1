@@ -1,14 +1,23 @@
 param(
   [string]$Branch = "",
   [string]$Ref = "",
-  [int]$PerPage = 10
+  [int]$PerPage = 10,
+  [switch]$Quiet
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
-function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
+function Info($m){
+  if (-not $Quiet) {
+    Write-Host "[INFO] $m" -ForegroundColor Cyan
+  }
+}
+function Warn($m){
+  if (-not $Quiet) {
+    Write-Host "[WARN] $m" -ForegroundColor Yellow
+  }
+}
 
 function Invoke-GitCapture {
   param(

@@ -104,6 +104,12 @@ Query the latest branch and nightly CI status:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\get_ci_status.ps1
 ```
 
+Verify the current branch end-to-end (wait for `Quick CI`, then ensure `Full Integration (Self-Hosted)` is green for the same head):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\verify_branch_ci.ps1
+```
+
 ## Key Endpoints
 
 - `base-java`: `GET /actuator/health`
