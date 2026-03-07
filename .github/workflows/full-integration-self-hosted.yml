@@ -195,6 +195,7 @@ jobs:
           "env_file=$resolved" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Run selected local CI profile
+        id: run-ci
         shell: powershell
         run: |
           $eventName = "${{ github.event_name }}"
@@ -212,21 +213,66 @@ jobs:
             $profile = "Full"
           }
 
+          $logDir = Join-Path $env:GITHUB_WORKSPACE "ops\logs\ci"
+          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+          $ciLog = Join-Path $logDir ("self_hosted_full_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+          $ciStdErr = Join-Path $logDir ("self_hosted_full_{0}.stderr.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+          "ci_log=$ciLog" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "ci_stderr=$ciStdErr" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
           $full = "${{ github.event.inputs.run_full_integration }}"
           if (-not $full -or $full.Trim().Length -eq 0) {
             $full = if ($isSchedule) { "true" } else { "false" }
           }
 
+          $ciArgs = @(
+            "-ExecutionPolicy", "Bypass",
+            "-File", ".\ops\scripts\ci_check.ps1",
+            "-Owner", $owner,
+            "-CiProfile", $profile
+          )
+
           if ($envFile -and $envFile.Trim().Length -gt 0) {
-            if ($full -eq "true") {
-              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -EnvFile $envFile -CiProfile $profile
-            } else {
-              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -EnvFile $envFile -CiProfile $profile -SkipSmoke
-            }
-          } else {
-            if ($full -eq "true") {
-              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -CiProfile $profile
-            } else {
-              powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -Owner $owner -CiProfile $profile -SkipSmoke
-            }
+            $ciArgs += @("-EnvFile", $envFile)
           }
+
+          if ($full -ne "true") {
+            $ciArgs += "-SkipSmoke"
+          }
+
+          $proc = Start-Process -FilePath "powershell" -ArgumentList $ciArgs -WorkingDirectory $env:GITHUB_WORKSPACE -NoNewWindow -Wait -PassThru -RedirectStandardOutput $ciLog -RedirectStandardError $ciStdErr
+          if (Test-Path $ciLog) {
+            Get-Content $ciLog | ForEach-Object { Write-Host $_ }
+          }
+          if ((Test-Path $ciStdErr) -and ((Get-Item $ciStdErr).Length -gt 0)) {
+            Write-Host ""
+            Write-Host "[stderr]"
+            Get-Content $ciStdErr | ForEach-Object { Write-Host $_ }
+          }
+          if ($proc.ExitCode -ne 0) {
+            exit $proc.ExitCode
+          }
+
+      - name: Upload CI transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-hosted-full-transcript-${{ github.run_id }}
+          path: |
+            ${{ steps.run-ci.outputs.ci_log }}
+            ${{ steps.run-ci.outputs.ci_stderr }}
+          if-no-files-found: warn
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-hosted-full-diagnostics-${{ github.run_id }}
+          path: |
+            ops/logs/ci
+            ops/logs/acceptance
+            ops/logs/regression
+            ops/logs/perf
+            ops/logs/route_bench
+            D:\actions-runner\aiwf-full\_diag
+          if-no-files-found: warn
