@@ -257,24 +257,54 @@ jobs:
           }
           Write-Host ("CI transcript saved to {0}" -f $ciLog)
 
-      - name: Upload CI transcript
+      - name: Report CI transcript path
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: self-hosted-full-transcript-${{ github.run_id }}
-          path: ${{ steps.run-ci.outputs.ci_log }}
-          if-no-files-found: warn
+        shell: powershell
+        run: |
+          $ciLog = "${{ steps.run-ci.outputs.ci_log }}"
+          if (-not $ciLog -or $ciLog.Trim().Length -eq 0) {
+            Write-Host "[WARN] no CI transcript path was reported"
+            exit 0
+          }
 
-      - name: Upload failure diagnostics
+          if (-not (Test-Path $ciLog)) {
+            Write-Host ("[WARN] CI transcript not found: {0}" -f $ciLog)
+            exit 0
+          }
+
+          $item = Get-Item $ciLog
+          Write-Host ("CI transcript: {0} ({1} bytes)" -f $item.FullName, $item.Length)
+
+      - name: Emit failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: self-hosted-full-diagnostics-${{ github.run_id }}
-          path: |
-            ops/logs/ci
-            ops/logs/acceptance
-            ops/logs/regression
-            ops/logs/perf
-            ops/logs/route_bench
-            D:\actions-runner\aiwf-full\_diag
-          if-no-files-found: warn
+        shell: powershell
+        run: |
+          $paths = @(
+            "${{ steps.run-ci.outputs.ci_log }}",
+            (Join-Path $env:GITHUB_WORKSPACE "ops\logs\ci"),
+            (Join-Path $env:GITHUB_WORKSPACE "ops\logs\acceptance"),
+            (Join-Path $env:GITHUB_WORKSPACE "ops\logs\regression"),
+            (Join-Path $env:GITHUB_WORKSPACE "ops\logs\perf"),
+            (Join-Path $env:GITHUB_WORKSPACE "ops\logs\route_bench"),
+            "D:\actions-runner\aiwf-full\_diag"
+          ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+          foreach ($path in $paths) {
+            if (-not (Test-Path $path)) {
+              Write-Host ("[WARN] diagnostic path not found: {0}" -f $path)
+              continue
+            }
+
+            $item = Get-Item $path
+            if ($item.PSIsContainer) {
+              Write-Host ("[INFO] diagnostic directory: {0}" -f $item.FullName)
+              Get-ChildItem -Path $item.FullName -Recurse -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 20 FullName, Length, LastWriteTime |
+                Format-Table -AutoSize | Out-String -Width 220 | Write-Host
+              continue
+            }
+
+            Write-Host ("[INFO] diagnostic file tail: {0}" -f $item.FullName)
+            Get-Content -Path $item.FullName -Tail 120 -ErrorAction SilentlyContinue | Write-Host
+          }
