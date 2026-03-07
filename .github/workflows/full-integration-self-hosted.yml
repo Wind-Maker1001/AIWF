@@ -44,7 +44,11 @@ jobs:
             throw "Local mirror is missing commit $sha"
           }
 
-          git -C $source worktree remove --force $dest 2>$null
+          $worktrees = git -C $source worktree list --porcelain
+          if ($worktrees -match [Regex]::Escape("worktree $dest")) {
+            git -C $source worktree remove --force $dest | Out-Null
+          }
+
           git -C $source worktree prune
 
           if (Test-Path $dest) {
