@@ -97,18 +97,17 @@ public sealed partial class MainWindow
         var title = isBlank ? $"节点 {_customNodeCounter++}" : template.Title;
         var subtitle = isBlank ? "请输入说明" : template.Subtitle;
         var keyPrefix = string.IsNullOrWhiteSpace(template.KeyPrefix) ? "node" : template.KeyPrefix;
-        var node = CreateCanvasNode(
+        AddCanvasNode(
             $"{keyPrefix}-{Guid.NewGuid():N}",
             title,
             subtitle,
             x,
             y,
-            isUserNode: true);
-        WorkspaceCanvas.Children.Add(node);
-        SelectNode(node);
-        DismissCanvasHint();
-        EnsureCanvasExtentForViewportAndNodes();
-        RequestCanvasAutosave();
+            isUserNode: true,
+            select: true,
+            dismissHint: true,
+            ensureExtent: true,
+            requestAutosave: true);
     }
 
     private (double x, double y) GetCanvasViewportCenter()

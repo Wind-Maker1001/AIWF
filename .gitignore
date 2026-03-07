@@ -26,6 +26,8 @@ apps/dify-desktop/dist-lite/
 apps/dify-desktop/test-results/
 apps/dify-native-winui/src/WinUI3Bootstrap/bin/
 apps/dify-native-winui/src/WinUI3Bootstrap/obj/
+apps/dify-native-winui/tests/**/bin/
+apps/dify-native-winui/tests/**/obj/
 
 # Local runtime/build artifacts
 tmp/

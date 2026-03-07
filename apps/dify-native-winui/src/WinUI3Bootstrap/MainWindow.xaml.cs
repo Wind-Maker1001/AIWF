@@ -225,6 +225,7 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        NativePerfRecorder.Mark("main_window_ctor_enter");
         InitializeComponent();
         _runnerAdapter = new WorkflowRunnerAdapter(_http);
         _runFlowCoordinator = new RunFlowCoordinator(_http, _runnerAdapter);
@@ -308,6 +309,8 @@ public sealed partial class MainWindow : Window
         {
             // Keep startup resilient if window sizing APIs are unavailable.
         }
+
+        NativePerfRecorder.Mark("main_window_ctor_exit");
     }
 
     private Brush? TryGetResourceBrush(string key)
@@ -719,89 +722,6 @@ public sealed partial class MainWindow : Window
         return comboBox.SelectedValue?.ToString() ?? "zh";
     }
 
-    private void BindRunResult(string json, string retryInfo = "未重试")
-    {
-        ArtifactsListView.Items.Clear();
-        ClearCanvasArtifactNodes();
-        SetCanvasNodeSubtitle(_inputNode, "源数据准备");
-        SetCanvasNodeSubtitle(_cleanNode, "规则处理");
-        SetCanvasNodeSubtitle(_outputNode, "等待运行结果");
-        ApplyResultPanelState(ResultPanelController.CreateInitialState());
-        ApplyMetricVisuals(null, "-", null);
-        ApplyRunStatusBadge(null);
-
-        if (!RunResultParser.TryParse(json, out var parsed))
-        {
-            return;
-        }
-
-        var panelState = ResultPanelController.CreateFromResult(parsed);
-        ApplyResultPanelState(ResultPanelController.WithRetryInfo(panelState, retryInfo));
-        ApplyRunStatusBadge(parsed.Ok);
-        ApplyMetricVisuals(parsed.Ok, parsed.RunMode, parsed.DurationMs);
-
-        var artifactItems = new List<(string id, string kind, string path)>();
-        foreach (var artifact in parsed.Artifacts)
-        {
-            ArtifactsListView.Items.Add(FormatArtifactDisplay(artifact.Kind, artifact.Path, artifact.ArtifactId));
-            artifactItems.Add((artifact.ArtifactId, artifact.Kind, artifact.Path));
-        }
-
-        ArtifactsCountTextBlock.Text = $"{ArtifactsListView.Items.Count} 项";
-        UpdateCanvasArtifactNodes(artifactItems);
-    }
-
-    private void ApplyResultPanelState(ResultPanelState state)
-    {
-        ArtifactsCountTextBlock.Text = state.ArtifactsCountText;
-        JobIdTextBlock.Text = state.JobIdText;
-        RetryInfoTextBlock.Text = state.RetryInfoText;
-        RunResultTextBlock.Text = state.RunResultText;
-        RunModeTextBlock.Text = state.RunModeText;
-        DurationTextBlock.Text = state.DurationText;
-        OkMetricTextBlock.Text = state.OkMetricText;
-        ModeMetricTextBlock.Text = state.ModeMetricText;
-        DurationMetricTextBlock.Text = state.DurationMetricText;
-    }
-
-    private static string PrettyJson(string text)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(text);
-            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
-        }
-        catch
-        {
-            return text;
-        }
-    }
-
-    private static string FormatArtifactDisplay(string kind, string path, string fallbackId)
-    {
-        var fileName = string.IsNullOrWhiteSpace(path) ? string.Empty : System.IO.Path.GetFileName(path);
-        if (string.IsNullOrWhiteSpace(fileName))
-        {
-            fileName = fallbackId;
-        }
-
-        var kindLabel = kind switch
-        {
-            "csv" => "数据表 CSV",
-            "parquet" => "分析文件 Parquet",
-            "xlsx" => "Excel 报表",
-            "docx" => "Word 审计文档",
-            "pptx" => "PPT 演示稿",
-            "json" => "JSON 资料",
-            _ => "文件"
-        };
-
-        return $"{kindLabel} - {fileName}";
-    }
-
     private Task SetBusyAsync(bool busy, string message, InlineStatusTone tone)
     {
         HealthButton.IsEnabled = !busy;
@@ -951,35 +871,6 @@ public sealed partial class MainWindow : Window
         return result.IsValid;
     }
 
-    private void ApplyMetricVisuals(bool? ok, string mode, int? durationMs)
-    {
-        var mapped = RunVisualStateMapper.MapMetrics(ok, mode, durationMs);
-        OkMetricTextBlock.Foreground = ToMetricBrush(mapped.OkState);
-        ModeMetricTextBlock.Foreground = ToMetricBrush(mapped.ModeState);
-        DurationMetricTextBlock.Foreground = ToMetricBrush(mapped.DurationState);
-    }
-
-    private void ApplyRunStatusBadge(bool? ok)
-    {
-        var visual = RunBadgePresenter.Resolve(ok);
-        RunStatusBadgeText.Text = visual.Text;
-        RunStatusBadgeText.Foreground = new SolidColorBrush(visual.Foreground);
-        RunStatusBadgeBorder.BorderBrush = new SolidColorBrush(visual.Border);
-        RunStatusBadgeBorder.Background = new SolidColorBrush(visual.Background);
-    }
-
-    private static SolidColorBrush ToMetricBrush(MetricVisualState state)
-    {
-        return new SolidColorBrush(
-            state switch
-            {
-                MetricVisualState.Good => Windows.UI.Color.FromArgb(0xFF, 0x11, 0x11, 0x11),
-                MetricVisualState.Warning => Windows.UI.Color.FromArgb(0xFF, 0x6B, 0x72, 0x80),
-                MetricVisualState.Danger => Windows.UI.Color.FromArgb(0xFF, 0xC6, 0x28, 0x28),
-                _ => Windows.UI.Color.FromArgb(0xFF, 0x6B, 0x72, 0x80)
-            });
-    }
-
     private void SetInlineStatus(string message, InlineStatusTone tone)
     {
         StatusTextBlock.Text = StatusPresenter.NormalizeMessage(message, DefaultInlineStatusText);
@@ -1125,218 +1016,6 @@ public sealed partial class MainWindow : Window
         _selectedNode = null;
         _multiSelectedNodes.Clear();
         _selectedConnection = null;
-    }
-
-    private Border CreateCanvasNode(
-        string nodeKey,
-        string title,
-        string subtitle,
-        double left,
-        double top,
-        string? artifactPath = null,
-        string? artifactKind = null,
-        bool isUserNode = false)
-    {
-        var titleBlock = new TextBlock
-        {
-            Text = title,
-            FontSize = 16,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x11, 0x11, 0x11))
-        };
-        var subtitleBlock = new TextBlock
-        {
-            Text = subtitle,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x6B, 0x72, 0x80))
-        };
-
-        var card = new Border
-        {
-            Tag = new CanvasNodeTag
-            {
-                NodeKey = nodeKey,
-                ArtifactPath = artifactPath,
-                ArtifactKind = artifactKind,
-                IsUserNode = isUserNode,
-                TitleBlock = titleBlock,
-                SubtitleBlock = subtitleBlock
-            },
-            Width = 220,
-            MinHeight = 96,
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x66, 0xC6, 0x28, 0x28)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Background = TryGetResourceBrush("CardAcrylicBrush") ?? new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
-            Padding = new Thickness(12)
-        };
-        card.Shadow = new ThemeShadow();
-        card.Translation = new Vector3(0, 0, 14);
-
-        var inputConnector = new Ellipse
-        {
-            Width = 12,
-            Height = 12,
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x6B, 0x72, 0x80)),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0),
-            Tag = new ConnectorTag
-            {
-                Node = card,
-                Kind = "in"
-            }
-        };
-        var outputConnector = new Ellipse
-        {
-            Width = 12,
-            Height = 12,
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xC6, 0x28, 0x28)),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 0, 0, 0),
-            Tag = new ConnectorTag
-            {
-                Node = card,
-                Kind = "out"
-            }
-        };
-
-        inputConnector.PointerPressed += OnConnectorPointerPressed;
-        outputConnector.PointerPressed += OnConnectorPointerPressed;
-
-        var contentStack = new StackPanel
-        {
-            Spacing = 4,
-            Children =
-            {
-                titleBlock,
-                subtitleBlock
-            }
-        };
-        var nodeGrid = new Grid
-        {
-            Children =
-            {
-                inputConnector,
-                contentStack,
-                outputConnector
-            }
-        };
-        nodeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        nodeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        nodeGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(contentStack, 1);
-        Grid.SetColumn(outputConnector, 2);
-        card.Child = nodeGrid;
-
-        card.PointerPressed += OnCanvasNodePointerPressed;
-        card.PointerMoved += OnCanvasNodePointerMoved;
-        card.PointerReleased += OnCanvasNodePointerReleased;
-        card.PointerCanceled += OnCanvasNodePointerReleased;
-        card.RightTapped += OnCanvasNodeRightTapped;
-        card.PointerEntered += (_, _) =>
-        {
-            if (_draggingNode == card)
-            {
-                return;
-            }
-
-            card.Translation = new Vector3(0, 0, 20);
-        };
-        card.PointerExited += (_, _) =>
-        {
-            if (_draggingNode == card)
-            {
-                return;
-            }
-
-            card.Translation = new Vector3(0, 0, 14);
-        };
-
-        Canvas.SetLeft(card, left);
-        Canvas.SetTop(card, top);
-        Canvas.SetZIndex(card, 10);
-        return card;
-    }
-
-    private static void SetCanvasNodeSubtitle(Border? node, string subtitle)
-    {
-        if (node?.Tag is not CanvasNodeTag tag || tag.SubtitleBlock is null)
-        {
-            return;
-        }
-
-        tag.SubtitleBlock.Text = subtitle;
-    }
-
-    private void ClearCanvasArtifactNodes()
-    {
-        foreach (var node in _artifactNodes)
-        {
-            RemoveConnectionsForNode(node);
-            WorkspaceCanvas.Children.Remove(node);
-        }
-
-        _artifactNodes.Clear();
-    }
-
-    private void UpdateCanvasArtifactNodes(List<(string id, string kind, string path)> artifacts)
-    {
-        ClearCanvasArtifactNodes();
-        if (artifacts.Count == 0)
-        {
-            SetCanvasNodeSubtitle(_outputNode, "无可用产物");
-            return;
-        }
-
-        SetCanvasNodeSubtitle(_outputNode, $"已生成 {artifacts.Count} 个产物");
-        SetCanvasNodeSubtitle(_cleanNode, "处理完成");
-
-        var startX = 1060.0;
-        var startY = 100.0;
-        const int rows = 4;
-        const double gapX = 250;
-        const double gapY = 118;
-
-        for (var i = 0; i < artifacts.Count; i++)
-        {
-            var item = artifacts[i];
-            var fileName = string.IsNullOrWhiteSpace(item.path) ? item.id : System.IO.Path.GetFileName(item.path);
-            if (string.IsNullOrWhiteSpace(fileName))
-            {
-                fileName = item.id;
-            }
-
-            var col = i / rows;
-            var row = i % rows;
-            var x = startX + (col * gapX);
-            var y = startY + (row * gapY);
-            var node = CreateCanvasNode(
-                $"artifact-{i}",
-                KindToShortTitle(item.kind),
-                fileName,
-                x,
-                y,
-                item.path,
-                item.kind);
-
-            _artifactNodes.Add(node);
-            WorkspaceCanvas.Children.Add(node);
-        }
-    }
-
-    private static string KindToShortTitle(string kind)
-    {
-        return kind switch
-        {
-            "csv" => "CSV",
-            "parquet" => "Parquet",
-            "xlsx" => "Excel",
-            "docx" => "Word",
-            "pptx" => "PPT",
-            "json" => "JSON",
-            _ => "文件"
-        };
     }
 
 }

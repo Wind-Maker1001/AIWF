@@ -150,19 +150,18 @@ public sealed partial class MainWindow
 
         var title = string.IsNullOrWhiteSpace(_copiedNodeTemplate.Title) ? $"节点 {_customNodeCounter}" : _copiedNodeTemplate.Title;
         var subtitle = _copiedNodeTemplate.Subtitle ?? string.Empty;
-        var node = CreateCanvasNode(
+        _customNodeCounter++;
+        AddCanvasNode(
             $"node-{Guid.NewGuid():N}",
             title,
             subtitle,
             Math.Max(0, SnapToGrid(_contextCanvasPoint.X - 110)),
             Math.Max(0, SnapToGrid(_contextCanvasPoint.Y - 48)),
-            isUserNode: true);
-        _customNodeCounter++;
-        WorkspaceCanvas.Children.Add(node);
-        SelectNode(node);
-        DismissCanvasHint();
-        EnsureCanvasExtentForViewportAndNodes();
-        RequestCanvasAutosave();
+            isUserNode: true,
+            select: true,
+            dismissHint: true,
+            ensureExtent: true,
+            requestAutosave: true);
         SetInlineStatus("已粘贴节点。", InlineStatusTone.Success);
     }
 

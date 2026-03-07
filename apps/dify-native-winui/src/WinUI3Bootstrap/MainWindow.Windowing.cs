@@ -30,6 +30,7 @@ public sealed partial class MainWindow
 
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
+        NativePerfRecorder.Mark("window_closed");
         _isSpaceHeld = false;
         _isPointerPanningMode = false;
         if (_windowHandle == IntPtr.Zero || _previousWndProc == IntPtr.Zero)
@@ -70,6 +71,7 @@ public sealed partial class MainWindow
 
     private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
     {
+        NativePerfRecorder.Mark("window_activated");
         ApplyResponsiveLayout();
         if (_didPlayIntroAnimation)
         {
