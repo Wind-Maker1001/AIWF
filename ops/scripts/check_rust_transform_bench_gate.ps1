@@ -4,6 +4,7 @@ param(
   [int]$Runs = 3,
   [int]$Warmup = 1,
   [int]$Seed = 42,
+  [string]$BenchScriptPath = "",
   [double]$MinSpeedup = 1.02,
   [double]$MinArrowSpeedup = 1.00,
   [double]$GateToleranceSpeedup = 0.02,
@@ -22,7 +23,11 @@ function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$benchScript = Join-Path $PSScriptRoot "bench_rust_transform.ps1"
+$benchScript = if ([string]::IsNullOrWhiteSpace($BenchScriptPath)) {
+  Join-Path $PSScriptRoot "bench_rust_transform.ps1"
+} else {
+  $BenchScriptPath
+}
 if (-not (Test-Path $benchScript)) { throw "benchmark script not found: $benchScript" }
 if (-not $OutDir) { $OutDir = Join-Path $root "ops\logs\bench\rust_transform" }
 if (-not $ProfilePath) { $ProfilePath = Join-Path $root "apps\accel-rust\conf\transform_engine_profile.json" }
@@ -216,7 +221,7 @@ for($attempt=1; $attempt -le $GateAttempts; $attempt++) {
     $rowLatency = Get-RobustMetricSamples -Obj $rowObj -RecordKey "rust_latency_ms"
     $colLatency = Get-RobustMetricSamples -Obj $colObj -RecordKey "rust_latency_ms"
     $colArrowLatency = Get-RobustMetricSamples -Obj $colArrowObj -RecordKey "rust_latency_ms"
-    $useLatencyMetric = $rowLatency.Count -gt 0 -and $colLatency.Count -gt 0 -and $colArrowLatency.Count -gt 0
+    $useLatencyMetric = @($rowLatency).Count -gt 0 -and @($colLatency).Count -gt 0 -and @($colArrowLatency).Count -gt 0
     if ($useLatencyMetric) {
       $rowRobust = Get-RobustMetric -Obj $rowObj -AvgKey "rust_latency_ms_avg" -RecordKey "rust_latency_ms"
       $colRobust = Get-RobustMetric -Obj $colObj -AvgKey "rust_latency_ms_avg" -RecordKey "rust_latency_ms"

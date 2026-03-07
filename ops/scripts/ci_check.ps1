@@ -205,6 +205,7 @@ $desktopRealSampleScript = Join-Path $PSScriptRoot "acceptance_desktop_real_samp
 $desktopFinanceTemplateScript = Join-Path $PSScriptRoot "acceptance_desktop_finance_template.ps1"
 $regressionQualityScript = Join-Path $PSScriptRoot "run_regression_quality.ps1"
 $regressionBaselineScript = Join-Path $PSScriptRoot "check_regression_baseline.ps1"
+$rustTransformBenchGateSelfTestScript = Join-Path $PSScriptRoot "test_rust_transform_bench_gate.ps1"
 $asyncBenchTrendScript = Join-Path $PSScriptRoot "check_async_bench_trend.ps1"
 $rustTransformBenchGateScript = Join-Path $PSScriptRoot "check_rust_transform_bench_gate.ps1"
 $rustNewOpsBenchGateScript = Join-Path $PSScriptRoot "check_rust_new_ops_bench_gate.ps1"
@@ -403,6 +404,16 @@ if (-not $SkipRegressionQuality) {
 } else {
   Warn "skip regression quality checks"
 }
+
+if (-not (Test-Path $rustTransformBenchGateSelfTestScript)) {
+  throw "rust transform benchmark gate self-test script not found: $rustTransformBenchGateSelfTestScript"
+}
+Info "running rust transform benchmark gate self-test"
+powershell -ExecutionPolicy Bypass -File $rustTransformBenchGateSelfTestScript
+if ($LASTEXITCODE -ne 0) {
+  throw "rust transform benchmark gate self-test failed"
+}
+Ok "rust transform benchmark gate self-test passed"
 
 if (-not $SkipDesktopUiTests) {
   if (-not (Test-Path $desktopDir)) {
