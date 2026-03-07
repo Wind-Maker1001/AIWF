@@ -22,8 +22,13 @@ on:
   schedule:
     - cron: "0 18 * * *"
 
+concurrency:
+  group: full-integration-self-hosted
+  cancel-in-progress: false
+
 jobs:
   full-check:
+    timeout-minutes: 90
     runs-on:
       - self-hosted
       - windows
@@ -274,6 +279,14 @@ jobs:
 
           $item = Get-Item $ciLog
           Write-Host ("CI transcript: {0} ({1} bytes)" -f $item.FullName, $item.Length)
+          if ($env:GITHUB_STEP_SUMMARY) {
+            @(
+              "## Self-Hosted CI Transcript",
+              "",
+              "- Path: ``$($item.FullName)``",
+              "- Size: $($item.Length) bytes"
+            ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
 
       - name: Emit failure diagnostics
         if: failure()
@@ -289,6 +302,13 @@ jobs:
             "D:\actions-runner\aiwf-full\_diag"
           ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
+          if ($env:GITHUB_STEP_SUMMARY) {
+            @(
+              "## Failure Diagnostics",
+              ""
+            ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
+
           foreach ($path in $paths) {
             if (-not (Test-Path $path)) {
               Write-Host ("[WARN] diagnostic path not found: {0}" -f $path)
@@ -296,6 +316,9 @@ jobs:
             }
 
             $item = Get-Item $path
+            if ($env:GITHUB_STEP_SUMMARY) {
+              ("- ``{0}``" -f $item.FullName) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            }
             if ($item.PSIsContainer) {
               Write-Host ("[INFO] diagnostic directory: {0}" -f $item.FullName)
               Get-ChildItem -Path $item.FullName -Recurse -File -ErrorAction SilentlyContinue |

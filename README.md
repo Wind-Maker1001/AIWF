@@ -84,6 +84,13 @@ This runs:
 - `glue-python` unit tests
 - smoke + invalid parquet fallback integration check
 
+## GitHub Actions
+
+- `Quick CI` runs on push / pull request for fast feedback.
+- `Full Integration (Self-Hosted)` is intended for the Windows self-hosted runner and also runs nightly at `18:00 UTC`.
+- Manual full runs accept `ci_profile=Full` and `run_full_integration=true`.
+- Self-hosted full runs now write the local transcript path into the job summary instead of uploading an artifact. The transcript itself stays on the runner workspace under `ops/logs/ci`.
+
 ## Key Endpoints
 
 - `base-java`: `GET /actuator/health`
