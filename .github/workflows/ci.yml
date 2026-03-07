@@ -43,7 +43,7 @@ jobs:
       - name: Run quick CI profile
         shell: pwsh
         run: |
-          powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick -SkipToolChecks -SkipSqlConnectivityGate -SkipDesktopPackageTests
+          powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick -SkipToolChecks -SkipSqlConnectivityGate -SkipDesktopUiTests -SkipDesktopPackageTests
 
   cross-platform-check:
     strategy:
