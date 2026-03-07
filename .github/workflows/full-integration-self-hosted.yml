@@ -215,10 +215,8 @@ jobs:
 
           $logDir = Join-Path $env:GITHUB_WORKSPACE "ops\logs\ci"
           New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-          $ciLog = Join-Path $logDir ("self_hosted_full_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
-          $ciStdErr = Join-Path $logDir ("self_hosted_full_{0}.stderr.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+          $ciLog = Join-Path $logDir ("self_hosted_full_{0}.transcript.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
           "ci_log=$ciLog" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "ci_stderr=$ciStdErr" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
           $full = "${{ github.event.inputs.run_full_integration }}"
           if (-not $full -or $full.Trim().Length -eq 0) {
@@ -240,32 +238,31 @@ jobs:
             $ciArgs += "-SkipSmoke"
           }
 
-          $proc = Start-Process -FilePath "powershell" -ArgumentList $ciArgs -WorkingDirectory $env:GITHUB_WORKSPACE -NoNewWindow -Wait -PassThru -RedirectStandardOutput $ciLog -RedirectStandardError $ciStdErr
-          if ($proc.ExitCode -ne 0) {
-            if (Test-Path $ciLog) {
-              Write-Host "[stdout tail]"
-              Get-Content $ciLog -Tail 200 | ForEach-Object { Write-Host $_ }
+          $ciExitCode = 0
+          Start-Transcript -Path $ciLog -Force | Out-Null
+          try {
+            & powershell @ciArgs
+            $ciExitCode = $LASTEXITCODE
+          }
+          finally {
+            try {
+              Stop-Transcript | Out-Null
+            } catch {
+              Write-Host ("[WARN] stop transcript failed: {0}" -f $_.Exception.Message)
             }
-            if ((Test-Path $ciStdErr) -and ((Get-Item $ciStdErr).Length -gt 0)) {
-              Write-Host ""
-              Write-Host "[stderr tail]"
-              Get-Content $ciStdErr -Tail 200 | ForEach-Object { Write-Host $_ }
-            }
-            exit $proc.ExitCode
+          }
+
+          if ($ciExitCode -ne 0) {
+            exit $ciExitCode
           }
           Write-Host ("CI transcript saved to {0}" -f $ciLog)
-          if ((Test-Path $ciStdErr) -and ((Get-Item $ciStdErr).Length -gt 0)) {
-            Write-Host ("CI stderr transcript saved to {0}" -f $ciStdErr)
-          }
 
       - name: Upload CI transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: self-hosted-full-transcript-${{ github.run_id }}
-          path: |
-            ${{ steps.run-ci.outputs.ci_log }}
-            ${{ steps.run-ci.outputs.ci_stderr }}
+          path: ${{ steps.run-ci.outputs.ci_log }}
           if-no-files-found: warn
 
       - name: Upload failure diagnostics
