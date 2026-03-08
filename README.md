@@ -62,6 +62,14 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1 -WithInvalidParquetFallbackTest
 ```
 
+6. Optional: run lightweight `base-java` smoke without Docker:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_base_java_smoke.ps1 -Mode Auto
+```
+
+If `base-java` is already running locally, `Auto` prefers live HTTP smoke; otherwise it falls back to a curated Maven contract smoke suite.
+
 ## Local Verification
 
 ```powershell
