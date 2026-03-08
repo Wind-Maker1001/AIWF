@@ -72,6 +72,7 @@ public sealed partial class MainWindow
     private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
     {
         NativePerfRecorder.Mark("window_activated");
+        ScheduleDeferredCanvasWarmup();
         ApplyResponsiveLayout();
         if (_didPlayIntroAnimation)
         {

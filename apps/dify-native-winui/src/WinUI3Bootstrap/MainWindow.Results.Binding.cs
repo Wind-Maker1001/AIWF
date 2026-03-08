@@ -6,38 +6,53 @@ namespace AIWF.Native;
 
 public sealed partial class MainWindow
 {
-    private void BindRunResult(string json, string retryInfo = "未重试")
+    private bool TryBindRunResult(string json, string retryInfo = "未重试")
     {
-        ResetRunResultPresentation();
-        if (!RunResultParser.TryParse(json, out var parsed))
+        if (!RunResultBindingService.TryCreateFromJson(json, retryInfo, out var state))
         {
-            return;
+            ApplyRunResultBindingState(state);
+            return false;
         }
 
-        var panelState = ResultPanelController.CreateFromResult(parsed);
-        ApplyResultPanelState(ResultPanelController.WithRetryInfo(panelState, retryInfo));
-        ApplyRunStatusBadge(parsed.Ok);
-        ApplyMetricVisuals(parsed.Ok, parsed.RunMode, parsed.DurationMs);
+        ApplyRunResultBindingState(state);
+        return true;
+    }
 
-        foreach (var artifact in parsed.Artifacts)
+    private void ApplyRunResultBindingState(RunResultBindingState state)
+    {
+        ArtifactsListView.Items.Clear();
+        foreach (var displayItem in state.ArtifactDisplayItems)
         {
-            ArtifactsListView.Items.Add(ArtifactPresentationMapper.FormatListDisplay(artifact));
+            ArtifactsListView.Items.Add(displayItem);
         }
 
-        ArtifactsCountTextBlock.Text = $"{ArtifactsListView.Items.Count} 项";
-        UpdateCanvasArtifactNodes(parsed.Artifacts);
+        var canvasReady = _isCanvasWorkspaceInitialized;
+        if (!canvasReady && state.SyncArtifactsToCanvas)
+        {
+            canvasReady = EnsureCanvasWorkspaceInitialized();
+        }
+
+        if (canvasReady)
+        {
+            ClearCanvasArtifactNodes();
+            if (state.SyncArtifactsToCanvas)
+            {
+                UpdateCanvasArtifactNodes(state.Artifacts);
+            }
+
+            SetCanvasNodeSubtitle(_inputNode, state.InputNodeSubtitle);
+            SetCanvasNodeSubtitle(_cleanNode, state.CleanNodeSubtitle);
+            SetCanvasNodeSubtitle(_outputNode, state.OutputNodeSubtitle);
+        }
+
+        ApplyResultPanelState(state.PanelState);
+        ApplyMetricVisuals(state.BadgeOk, state.MetricMode, state.MetricDurationMs);
+        ApplyRunStatusBadge(state.BadgeOk);
     }
 
     private void ResetRunResultPresentation()
     {
-        ArtifactsListView.Items.Clear();
-        ClearCanvasArtifactNodes();
-        SetCanvasNodeSubtitle(_inputNode, "源数据准备");
-        SetCanvasNodeSubtitle(_cleanNode, "规则处理");
-        SetCanvasNodeSubtitle(_outputNode, "等待运行结果");
-        ApplyResultPanelState(ResultPanelController.CreateInitialState());
-        ApplyMetricVisuals(null, "-", null);
-        ApplyRunStatusBadge(null);
+        ApplyRunResultBindingState(RunResultBindingService.CreateInitialState());
     }
 
     private void ApplyResultPanelState(ResultPanelState state)

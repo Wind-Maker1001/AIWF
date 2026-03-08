@@ -7,6 +7,17 @@ public static class ResultPanelController
         return ResultPanelState.Empty;
     }
 
+    public static ResultPanelState CreateParseFailureState()
+    {
+        return ResultPanelState.Empty with
+        {
+            RunResultText = "运行完成，但返回结果无法解析。",
+            OkMetricText = "-",
+            ModeMetricText = "-",
+            DurationMetricText = "-"
+        };
+    }
+
     public static ResultPanelState CreateFromResult(RunResultViewData data)
     {
         var view = RunResultPresentationMapper.Map(data);

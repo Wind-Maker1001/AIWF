@@ -23,7 +23,6 @@ public static class RunInputValidator
 
         AddIfMissing(data.BridgeUrl, "bridge_url", "桥接地址", missing, labels);
         AddIfMissing(data.Actor, "actor", "执行者", missing, labels);
-        AddIfMissing(data.JobId, "job_id", "Job ID", missing, labels);
         AddIfMissing(data.Flow, "flow", "Flow", missing, labels);
         AddIfMissing(data.ReportTitle, "report_title", "报告标题", missing, labels);
 
