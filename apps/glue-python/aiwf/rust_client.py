@@ -11,13 +11,23 @@ def _url(base: str, path: str) -> str:
     return b + p
 
 
+def _json_or_ok(response: Any, context: str) -> Dict[str, Any]:
+    if not getattr(response, "content", b""):
+        return {"ok": True}
+    try:
+        return response.json()
+    except ValueError as exc:
+        preview = str(getattr(response, "text", "") or "")[:200]
+        raise RuntimeError(f"{context} returned invalid JSON: {preview}") from exc
+
+
 def post_json(path: str, payload: Dict[str, Any], base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
     import requests
 
     r = requests.post(_url(base_url, path), json=payload, timeout=timeout)
     if r.status_code >= 400:
         raise RuntimeError(f"POST {path} -> {r.status_code} {r.text}")
-    return r.json()
+    return _json_or_ok(r, f"POST {path}")
 
 
 def get_json(path: str, base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
@@ -26,7 +36,7 @@ def get_json(path: str, base_url: str = "http://127.0.0.1:18082", timeout: float
     r = requests.get(_url(base_url, path), timeout=timeout)
     if r.status_code >= 400:
         raise RuntimeError(f"GET {path} -> {r.status_code} {r.text}")
-    return r.json()
+    return _json_or_ok(r, f"GET {path}")
 
 
 def transform_rows_v2(
@@ -525,7 +535,7 @@ def get_task(task_id: str, base_url: str = "http://127.0.0.1:18082", timeout: fl
     r = requests.get(_url(base_url, f"/tasks/{task_id}"), timeout=timeout)
     if r.status_code >= 400:
         raise RuntimeError(f"GET /tasks/{task_id} -> {r.status_code} {r.text}")
-    return r.json()
+    return _json_or_ok(r, f"GET /tasks/{task_id}")
 
 
 def health(base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
@@ -551,4 +561,4 @@ def cancel_task(task_id: str, base_url: str = "http://127.0.0.1:18082", timeout:
     r = requests.post(_url(base_url, f"/tasks/{task_id}/cancel"), timeout=timeout)
     if r.status_code >= 400:
         raise RuntimeError(f"POST /tasks/{task_id}/cancel -> {r.status_code} {r.text}")
-    return r.json()
+    return _json_or_ok(r, f"POST /tasks/{task_id}/cancel")

@@ -4,11 +4,16 @@ import time
 import traceback
 import logging
 import uuid
+import inspect
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from aiwf.capabilities import collect_capabilities
+from aiwf.flows.registry import get_flow_runner, list_flows
+from aiwf.paths import resolve_job_root, resolve_jobs_root
 
 
 logging.basicConfig(
@@ -18,16 +23,9 @@ logging.basicConfig(
 log = logging.getLogger("glue")
 
 
-def _default_jobs_root() -> str:
-    root = os.getenv("AIWF_ROOT")
-    if root:
-        return os.path.join(root, "bus", "jobs")
-    return os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "bus", "jobs"))
-
-
 class Settings(BaseModel):
     base_url: str = Field(default_factory=lambda: os.getenv("AIWF_BASE_URL", "http://127.0.0.1:18080"))
-    jobs_root: str = Field(default_factory=lambda: os.getenv("AIWF_JOBS_ROOT", _default_jobs_root()))
+    jobs_root: str = Field(default_factory=resolve_jobs_root)
     api_key: Optional[str] = Field(default_factory=lambda: os.getenv("AIWF_API_KEY"))
     timeout_seconds: float = Field(default_factory=lambda: float(os.getenv("AIWF_HTTP_TIMEOUT", "30")))
 
@@ -49,75 +47,114 @@ class RunReq(BaseModel):
     params: Dict[str, Any] = Field(default_factory=dict)
 
 
+def _call_compatible(callable_obj, candidates):
+    try:
+        callable_signature = inspect.signature(callable_obj)
+    except (TypeError, ValueError):
+        callable_signature = None
+
+    if callable_signature is not None:
+        for args, kwargs in candidates:
+            try:
+                callable_signature.bind(*args, **kwargs)
+            except TypeError:
+                continue
+            return callable_obj(*args, **kwargs)
+
+    args, kwargs = candidates[-1]
+    return callable_obj(*args, **kwargs)
+
+
 def make_base_client():
     """
     Build BaseClient with best-effort compatibility for different constructor signatures.
     """
     try:
         from aiwf.base_client import BaseClient  # type: ignore
-
-        try:
-            return BaseClient(settings.base_url, api_key=settings.api_key, timeout=settings.timeout_seconds)
-        except TypeError:
-            try:
-                return BaseClient(settings.base_url, settings.api_key)
-            except TypeError:
-                return BaseClient(settings.base_url)
     except Exception as e:
         log.warning("make_base_client: cannot import/use aiwf.base_client.BaseClient: %s", e)
         return None
 
+    return _call_compatible(
+        BaseClient,
+        [
+            (
+                (settings.base_url,),
+                {"api_key": settings.api_key, "timeout": settings.timeout_seconds},
+            ),
+            (
+                (settings.base_url, settings.api_key),
+                {},
+            ),
+            (
+                (settings.base_url,),
+                {},
+            ),
+        ],
+    )
 
-def run_cleaning_flow(job_id: str, req: RunReq):
-    """
-    Compatibility wrapper for multiple run_cleaning signatures.
-    """
+
+def _run_flow_with_runner(job_id: str, req: RunReq, runner):
+    """Compatibility wrapper for flow runners with mixed signatures."""
     base = make_base_client()
 
-    try:
-        from aiwf.flows.cleaning import run_cleaning  # type: ignore
-    except Exception as e:
-        raise RuntimeError(f"cannot import aiwf.flows.cleaning.run_cleaning: {e}")
-
-    params_obj = req.params or {}
+    params_obj = dict(req.params or {})
+    params_obj.setdefault("job_root", resolve_job_root(job_id, override=os.path.join(settings.jobs_root, job_id)))
     params_json = json.dumps(params_obj, ensure_ascii=False)
+    return _call_compatible(
+        runner,
+        [
+            (
+                (),
+                {
+                    "job_id": job_id,
+                    "actor": req.actor,
+                    "ruleset_version": req.ruleset_version,
+                    "s": settings,
+                    "base": base,
+                    "params": params_obj,
+                },
+            ),
+            (
+                (),
+                {
+                    "job_id": job_id,
+                    "actor": req.actor,
+                    "ruleset_version": req.ruleset_version,
+                    "s": settings,
+                    "base": base,
+                    "params_json": params_json,
+                },
+            ),
+            (
+                (),
+                {
+                    "job_id": job_id,
+                    "actor": req.actor,
+                    "ruleset_version": req.ruleset_version,
+                    "s": settings,
+                    "base": base,
+                },
+            ),
+            (
+                (),
+                {
+                    "job_id": job_id,
+                    "actor": req.actor,
+                    "ruleset_version": req.ruleset_version,
+                },
+            ),
+        ],
+    )
 
-    try:
-        return run_cleaning(
-            job_id=job_id,
-            actor=req.actor,
-            ruleset_version=req.ruleset_version,
-            s=settings,
-            base=base,
-            params=params_obj,
-        )
-    except TypeError:
-        pass
 
-    try:
-        return run_cleaning(
-            job_id=job_id,
-            actor=req.actor,
-            ruleset_version=req.ruleset_version,
-            s=settings,
-            base=base,
-            params_json=params_json,
-        )
-    except TypeError:
-        pass
+def run_registered_flow(job_id: str, flow: str, req: RunReq):
+    runner = get_flow_runner(flow)
+    return _run_flow_with_runner(job_id, req, runner)
 
-    try:
-        return run_cleaning(
-            job_id=job_id,
-            actor=req.actor,
-            ruleset_version=req.ruleset_version,
-            s=settings,
-            base=base,
-        )
-    except TypeError:
-        pass
 
-    return run_cleaning(job_id=job_id, actor=req.actor, ruleset_version=req.ruleset_version)
+def run_cleaning_flow(job_id: str, req: RunReq):
+    return run_registered_flow(job_id, "cleaning", req)
 
 
 app = FastAPI(title="AIWF glue-python", version="0.1.0")
@@ -126,6 +163,11 @@ app = FastAPI(title="AIWF glue-python", version="0.1.0")
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/capabilities")
+def capabilities():
+    return {"ok": True, "capabilities": collect_capabilities()}
 
 
 @app.exception_handler(Exception)
@@ -154,10 +196,14 @@ def run_flow(job_id: str, flow: str, req: RunReq):
     t0 = time.time()
     flow = (flow or "").strip().lower()
 
-    if flow != "cleaning":
-        return JSONResponse(status_code=404, content={"ok": False, "error": f"unknown flow: {flow}"})
-
-    result = run_cleaning_flow(job_id, req)
+    try:
+        runner = get_flow_runner(flow)
+    except KeyError:
+        return JSONResponse(
+            status_code=404,
+            content={"ok": False, "error": f"unknown flow: {flow}", "available_flows": list_flows()},
+        )
+    result = _run_flow_with_runner(job_id, req, runner)
 
     if isinstance(result, BaseModel):
         out = result.model_dump()
