@@ -2,6 +2,8 @@ package com.aiwf.base.web;
 
 import com.aiwf.base.service.JobService;
 import com.aiwf.base.config.AppProperties;
+import com.aiwf.base.glue.GlueHealthResult;
+import com.aiwf.base.glue.GlueRunResult;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.datasource.lookup.DataSourceLookupFailureException;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
@@ -18,6 +21,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,7 +42,7 @@ class JobControllerContractTest {
     @Test
     void runFlowPassesNestedParamsAndRulesetVersion() throws Exception {
         when(jobs.runFlow(eq("job1"), eq("cleaning"), eq("local"), eq("v2"), anyMap()))
-                .thenReturn(Map.of("ok", true, "job_id", "job1"));
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "job1"), "job1", "cleaning"));
 
         String body = """
                 {
@@ -72,7 +76,7 @@ class JobControllerContractTest {
     @Test
     void runFlowSupportsLegacyTopLevelParams() throws Exception {
         when(jobs.runFlow(eq("job2"), eq("cleaning"), eq("local"), eq("v1"), anyMap()))
-                .thenReturn(Map.of("ok", true, "job_id", "job2"));
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "job2"), "job2", "cleaning"));
 
         String body = """
                 {
@@ -95,5 +99,25 @@ class JobControllerContractTest {
         verify(jobs).runFlow(eq("job2"), eq("cleaning"), eq("local"), eq("v1"), paramsCap.capture());
         assertThat(paramsCap.getValue()).containsEntry("office_theme", "academic");
         assertThat(paramsCap.getValue()).containsEntry("office_lang", "en");
+    }
+
+    @Test
+    void glueHealthReflectsDownstreamFailure() throws Exception {
+        when(jobs.glueHealth()).thenReturn(GlueHealthResult.unavailable("connection refused"));
+
+        mockMvc.perform(get("/api/v1/jobs/glue/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.glue.error").value("connection refused"));
+    }
+
+    @Test
+    void jobReadReturnsStructured503WhenStoreUnavailable() throws Exception {
+        when(jobs.getJob(eq("job-db-down"))).thenThrow(new DataSourceLookupFailureException("sql unavailable"));
+
+        mockMvc.perform(get("/api/v1/jobs/job-db-down"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("data_store_unavailable"));
     }
 }

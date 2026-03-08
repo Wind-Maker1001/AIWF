@@ -1,9 +1,10 @@
 package com.aiwf.base.web;
 
 import com.aiwf.base.service.JobService;
+import com.aiwf.base.web.dto.DifyRunCleaningResp;
+import com.aiwf.base.web.dto.DifyRunCleaningReq;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -21,60 +22,25 @@ public class DifyController {
      * create job -> run cleaning -> return run/steps/artifacts snapshot.
      */
     @PostMapping("/run_cleaning")
-    public Map<String, Object> runCleaning(
-            @RequestBody(required = false) Map<String, Object> body
+    public Object runCleaning(
+            @RequestBody(required = false) DifyRunCleaningReq body
     ) {
-        Map<String, Object> req = body == null ? Map.of() : body;
+        DifyRunCleaningReq req = body == null ? new DifyRunCleaningReq(null, null, null, null, null) : body;
 
-        String owner = readString(req, "owner", "dify");
-        String actor = readString(req, "actor", "dify");
-        String rulesetVersion = readString(req, "ruleset_version", "v1");
-
-        Map<String, Object> policy = new HashMap<>();
-        Object policyObj = req.get("policy");
-        if (policyObj instanceof Map<?, ?> p) {
-            for (Map.Entry<?, ?> e : p.entrySet()) {
-                if (e.getKey() != null) {
-                    policy.put(String.valueOf(e.getKey()), e.getValue());
-                }
-            }
-        }
-
-        Map<String, Object> params = new HashMap<>();
-        Object paramsObj = req.get("params");
-        if (paramsObj instanceof Map<?, ?> p) {
-            for (Map.Entry<?, ?> e : p.entrySet()) {
-                if (e.getKey() != null) {
-                    params.put(String.valueOf(e.getKey()), e.getValue());
-                }
-            }
-        }
-
-        Map<String, Object> job = jobs.createJob(owner, policy);
-        String jobId = String.valueOf(job.get("job_id"));
+        var job = jobs.createJob(req.ownerOrDefault("dify"), req.policyOrEmpty());
+        String jobId = job.jobId();
         if (jobId == null || jobId.isBlank()) {
-            return Map.of("ok", false, "error", "create_job failed: empty job_id");
+            return java.util.Map.of("ok", false, "error", "create_job failed: empty job_id");
         }
 
-        Map<String, Object> run = jobs.runFlow(jobId, "cleaning", actor, rulesetVersion, params);
-        boolean ok = Boolean.TRUE.equals(run.get("ok"));
-
-        Map<String, Object> out = new HashMap<>();
-        out.put("ok", ok);
-        out.put("job_id", jobId);
-        out.put("job", job);
-        out.put("run", run);
-        out.put("steps", jobs.listSteps(jobId));
-        out.put("artifacts", jobs.listArtifacts(jobId));
-        return out;
-    }
-
-    private static String readString(Map<String, Object> req, String key, String defaultValue) {
-        Object raw = req.get(key);
-        if (raw == null) return defaultValue;
-        String s = String.valueOf(raw).trim();
-        if (s.isEmpty() || "null".equalsIgnoreCase(s)) return defaultValue;
-        return s;
+        var run = jobs.runFlow(
+                jobId,
+                "cleaning",
+                req.actorOrDefault("dify"),
+                req.rulesetVersionOrDefault("v1"),
+                req.paramsOrEmpty()
+        );
+        return new DifyRunCleaningResp(run.isOk(), jobId, job, run, jobs.listSteps(jobId), jobs.listArtifacts(jobId));
     }
 
     @GetMapping("/health")

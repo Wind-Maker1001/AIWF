@@ -12,10 +12,22 @@ import java.io.IOException;
 
 @Component
 public class ApiKeyFilter extends OncePerRequestFilter {
+    private static final String ACTUATOR_HEALTH_PATH = "/actuator/health";
+
     private final AppProperties props;
 
     public ApiKeyFilter(AppProperties props) {
         this.props = props;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        if (path == null || path.isBlank()) {
+            path = request.getRequestURI();
+        }
+        return path != null
+                && (ACTUATOR_HEALTH_PATH.equals(path) || path.startsWith(ACTUATOR_HEALTH_PATH + "/"));
     }
 
     @Override
@@ -28,7 +40,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
             if (!required.equals(got)) {
                 res.setStatus(401);
                 res.setContentType("application/json; charset=utf-8");
-                res.getWriter().write("{\"error\":\"unauthorized\"}");
+                res.getWriter().write("{\"ok\":false,\"error\":\"unauthorized\"}");
                 return;
             }
         }

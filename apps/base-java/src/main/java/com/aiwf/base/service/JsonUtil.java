@@ -10,4 +10,14 @@ public final class JsonUtil {
         try { return M.writeValueAsString(o); }
         catch (Exception e) { return "{}"; }
     }
+
+    public static String toJsonOrNull(Object o) {
+        if (o == null) {
+            return null;
+        }
+        if (o instanceof String s) {
+            return s;
+        }
+        return toJson(o);
+    }
 }
