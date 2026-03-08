@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using AIWF.Native.CanvasRuntime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -41,6 +42,7 @@ public sealed partial class MainWindow
             _canvasWidth = DefaultCanvasWidth;
             _canvasHeight = DefaultCanvasHeight;
             BuildCanvasGrid();
+            SeedCanvasNodes();
             ResetCanvasView();
             ClampCanvasTransform();
             EnsureCanvasExtentForViewportAndNodes();
@@ -85,13 +87,25 @@ public sealed partial class MainWindow
             var dir = Path.GetDirectoryName(CanvasStateFilePath) ?? ".";
             Directory.CreateDirectory(dir);
             var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(CanvasStateFilePath, json, Encoding.UTF8);
-            if (showStatus)
+            var shouldWrite = CanvasSnapshotWriteDecider.ShouldWrite(
+                _lastSavedCanvasSnapshotJson,
+                json,
+                File.Exists(CanvasStateFilePath));
+            if (shouldWrite)
             {
-                SetInlineStatus($"画布已保存：{CanvasStateFilePath}", InlineStatusTone.Success);
+                File.WriteAllText(CanvasStateFilePath, json, Encoding.UTF8);
+                _lastSavedCanvasSnapshotJson = json;
+                if (showStatus)
+                {
+                    SetInlineStatus($"画布已保存：{CanvasStateFilePath}", InlineStatusTone.Success);
+                }
+            }
+            else if (showStatus)
+            {
+                SetInlineStatus("画布无变化，无需保存。", InlineStatusTone.Neutral);
             }
 
-            return true;
+            return shouldWrite;
         }
         catch (Exception ex)
         {
@@ -106,15 +120,7 @@ public sealed partial class MainWindow
 
     private CanvasSnapshot BuildCanvasSnapshot()
     {
-        var snapshot = new CanvasSnapshot
-        {
-            CanvasWidth = _canvasWidth,
-            CanvasHeight = _canvasHeight,
-            ViewScale = Math.Clamp(CanvasTransform.ScaleX, CanvasMinScale, CanvasMaxScale),
-            ViewTranslateX = CanvasTransform.TranslateX,
-            ViewTranslateY = CanvasTransform.TranslateY
-        };
-
+        var nodes = new List<CanvasNodeState>();
         foreach (var node in GetCanvasNodeBorders())
         {
             if (node.Tag is not CanvasNodeTag tag)
@@ -122,38 +128,42 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            snapshot.Nodes.Add(new CanvasNodeDto
-            {
-                NodeKey = tag.NodeKey,
-                Title = tag.TitleBlock?.Text ?? string.Empty,
-                Subtitle = tag.SubtitleBlock?.Text ?? string.Empty,
-                X = Canvas.GetLeft(node),
-                Y = Canvas.GetTop(node),
-                IsUserNode = tag.IsUserNode
-            });
+            nodes.Add(new CanvasNodeState(
+                tag.NodeKey,
+                tag.TitleBlock?.Text ?? string.Empty,
+                tag.SubtitleBlock?.Text ?? string.Empty,
+                Canvas.GetLeft(node),
+                Canvas.GetTop(node),
+                tag.IsUserNode,
+                tag.IsArtifactNode,
+                tag.ArtifactPath,
+                tag.ArtifactKind));
         }
 
-        var keys = snapshot.Nodes.Select(x => x.NodeKey).ToHashSet(StringComparer.Ordinal);
-        foreach (var edge in _connections)
-        {
-            if (edge.Source.Tag is not CanvasNodeTag sourceTag || edge.Target.Tag is not CanvasNodeTag targetTag)
+        var edges = _connections
+            .Select(edge =>
             {
-                continue;
-            }
+                if (edge.Source.Tag is not CanvasNodeTag sourceTag || edge.Target.Tag is not CanvasNodeTag targetTag)
+                {
+                    return null;
+                }
 
-            if (!keys.Contains(sourceTag.NodeKey) || !keys.Contains(targetTag.NodeKey))
-            {
-                continue;
-            }
+                return new CanvasEdgeState(sourceTag.NodeKey, targetTag.NodeKey);
+            })
+            .Where(static edge => edge is not null)
+            .Cast<CanvasEdgeState>()
+            .ToList();
 
-            snapshot.Edges.Add(new CanvasEdgeDto
-            {
-                SourceKey = sourceTag.NodeKey,
-                TargetKey = targetTag.NodeKey
-            });
-        }
-
-        return snapshot;
+        return CanvasSnapshotMapper.CreateSnapshot(
+            _canvasWidth,
+            _canvasHeight,
+            CanvasTransform.ScaleX,
+            CanvasTransform.TranslateX,
+            CanvasTransform.TranslateY,
+            nodes,
+            edges,
+            CanvasMinScale,
+            CanvasMaxScale);
     }
 
     private bool TryLoadCanvasSnapshot(bool showStatus, bool missingIsError)
@@ -186,6 +196,7 @@ public sealed partial class MainWindow
             try
             {
                 ApplyCanvasSnapshot(snapshot);
+                _lastSavedCanvasSnapshotJson = json;
             }
             finally
             {
@@ -213,57 +224,55 @@ public sealed partial class MainWindow
     private void ApplyCanvasSnapshot(CanvasSnapshot snapshot)
     {
         ClearCanvasWorkspaceState();
+        var restorePlan = CanvasSnapshotMapper.CreateRestorePlan(
+            snapshot,
+            DefaultCanvasWidth,
+            DefaultCanvasHeight,
+            CanvasGridSize,
+            CanvasMinScale,
+            CanvasMaxScale);
 
         var map = new Dictionary<string, Border>(StringComparer.Ordinal);
-        var maxX = Math.Max(DefaultCanvasWidth, snapshot.CanvasWidth);
-        var maxY = Math.Max(DefaultCanvasHeight, snapshot.CanvasHeight);
-        foreach (var node in snapshot.Nodes)
+        foreach (var node in restorePlan.Nodes)
         {
-            if (string.IsNullOrWhiteSpace(node.NodeKey))
-            {
-                continue;
-            }
-
-            var x = Math.Max(0, node.X);
-            var y = Math.Max(0, node.Y);
-            maxX = Math.Max(maxX, x + 320);
-            maxY = Math.Max(maxY, y + 220);
             var border = AddCanvasNode(
                 node.NodeKey,
                 string.IsNullOrWhiteSpace(node.Title) ? "节点" : node.Title,
                 node.Subtitle ?? string.Empty,
-                x,
-                y,
-                isUserNode: node.IsUserNode);
+                node.X,
+                node.Y,
+                node.ArtifactPath,
+                node.ArtifactKind,
+                isUserNode: node.IsUserNode,
+                isArtifactNode: node.IsArtifactNode);
             map[node.NodeKey] = border;
+            if (node.IsArtifactNode)
+            {
+                _artifactNodes.Add(border);
+            }
         }
 
-        _canvasWidth = Math.Ceiling(Math.Max(DefaultCanvasWidth, maxX) / CanvasGridSize) * CanvasGridSize;
-        _canvasHeight = Math.Ceiling(Math.Max(DefaultCanvasHeight, maxY) / CanvasGridSize) * CanvasGridSize;
+        _canvasWidth = restorePlan.CanvasWidth;
+        _canvasHeight = restorePlan.CanvasHeight;
         BuildCanvasGrid();
 
-        foreach (var edge in snapshot.Edges)
+        foreach (var edge in restorePlan.Edges)
         {
-            if (string.IsNullOrWhiteSpace(edge.SourceKey) || string.IsNullOrWhiteSpace(edge.TargetKey))
-            {
-                continue;
-            }
-
             if (!map.TryGetValue(edge.SourceKey, out var source) || !map.TryGetValue(edge.TargetKey, out var target))
             {
                 continue;
             }
 
-            AddConnection(source, target, select: false);
+            AddConnection(source, target, select: false, updateGeometry: false, requestAutosave: false);
         }
 
-        var userNodes = snapshot.Nodes.Count(x => x.IsUserNode);
-        _customNodeCounter = Math.Max(1, userNodes + 1);
+        EnsureCoreCanvasWorkflowScaffold();
+        _customNodeCounter = restorePlan.NextCustomNodeCounter;
         UpdateAllConnections();
-        CanvasTransform.ScaleX = Math.Clamp(snapshot.ViewScale, CanvasMinScale, CanvasMaxScale);
-        CanvasTransform.ScaleY = Math.Clamp(snapshot.ViewScale, CanvasMinScale, CanvasMaxScale);
-        CanvasTransform.TranslateX = snapshot.ViewTranslateX;
-        CanvasTransform.TranslateY = snapshot.ViewTranslateY;
+        CanvasTransform.ScaleX = restorePlan.ViewScale;
+        CanvasTransform.ScaleY = restorePlan.ViewScale;
+        CanvasTransform.TranslateX = restorePlan.ViewTranslateX;
+        CanvasTransform.TranslateY = restorePlan.ViewTranslateY;
         ClampCanvasTransform();
         UpdateNodePropertyPanel();
         EnsureCanvasExtentForViewportAndNodes();
@@ -273,9 +282,9 @@ public sealed partial class MainWindow
     {
         CancelConnectionPreview();
         _connections.Clear();
+        _connectionIndex.Clear();
         _artifactNodes.Clear();
-        _selectedConnection = null;
-        _selectedNode = null;
+        ResetCanvasSelectionState();
         _inputNode = null;
         _cleanNode = null;
         _outputNode = null;

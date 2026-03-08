@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 
 namespace AIWF.Native.Runtime;
 
 public sealed record RunFlowExecutionResult(
-    HttpResponseMessage Response,
+    HttpStatusCode StatusCode,
+    bool IsSuccessStatusCode,
     string Body,
     string EffectiveJobId,
     string RetryInfo,
@@ -41,7 +43,12 @@ public sealed class RunFlowCoordinator
             retryInfo = $"预检创建作业：{ensured}";
         }
 
-        var (response, body) = await _runner.RunFlowAsync(
+        if (string.IsNullOrWhiteSpace(effectiveJobId))
+        {
+            throw new InvalidOperationException("无法自动创建作业，请确认桥接服务与作业服务可用。");
+        }
+
+        var runResult = await _runner.RunFlowAsync(
             bridgeBaseUrl,
             apiKey,
             effectiveJobId,
@@ -50,13 +57,13 @@ public sealed class RunFlowCoordinator
             cancellationToken);
         var retriedAfter500 = false;
 
-        if (!response.IsSuccessStatusCode && response.StatusCode == HttpStatusCode.InternalServerError)
+        if (!runResult.IsSuccessStatusCode && runResult.StatusCode == HttpStatusCode.InternalServerError)
         {
             var forcedJobId = await TryCreateJobAsync(bridgeBaseUrl, apiKey, owner, cancellationToken);
             if (!string.IsNullOrWhiteSpace(forcedJobId))
             {
                 effectiveJobId = forcedJobId;
-                (response, body) = await _runner.RunFlowAsync(
+                runResult = await _runner.RunFlowAsync(
                     bridgeBaseUrl,
                     apiKey,
                     forcedJobId,
@@ -68,7 +75,13 @@ public sealed class RunFlowCoordinator
             }
         }
 
-        return new RunFlowExecutionResult(response, body, effectiveJobId, retryInfo, retriedAfter500);
+        return new RunFlowExecutionResult(
+            runResult.StatusCode,
+            runResult.IsSuccessStatusCode,
+            runResult.Body,
+            effectiveJobId,
+            retryInfo,
+            retriedAfter500);
     }
 
     private async Task<string?> TryCreateJobAsync(string bridgeBaseUrl, string apiKey, string owner, CancellationToken cancellationToken)
@@ -99,8 +112,8 @@ public sealed class RunFlowCoordinator
         var text = await response.Content.ReadAsStringAsync(cancellationToken);
         try
         {
-            var root = JsonNode.Parse(text);
-            return root?["job_id"]?.GetValue<string?>();
+            var root = JsonNode.Parse(text) as JsonObject;
+            return ReadString(root?["job_id"]) ?? ReadString((root?["data"] as JsonObject)?["job_id"]);
         }
         catch
         {
@@ -148,6 +161,31 @@ public sealed class RunFlowCoordinator
 
         var created = await TryCreateJobAsync(bridgeBaseUrl, token, owner, cancellationToken);
         return string.IsNullOrWhiteSpace(created) ? trimmed : created;
+    }
+
+    private static string? ReadString(JsonNode? node)
+    {
+        if (node is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text))
+        {
+            return text.Trim();
+        }
+
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return intValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (value.TryGetValue<long>(out var longValue))
+        {
+            return longValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return null;
     }
 
     private static string? ResolveBaseApiUrlFromBridge(string bridgeBaseUrl)

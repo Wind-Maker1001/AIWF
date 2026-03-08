@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 
 namespace AIWF.Native.Runtime;
@@ -28,34 +29,24 @@ public static class RunResultParser
             return false;
         }
 
-        if (root is null)
+        if (root is not JsonObject rootObject)
         {
             return false;
         }
 
-        var ok = root["ok"]?.GetValue<bool?>();
-        var jobId = root["job_id"]?.GetValue<string?>() ?? "-";
-        var payload = root["data"];
-        var runMode = payload?["mode"]?.GetValue<string?>() ?? root["run_mode"]?.GetValue<string?>() ?? "-";
-        var duration = payload?["duration_ms"]?.GetValue<int?>() ?? root["duration_ms"]?.GetValue<int?>();
-        var artifactsArray = root["artifacts"] as JsonArray ?? payload?["artifacts"] as JsonArray;
-        var artifacts = new List<RunArtifactItem>();
-
-        if (artifactsArray is not null)
-        {
-            foreach (var artifact in artifactsArray)
-            {
-                if (artifact is null)
-                {
-                    continue;
-                }
-
-                var id = artifact["artifact_id"]?.GetValue<string?>() ?? "-";
-                var kind = artifact["kind"]?.GetValue<string?>() ?? "-";
-                var path = artifact["path"]?.GetValue<string?>() ?? "-";
-                artifacts.Add(new RunArtifactItem(id, kind, path));
-            }
-        }
+        var payload = rootObject["data"] as JsonObject;
+        var ok = TryReadBoolean(rootObject["ok"]) ?? TryReadBoolean(payload?["ok"]);
+        var jobId = ReadString(rootObject["job_id"]) ?? ReadString(payload?["job_id"]) ?? "-";
+        var runMode = ReadString(payload?["mode"])
+            ?? ReadString(rootObject["run_mode"])
+            ?? ReadString(rootObject["mode"])
+            ?? ReadString(rootObject["flow"])
+            ?? "-";
+        var duration = TryReadInt(payload?["duration_ms"])
+            ?? TryReadInt(rootObject["duration_ms"])
+            ?? TryReadSecondsAsMilliseconds(payload?["seconds"])
+            ?? TryReadSecondsAsMilliseconds(rootObject["seconds"]);
+        var artifacts = ReadArtifacts(rootObject["artifacts"] as JsonArray ?? payload?["artifacts"] as JsonArray);
 
         data = new RunResultViewData
         {
@@ -66,5 +57,173 @@ public static class RunResultParser
             Artifacts = artifacts
         };
         return true;
+    }
+
+    private static IReadOnlyList<RunArtifactItem> ReadArtifacts(JsonArray? artifactsArray)
+    {
+        if (artifactsArray is null)
+        {
+            return [];
+        }
+
+        var artifacts = new List<RunArtifactItem>(artifactsArray.Count);
+        foreach (var artifact in artifactsArray)
+        {
+            if (artifact is not JsonObject artifactObject)
+            {
+                continue;
+            }
+
+            artifacts.Add(new RunArtifactItem(
+                ReadString(artifactObject["artifact_id"]) ?? "-",
+                ReadString(artifactObject["kind"]) ?? "-",
+                ReadString(artifactObject["path"]) ?? "-"));
+        }
+
+        return artifacts;
+    }
+
+    private static string? ReadString(JsonNode? node)
+    {
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+
+            if (value.TryGetValue<int>(out var intValue))
+            {
+                return intValue.ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (value.TryGetValue<long>(out var longValue))
+            {
+                return longValue.ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (value.TryGetValue<double>(out var doubleValue) && !double.IsNaN(doubleValue) && !double.IsInfinity(doubleValue))
+            {
+                return doubleValue.ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (value.TryGetValue<decimal>(out var decimalValue))
+            {
+                return decimalValue.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool? TryReadBoolean(JsonNode? node)
+    {
+        if (node is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue<bool>(out var boolValue))
+        {
+            return boolValue;
+        }
+
+        if (value.TryGetValue<string>(out var text))
+        {
+            if (bool.TryParse(text, out var parsedBool))
+            {
+                return parsedBool;
+            }
+
+            if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLong))
+            {
+                return parsedLong != 0;
+            }
+        }
+
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return intValue != 0;
+        }
+
+        if (value.TryGetValue<long>(out var longValue))
+        {
+            return longValue != 0;
+        }
+
+        if (value.TryGetValue<double>(out var doubleValue) && !double.IsNaN(doubleValue) && !double.IsInfinity(doubleValue))
+        {
+            return Math.Abs(doubleValue) > double.Epsilon;
+        }
+
+        return null;
+    }
+
+    private static int? TryReadInt(JsonNode? node)
+    {
+        if (node is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return intValue;
+        }
+
+        if (value.TryGetValue<long>(out var longValue) && longValue is >= int.MinValue and <= int.MaxValue)
+        {
+            return (int)longValue;
+        }
+
+        if (value.TryGetValue<double>(out var doubleValue) && !double.IsNaN(doubleValue) && !double.IsInfinity(doubleValue))
+        {
+            return (int)Math.Round(doubleValue, MidpointRounding.AwayFromZero);
+        }
+
+        if (value.TryGetValue<string>(out var text))
+        {
+            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedInt))
+            {
+                return parsedInt;
+            }
+
+            if (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var parsedDouble)
+                && !double.IsNaN(parsedDouble)
+                && !double.IsInfinity(parsedDouble))
+            {
+                return (int)Math.Round(parsedDouble, MidpointRounding.AwayFromZero);
+            }
+        }
+
+        return null;
+    }
+
+    private static int? TryReadSecondsAsMilliseconds(JsonNode? node)
+    {
+        if (node is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue<double>(out var doubleValue) && !double.IsNaN(doubleValue) && !double.IsInfinity(doubleValue))
+        {
+            return (int)Math.Round(doubleValue * 1000, MidpointRounding.AwayFromZero);
+        }
+
+        if (value.TryGetValue<decimal>(out var decimalValue))
+        {
+            return (int)Math.Round(decimalValue * 1000, MidpointRounding.AwayFromZero);
+        }
+
+        if (value.TryGetValue<string>(out var text)
+            && double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var parsedDouble)
+            && !double.IsNaN(parsedDouble)
+            && !double.IsInfinity(parsedDouble))
+        {
+            return (int)Math.Round(parsedDouble * 1000, MidpointRounding.AwayFromZero);
+        }
+
+        return null;
     }
 }

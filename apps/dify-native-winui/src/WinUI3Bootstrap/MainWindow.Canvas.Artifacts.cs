@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Linq;
 using AIWF.Native.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -18,7 +19,8 @@ public sealed partial class MainWindow
         double top,
         string? artifactPath = null,
         string? artifactKind = null,
-        bool isUserNode = false)
+        bool isUserNode = false,
+        bool isArtifactNode = false)
     {
         var titleBlock = new TextBlock
         {
@@ -41,6 +43,7 @@ public sealed partial class MainWindow
                 ArtifactPath = artifactPath,
                 ArtifactKind = artifactKind,
                 IsUserNode = isUserNode,
+                IsArtifactNode = isArtifactNode,
                 TitleBlock = titleBlock,
                 SubtitleBlock = subtitleBlock
             },
@@ -154,13 +157,20 @@ public sealed partial class MainWindow
 
     private void ClearCanvasArtifactNodes()
     {
-        foreach (var node in _artifactNodes)
+        if (_artifactNodes.Count == 0)
         {
-            RemoveConnectionsForNode(node);
-            WorkspaceCanvas.Children.Remove(node);
+            return;
+        }
+
+        foreach (var node in _artifactNodes.ToList())
+        {
+            RemoveCanvasNode(node, refreshUi: false);
         }
 
         _artifactNodes.Clear();
+        ApplyNodeSelectionVisuals();
+        UpdateConnectionVisuals();
+        UpdateNodePropertyPanel();
     }
 
     private void UpdateCanvasArtifactNodes(IReadOnlyList<RunArtifactItem> artifacts)
@@ -184,9 +194,14 @@ public sealed partial class MainWindow
                 placement.Left,
                 placement.Top,
                 placement.ArtifactPath,
-                placement.ArtifactKind);
+                placement.ArtifactKind,
+                isArtifactNode: true);
 
             _artifactNodes.Add(node);
+            if (_outputNode is not null)
+            {
+                AddConnection(_outputNode, node, select: false, requestAutosave: false);
+            }
         }
 
         EnsureCanvasExtentForViewportAndNodes();
