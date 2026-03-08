@@ -102,6 +102,55 @@ class IngestTests(unittest.TestCase):
             self.assertEqual(meta["input_format"], "image")
             self.assertTrue(meta.get("skipped"))
 
+    def test_register_input_reader_supports_custom_extension(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = os.path.join(tmp, "a.custom")
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("ignored")
+
+            def load_custom(path, options):
+                return (
+                    [{"text": "custom", "source_path": path, "source_type": "custom"}],
+                    {"input_format": "custom"},
+                )
+
+            ingest.register_input_reader("custom", [".custom"], load_custom)
+            try:
+                rows, meta = ingest.load_rows_from_file(p)
+            finally:
+                ingest.unregister_input_reader("custom")
+
+            self.assertEqual(meta["input_format"], "custom")
+            self.assertEqual(rows[0]["source_type"], "custom")
+
+    def test_register_input_reader_rejects_conflicting_extension_when_requested(self):
+        def load_markdown(path, options):
+            return [{"text": "markdown"}], {"input_format": "markdown"}
+
+        with self.assertRaises(RuntimeError):
+            ingest.register_input_reader("markdown", [".txt"], load_markdown, on_conflict="error")
+
+    def test_register_input_reader_can_replace_extension_owner(self):
+        def load_markdown(path, options):
+            return [{"text": "markdown"}], {"input_format": "markdown"}
+
+        original = ingest.get_input_reader("demo.txt")
+        ingest.register_input_reader("markdown", [".txt"], load_markdown, on_conflict="warn")
+        try:
+            self.assertEqual(ingest.get_input_reader("demo.txt").input_format, "markdown")
+            details = {item["input_format"]: item for item in ingest.list_input_reader_details()}
+            self.assertEqual(details["markdown"]["extensions"], [".txt"])
+            self.assertNotIn("txt", details)
+        finally:
+            ingest.unregister_input_reader("markdown")
+            ingest.register_input_reader(
+                original.input_format,
+                original.extensions,
+                original.loader,
+                source_module=original.source_module,
+                on_conflict="replace",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

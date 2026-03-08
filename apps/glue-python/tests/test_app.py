@@ -10,7 +10,7 @@ import sys
 from fastapi.testclient import TestClient
 
 from aiwf import extensions
-from aiwf.flows.registry import get_flow_runner, register_flow, unregister_flow
+from aiwf.flows.registry import get_flow_registration, get_flow_runner, register_flow, unregister_flow
 from aiwf.registry_events import clear_registry_events
 
 
@@ -188,6 +188,32 @@ class AppRouteTests(unittest.TestCase):
             self.assertEqual(ext_flow["source_module"], module_name)
             unregister_flow("ext_flow")
 
+    def test_extension_loader_force_reload_reexecutes_module_registration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            module_name = "aiwf_test_ext_reload_module"
+            module_path = os.path.join(tmp, f"{module_name}.py")
+            with open(module_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "from aiwf.flows.registry import register_flow\n"
+                    "register_flow('ext_reload_flow', runner=lambda **kwargs: {'ok': True, 'reloaded': True})\n"
+                )
+
+            sys.path.insert(0, tmp)
+            unregister_flow("ext_reload_flow")
+            try:
+                with patch.dict("os.environ", {"AIWF_EXT_MODULES": module_name}, clear=False):
+                    extensions.reset_extension_state_for_tests()
+                    extensions.load_extension_modules(force=True)
+                    unregister_flow("ext_reload_flow")
+                    status = extensions.load_extension_modules(force=True)
+            finally:
+                if tmp in sys.path:
+                    sys.path.remove(tmp)
+
+            self.assertIn(module_name, status["loaded"])
+            self.assertTrue(get_flow_runner("ext_reload_flow")()["reloaded"])
+            unregister_flow("ext_reload_flow")
+
     def test_register_flow_keep_policy_preserves_existing_runner(self):
         def first_runner(**kwargs):
             return {"ok": True, "runner": "first"}
@@ -223,6 +249,32 @@ class AppRouteTests(unittest.TestCase):
             self.assertEqual(match[-1]["policy"], "warn")
         finally:
             unregister_flow("warn_flow")
+
+    def test_register_flow_rejects_alias_that_matches_existing_flow_name(self):
+        register_flow("alias-root", runner=lambda **kwargs: {"ok": True})
+        try:
+            with self.assertRaises(RuntimeError):
+                register_flow("alias-child", runner=lambda **kwargs: {"ok": True}, aliases=("alias-root",))
+        finally:
+            unregister_flow("alias-root")
+            unregister_flow("alias-child")
+
+    def test_register_flow_reassigns_shared_alias_without_hiding_original_flow(self):
+        def flow_a(**kwargs):
+            return {"runner": "a"}
+
+        def flow_b(**kwargs):
+            return {"runner": "b"}
+
+        register_flow("flow-a", runner=flow_a, aliases=("shared-alias",))
+        try:
+            register_flow("flow-b", runner=flow_b, aliases=("shared-alias",), on_conflict="warn")
+            self.assertEqual(get_flow_runner("shared-alias")()["runner"], "b")
+            self.assertEqual(get_flow_runner("flow-a")()["runner"], "a")
+            self.assertEqual(get_flow_registration("flow-a").aliases, ())
+        finally:
+            unregister_flow("flow-a")
+            unregister_flow("flow-b")
 
     @patch.object(glue_app, "make_base_client", return_value=None)
     @patch("aiwf.flows.cleaning.run_cleaning", return_value={"ok": True})
