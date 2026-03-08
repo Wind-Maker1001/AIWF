@@ -1,10 +1,15 @@
 package com.aiwf.base.web;
 
 import com.aiwf.base.service.JobService;
+import com.aiwf.base.web.dto.CreateJobPolicyReq;
+import com.aiwf.base.web.dto.GlueHealthResp;
+import com.aiwf.base.web.dto.JobCreateResp;
+import com.aiwf.base.web.dto.StepResp;
+import com.aiwf.base.web.dto.ArtifactResp;
+import com.aiwf.base.web.dto.RunFlowReq;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -18,62 +23,46 @@ public class JobController {
     }
 
     @GetMapping("/glue/health")
-    public Map<String, Object> glueHealth() {
-        return Map.of("ok", true, "glue", jobs.glueHealth());
+    public GlueHealthResp glueHealth() {
+        var glue = jobs.glueHealth();
+        return new GlueHealthResp(glue.isOk(), glue);
     }
 
     @PostMapping("/create")
-    public Map<String, Object> createJob(
+    public JobCreateResp createJob(
             @RequestParam(name = "owner", defaultValue = "local") @NotBlank String owner,
-            @RequestBody(required = false) Map<String, Object> policy
+            @RequestBody(required = false) CreateJobPolicyReq body
     ) {
-        if (policy == null) {
-            policy = Map.of();
-        }
-        return jobs.createJob(owner, policy);
+        return jobs.createJob(owner, body == null ? Map.of() : body.policy());
     }
 
     @GetMapping("/{jobId}")
-    public Map<String, Object> getJob(@PathVariable("jobId") @NotBlank String jobId) {
+    public Object getJob(@PathVariable("jobId") @NotBlank String jobId) {
         return jobs.getJob(jobId);
     }
 
     @GetMapping("/{jobId}/steps")
-    public Object listSteps(@PathVariable("jobId") @NotBlank String jobId) {
+    public java.util.List<StepResp> listSteps(@PathVariable("jobId") @NotBlank String jobId) {
         return jobs.listSteps(jobId);
     }
 
     @GetMapping("/{jobId}/artifacts")
-    public Object listArtifacts(@PathVariable("jobId") @NotBlank String jobId) {
+    public java.util.List<ArtifactResp> listArtifacts(@PathVariable("jobId") @NotBlank String jobId) {
         return jobs.listArtifacts(jobId);
     }
 
     @PostMapping("/{jobId}/run/{flow}")
-    public Map<String, Object> runFlow(
+    public Object runFlow(
             @PathVariable("jobId") @NotBlank String jobId,
             @PathVariable("flow") @NotBlank String flow,
-            @RequestBody Map<String, Object> body
+            @RequestBody RunFlowReq body
     ) {
-        String actor = String.valueOf(body.getOrDefault("actor", "local"));
-        String rulesetVersion = String.valueOf(body.getOrDefault("ruleset_version", "v1"));
-
-        Object paramsObj = body.get("params");
-        Map<String, Object> params = new HashMap<>();
-        if (paramsObj instanceof Map<?, ?> p) {
-            for (Map.Entry<?, ?> e : p.entrySet()) {
-                if (e.getKey() != null) {
-                    params.put(String.valueOf(e.getKey()), e.getValue());
-                }
-            }
-        } else {
-            for (Map.Entry<String, Object> e : body.entrySet()) {
-                String k = e.getKey();
-                if (!"actor".equals(k) && !"ruleset_version".equals(k)) {
-                    params.put(k, e.getValue());
-                }
-            }
-        }
-
-        return jobs.runFlow(jobId, flow, actor, rulesetVersion, params);
+        return jobs.runFlow(
+                jobId,
+                flow,
+                body.actorOrDefault("local"),
+                body.rulesetVersionOrDefault("v1"),
+                body.resolvedParams()
+        );
     }
 }

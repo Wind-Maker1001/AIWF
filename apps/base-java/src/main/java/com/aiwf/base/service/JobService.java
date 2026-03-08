@@ -1,112 +1,111 @@
 package com.aiwf.base.service;
 
-import com.aiwf.base.db.AiWfDao;
+import com.aiwf.base.db.JobRepository;
+import com.aiwf.base.db.model.ArtifactRow;
+import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.db.model.JobRow;
+import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.glue.GlueGateway;
+import com.aiwf.base.glue.GlueHealthResult;
+import com.aiwf.base.glue.GlueRunRequest;
+import com.aiwf.base.glue.GlueRunResult;
+import com.aiwf.base.web.ApiException;
+import com.aiwf.base.web.dto.ArtifactResp;
+import com.aiwf.base.web.dto.JobCreateResp;
+import com.aiwf.base.web.dto.JobDetailsResp;
 import com.aiwf.base.web.dto.StepFailReq;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.aiwf.base.web.dto.StepFailResp;
+import com.aiwf.base.web.dto.StepResp;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class JobService {
 
-    private final AiWfDao dao;
-    private final ObjectMapper om;
-    private final RestTemplate http;
+    private final JobRepository jobs;
+    private final JobStatusService jobStatus;
+    private final GlueGateway glue;
 
     @Value("${aiwf.bus:R:\\aiwf}")
     private String jobsBusRoot;
 
-    @Value("${aiwf.glueUrl:http://127.0.0.1:18081}")
-    private String glueBaseUrl;
-
-    public JobService(AiWfDao dao, ObjectMapper om, RestTemplateBuilder rtb) {
-        this.dao = dao;
-        this.om = om;
-        this.http = rtb
-                .setConnectTimeout(Duration.ofSeconds(3))
-                .setReadTimeout(Duration.ofSeconds(120))
-                .build();
+    public JobService(JobRepository jobs, JobStatusService jobStatus, GlueGateway glue) {
+        this.jobs = jobs;
+        this.jobStatus = jobStatus;
+        this.glue = glue;
     }
 
-    public Map<String, Object> glueHealth() {
+    public GlueHealthResult glueHealth() {
         try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> resp = http.getForObject(glueBaseUrl + "/health", Map.class);
-            return resp == null ? Map.of("ok", false) : resp;
+            return glue.health();
         } catch (RestClientException e) {
-            return Map.of("ok", false, "error", e.getMessage());
+            return GlueHealthResult.unavailable(e.getMessage());
         }
     }
 
-    public Map<String, Object> createJob(String owner) {
-        String jobId = dao.createJob(owner);
+    public JobCreateResp createJob(String owner) {
+        String jobId = jobs.createJob(owner);
         ensureJobDirs(jobId);
+        return new JobCreateResp(jobId, owner, "RUNNING", Paths.get(jobsRoot(), jobId).toString(), null);
+    }
 
-        Map<String, Object> out = new HashMap<>();
-        out.put("job_id", jobId);
-        out.put("owner", owner);
-        out.put("status", "RUNNING");
-        out.put("job_root", Paths.get(jobsRoot(), jobId).toString());
+    public JobCreateResp createJob(String owner, Map<String, Object> policy) {
+        JobCreateResp out = createJob(owner);
+        if (policy != null && !policy.isEmpty()) {
+            return out.withPolicy(Map.copyOf(policy));
+        }
         return out;
     }
 
-    public Map<String, Object> createJob(String owner, Map<String, Object> policy) {
-        Map<String, Object> out = createJob(owner);
-        if (policy != null) out.put("policy", policy);
-        return out;
+    public JobDetailsResp getJob(String jobId) {
+        JobRow job = jobs.getJob(jobId);
+        if (job == null) {
+            throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
+        }
+        return toJobDetails(job);
     }
 
-    public Map<String, Object> getJob(String jobId) {
-        Map<String, Object> job = dao.getJob(jobId);
-        return job == null ? Map.of("ok", false, "error", "job not found") : job;
+    public List<StepResp> listSteps(String jobId) {
+        return jobs.listSteps(jobId).stream().map(this::toStepResp).toList();
     }
 
-    public List<Map<String, Object>> listSteps(String jobId) {
-        return dao.listSteps(jobId);
+    public List<ArtifactResp> listArtifacts(String jobId) {
+        return jobs.listArtifacts(jobId).stream().map(this::toArtifactResp).toList();
     }
 
-    public List<Map<String, Object>> listArtifacts(String jobId) {
-        return dao.listArtifacts(jobId);
-    }
-
-    public Map<String, Object> runFlow(
+    public GlueRunResult runFlow(
             String jobId,
             String flow,
             String actor,
             String rulesetVersion,
             Map<String, Object> params
     ) {
+        if (jobs.getJob(jobId) == null) {
+            throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
+        }
+
         ensureJobDirs(jobId);
 
-        String url = glueBaseUrl + "/jobs/" + jobId + "/run/" + flow;
-
-        Map<String, Object> body = new HashMap<>();
-        body.put("actor", actor == null ? "glue" : actor);
-        body.put("ruleset_version", (rulesetVersion == null || rulesetVersion.isBlank()) ? "v1" : rulesetVersion);
-        if (params != null) body.put("params", params);
+        String effectiveActor = actor == null ? "glue" : actor;
+        String effectiveRuleset = (rulesetVersion == null || rulesetVersion.isBlank()) ? "v1" : rulesetVersion;
 
         try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> resp = http.postForObject(url, body, Map.class);
-            return resp == null ? Map.of("ok", false, "error", "empty response from glue") : resp;
+            return glue.runFlow(jobId, flow, new GlueRunRequest(effectiveActor, effectiveRuleset, params));
         } catch (RestClientException e) {
-            dao.audit(jobId, actor == null ? "base" : actor, "FLOW_RUN_FAIL", flow, e.getMessage());
-            return Map.of("ok", false, "job_id", jobId, "flow", flow, "error", e.getMessage());
+            jobs.audit(new AuditEvent(jobId, effectiveActor, "FLOW_RUN_FAIL", flow, e.getMessage()));
+            return GlueRunResult.failed(jobId, flow, e.getMessage());
         }
     }
 
-    public Map<String, Object> runFlow(
+    public GlueRunResult runFlow(
             String jobId,
             String flow,
             String actor,
@@ -115,11 +114,23 @@ public class JobService {
         return runFlow(jobId, flow, actor, "v1", params);
     }
 
-    public Map<String, Object> stepFail(String jobId, String stepId, String actor, StepFailReq req) {
-        String msg = (req == null) ? "manual stepFail" : (req.error() == null ? "manual stepFail" : req.error());
-        dao.markStepFailed(jobId, stepId, msg);
-        dao.audit(jobId, actor == null ? "manual" : actor, "STEP_FAIL", stepId, msg);
-        return Map.of("ok", true, "job_id", jobId, "step_id", stepId);
+    @Transactional
+    public StepFailResp failStep(String jobId, String stepId, String actor, String error, String auditDetail) {
+        String effectiveActor = defaultIfBlank(actor, "manual");
+        String effectiveError = defaultIfBlank(error, "manual stepFail");
+        int updated = jobs.markStepFailed(jobId, stepId, effectiveError);
+        if (updated == 0) {
+            throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
+        }
+
+        jobs.audit(new AuditEvent(jobId, effectiveActor, "STEP_FAIL", stepId, defaultIfBlank(auditDetail, effectiveError)));
+        jobStatus.onStepFail(jobId);
+        return new StepFailResp(true, jobId, stepId);
+    }
+
+    public StepFailResp stepFail(String jobId, String stepId, String actor, StepFailReq req) {
+        String msg = req == null ? "manual stepFail" : defaultIfBlank(req.error(), "manual stepFail");
+        return failStep(jobId, stepId, actor, msg, msg);
     }
 
     private void ensureJobDirs(String jobId) {
@@ -130,11 +141,43 @@ public class JobService {
             Files.createDirectories(jobRoot.resolve("artifacts"));
             Files.createDirectories(jobRoot.resolve("evidence"));
         } catch (Exception e) {
-            dao.audit(jobId, "base", "JOB_DIRS_WARN", null, e.getMessage());
+            jobs.audit(new AuditEvent(jobId, "base", "JOB_DIRS_WARN", null, e.getMessage()));
         }
     }
 
     private String jobsRoot() {
         return Paths.get(jobsBusRoot, "jobs").toString();
+    }
+
+    private JobDetailsResp toJobDetails(JobRow row) {
+        return new JobDetailsResp(row.jobId(), row.owner(), row.status(), row.createdAt());
+    }
+
+    private StepResp toStepResp(StepRow row) {
+        return new StepResp(
+                row.jobId(),
+                row.stepId(),
+                row.status(),
+                row.inputUri(),
+                row.outputUri(),
+                row.rulesetVersion(),
+                row.paramsJson(),
+                row.startedAt(),
+                row.endedAt(),
+                row.outputHash(),
+                row.error()
+        );
+    }
+
+    private ArtifactResp toArtifactResp(ArtifactRow row) {
+        return new ArtifactResp(row.artifactId(), row.kind(), row.path(), row.sha256(), row.createdAt());
+    }
+
+    private static String defaultIfBlank(String value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? fallback : trimmed;
     }
 }

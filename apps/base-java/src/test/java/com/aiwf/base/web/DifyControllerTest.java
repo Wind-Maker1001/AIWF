@@ -1,7 +1,11 @@
 package com.aiwf.base.web;
 
 import com.aiwf.base.config.AppProperties;
+import com.aiwf.base.web.dto.ArtifactResp;
+import com.aiwf.base.glue.GlueRunResult;
 import com.aiwf.base.service.JobService;
+import com.aiwf.base.web.dto.JobCreateResp;
+import com.aiwf.base.web.dto.StepResp;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -38,11 +42,11 @@ class DifyControllerTest {
     @Test
     void runCleaningOneShotReturnsJobRunAndArtifacts() throws Exception {
         when(jobs.createJob(eq("dify"), anyMap()))
-                .thenReturn(Map.of("job_id", "j100", "status", "RUNNING"));
+                .thenReturn(new JobCreateResp("j100", "dify", "RUNNING", "D:\\AIWF\\bus\\jobs\\j100", null));
         when(jobs.runFlow(eq("j100"), eq("cleaning"), eq("dify"), eq("v1"), anyMap()))
-                .thenReturn(Map.of("ok", true, "job_id", "j100"));
-        when(jobs.listSteps(eq("j100"))).thenReturn(List.of(Map.of("step_id", "cleaning", "status", "DONE")));
-        when(jobs.listArtifacts(eq("j100"))).thenReturn(List.of(Map.of("artifact_id", "xlsx_fin_001", "kind", "xlsx")));
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "j100"), "j100", "cleaning"));
+        when(jobs.listSteps(eq("j100"))).thenReturn(List.of(new StepResp("j100", "cleaning", "DONE", null, null, null, null, null, null, null, null)));
+        when(jobs.listArtifacts(eq("j100"))).thenReturn(List.of(new ArtifactResp("xlsx_fin_001", "xlsx", null, null, null)));
 
         String body = """
                 {
@@ -77,9 +81,9 @@ class DifyControllerTest {
     @Test
     void runCleaningNullStringsFallbackToDefaults() throws Exception {
         when(jobs.createJob(eq("dify"), anyMap()))
-                .thenReturn(Map.of("job_id", "j101", "status", "RUNNING"));
+                .thenReturn(new JobCreateResp("j101", "dify", "RUNNING", "D:\\AIWF\\bus\\jobs\\j101", null));
         when(jobs.runFlow(eq("j101"), eq("cleaning"), eq("dify"), eq("v1"), anyMap()))
-                .thenReturn(Map.of("ok", true, "job_id", "j101"));
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "j101"), "j101", "cleaning"));
         when(jobs.listSteps(eq("j101"))).thenReturn(List.of());
         when(jobs.listArtifacts(eq("j101"))).thenReturn(List.of());
 

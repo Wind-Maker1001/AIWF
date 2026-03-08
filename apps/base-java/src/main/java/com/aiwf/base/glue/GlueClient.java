@@ -8,27 +8,31 @@ import org.springframework.web.client.RestClient;
 import java.util.Map;
 
 @Component
-public class GlueClient {
+public class GlueClient implements GlueGateway {
     private final RestClient client;
 
-    public GlueClient(AppProperties props) {
-        this.client = RestClient.builder()
+    public GlueClient(AppProperties props, RestClient.Builder restClientBuilder) {
+        this.client = restClientBuilder
                 .baseUrl(props.getGlueUrl())
                 .build();
     }
 
+    @Override
     @SuppressWarnings("unchecked")
-    public Map<String, Object> runFlow(String jobId, String flow, Map<String, Object> payload) {
-        // 约定 Python Glue 提供：POST /jobs/{jobId}/run/{flow}
-        return client.post()
+    public GlueRunResult runFlow(String jobId, String flow, GlueRunRequest request) {
+        Map<String, Object> response = client.post()
                 .uri("/jobs/{jobId}/run/{flow}", jobId, flow)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(payload == null ? Map.of() : payload)
+                .body(request == null ? Map.of() : request.toPayload())
                 .retrieve()
                 .body(Map.class);
+        return GlueRunResult.fromMap(response, jobId, flow);
     }
 
-    public Map<?, ?> health() {
-        return client.get().uri("/health").retrieve().body(Map.class);
+    @Override
+    @SuppressWarnings("unchecked")
+    public GlueHealthResult health() {
+        Map<String, Object> response = client.get().uri("/health").retrieve().body(Map.class);
+        return GlueHealthResult.fromMap(response);
     }
 }

@@ -2,10 +2,9 @@ package com.aiwf.base.web;
 
 import com.aiwf.base.service.JobService;
 import com.aiwf.base.web.dto.StepFailReq;
+import com.aiwf.base.web.dto.StepFailResp;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/steps")
@@ -18,7 +17,7 @@ public class StepsFailController {
     }
 
     @PostMapping("/{jobId}/{stepId}/fail")
-    public Map<String, Object> stepFail(
+    public StepFailResp stepFail(
             @PathVariable("jobId") @NotBlank String jobId,
             @PathVariable("stepId") @NotBlank String stepId,
             @RequestParam(name = "actor", defaultValue = "local") String actor,

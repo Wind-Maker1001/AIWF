@@ -1,12 +1,20 @@
 package com.aiwf.base.web;
 
-import com.aiwf.base.db.AiWfDao;
+import com.aiwf.base.db.JobRepository;
+import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.service.JobService;
 import com.aiwf.base.service.JobStatusService;
 import com.aiwf.base.service.JsonUtil;
+import com.aiwf.base.web.dto.ArtifactRegisterReq;
+import com.aiwf.base.web.dto.ArtifactRegisterResp;
+import com.aiwf.base.web.dto.OkResp;
+import com.aiwf.base.web.dto.StepDoneCallbackReq;
+import com.aiwf.base.web.dto.StepFailCallbackReq;
+import com.aiwf.base.web.dto.StepFailResp;
+import com.aiwf.base.web.dto.StepStartCallbackReq;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
@@ -14,100 +22,79 @@ import java.util.Map;
 @RequestMapping("/api/v1")
 public class CallbackController {
 
-    private final AiWfDao dao;
+    private final JobRepository jobsRepo;
     private final JobStatusService jobStatus;
+    private final JobService jobs;
 
-    public CallbackController(AiWfDao dao, JobStatusService jobStatus) {
-        this.dao = dao;
+    public CallbackController(JobRepository jobsRepo, JobStatusService jobStatus, JobService jobs) {
+        this.jobsRepo = jobsRepo;
         this.jobStatus = jobStatus;
+        this.jobs = jobs;
     }
 
-    // ---- Steps ----
-
     @PostMapping(value = "/jobs/{jobId}/steps/{stepId}/start", consumes = {"application/json", "*/*"})
-    public Map<String, Object> stepStart(
+    public OkResp stepStart(
             @PathVariable @NotBlank String jobId,
             @PathVariable @NotBlank String stepId,
             @RequestParam(defaultValue = "glue") String actor,
-            @RequestBody(required = false) Map<String, Object> body
+            @RequestBody(required = false) StepStartCallbackReq body
     ) {
+        StepStartCallbackReq req = body == null ? new StepStartCallbackReq() : body;
         jobStatus.onStepStart(jobId);
 
-        String inputUri = body == null ? "" : String.valueOf(body.getOrDefault("input_uri", ""));
-        String outputUri = body == null ? "" : String.valueOf(body.getOrDefault("output_uri", ""));
-        String rulesetVersion = body == null ? null : (body.get("ruleset_version") == null ? null : String.valueOf(body.get("ruleset_version")));
-        String paramsJson = JsonUtil.toJson(body == null ? Map.of() : body);
-
-        dao.upsertStepRunning(jobId, stepId, inputUri, outputUri, rulesetVersion, paramsJson);
-        dao.audit(actor, "STEP_START", jobId, stepId, paramsJson);
-        return Map.of("ok", true);
+        String paramsJson = JsonUtil.toJson(req.payload());
+        jobsRepo.upsertStepRunning(
+                jobId,
+                stepId,
+                req.getInputUri() == null ? "" : req.getInputUri(),
+                req.getOutputUri() == null ? "" : req.getOutputUri(),
+                req.getRulesetVersion(),
+                paramsJson
+        );
+        jobsRepo.audit(new AuditEvent(jobId, actor, "STEP_START", stepId, paramsJson));
+        return OkResp.success();
     }
 
     @PostMapping(value = "/jobs/{jobId}/steps/{stepId}/done", consumes = {"application/json", "*/*"})
-    public Map<String, Object> stepDone(
+    public OkResp stepDone(
             @PathVariable @NotBlank String jobId,
             @PathVariable @NotBlank String stepId,
             @RequestParam(defaultValue = "glue") String actor,
-            @RequestBody(required = false) Map<String, Object> body
+            @RequestBody(required = false) StepDoneCallbackReq body
     ) {
-        String outputHash = body == null ? null : (body.get("output_hash") == null ? null : String.valueOf(body.get("output_hash")));
-        String detailJson = JsonUtil.toJson(body == null ? Map.of() : body);
+        StepDoneCallbackReq req = body == null ? new StepDoneCallbackReq() : body;
+        String detailJson = JsonUtil.toJson(req.payload());
 
-        dao.markStepDone(jobId, stepId, outputHash);
-        dao.audit(actor, "STEP_DONE", jobId, stepId, detailJson);
+        int updated = jobsRepo.markStepDone(jobId, stepId, req.getOutputHash());
+        if (updated == 0) {
+            throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
+        }
+        jobsRepo.audit(new AuditEvent(jobId, actor, "STEP_DONE", stepId, detailJson));
 
         jobStatus.onStepDone(jobId);
-        return Map.of("ok", true);
+        return OkResp.success();
     }
 
     @PostMapping(value = "/jobs/{jobId}/steps/{stepId}/fail", consumes = {"application/json", "*/*"})
-    public Map<String, Object> stepFail(
+    public StepFailResp stepFail(
             @PathVariable @NotBlank String jobId,
             @PathVariable @NotBlank String stepId,
             @RequestParam(defaultValue = "glue") String actor,
-            @RequestBody(required = false) Map<String, Object> body
+            @RequestBody(required = false) StepFailCallbackReq body
     ) {
-        String error = body == null ? "failed" : String.valueOf(body.getOrDefault("error", "failed"));
-        String detailJson = JsonUtil.toJson(body == null ? Map.of("error", error) : body);
-
-        dao.markStepFailed(jobId, stepId, error);
-        dao.audit(actor, "STEP_FAIL", jobId, stepId, detailJson);
-
-        jobStatus.onStepFail(jobId);
-        return Map.of("ok", true);
-    }
-
-    // ---- Artifacts ----
-
-    private static String requiredString(Map<String, Object> body, String key) {
-        if (body == null || !body.containsKey(key)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "missing required field: " + key);
-        }
-        Object v = body.get(key);
-        if (v == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "missing required field: " + key);
-        }
-        String s = String.valueOf(v).trim();
-        if (s.isEmpty() || "null".equalsIgnoreCase(s)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid required field: " + key);
-        }
-        return s;
+        StepFailCallbackReq req = body == null ? new StepFailCallbackReq() : body;
+        String error = req.errorOrDefault("failed");
+        return jobs.failStep(jobId, stepId, actor, error, JsonUtil.toJson(req.payload(error)));
     }
 
     @PostMapping(value = "/jobs/{jobId}/artifacts/register", consumes = {"application/json", "*/*"})
-    public Map<String, Object> registerArtifact(
+    public ArtifactRegisterResp registerArtifact(
             @PathVariable @NotBlank String jobId,
             @RequestParam(defaultValue = "glue") String actor,
-            @RequestBody Map<String, Object> body
+            @Valid @RequestBody ArtifactRegisterReq body
     ) {
-        String artifactId = requiredString(body, "artifact_id");
-        String kind = requiredString(body, "kind");   // csv/xlsx/docx/pptx/powerbi/...
-        String path = requiredString(body, "path");   // Recommended: <AIWF_BUS>\\jobs\\<id>\\artifacts\\...
-        String sha256 = body.get("sha256") == null ? null : String.valueOf(body.get("sha256"));
-        String bindingJson = body.get("binding_json") == null ? null : JsonUtil.toJson(body.get("binding_json"));
-
-        dao.upsertArtifact(jobId, artifactId, kind, path, sha256, bindingJson);
-        dao.audit(actor, "ARTIFACT_REGISTER", jobId, null, JsonUtil.toJson(body));
-        return Map.of("ok", true, "artifact_id", artifactId);
+        jobsRepo.upsertArtifact(jobId, body.artifactId(), body.kind(), body.path(), body.sha256());
+        jobsRepo.audit(new AuditEvent(jobId, actor, "ARTIFACT_REGISTER", null, JsonUtil.toJson(body.payload())));
+        return new ArtifactRegisterResp(true, body.artifactId());
     }
 }

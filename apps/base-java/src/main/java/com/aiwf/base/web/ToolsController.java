@@ -1,6 +1,8 @@
 package com.aiwf.base.web;
 
 import com.aiwf.base.service.JobService;
+import com.aiwf.base.web.dto.CreateJobPolicyReq;
+import com.aiwf.base.web.dto.JobCreateResp;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,17 +18,11 @@ public class ToolsController {
         this.jobs = jobs;
     }
 
-    /**
-     * 兼容你的调用：
-     * POST /api/v1/tools/create_job?owner=local
-     * body: {}
-     */
     @PostMapping("/create_job")
-    public Map<String, Object> createJob(
+    public JobCreateResp createJob(
             @RequestParam(name = "owner", defaultValue = "local") @NotBlank String owner,
-            @RequestBody(required = false) Map<String, Object> policy
+            @RequestBody(required = false) CreateJobPolicyReq body
     ) {
-        if (policy == null) policy = Map.of();
-        return jobs.createJob(owner, policy);
+        return jobs.createJob(owner, body == null ? Map.of() : body.policy());
     }
 }

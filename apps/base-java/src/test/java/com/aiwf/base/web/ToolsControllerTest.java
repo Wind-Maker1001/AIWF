@@ -2,6 +2,7 @@ package com.aiwf.base.web;
 
 import com.aiwf.base.config.AppProperties;
 import com.aiwf.base.service.JobService;
+import com.aiwf.base.web.dto.JobCreateResp;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -38,7 +40,7 @@ class ToolsControllerTest {
     @Test
     void createJobPassesOwnerAndPolicy() throws Exception {
         when(jobs.createJob(eq("tester"), anyMap()))
-                .thenReturn(Map.of("job_id", "j1", "status", "RUNNING"));
+                .thenReturn(new JobCreateResp("j1", "tester", "RUNNING", "D:\\AIWF\\bus\\jobs\\j1", null));
 
         mockMvc.perform(post("/api/v1/tools/create_job")
                         .param("owner", "tester")
@@ -57,7 +59,7 @@ class ToolsControllerTest {
     @Test
     void createJobUsesDefaultOwnerWhenMissing() throws Exception {
         when(jobs.createJob(eq("local"), anyMap()))
-                .thenReturn(Map.of("job_id", "j2", "status", "RUNNING"));
+                .thenReturn(new JobCreateResp("j2", "local", "RUNNING", "D:\\AIWF\\bus\\jobs\\j2", null));
 
         mockMvc.perform(post("/api/v1/tools/create_job")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -66,5 +68,17 @@ class ToolsControllerTest {
                 .andExpect(jsonPath("$.job_id").value("j2"));
 
         verify(jobs).createJob(eq("local"), anyMap());
+    }
+
+    @Test
+    void createJobRejectsBlankOwner() throws Exception {
+        mockMvc.perform(post("/api/v1/tools/create_job")
+                        .param("owner", " ")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.ok").value(false));
+
+        verify(jobs, never()).createJob(eq(" "), anyMap());
     }
 }
