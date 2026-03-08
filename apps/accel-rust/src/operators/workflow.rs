@@ -1,7 +1,11 @@
 use crate::*;
+use accel_rust::error::AccelError;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
 #[derive(Deserialize)]
 pub(crate) struct LineageV2Req {
@@ -156,13 +160,37 @@ pub(crate) fn summarize_value(v: &Value) -> Value {
     }
 }
 
+fn workflow_error(code: &str, operator: &str, message: impl Into<String>) -> String {
+    AccelError::new(code, message)
+        .with_operator(operator)
+        .to_string()
+}
+
+fn workflow_local_state() -> AppState {
+    AppState {
+        service: "workflow_local".to_string(),
+        tasks: Arc::new(Mutex::new(HashMap::new())),
+        metrics: Arc::new(Mutex::new(ServiceMetrics::default())),
+        task_cfg: Arc::new(Mutex::new(task_store_config_from_env())),
+        cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+        tenant_running: Arc::new(Mutex::new(HashMap::new())),
+        idempotency_index: Arc::new(Mutex::new(HashMap::new())),
+        transform_cache: Arc::new(Mutex::new(HashMap::new())),
+        schema_registry: Arc::new(Mutex::new(load_schema_registry_store())),
+    }
+}
+
 pub(crate) fn run_workflow(req: WorkflowRunReq) -> Result<WorkflowRunResp, String> {
     let step_limit = tenant_max_workflow_steps_for(req.tenant_id.as_deref());
     if req.steps.len() > step_limit {
-        return Err(format!(
+        return Err(workflow_error(
+            "workflow_step_quota",
+            "workflow_run",
+            format!(
             "workflow step quota exceeded: {} > {}",
             req.steps.len(),
             step_limit
+            ),
         ));
     }
     let trace_id = resolve_trace_id(
@@ -183,16 +211,24 @@ pub(crate) fn run_workflow(req: WorkflowRunReq) -> Result<WorkflowRunResp, Strin
     let mut failed_error: Option<String> = None;
     for step in &req.steps {
         let Some(obj) = step.as_object() else {
-            return Err("workflow step must be object".to_string());
+            return Err(workflow_error(
+                "invalid_workflow_step",
+                "workflow_run",
+                "workflow step must be object",
+            ));
         };
         let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("step");
         let op = obj.get("operator").and_then(|v| v.as_str()).unwrap_or("");
         let input = obj.get("input").cloned().unwrap_or_else(|| json!({}));
         if !operator_allowed_for_tenant(op, req.tenant_id.as_deref()) {
-            return Err(format!(
+            return Err(workflow_error(
+                "operator_forbidden",
+                "workflow_run",
+                format!(
                 "operator_forbidden: tenant={} operator={}",
                 req.tenant_id.as_deref().unwrap_or("default"),
                 op
+                ),
             ));
         }
         let started_at = utc_now_iso();
@@ -305,17 +341,7 @@ pub(crate) fn run_workflow(req: WorkflowRunReq) -> Result<WorkflowRunResp, Strin
             "schema_registry_v2_check_compat" => serde_json::from_value::<SchemaCompatReq>(input)
                 .map_err(|e| e.to_string())
                 .and_then(|r| {
-                    let st = AppState {
-                        service: "workflow_local".to_string(),
-                        tasks: Arc::new(Mutex::new(HashMap::new())),
-                        metrics: Arc::new(Mutex::new(ServiceMetrics::default())),
-                        task_cfg: Arc::new(Mutex::new(task_store_config_from_env())),
-                        cancel_flags: Arc::new(Mutex::new(HashMap::new())),
-                        tenant_running: Arc::new(Mutex::new(HashMap::new())),
-                        idempotency_index: Arc::new(Mutex::new(HashMap::new())),
-                        transform_cache: Arc::new(Mutex::new(HashMap::new())),
-                        schema_registry: Arc::new(Mutex::new(load_schema_registry_store())),
-                    };
+                    let st = workflow_local_state();
                     run_schema_registry_check_compat_v2(&st, r)
                 })
                 .and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string())),
@@ -323,17 +349,7 @@ pub(crate) fn run_workflow(req: WorkflowRunReq) -> Result<WorkflowRunResp, Strin
                 serde_json::from_value::<SchemaMigrationSuggestReq>(input)
                     .map_err(|e| e.to_string())
                     .and_then(|r| {
-                        let st = AppState {
-                            service: "workflow_local".to_string(),
-                            tasks: Arc::new(Mutex::new(HashMap::new())),
-                            metrics: Arc::new(Mutex::new(ServiceMetrics::default())),
-                            task_cfg: Arc::new(Mutex::new(task_store_config_from_env())),
-                            cancel_flags: Arc::new(Mutex::new(HashMap::new())),
-                            tenant_running: Arc::new(Mutex::new(HashMap::new())),
-                            idempotency_index: Arc::new(Mutex::new(HashMap::new())),
-                            transform_cache: Arc::new(Mutex::new(HashMap::new())),
-                            schema_registry: Arc::new(Mutex::new(load_schema_registry_store())),
-                        };
+                        let st = workflow_local_state();
                         run_schema_registry_suggest_migration_v2(&st, r)
                     })
                     .and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string()))
@@ -546,17 +562,7 @@ pub(crate) fn run_workflow(req: WorkflowRunReq) -> Result<WorkflowRunResp, Strin
             "incremental_plan_v1" => serde_json::from_value::<IncrementalPlanV1Req>(input)
                 .map_err(|e| e.to_string())
                 .and_then(|r| {
-                    let st = AppState {
-                        service: "workflow_local".to_string(),
-                        tasks: Arc::new(Mutex::new(HashMap::new())),
-                        metrics: Arc::new(Mutex::new(ServiceMetrics::default())),
-                        task_cfg: Arc::new(Mutex::new(task_store_config_from_env())),
-                        cancel_flags: Arc::new(Mutex::new(HashMap::new())),
-                        tenant_running: Arc::new(Mutex::new(HashMap::new())),
-                        idempotency_index: Arc::new(Mutex::new(HashMap::new())),
-                        transform_cache: Arc::new(Mutex::new(HashMap::new())),
-                        schema_registry: Arc::new(Mutex::new(load_schema_registry_store())),
-                    };
+                    let st = workflow_local_state();
                     run_incremental_plan_v1(&st, r)
                 })
                 .and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string())),
@@ -600,7 +606,11 @@ pub(crate) fn run_workflow(req: WorkflowRunReq) -> Result<WorkflowRunResp, Strin
                 .map_err(|e| e.to_string())
                 .and_then(run_perf_baseline_v1)
                 .and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string())),
-            _ => Err(format!("unsupported workflow operator: {op}")),
+            _ => Err(workflow_error(
+                "unsupported_workflow_operator",
+                "workflow_run",
+                format!("unsupported workflow operator: {op}"),
+            )),
         };
         let output = match step_result {
             Ok(v) => v,
