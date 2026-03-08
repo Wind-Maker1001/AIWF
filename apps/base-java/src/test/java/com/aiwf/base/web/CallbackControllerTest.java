@@ -2,6 +2,8 @@ package com.aiwf.base.web;
 
 import com.aiwf.base.config.AppProperties;
 import com.aiwf.base.db.JobRepository;
+import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.service.JobService;
 import com.aiwf.base.service.JobStatusService;
@@ -90,7 +92,8 @@ class CallbackControllerTest {
 
     @Test
     void stepDoneReturnsNotFoundForUnknownStep() throws Exception {
-        when(jobsRepo.markStepDone(eq("job1"), eq("missing-step"), eq(null))).thenReturn(0);
+        when(jobsRepo.markStepDone(eq("job1"), eq("missing-step"), eq(null)))
+                .thenReturn(new StepTransitionResult(null, false));
 
         mockMvc.perform(post("/api/v1/jobs/job1/steps/missing-step/done")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -99,5 +102,56 @@ class CallbackControllerTest {
 
         verify(jobsRepo, never()).audit(any());
         verify(jobStatusService, never()).onStepDone(any());
+    }
+
+    @Test
+    void stepDoneReturnsConflictForFailedStep() throws Exception {
+        when(jobsRepo.markStepDone(eq("job1"), eq("step1"), eq(null)))
+                .thenReturn(new StepTransitionResult(
+                        new StepRow("job1", "step1", "FAILED", null, null, "v1", "{}", null, null, null, "boom"),
+                        false
+                ));
+
+        mockMvc.perform(post("/api/v1/jobs/job1/steps/step1/done")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict());
+
+        verify(jobsRepo, never()).audit(any());
+        verify(jobStatusService, never()).onStepDone(any());
+    }
+
+    @Test
+    void stepDoneIsIdempotentWhenAlreadyDone() throws Exception {
+        when(jobsRepo.markStepDone(eq("job1"), eq("step1"), eq("abc123")))
+                .thenReturn(new StepTransitionResult(
+                        new StepRow("job1", "step1", "DONE", null, null, "v1", "{}", null, null, "abc123", null),
+                        false
+                ));
+
+        mockMvc.perform(post("/api/v1/jobs/job1/steps/step1/done")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"output_hash\":\"abc123\"}"))
+                .andExpect(status().isOk());
+
+        verify(jobsRepo, never()).audit(any());
+        verify(jobStatusService, never()).onStepDone(any());
+    }
+
+    @Test
+    void stepStartReturnsConflictForDoneStep() throws Exception {
+        when(jobsRepo.upsertStepRunning(eq("job1"), eq("step1"), eq(""), eq(""), eq(null), eq("{}")))
+                .thenReturn(new StepTransitionResult(
+                        new StepRow("job1", "step1", "DONE", "", "", "v1", "{}", null, null, "abc123", null),
+                        false
+                ));
+
+        mockMvc.perform(post("/api/v1/jobs/job1/steps/step1/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict());
+
+        verify(jobsRepo, never()).audit(any());
+        verify(jobStatusService, never()).onStepStart(any());
     }
 }

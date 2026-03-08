@@ -2,6 +2,8 @@ package com.aiwf.base.web;
 
 import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.service.JobService;
 import com.aiwf.base.service.JobStatusService;
 import com.aiwf.base.service.JsonUtil;
@@ -40,10 +42,8 @@ public class CallbackController {
             @RequestBody(required = false) StepStartCallbackReq body
     ) {
         StepStartCallbackReq req = body == null ? new StepStartCallbackReq() : body;
-        jobStatus.onStepStart(jobId);
-
         String paramsJson = JsonUtil.toJson(req.payload());
-        jobsRepo.upsertStepRunning(
+        StepTransitionResult result = jobsRepo.upsertStepRunning(
                 jobId,
                 stepId,
                 req.getInputUri() == null ? "" : req.getInputUri(),
@@ -51,6 +51,14 @@ public class CallbackController {
                 req.getRulesetVersion(),
                 paramsJson
         );
+        StepRow step = result.step();
+        if (step == null) {
+            throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
+        }
+        if (!"RUNNING".equals(step.status())) {
+            throw stepConflict(jobId, stepId, "RUNNING", step.status());
+        }
+        jobStatus.onStepStart(jobId);
         jobsRepo.audit(new AuditEvent(jobId, actor, "STEP_START", stepId, paramsJson));
         return OkResp.success();
     }
@@ -65,13 +73,19 @@ public class CallbackController {
         StepDoneCallbackReq req = body == null ? new StepDoneCallbackReq() : body;
         String detailJson = JsonUtil.toJson(req.payload());
 
-        int updated = jobsRepo.markStepDone(jobId, stepId, req.getOutputHash());
-        if (updated == 0) {
+        StepTransitionResult result = jobsRepo.markStepDone(jobId, stepId, req.getOutputHash());
+        StepRow step = result.step();
+        if (step == null) {
             throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
         }
-        jobsRepo.audit(new AuditEvent(jobId, actor, "STEP_DONE", stepId, detailJson));
+        if (!"DONE".equals(step.status())) {
+            throw stepConflict(jobId, stepId, "DONE", step.status());
+        }
+        if (result.changed()) {
+            jobsRepo.audit(new AuditEvent(jobId, actor, "STEP_DONE", stepId, detailJson));
+            jobStatus.onStepDone(jobId);
+        }
 
-        jobStatus.onStepDone(jobId);
         return OkResp.success();
     }
 
@@ -96,5 +110,13 @@ public class CallbackController {
         jobsRepo.upsertArtifact(jobId, body.artifactId(), body.kind(), body.path(), body.sha256());
         jobsRepo.audit(new AuditEvent(jobId, actor, "ARTIFACT_REGISTER", null, JsonUtil.toJson(body.payload())));
         return new ArtifactRegisterResp(true, body.artifactId());
+    }
+
+    private static ApiException stepConflict(String jobId, String stepId, String targetStatus, String currentStatus) {
+        return ApiException.conflict(
+                "step_transition_conflict",
+                "step cannot transition to " + targetStatus,
+                Map.of("job_id", jobId, "step_id", stepId, "current_status", currentStatus)
+        );
     }
 }

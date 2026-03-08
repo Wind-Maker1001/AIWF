@@ -5,6 +5,7 @@ import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.glue.GlueGateway;
 import com.aiwf.base.glue.GlueHealthResult;
 import com.aiwf.base.glue.GlueRunRequest;
@@ -118,13 +119,23 @@ public class JobService {
     public StepFailResp failStep(String jobId, String stepId, String actor, String error, String auditDetail) {
         String effectiveActor = defaultIfBlank(actor, "manual");
         String effectiveError = defaultIfBlank(error, "manual stepFail");
-        int updated = jobs.markStepFailed(jobId, stepId, effectiveError);
-        if (updated == 0) {
+        StepTransitionResult result = jobs.markStepFailed(jobId, stepId, effectiveError);
+        StepRow step = result.step();
+        if (step == null) {
             throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
         }
+        if (!"FAILED".equals(step.status())) {
+            throw ApiException.conflict(
+                    "step_transition_conflict",
+                    "step cannot transition to FAILED",
+                    Map.of("job_id", jobId, "step_id", stepId, "current_status", step.status())
+            );
+        }
 
-        jobs.audit(new AuditEvent(jobId, effectiveActor, "STEP_FAIL", stepId, defaultIfBlank(auditDetail, effectiveError)));
-        jobStatus.onStepFail(jobId);
+        if (result.changed()) {
+            jobs.audit(new AuditEvent(jobId, effectiveActor, "STEP_FAIL", stepId, defaultIfBlank(auditDetail, effectiveError)));
+            jobStatus.onStepFail(jobId);
+        }
         return new StepFailResp(true, jobId, stepId);
     }
 

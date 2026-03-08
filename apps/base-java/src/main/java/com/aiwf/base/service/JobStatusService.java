@@ -70,7 +70,7 @@ public class JobStatusService {
             jdbc.update("""
                     UPDATE dbo.jobs
                     SET status='RUNNING'
-                    WHERE job_id=? AND status='CREATED'
+                    WHERE job_id=? AND status NOT IN ('FAILED', 'RUNNING')
                     """, jobId);
         }
     }

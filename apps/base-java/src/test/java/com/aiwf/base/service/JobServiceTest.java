@@ -2,6 +2,8 @@ package com.aiwf.base.service;
 
 import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.glue.GlueGateway;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.StepFailReq;
@@ -42,7 +44,11 @@ class JobServiceTest {
 
     @Test
     void manualStepFailAlsoUpdatesJobStatus() {
-        when(jobs.markStepFailed("job1", "step1", "boom")).thenReturn(1);
+        when(jobs.markStepFailed("job1", "step1", "boom"))
+                .thenReturn(new StepTransitionResult(
+                        new StepRow("job1", "step1", "FAILED", null, null, "v1", "{}", null, null, null, "boom"),
+                        true
+                ));
 
         StepFailResp out = service.stepFail("job1", "step1", "manual", new StepFailReq(null, "boom"));
 
@@ -55,13 +61,45 @@ class JobServiceTest {
 
     @Test
     void manualStepFailRejectsUnknownStep() {
-        when(jobs.markStepFailed("job1", "missing", "boom")).thenReturn(0);
+        when(jobs.markStepFailed("job1", "missing", "boom"))
+                .thenReturn(new StepTransitionResult(null, false));
 
         assertThatThrownBy(() -> service.stepFail("job1", "missing", "manual", new StepFailReq(null, "boom")))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("step not found");
 
         verify(jobStatus, never()).onStepFail("job1");
+    }
+
+    @Test
+    void manualStepFailRejectsDoneStep() {
+        when(jobs.markStepFailed("job1", "step1", "boom"))
+                .thenReturn(new StepTransitionResult(
+                        new StepRow("job1", "step1", "DONE", null, null, "v1", "{}", null, null, "abc123", null),
+                        false
+                ));
+
+        assertThatThrownBy(() -> service.stepFail("job1", "step1", "manual", new StepFailReq(null, "boom")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("cannot transition to FAILED");
+
+        verify(jobStatus, never()).onStepFail("job1");
+        verify(jobs, never()).audit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void manualStepFailIsIdempotentWhenAlreadyFailed() {
+        when(jobs.markStepFailed("job1", "step1", "boom"))
+                .thenReturn(new StepTransitionResult(
+                        new StepRow("job1", "step1", "FAILED", null, null, "v1", "{}", null, null, null, "boom"),
+                        false
+                ));
+
+        StepFailResp out = service.stepFail("job1", "step1", "manual", new StepFailReq(null, "boom"));
+
+        assertThat(out.ok()).isTrue();
+        verify(jobStatus, never()).onStepFail("job1");
+        verify(jobs, never()).audit(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
