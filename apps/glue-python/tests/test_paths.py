@@ -26,6 +26,30 @@ class PathResolutionTests(unittest.TestCase):
             self.assertEqual(layout["input_uri"], expected_uri)
             self.assertEqual(layout["output_uri"], expected_uri)
 
+    def test_resolve_job_root_rejects_traversal_job_id(self):
+        with patch.dict(os.environ, {"AIWF_JOBS_ROOT": r"D:\custom\jobs"}, clear=True):
+            with self.assertRaises(ValueError):
+                paths.resolve_job_root(r"..\escape")
+
+    def test_resolve_job_root_rejects_external_absolute_override_by_default(self):
+        with patch.dict(os.environ, {"AIWF_JOBS_ROOT": r"D:\custom\jobs"}, clear=True):
+            with self.assertRaises(ValueError):
+                paths.resolve_job_root("job-1", override=r"D:\elsewhere\job-1")
+
+    def test_resolve_job_root_allows_external_absolute_override_with_opt_in(self):
+        with patch.dict(
+            os.environ,
+            {
+                "AIWF_JOBS_ROOT": r"D:\custom\jobs",
+                "AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                paths.resolve_job_root("job-1", override=r"D:\elsewhere\job-1"),
+                os.path.normpath(r"D:\elsewhere\job-1"),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

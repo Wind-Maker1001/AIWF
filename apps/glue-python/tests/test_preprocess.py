@@ -42,6 +42,10 @@ class PreprocessTests(unittest.TestCase):
         self.assertFalse(bad9["ok"])
         bad10 = preprocess.validate_preprocess_spec({"export_canonical_bundle": "yes"})
         self.assertFalse(bad10["ok"])
+        bad11 = preprocess.validate_preprocess_spec({"field_transforms": [{"field": "text", "op": "missing_op"}]})
+        self.assertFalse(bad11["ok"])
+        bad12 = preprocess.validate_preprocess_spec({"row_filters": [{"field": "text", "op": "missing_filter"}]})
+        self.assertFalse(bad12["ok"])
 
     def test_preprocess_passes_ocr_options_to_ingest(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -137,6 +141,56 @@ class PreprocessTests(unittest.TestCase):
             self.assertEqual(rows[0]["speaker"], "alice")
             self.assertNotIn("https://", rows[0]["text"])
             self.assertEqual(rows[0]["score"], 10.0)
+
+    def test_preprocess_supports_registered_custom_transform_and_filter(self):
+        def prefix_transform(value, cfg):
+            if value is None:
+                return value, False
+            return f"{cfg.get('prefix', '')}{value}", True
+
+        def starts_with_filter(row, cfg):
+            field = str(cfg.get("field") or "").strip()
+            if not field:
+                return True
+            return str(row.get(field) or "").startswith(str(cfg.get("value") or ""))
+
+        preprocess.register_field_transform("prefix", prefix_transform)
+        preprocess.register_row_filter("starts_with", starts_with_filter)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                src = os.path.join(tmp, "raw.jsonl")
+                dst = os.path.join(tmp, "cooked.jsonl")
+                with open(src, "w", encoding="utf-8") as f:
+                    f.write(json.dumps({"speaker": "alice"}) + "\n")
+                    f.write(json.dumps({"speaker": "bob"}) + "\n")
+
+                valid = preprocess.validate_preprocess_spec(
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "field_transforms": [{"field": "speaker", "op": "prefix", "prefix": "team-"}],
+                        "row_filters": [{"field": "speaker", "op": "starts_with", "value": "team-a"}],
+                    }
+                )
+                self.assertTrue(valid["ok"])
+
+                res = preprocess.preprocess_file(
+                    src,
+                    dst,
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "field_transforms": [{"field": "speaker", "op": "prefix", "prefix": "team-"}],
+                        "row_filters": [{"field": "speaker", "op": "starts_with", "value": "team-a"}],
+                    },
+                )
+                rows = preprocess._read_jsonl(dst)
+        finally:
+            preprocess.unregister_field_transform("prefix")
+            preprocess.unregister_row_filter("starts_with")
+
+        self.assertEqual(res["summary"]["output_rows"], 1)
+        self.assertEqual(rows[0]["speaker"], "team-alice")
 
     def test_preprocess_with_input_files_txt_and_docx(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -366,6 +420,97 @@ class PreprocessTests(unittest.TestCase):
             self.assertTrue(os.path.isfile(out_csv))
             rows, _ = preprocess._read_csv(out_csv)
             self.assertGreaterEqual(len(rows), 2)
+
+    def test_validate_preprocess_pipeline_rejects_unknown_stage(self):
+        vr = preprocess.validate_preprocess_pipeline({"stages": [{"name": "missing_stage", "config": {}}]})
+        self.assertFalse(vr["ok"])
+
+    def test_write_rows_supports_bare_filename_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cwd = os.getcwd()
+            os.chdir(tmp)
+            try:
+                out_format = preprocess._write_rows("rows.jsonl", [{"text": "hello"}], {})
+                rows = preprocess._read_jsonl("rows.jsonl")
+            finally:
+                os.chdir(cwd)
+
+        self.assertEqual(out_format, "jsonl")
+        self.assertEqual(rows[0]["text"], "hello")
+
+    def test_preprocess_pipeline_supports_registered_custom_stage(self):
+        def prepare_uppercase_stage(context):
+            cfg = dict(context.config)
+            cfg.setdefault("output_format", "jsonl")
+            transforms = list(cfg.get("field_transforms") or [])
+            transforms.append({"field": "text", "op": "upper"})
+            cfg["field_transforms"] = transforms
+            return cfg
+
+        preprocess.register_pipeline_stage("uppercase_stage", prepare_config=prepare_uppercase_stage)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                txt = os.path.join(tmp, "raw.txt")
+                with open(txt, "w", encoding="utf-8") as f:
+                    f.write("hello world")
+
+                pipeline = {
+                    "stages": [
+                        {"name": "extract", "config": {"input_files": [txt]}},
+                        {"name": "uppercase_stage", "config": {}},
+                    ]
+                }
+                vr = preprocess.validate_preprocess_pipeline(pipeline)
+                self.assertTrue(vr["ok"])
+
+                out_csv = os.path.join(tmp, "final.csv")
+                res = preprocess.run_preprocess_pipeline(
+                    pipeline=pipeline,
+                    job_root=tmp,
+                    stage_dir=os.path.join(tmp, "stage"),
+                    input_path=txt,
+                    final_output_path=out_csv,
+                )
+                rows, _ = preprocess._read_csv(out_csv)
+        finally:
+            preprocess.unregister_pipeline_stage("uppercase_stage")
+
+        self.assertEqual(res["stages"][1]["stage"], "uppercase_stage")
+        self.assertEqual(rows[0]["text"], "HELLO WORLD")
+
+    def test_preprocess_pipeline_final_output_respects_requested_format(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            txt = os.path.join(tmp, "raw.txt")
+            with open(txt, "w", encoding="utf-8") as f:
+                f.write("hello world")
+
+            out_jsonl = os.path.join(tmp, "final.jsonl")
+            res = preprocess.run_preprocess_pipeline(
+                pipeline={"stages": [{"name": "extract", "config": {"input_files": [txt]}}]},
+                job_root=tmp,
+                stage_dir=os.path.join(tmp, "stage"),
+                input_path=txt,
+                final_output_path=out_jsonl,
+            )
+            rows = preprocess._read_jsonl(out_jsonl)
+
+        self.assertEqual(res["output_path"], out_jsonl)
+        self.assertEqual(rows[0]["text"], "hello world")
+
+    def test_preprocess_pipeline_rejects_final_output_path_escape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            txt = os.path.join(tmp, "raw.txt")
+            with open(txt, "w", encoding="utf-8") as f:
+                f.write("hello world")
+
+            with self.assertRaises(ValueError):
+                preprocess.run_preprocess_pipeline(
+                    pipeline={"stages": [{"name": "extract", "config": {"input_files": [txt]}}]},
+                    job_root=tmp,
+                    stage_dir=os.path.join(tmp, "stage"),
+                    input_path=txt,
+                    final_output_path=r"..\outside.csv",
+                )
 
 
 if __name__ == "__main__":

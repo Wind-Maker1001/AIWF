@@ -1,14 +1,362 @@
 from __future__ import annotations
 
 import argparse
-import csv
+from dataclasses import dataclass
 import hashlib
 import json
 import os
 import re
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from aiwf import ingest
+from aiwf.preprocess_conflicts import (
+    _apply_conflict_detection as _apply_conflict_detection_impl,
+    _chunk_text as _chunk_text_impl,
+    _detect_polarity as _detect_polarity_impl,
+    _infer_topic_key as _infer_topic_key_impl,
+)
+from aiwf.preprocess_io import (
+    _detect_input_format,
+    _detect_output_format,
+    _read_csv,
+    _read_json,
+    _read_jsonl,
+    _read_rows,
+    _write_csv,
+    _write_json,
+    _write_jsonl,
+    _write_rows,
+)
+from aiwf.preprocess_reporting import (
+    _build_quality_report,
+    _pick_markdown_text,
+    _safe_filename,
+    export_canonical_bundle,
+)
+from aiwf.preprocess_pipeline import (
+    _stage_output_ext as _stage_output_ext_impl,
+    default_pipeline_stage_executor as _default_pipeline_stage_executor_impl,
+    pipeline_stage_output_path as pipeline_stage_output_path_impl,
+    run_preprocess_pipeline_impl,
+)
+from aiwf.preprocess_validation import (
+    validate_preprocess_pipeline_impl,
+    validate_preprocess_spec_impl,
+)
+from aiwf.registry_events import record_registry_event
+from aiwf.registry_policy import default_conflict_policy, normalize_conflict_policy
+from aiwf.registry_utils import infer_caller_module
+
+
+PreprocessTransformFn = Callable[[Any, Dict[str, Any]], Tuple[Any, bool]]
+PreprocessFilterFn = Callable[[Dict[str, Any], Dict[str, Any]], bool]
+PipelineStageValidatorFn = Callable[[Dict[str, Any]], Dict[str, Any]]
+PipelineStagePrepareFn = Callable[["PipelineStageContext"], Dict[str, Any]]
+PipelineStageExecutorFn = Callable[["PipelineStageContext"], Dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class FieldTransformRegistration:
+    op: str
+    handler: PreprocessTransformFn
+    source_module: str
+
+
+@dataclass(frozen=True)
+class RowFilterRegistration:
+    op: str
+    handler: PreprocessFilterFn
+    requires_field: bool
+    source_module: str
+
+
+@dataclass(frozen=True)
+class PipelineStageContext:
+    stage_index: int
+    stage_name: str
+    input_path: str
+    stage_dir: str
+    job_root: str
+    config: Dict[str, Any]
+
+
+@dataclass(frozen=True)
+class PipelineStageRegistration:
+    name: str
+    validator: PipelineStageValidatorFn
+    prepare_config: PipelineStagePrepareFn
+    executor: Optional[PipelineStageExecutorFn]
+    source_module: str
+
+
+_FIELD_TRANSFORMS: Dict[str, FieldTransformRegistration] = {}
+_ROW_FILTERS: Dict[str, RowFilterRegistration] = {}
+_PIPELINE_STAGES: Dict[str, PipelineStageRegistration] = {}
+
+
+def _normalize_preprocess_op(op: str) -> str:
+    normalized = str(op or "").strip().lower()
+    if not normalized:
+        raise ValueError("preprocess op must be non-empty")
+    return normalized
+
+
+def register_field_transform(
+    op: str,
+    handler: PreprocessTransformFn,
+    *,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> FieldTransformRegistration:
+    normalized = _normalize_preprocess_op(op)
+    if not callable(handler):
+        raise TypeError("field transform handler must be callable")
+    source = str(source_module or infer_caller_module())
+    existing = _FIELD_TRANSFORMS.get(normalized)
+    if existing is not None:
+        policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
+        if policy == "error":
+            record_registry_event(
+                registry="field_transform",
+                name=normalized,
+                action="error",
+                policy=policy,
+                existing_source_module=existing.source_module,
+                new_source_module=source,
+                detail="registration already exists",
+            )
+            raise RuntimeError(
+                f"field transform {normalized} already registered by {existing.source_module}"
+            )
+        if policy == "keep":
+            record_registry_event(
+                registry="field_transform",
+                name=normalized,
+                action="keep",
+                policy=policy,
+                existing_source_module=existing.source_module,
+                new_source_module=source,
+                detail="kept existing registration",
+            )
+            return existing
+        action = "replace_with_warning" if policy == "warn" else "replace"
+        record_registry_event(
+            registry="field_transform",
+            name=normalized,
+            action=action,
+            policy=policy,
+            existing_source_module=existing.source_module,
+            new_source_module=source,
+            detail="replaced existing registration",
+        )
+    registration = FieldTransformRegistration(
+        op=normalized,
+        handler=handler,
+        source_module=source,
+    )
+    _FIELD_TRANSFORMS[normalized] = registration
+    return registration
+
+
+def unregister_field_transform(op: str) -> Optional[FieldTransformRegistration]:
+    normalized = _normalize_preprocess_op(op)
+    return _FIELD_TRANSFORMS.pop(normalized, None)
+
+
+def get_field_transform(op: str) -> FieldTransformRegistration:
+    normalized = _normalize_preprocess_op(op)
+    registration = _FIELD_TRANSFORMS.get(normalized)
+    if registration is None:
+        raise KeyError(f"unknown field transform: {normalized}")
+    return registration
+
+
+def list_field_transforms() -> List[str]:
+    return sorted(_FIELD_TRANSFORMS.keys())
+
+
+def list_field_transform_details() -> List[Dict[str, Any]]:
+    return [
+        {
+            "op": registration.op,
+            "source_module": registration.source_module,
+        }
+        for registration in sorted(_FIELD_TRANSFORMS.values(), key=lambda item: item.op)
+    ]
+
+
+def register_row_filter(
+    op: str,
+    handler: PreprocessFilterFn,
+    *,
+    requires_field: bool = True,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> RowFilterRegistration:
+    normalized = _normalize_preprocess_op(op)
+    if not callable(handler):
+        raise TypeError("row filter handler must be callable")
+    source = str(source_module or infer_caller_module())
+    existing = _ROW_FILTERS.get(normalized)
+    if existing is not None:
+        policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
+        if policy == "error":
+            record_registry_event(
+                registry="row_filter",
+                name=normalized,
+                action="error",
+                policy=policy,
+                existing_source_module=existing.source_module,
+                new_source_module=source,
+                detail="registration already exists",
+            )
+            raise RuntimeError(
+                f"row filter {normalized} already registered by {existing.source_module}"
+            )
+        if policy == "keep":
+            record_registry_event(
+                registry="row_filter",
+                name=normalized,
+                action="keep",
+                policy=policy,
+                existing_source_module=existing.source_module,
+                new_source_module=source,
+                detail="kept existing registration",
+            )
+            return existing
+        action = "replace_with_warning" if policy == "warn" else "replace"
+        record_registry_event(
+            registry="row_filter",
+            name=normalized,
+            action=action,
+            policy=policy,
+            existing_source_module=existing.source_module,
+            new_source_module=source,
+            detail="replaced existing registration",
+        )
+    registration = RowFilterRegistration(
+        op=normalized,
+        handler=handler,
+        requires_field=requires_field,
+        source_module=source,
+    )
+    _ROW_FILTERS[normalized] = registration
+    return registration
+
+
+def unregister_row_filter(op: str) -> Optional[RowFilterRegistration]:
+    normalized = _normalize_preprocess_op(op)
+    return _ROW_FILTERS.pop(normalized, None)
+
+
+def get_row_filter(op: str) -> RowFilterRegistration:
+    normalized = _normalize_preprocess_op(op)
+    registration = _ROW_FILTERS.get(normalized)
+    if registration is None:
+        raise KeyError(f"unknown row filter: {normalized}")
+    return registration
+
+
+def list_row_filters() -> List[str]:
+    return sorted(_ROW_FILTERS.keys())
+
+
+def list_row_filter_details() -> List[Dict[str, Any]]:
+    return [
+        {
+            "op": registration.op,
+            "requires_field": registration.requires_field,
+            "source_module": registration.source_module,
+        }
+        for registration in sorted(_ROW_FILTERS.values(), key=lambda item: item.op)
+    ]
+
+
+def register_pipeline_stage(
+    name: str,
+    *,
+    validator: Optional[PipelineStageValidatorFn] = None,
+    prepare_config: Optional[PipelineStagePrepareFn] = None,
+    executor: Optional[PipelineStageExecutorFn] = None,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> PipelineStageRegistration:
+    normalized = _normalize_preprocess_op(name)
+    source = str(source_module or infer_caller_module())
+    existing = _PIPELINE_STAGES.get(normalized)
+    if existing is not None:
+        policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
+        if policy == "error":
+            record_registry_event(
+                registry="pipeline_stage",
+                name=normalized,
+                action="error",
+                policy=policy,
+                existing_source_module=existing.source_module,
+                new_source_module=source,
+                detail="registration already exists",
+            )
+            raise RuntimeError(
+                f"pipeline stage {normalized} already registered by {existing.source_module}"
+            )
+        if policy == "keep":
+            record_registry_event(
+                registry="pipeline_stage",
+                name=normalized,
+                action="keep",
+                policy=policy,
+                existing_source_module=existing.source_module,
+                new_source_module=source,
+                detail="kept existing registration",
+            )
+            return existing
+        action = "replace_with_warning" if policy == "warn" else "replace"
+        record_registry_event(
+            registry="pipeline_stage",
+            name=normalized,
+            action=action,
+            policy=policy,
+            existing_source_module=existing.source_module,
+            new_source_module=source,
+            detail="replaced existing registration",
+        )
+    registration = PipelineStageRegistration(
+        name=normalized,
+        validator=validator or validate_preprocess_spec,
+        prepare_config=prepare_config or _default_pipeline_stage_prepare_config,
+        executor=executor,
+        source_module=source,
+    )
+    _PIPELINE_STAGES[normalized] = registration
+    return registration
+
+
+def unregister_pipeline_stage(name: str) -> Optional[PipelineStageRegistration]:
+    normalized = _normalize_preprocess_op(name)
+    return _PIPELINE_STAGES.pop(normalized, None)
+
+
+def get_pipeline_stage(name: str) -> PipelineStageRegistration:
+    normalized = _normalize_preprocess_op(name)
+    registration = _PIPELINE_STAGES.get(normalized)
+    if registration is None:
+        raise KeyError(f"unknown pipeline stage: {normalized}")
+    return registration
+
+
+def list_pipeline_stages() -> List[str]:
+    return sorted(_PIPELINE_STAGES.keys())
+
+
+def list_pipeline_stage_details() -> List[Dict[str, Any]]:
+    return [
+        {
+            "name": registration.name,
+            "has_custom_executor": registration.executor is not None,
+            "source_module": registration.source_module,
+        }
+        for registration in sorted(_PIPELINE_STAGES.values(), key=lambda item: item.name)
+    ]
 
 
 def _normalize_header(name: str) -> str:
@@ -55,370 +403,257 @@ def _normalize_date(v: Any, output_fmt: str, fmts: List[str]) -> Any:
     return v
 
 
-def _detect_input_format(path: str, spec: Dict[str, Any]) -> str:
-    fmt = str(spec.get("input_format") or "").strip().lower()
-    if fmt in {"csv", "json", "jsonl"}:
-        return fmt
-    ext = os.path.splitext(path)[1].lower()
-    if ext in {".json"}:
-        return "json"
-    if ext in {".jsonl", ".ndjson"}:
-        return "jsonl"
-    return "csv"
+def _filter_field(cfg: Dict[str, Any]) -> str:
+    return str(cfg.get("field") or "").strip()
 
 
-def _detect_output_format(path: str, spec: Dict[str, Any]) -> str:
-    fmt = str(spec.get("output_format") or "").strip().lower()
-    if fmt in {"csv", "json", "jsonl"}:
-        return fmt
-    ext = os.path.splitext(path)[1].lower()
-    if ext == ".json":
-        return "json"
-    if ext in {".jsonl", ".ndjson"}:
-        return "jsonl"
-    return "csv"
+def _filter_value(row: Dict[str, Any], cfg: Dict[str, Any]) -> Any:
+    field = _filter_field(cfg)
+    if not field:
+        return None
+    return row.get(field)
 
 
-def _read_csv(path: str, delimiter: Optional[str] = None) -> Tuple[List[Dict[str, Any]], str]:
-    if delimiter is None:
-        with open(path, "r", encoding="utf-8-sig", newline="") as f:
-            sample = f.read(4096)
-            f.seek(0)
-            try:
-                dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
-                delimiter = dialect.delimiter
-            except Exception:
-                delimiter = ","
-            reader = csv.DictReader(f, delimiter=delimiter)
-            return [dict(r) for r in reader], delimiter
-
-    with open(path, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f, delimiter=delimiter)
-        return [dict(r) for r in reader], delimiter
+def _transform_trim(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if isinstance(value, str):
+        return value.strip(), True
+    return value, False
 
 
-def _read_json(path: str) -> List[Dict[str, Any]]:
-    with open(path, "r", encoding="utf-8-sig") as f:
-        payload = json.load(f)
-    if isinstance(payload, list):
-        return [dict(x) for x in payload if isinstance(x, dict)]
-    if isinstance(payload, dict):
-        if isinstance(payload.get("rows"), list):
-            return [dict(x) for x in payload["rows"] if isinstance(x, dict)]
-        return [payload]
-    return []
+def _transform_lower(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if isinstance(value, str):
+        return value.lower(), True
+    return value, False
 
 
-def _read_jsonl(path: str) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    with open(path, "r", encoding="utf-8-sig") as f:
-        for line in f:
-            s = line.strip()
-            if not s:
-                continue
-            try:
-                obj = json.loads(s)
-            except Exception:
-                continue
-            if isinstance(obj, dict):
-                out.append(obj)
-    return out
+def _transform_upper(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if isinstance(value, str):
+        return value.upper(), True
+    return value, False
 
 
-def _read_rows(path: str, spec: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    input_files = spec.get("input_files") if isinstance(spec.get("input_files"), list) else []
-    if input_files:
-        abs_files = [str(x) for x in input_files]
-        rows, meta = ingest.load_rows_from_files(
-            abs_files,
-            text_by_line=bool(spec.get("text_split_by_line", False)),
-            ocr_enabled=bool(spec.get("ocr_enabled", True)),
-            ocr_lang=str(spec.get("ocr_lang") or "").strip() or None,
-            ocr_config=str(spec.get("ocr_config") or "").strip() or None,
-            ocr_preprocess=str(spec.get("ocr_preprocess") or "").strip() or None,
-            xlsx_all_sheets=bool(spec.get("xlsx_all_sheets", False)),
-            max_retries=int(spec.get("max_retries", 0)),
-            on_file_error=str(spec.get("on_file_error", "skip")).strip().lower(),
-        )
-        return rows, meta
-
-    fmt = _detect_input_format(path, spec)
-    if fmt == "csv":
-        rows, delimiter = _read_csv(path, delimiter=spec.get("delimiter"))
-        return rows, {"input_format": "csv", "delimiter": delimiter}
-    if fmt == "json":
-        rows = _read_json(path)
-        return rows, {"input_format": "json"}
-    rows = _read_jsonl(path)
-    return rows, {"input_format": "jsonl"}
+def _transform_collapse_whitespace(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if isinstance(value, str):
+        return re.sub(r"\s+", " ", value).strip(), True
+    return value, False
 
 
-def _write_csv(path: str, rows: List[Dict[str, Any]]) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    if rows:
-        fields = list(rows[0].keys())
-        seen = set(fields)
-        for r in rows[1:]:
-            for k in r.keys():
-                if k not in seen:
-                    fields.append(k)
-                    seen.add(k)
-    else:
-        fields = []
-
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
-        writer.writeheader()
-        for r in rows:
-            writer.writerow(r)
+def _transform_remove_urls(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if isinstance(value, str):
+        return re.sub(r"https?://\S+|www\.\S+", "", value).strip(), True
+    return value, False
 
 
-def _write_json(path: str, rows: List[Dict[str, Any]]) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(rows, f, ensure_ascii=False, indent=2)
+def _transform_remove_emails(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if isinstance(value, str):
+        return re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "", value).strip(), True
+    return value, False
 
 
-def _write_jsonl(path: str, rows: List[Dict[str, Any]]) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+def _transform_regex_replace(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    pat = str(cfg.get("pattern") or "")
+    rep = str(cfg.get("replace") or "")
+    try:
+        return re.sub(pat, rep, value), True
+    except re.error:
+        return value, False
 
 
-def _safe_filename(name: str) -> str:
-    s = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name or "").strip())
-    return s.strip("._") or "artifact"
+def _transform_parse_number(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    parsed = _to_float(value)
+    return (parsed if parsed is not None else value), (parsed is not None)
 
 
-def _pick_markdown_text(row: Dict[str, Any]) -> str:
-    for key in ("claim_text", "text", "content", "body", "paragraph"):
-        v = row.get(key)
-        if v is not None and str(v).strip():
-            return str(v).strip()
-    parts: List[str] = []
-    for k, v in row.items():
-        if v is None:
-            continue
-        sv = str(v).strip()
-        if not sv:
-            continue
-        parts.append(f"{k}: {sv}")
-    return " | ".join(parts)
+def _transform_round_number(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    digits = int(cfg.get("digits", 2))
+    parsed = _to_float(value)
+    if parsed is None:
+        return value, False
+    return round(parsed, digits), True
 
 
-def export_canonical_bundle(
-    *,
-    rows: List[Dict[str, Any]],
-    summary: Dict[str, Any],
-    meta: Dict[str, Any],
-    output_path: str,
-    spec: Dict[str, Any],
-) -> Dict[str, Any]:
-    bundle_dir = str(spec.get("canonical_bundle_dir") or f"{output_path}.bundle")
-    os.makedirs(bundle_dir, exist_ok=True)
-    title = str(spec.get("canonical_title") or "AIWF Canonical Corpus").strip()
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    md_lines: List[str] = []
-    md_lines.append(f"# {title}")
-    md_lines.append("")
-    md_lines.append(f"- generated_at: {now}")
-    md_lines.append(f"- output_rows: {int(summary.get('output_rows', len(rows)))}")
-    md_lines.append(f"- input_format: {meta.get('input_format')}")
-    md_lines.append("")
-    md_lines.append("## Content")
-    md_lines.append("")
-    for i, r in enumerate(rows):
-        text = _pick_markdown_text(r)
-        if not text:
-            continue
-        md_lines.append(f"### Item {i + 1}")
-        md_lines.append("")
-        md_lines.append(text)
-        md_lines.append("")
-    md_path = os.path.join(bundle_dir, f"{_safe_filename(title)}.md")
-    with open(md_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(md_lines).rstrip() + "\n")
-
-    source_counts: Dict[str, int] = {}
-    for r in rows:
-        src = str(r.get("source_file") or r.get("source_path") or "unknown").strip()
-        source_counts[src] = source_counts.get(src, 0) + 1
-
-    metadata = {
-        "title": title,
-        "generated_at": now,
-        "input_format": meta.get("input_format"),
-        "file_count": meta.get("file_count"),
-        "summary": summary,
-        "row_count": len(rows),
-        "source_counts": source_counts,
-    }
-    metadata_path = os.path.join(bundle_dir, "metadata.json")
-    with open(metadata_path, "w", encoding="utf-8") as f:
-        json.dump(metadata, f, ensure_ascii=False, indent=2)
-
-    lineage = {
-        "generated_at": now,
-        "output_path": output_path,
-        "output_format": _detect_output_format(output_path, spec),
-        "input_files": spec.get("input_files") if isinstance(spec.get("input_files"), list) else [],
-        "skipped_files": meta.get("skipped_files") or [],
-        "failed_files": meta.get("failed_files") or [],
-        "steps": [
-            "ingest",
-            "normalize",
-            "filter",
-            "deduplicate",
-            "export_markdown_bundle",
-        ],
-    }
-    lineage_path = os.path.join(bundle_dir, "lineage.json")
-    with open(lineage_path, "w", encoding="utf-8") as f:
-        json.dump(lineage, f, ensure_ascii=False, indent=2)
-
-    return {
-        "bundle_dir": bundle_dir,
-        "markdown_path": md_path,
-        "metadata_path": metadata_path,
-        "lineage_path": lineage_path,
-    }
+def _transform_parse_date(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    out_fmt = str(cfg.get("output_format") or "%Y-%m-%d")
+    in_fmts = cfg.get("input_formats") or [
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%Y-%m-%d %H:%M:%S",
+    ]
+    if isinstance(value, str):
+        normalized = _normalize_date(value, out_fmt, [str(x) for x in in_fmts])
+        return normalized, normalized != value
+    return value, False
 
 
-def _write_rows(path: str, rows: List[Dict[str, Any]], spec: Dict[str, Any]) -> str:
-    fmt = _detect_output_format(path, spec)
-    if fmt == "json":
-        _write_json(path, rows)
-        return "json"
-    if fmt == "jsonl":
-        _write_jsonl(path, rows)
-        return "jsonl"
-    _write_csv(path, rows)
-    return "csv"
+def _transform_extract_regex(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    pat = str(cfg.get("pattern") or "")
+    group = int(cfg.get("group", 0))
+    try:
+        match = re.search(pat, value)
+    except re.error:
+        return value, False
+    if not match:
+        return value, False
+    try:
+        return match.group(group), True
+    except IndexError:
+        return value, False
+
+
+def _filter_exists(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    return row.get(field) is not None
+
+
+def _filter_not_exists(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    return row.get(field) is None
+
+
+def _filter_eq(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    return _filter_value(row, cfg) == cfg.get("value")
+
+
+def _filter_ne(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    return _filter_value(row, cfg) != cfg.get("value")
+
+
+def _filter_compare_numeric(row: Dict[str, Any], cfg: Dict[str, Any], op: str) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    a = _to_float(_filter_value(row, cfg))
+    b = _to_float(cfg.get("value"))
+    if a is None or b is None:
+        return False
+    if op == "gt":
+        return a > b
+    if op == "gte":
+        return a >= b
+    if op == "lt":
+        return a < b
+    return a <= b
+
+
+def _filter_gt(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    return _filter_compare_numeric(row, cfg, "gt")
+
+
+def _filter_gte(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    return _filter_compare_numeric(row, cfg, "gte")
+
+
+def _filter_lt(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    return _filter_compare_numeric(row, cfg, "lt")
+
+
+def _filter_lte(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    return _filter_compare_numeric(row, cfg, "lte")
+
+
+def _filter_in(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    arr = cfg.get("value") if isinstance(cfg.get("value"), list) else []
+    return _filter_value(row, cfg) in arr
+
+
+def _filter_not_in(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    arr = cfg.get("value") if isinstance(cfg.get("value"), list) else []
+    return _filter_value(row, cfg) not in arr
+
+
+def _filter_contains(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    return str(cfg.get("value")) in str(_filter_value(row, cfg))
+
+
+def _filter_regex(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    try:
+        return re.search(str(cfg.get("value")), str(_filter_value(row, cfg))) is not None
+    except re.error:
+        return False
+
+
+def _filter_not_regex(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    field = _filter_field(cfg)
+    if not field:
+        return True
+    try:
+        return re.search(str(cfg.get("value")), str(_filter_value(row, cfg))) is None
+    except re.error:
+        return False
+
+
+def _register_builtin_preprocess_ops() -> None:
+    register_field_transform("trim", _transform_trim)
+    register_field_transform("lower", _transform_lower)
+    register_field_transform("upper", _transform_upper)
+    register_field_transform("collapse_whitespace", _transform_collapse_whitespace)
+    register_field_transform("remove_urls", _transform_remove_urls)
+    register_field_transform("remove_emails", _transform_remove_emails)
+    register_field_transform("regex_replace", _transform_regex_replace)
+    register_field_transform("parse_number", _transform_parse_number)
+    register_field_transform("round_number", _transform_round_number)
+    register_field_transform("parse_date", _transform_parse_date)
+    register_field_transform("extract_regex", _transform_extract_regex)
+
+    register_row_filter("exists", _filter_exists, requires_field=False)
+    register_row_filter("not_exists", _filter_not_exists, requires_field=False)
+    register_row_filter("eq", _filter_eq)
+    register_row_filter("ne", _filter_ne)
+    register_row_filter("gt", _filter_gt)
+    register_row_filter("gte", _filter_gte)
+    register_row_filter("lt", _filter_lt)
+    register_row_filter("lte", _filter_lte)
+    register_row_filter("in", _filter_in)
+    register_row_filter("not_in", _filter_not_in)
+    register_row_filter("contains", _filter_contains)
+    register_row_filter("regex", _filter_regex)
+    register_row_filter("not_regex", _filter_not_regex)
+
+
+_register_builtin_preprocess_ops()
 
 
 def _filter_match(row: Dict[str, Any], f: Dict[str, Any]) -> bool:
-    field = str(f.get("field") or "").strip()
     op = str(f.get("op") or "eq").strip().lower()
-    target = f.get("value")
-    if not field:
+    try:
+        return get_row_filter(op).handler(row, f)
+    except KeyError:
         return True
-    val = row.get(field)
-
-    if op == "exists":
-        return val is not None
-    if op == "not_exists":
-        return val is None
-    if op == "eq":
-        return val == target
-    if op == "ne":
-        return val != target
-    if op in {"gt", "gte", "lt", "lte"}:
-        a = _to_float(val)
-        b = _to_float(target)
-        if a is None or b is None:
-            return False
-        if op == "gt":
-            return a > b
-        if op == "gte":
-            return a >= b
-        if op == "lt":
-            return a < b
-        return a <= b
-    if op == "in":
-        arr = target if isinstance(target, list) else []
-        return val in arr
-    if op == "not_in":
-        arr = target if isinstance(target, list) else []
-        return val not in arr
-    if op == "contains":
-        return str(target) in str(val)
-    if op == "regex":
-        try:
-            return re.search(str(target), str(val)) is not None
-        except re.error:
-            return False
-    if op == "not_regex":
-        try:
-            return re.search(str(target), str(val)) is None
-        except re.error:
-            return False
-    return True
 
 
 def _apply_field_transform(value: Any, op: str, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
-    if op == "trim":
-        if isinstance(value, str):
-            return value.strip(), True
+    try:
+        return get_field_transform(op).handler(value, cfg)
+    except KeyError:
         return value, False
-    if op == "lower":
-        if isinstance(value, str):
-            return value.lower(), True
-        return value, False
-    if op == "upper":
-        if isinstance(value, str):
-            return value.upper(), True
-        return value, False
-    if op == "collapse_whitespace":
-        if isinstance(value, str):
-            return re.sub(r"\s+", " ", value).strip(), True
-        return value, False
-    if op == "remove_urls":
-        if isinstance(value, str):
-            return re.sub(r"https?://\S+|www\.\S+", "", value).strip(), True
-        return value, False
-    if op == "remove_emails":
-        if isinstance(value, str):
-            return re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "", value).strip(), True
-        return value, False
-    if op == "regex_replace":
-        if isinstance(value, str):
-            pat = str(cfg.get("pattern") or "")
-            rep = str(cfg.get("replace") or "")
-            try:
-                return re.sub(pat, rep, value), True
-            except re.error:
-                return value, False
-        return value, False
-    if op == "parse_number":
-        f = _to_float(value)
-        return (f if f is not None else value), (f is not None)
-    if op == "round_number":
-        digits = int(cfg.get("digits", 2))
-        f = _to_float(value)
-        if f is None:
-            return value, False
-        return round(f, digits), True
-    if op == "parse_date":
-        out_fmt = str(cfg.get("output_format") or "%Y-%m-%d")
-        in_fmts = cfg.get("input_formats") or [
-            "%Y-%m-%d",
-            "%Y/%m/%d",
-            "%d/%m/%Y",
-            "%m/%d/%Y",
-            "%Y-%m-%d %H:%M:%S",
-        ]
-        if isinstance(value, str):
-            v = _normalize_date(value, out_fmt, [str(x) for x in in_fmts])
-            return v, v != value
-        return value, False
-    if op == "extract_regex":
-        if isinstance(value, str):
-            pat = str(cfg.get("pattern") or "")
-            group = int(cfg.get("group", 0))
-            try:
-                m = re.search(pat, value)
-            except re.error:
-                return value, False
-            if not m:
-                return value, False
-            try:
-                return m.group(group), True
-            except IndexError:
-                return value, False
-        return value, False
-    return value, False
 
 
 def _first_non_empty(row: Dict[str, Any], keys: List[str]) -> Any:
@@ -561,329 +796,97 @@ def _build_quality_report(rows: List[Dict[str, Any]], summary: Dict[str, Any], s
 
 
 def _chunk_text(text: str, mode: str, max_chars: int) -> List[str]:
-    s = (text or "").strip()
-    if not s:
-        return []
-    m = (mode or "none").strip().lower()
-    if m in {"none", "off"}:
-        return [s]
-    if m == "paragraph":
-        parts = [p.strip() for p in re.split(r"\n\s*\n", s) if p.strip()]
-        return parts if parts else [s]
-    if m == "sentence":
-        parts = [p.strip() for p in re.split(r"(?<=[\.\!\?。！？])\s+", s) if p.strip()]
-        return parts if parts else [s]
-    if m == "fixed":
-        size = max(1, int(max_chars))
-        return [s[i : i + size].strip() for i in range(0, len(s), size) if s[i : i + size].strip()]
-    return [s]
+    return _chunk_text_impl(text, mode, max_chars)
 
 
 def _infer_topic_key(text: Any, ignore_words: Optional[List[str]] = None) -> str:
-    s = str(text or "").lower()
-    s = re.sub(r"[^a-z0-9\u4e00-\u9fff\s]+", " ", s)
-    tokens = [t for t in s.split() if t]
-    if not tokens:
-        return ""
-    stop = {
-        "the",
-        "a",
-        "an",
-        "is",
-        "are",
-        "of",
-        "to",
-        "and",
-        "or",
-        "in",
-        "on",
-        "for",
-        "we",
-        "should",
-        "it",
-        "this",
-        "that",
-        "these",
-        "those",
-        "they",
-        "them",
-    }
-    if ignore_words:
-        stop.update({str(x).lower() for x in ignore_words})
-    topic = [t for t in tokens if t not in stop][:8]
-    return " ".join(topic)
+    return _infer_topic_key_impl(text, ignore_words=ignore_words)
 
 
 def _detect_polarity(text: Any, positive_words: List[str], negative_words: List[str]) -> str:
-    s = str(text or "").lower()
-    pos = any(w in s for w in positive_words)
-    neg = any(w in s for w in negative_words)
-    if pos and not neg:
-        return "pro"
-    if neg and not pos:
-        return "con"
-    return "unknown"
+    return _detect_polarity_impl(text, positive_words, negative_words)
 
 
 def _apply_conflict_detection(rows: List[Dict[str, Any]], spec: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], int]:
-    if not bool(spec.get("detect_conflicts", False)):
-        return rows, 0
-
-    topic_field = str(spec.get("conflict_topic_field") or "topic").strip()
-    stance_field = str(spec.get("conflict_stance_field") or "stance").strip()
-    text_field = str(spec.get("conflict_text_field") or "claim_text").strip()
-    positive_words = [str(x).lower() for x in (spec.get("conflict_positive_words") or ["support", "true", "yes", "approve", "agree"])]
-    negative_words = [str(x).lower() for x in (spec.get("conflict_negative_words") or ["oppose", "false", "no", "reject", "disagree"])]
-
-    groups: Dict[str, List[int]] = {}
-    row_polarity: List[str] = []
-    for idx, r in enumerate(rows):
-        topic = str(r.get(topic_field) or "").strip().lower()
-        if not topic:
-            topic = _infer_topic_key(r.get(text_field), ignore_words=positive_words + negative_words)
-        if not topic:
-            fallback_src = str(r.get("source_path") or r.get("source_file") or "").strip().lower()
-            if fallback_src:
-                topic = f"src:{fallback_src}"
-        pol = _detect_polarity(r.get(stance_field) if r.get(stance_field) is not None else r.get(text_field), positive_words, negative_words)
-        row_polarity.append(pol)
-        if topic:
-            groups.setdefault(topic, []).append(idx)
-
-    conflict_topics = set()
-    for t, idxs in groups.items():
-        ps = {row_polarity[i] for i in idxs}
-        if "pro" in ps and "con" in ps:
-            conflict_topics.add(t)
-
-    marked = 0
-    out: List[Dict[str, Any]] = []
-    for idx, r in enumerate(rows):
-        topic = str(r.get(topic_field) or "").strip().lower() or _infer_topic_key(
-            r.get(text_field), ignore_words=positive_words + negative_words
-        )
-        if not topic:
-            fallback_src = str(r.get("source_path") or r.get("source_file") or "").strip().lower()
-            if fallback_src:
-                topic = f"src:{fallback_src}"
-        rr = dict(r)
-        rr["conflict_topic"] = topic
-        rr["conflict_polarity"] = row_polarity[idx]
-        rr["conflict_flag"] = bool(topic and topic in conflict_topics)
-        if rr["conflict_flag"]:
-            marked += 1
-        out.append(rr)
-    return out, marked
+    return _apply_conflict_detection_impl(rows, spec)
 
 
 def validate_preprocess_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
-    errors: List[str] = []
-    warnings: List[str] = []
-    if not isinstance(spec, dict):
-        return {"ok": False, "errors": ["preprocess spec must be object"], "warnings": []}
-
-    for key in ["header_map", "default_values"]:
-        if key in spec and not isinstance(spec.get(key), dict):
-            errors.append(f"{key} must be an object")
-    for key in [
-        "amount_fields",
-        "date_fields",
-        "null_values",
-        "include_fields",
-        "exclude_fields",
-        "field_transforms",
-        "row_filters",
-        "input_files",
-        "quality_required_fields",
-        "conflict_positive_words",
-        "conflict_negative_words",
-    ]:
-        if key in spec and not isinstance(spec.get(key), list):
-            errors.append(f"{key} must be an array")
-    if "ocr_enabled" in spec and not isinstance(spec.get("ocr_enabled"), bool):
-        errors.append("ocr_enabled must be boolean")
-    if "ocr_lang" in spec and not isinstance(spec.get("ocr_lang"), str):
-        errors.append("ocr_lang must be string")
-    if "ocr_config" in spec and not isinstance(spec.get("ocr_config"), str):
-        errors.append("ocr_config must be string")
-    if "ocr_preprocess" in spec and not isinstance(spec.get("ocr_preprocess"), str):
-        errors.append("ocr_preprocess must be string")
-    if "ocr_preprocess" in spec:
-        val = str(spec.get("ocr_preprocess") or "").strip().lower()
-        if val and val not in {"adaptive", "gray", "none", "off"}:
-            errors.append("ocr_preprocess must be adaptive|gray|none|off")
-    if "xlsx_all_sheets" in spec and not isinstance(spec.get("xlsx_all_sheets"), bool):
-        errors.append("xlsx_all_sheets must be boolean")
-    if "standardize_evidence" in spec and not isinstance(spec.get("standardize_evidence"), bool):
-        errors.append("standardize_evidence must be boolean")
-    if "generate_quality_report" in spec and not isinstance(spec.get("generate_quality_report"), bool):
-        errors.append("generate_quality_report must be boolean")
-    if "quality_report_path" in spec and not isinstance(spec.get("quality_report_path"), str):
-        errors.append("quality_report_path must be string")
-    if "export_canonical_bundle" in spec and not isinstance(spec.get("export_canonical_bundle"), bool):
-        errors.append("export_canonical_bundle must be boolean")
-    if "canonical_bundle_dir" in spec and not isinstance(spec.get("canonical_bundle_dir"), str):
-        errors.append("canonical_bundle_dir must be string")
-    if "canonical_title" in spec and not isinstance(spec.get("canonical_title"), str):
-        errors.append("canonical_title must be string")
-    if "evidence_schema" in spec and not isinstance(spec.get("evidence_schema"), dict):
-        errors.append("evidence_schema must be object")
-    if "detect_conflicts" in spec and not isinstance(spec.get("detect_conflicts"), bool):
-        errors.append("detect_conflicts must be boolean")
-    if "chunk_mode" in spec and str(spec.get("chunk_mode")).strip().lower() not in {"none", "off", "paragraph", "sentence", "fixed"}:
-        errors.append("chunk_mode must be one of none/off/paragraph/sentence/fixed")
-    if "chunk_max_chars" in spec:
-        try:
-            if int(spec.get("chunk_max_chars")) <= 0:
-                errors.append("chunk_max_chars must be > 0")
-        except Exception:
-            errors.append("chunk_max_chars must be integer")
-    if "max_retries" in spec:
-        try:
-            if int(spec.get("max_retries")) < 0:
-                errors.append("max_retries must be >= 0")
-        except Exception:
-            errors.append("max_retries must be integer")
-    if "on_file_error" in spec:
-        if str(spec.get("on_file_error")).strip().lower() not in {"skip", "raise"}:
-            errors.append("on_file_error must be 'skip' or 'raise'")
-    if "amount_round_digits" in spec:
-        try:
-            d = int(spec.get("amount_round_digits"))
-            if d < 0 or d > 6:
-                errors.append("amount_round_digits must be [0..6]")
-        except Exception:
-            errors.append("amount_round_digits must be integer")
-    if "deduplicate_keep" in spec and str(spec.get("deduplicate_keep")).strip().lower() not in {"first", "last"}:
-        errors.append("deduplicate_keep must be 'first' or 'last'")
-    if "deduplicate_by" in spec and not isinstance(spec.get("deduplicate_by"), list):
-        errors.append("deduplicate_by must be an array")
-
-    allowed_input = {"", "csv", "json", "jsonl"}
-    if str(spec.get("input_format") or "").strip().lower() not in allowed_input:
-        errors.append("input_format must be one of csv/json/jsonl")
-    allowed_output = {"", "csv", "json", "jsonl"}
-    if str(spec.get("output_format") or "").strip().lower() not in allowed_output:
-        errors.append("output_format must be one of csv/json/jsonl")
-
-    if isinstance(spec.get("field_transforms"), list):
-        for i, t in enumerate(spec["field_transforms"]):
-            if not isinstance(t, dict):
-                errors.append(f"field_transforms[{i}] must be an object")
-                continue
-            if "field" not in t or "op" not in t:
-                errors.append(f"field_transforms[{i}] requires field and op")
-
-    if isinstance(spec.get("row_filters"), list):
-        for i, f in enumerate(spec["row_filters"]):
-            if not isinstance(f, dict):
-                errors.append(f"row_filters[{i}] must be an object")
-                continue
-            if "op" not in f:
-                errors.append(f"row_filters[{i}] requires op")
-            if f.get("op") not in {"exists", "not_exists"} and "field" not in f:
-                errors.append(f"row_filters[{i}] requires field")
-
-    known = {
-        "pipeline",
-        "input_format",
-        "output_format",
-        "input_files",
-        "text_split_by_line",
-        "ocr_enabled",
-        "ocr_lang",
-        "ocr_config",
-        "ocr_preprocess",
-        "xlsx_all_sheets",
-        "max_retries",
-        "on_file_error",
-        "standardize_evidence",
-        "evidence_schema",
-        "generate_quality_report",
-        "quality_report_path",
-        "export_canonical_bundle",
-        "canonical_bundle_dir",
-        "canonical_title",
-        "quality_required_fields",
-        "chunk_mode",
-        "chunk_field",
-        "chunk_max_chars",
-        "detect_conflicts",
-        "conflict_topic_field",
-        "conflict_stance_field",
-        "conflict_text_field",
-        "conflict_positive_words",
-        "conflict_negative_words",
-        "delimiter",
-        "header_map",
-        "null_values",
-        "amount_fields",
-        "date_fields",
-        "amount_round_digits",
-        "trim_strings",
-        "drop_empty_rows",
-        "date_output_format",
-        "date_input_formats",
-        "default_values",
-        "include_fields",
-        "exclude_fields",
-        "field_transforms",
-        "row_filters",
-        "deduplicate_by",
-        "deduplicate_keep",
-    }
-    unknown = [k for k in spec.keys() if k not in known]
-    if unknown:
-        warnings.append(f"unknown preprocess keys: {', '.join(sorted(unknown))}")
-
-    pipeline = spec.get("pipeline")
-    if pipeline is not None:
-        if not isinstance(pipeline, dict):
-            errors.append("pipeline must be object")
-        else:
-            stages = pipeline.get("stages")
-            if not isinstance(stages, list) or not stages:
-                errors.append("pipeline.stages must be a non-empty array")
-
-    return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
+    return validate_preprocess_spec_impl(
+        spec,
+        field_transform_ops=list_field_transforms(),
+        row_filter_specs={registration.op: registration.requires_field for registration in _ROW_FILTERS.values()},
+    )
 
 
 def validate_preprocess_pipeline(pipeline: Dict[str, Any]) -> Dict[str, Any]:
-    errors: List[str] = []
-    warnings: List[str] = []
-    if not isinstance(pipeline, dict):
-        return {"ok": False, "errors": ["pipeline must be object"], "warnings": []}
+    return validate_preprocess_pipeline_impl(
+        pipeline,
+        list_pipeline_stages=list_pipeline_stages,
+        get_pipeline_registration=get_pipeline_stage,
+    )
 
-    stages = pipeline.get("stages")
-    if not isinstance(stages, list) or not stages:
-        errors.append("pipeline.stages must be a non-empty array")
-        return {"ok": False, "errors": errors, "warnings": warnings}
 
-    allowed = {"extract", "clean", "structure", "audit"}
-    for i, stage in enumerate(stages):
-        if not isinstance(stage, dict):
-            errors.append(f"pipeline.stages[{i}] must be object")
-            continue
-        name = str(stage.get("name") or "").strip().lower()
-        if name not in allowed:
-            errors.append(f"pipeline.stages[{i}].name must be one of {sorted(allowed)}")
-            continue
-        cfg = stage.get("config") if isinstance(stage.get("config"), dict) else {}
-        vr = validate_preprocess_spec(cfg)
-        if not vr.get("ok"):
-            errors.extend([f"pipeline.stages[{i}]: {x}" for x in vr.get("errors", [])])
-        warnings.extend([f"pipeline.stages[{i}]: {x}" for x in vr.get("warnings", [])])
-
-    return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
+def _default_pipeline_stage_prepare_config(context: PipelineStageContext) -> Dict[str, Any]:
+    return dict(context.config)
 
 
 def _stage_output_ext(output_format: str, fallback: str = ".csv") -> str:
-    m = str(output_format or "").strip().lower()
-    if m == "json":
-        return ".json"
-    if m == "jsonl":
-        return ".jsonl"
-    return fallback
+    return _stage_output_ext_impl(output_format, fallback=fallback)
+
+
+def pipeline_stage_output_path(context: PipelineStageContext) -> str:
+    return pipeline_stage_output_path_impl(context)
+
+
+def _default_pipeline_stage_executor(
+    context: PipelineStageContext,
+    *,
+    preprocess_file: Optional[Callable[[str, str, Dict[str, Any]], Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    runner = preprocess_file or globals()["preprocess_file"]
+    return _default_pipeline_stage_executor_impl(context, preprocess_file=runner)
+
+
+def _prepare_extract_stage_config(context: PipelineStageContext) -> Dict[str, Any]:
+    cfg = dict(context.config)
+    cfg.setdefault("output_format", "jsonl")
+    return cfg
+
+
+def _prepare_clean_stage_config(context: PipelineStageContext) -> Dict[str, Any]:
+    cfg = dict(context.config)
+    cfg.setdefault("trim_strings", True)
+    return cfg
+
+
+def _prepare_structure_stage_config(context: PipelineStageContext) -> Dict[str, Any]:
+    cfg = dict(context.config)
+    cfg.setdefault("standardize_evidence", True)
+    cfg.setdefault("output_format", "jsonl")
+    return cfg
+
+
+def _prepare_audit_stage_config(context: PipelineStageContext) -> Dict[str, Any]:
+    cfg = dict(context.config)
+    cfg.setdefault("generate_quality_report", True)
+    cfg.setdefault("output_format", "jsonl")
+    if "quality_report_path" not in cfg:
+        cfg["quality_report_path"] = os.path.join(
+            context.stage_dir,
+            f"pre_stage_{context.stage_index+1}_audit_quality.json",
+        )
+    return cfg
+
+
+def _register_builtin_pipeline_stages() -> None:
+    register_pipeline_stage("extract", prepare_config=_prepare_extract_stage_config)
+    register_pipeline_stage("clean", prepare_config=_prepare_clean_stage_config)
+    register_pipeline_stage("structure", prepare_config=_prepare_structure_stage_config)
+    register_pipeline_stage("audit", prepare_config=_prepare_audit_stage_config)
+
+
+_register_builtin_pipeline_stages()
 
 
 def run_preprocess_pipeline(
@@ -894,50 +897,18 @@ def run_preprocess_pipeline(
     input_path: str,
     final_output_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    vr = validate_preprocess_pipeline(pipeline)
-    if not vr.get("ok"):
-        raise RuntimeError(f"preprocess pipeline invalid: {vr.get('errors')}")
-
-    os.makedirs(stage_dir, exist_ok=True)
-    current_input = input_path
-    stage_results: List[Dict[str, Any]] = []
-    stages = pipeline.get("stages") if isinstance(pipeline.get("stages"), list) else []
-
-    for i, stage in enumerate(stages):
-        name = str(stage.get("name") or "").strip().lower()
-        cfg = dict(stage.get("config") if isinstance(stage.get("config"), dict) else {})
-        if name == "extract":
-            cfg.setdefault("output_format", "jsonl")
-        elif name == "clean":
-            cfg.setdefault("trim_strings", True)
-        elif name == "structure":
-            cfg.setdefault("standardize_evidence", True)
-            cfg.setdefault("output_format", "jsonl")
-        elif name == "audit":
-            cfg.setdefault("generate_quality_report", True)
-            cfg.setdefault("output_format", "jsonl")
-            if "quality_report_path" not in cfg:
-                cfg["quality_report_path"] = os.path.join(stage_dir, f"pre_stage_{i+1}_audit_quality.json")
-
-        ext = _stage_output_ext(str(cfg.get("output_format") or "csv"))
-        stage_output = os.path.join(stage_dir, f"pre_stage_{i+1}_{name}{ext}")
-        res = preprocess_file(current_input, stage_output, cfg)
-        stage_results.append({"stage": name, "output_path": stage_output, "result": res})
-        current_input = stage_output
-
-    final_out = str(final_output_path or os.path.join(stage_dir, "preprocessed_input.csv"))
-    if not os.path.isabs(final_out):
-        final_out = os.path.join(job_root, final_out)
-    final_res = preprocess_file(current_input, final_out, {"output_format": "csv"})
-
-    return {
-        "mode": "pipeline",
-        "input_path": input_path,
-        "output_path": final_out,
-        "stages": stage_results,
-        "final": final_res,
-        "warnings": vr.get("warnings", []),
-    }
+    return run_preprocess_pipeline_impl(
+        pipeline=pipeline,
+        job_root=job_root,
+        stage_dir=stage_dir,
+        input_path=input_path,
+        final_output_path=final_output_path,
+        validate_pipeline=validate_preprocess_pipeline,
+        get_pipeline_stage=get_pipeline_stage,
+        pipeline_stage_context_type=PipelineStageContext,
+        default_stage_executor=_default_pipeline_stage_executor,
+        preprocess_file=preprocess_file,
+    )
 
 
 def preprocess_rows(rows: List[Dict[str, Any]], spec: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
