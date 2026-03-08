@@ -1,12 +1,7 @@
 use crate::app_state::{TaskState, TaskStoreConfig};
 use odbc_api::{ConnectionOptions, Cursor, Environment, IntoParameter, buffers::TextRowSet};
 use serde_json::{Value, json};
-use std::{
-    collections::HashMap,
-    env, fs,
-    path::PathBuf,
-    process::Command,
-};
+use std::{collections::HashMap, env, fs, path::PathBuf, process::Command};
 
 pub fn task_store_config_from_env() -> TaskStoreConfig {
     let ttl_sec = env::var("AIWF_RUST_TASK_TTL_SEC")
@@ -598,7 +593,10 @@ FROM dbo.workflow_tasks WHERE task_id=@task_id FOR JSON PATH, WITHOUT_ARRAY_WRAP
 }
 
 fn odbc_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<Value> {
-    let now = utc_now_epoch_string().parse::<u64>().unwrap_or(0).to_string();
+    let now = utc_now_epoch_string()
+        .parse::<u64>()
+        .unwrap_or(0)
+        .to_string();
     let q = "SET NOCOUNT ON;\
 DECLARE @task_id NVARCHAR(128)=?;\
 DECLARE @now BIGINT=CAST(? AS BIGINT);\
@@ -648,11 +646,15 @@ fn sqlcmd_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) {
     let _ = run_sqlcmd_query(cfg, &q);
 }
 
-fn sqlcmd_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<TaskState> {
+fn sqlcmd_get_task_query(task_id: &str) -> String {
     let task_id = escape_tsql(task_id);
-    let q = format!(
-        "SET NOCOUNT ON; SELECT TOP 1 task_id,operator,status,created_at_epoch,updated_at_epoch,result_json,error FROM dbo.workflow_tasks WHERE task_id=N'{task_id}' FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;"
-    );
+    format!(
+        "SET NOCOUNT ON; SELECT TOP 1 task_id,tenant_id,operator,status,created_at_epoch,updated_at_epoch,result_json,error FROM dbo.workflow_tasks WHERE task_id=N'{task_id}' FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;"
+    )
+}
+
+fn sqlcmd_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<TaskState> {
+    let q = sqlcmd_get_task_query(task_id);
     let out = run_sqlcmd_query(cfg, &q).ok()?;
     let s = out.trim();
     if s.is_empty() {
@@ -681,4 +683,16 @@ fn sqlcmd_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<Value> {
         "cancelled": status == "cancelled",
         "status": status
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sqlcmd_get_task_query;
+
+    #[test]
+    fn sqlcmd_get_task_query_keeps_tenant_id() {
+        let query = sqlcmd_get_task_query("task-123");
+        assert!(query.contains("tenant_id"));
+        assert!(query.contains("WHERE task_id=N'task-123'"));
+    }
 }
