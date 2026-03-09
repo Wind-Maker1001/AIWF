@@ -120,4 +120,14 @@ class JobControllerContractTest {
                 .andExpect(jsonPath("$.ok").value(false))
                 .andExpect(jsonPath("$.error").value("data_store_unavailable"));
     }
+
+    @Test
+    void jobReadReturnsStructured500ForUnexpectedError() throws Exception {
+        when(jobs.getJob(eq("job-crash"))).thenThrow(new IllegalStateException("boom"));
+
+        mockMvc.perform(get("/api/v1/jobs/job-crash"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("internal_error"));
+    }
 }

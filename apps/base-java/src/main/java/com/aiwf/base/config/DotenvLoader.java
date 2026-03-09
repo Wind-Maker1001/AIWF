@@ -1,5 +1,8 @@
 package com.aiwf.base.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -7,9 +10,14 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
 public final class DotenvLoader {
+    private static final Logger log = LoggerFactory.getLogger(DotenvLoader.class);
+
     private DotenvLoader() {}
 
     public static void load(String path) {
+        if (path == null || path.isBlank()) {
+            return;
+        }
         try {
             File f = new File(path);
             if (!f.exists()) return;
@@ -39,7 +47,12 @@ public final class DotenvLoader {
             }
         } catch (Exception e) {
             // Keep startup resilient even when dev.env is invalid.
-            System.err.println("[WARN] Failed to load dev.env: " + e.getMessage());
+            log.warn("failed to load dev.env path={} error={}", path, safeMessage(e));
         }
+    }
+
+    private static String safeMessage(Exception e) {
+        String message = e.getMessage();
+        return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
     }
 }
