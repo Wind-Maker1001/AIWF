@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import argparse
-import json
-import os
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from aiwf import ingest
+from aiwf.preprocess_cli import parse_args as _parse_args_impl, run_cli as _run_cli_impl
 from aiwf.preprocess_conflicts import (
     _apply_conflict_detection,
     _chunk_text,
@@ -26,6 +24,7 @@ from aiwf.preprocess_reporting import (
     _build_quality_report,
     export_canonical_bundle,
 )
+from aiwf.preprocess_service import preprocess_file_impl
 from aiwf.preprocess_pipeline import (
     default_pipeline_stage_executor as _default_pipeline_stage_executor_impl,
     run_preprocess_pipeline_impl,
@@ -37,6 +36,10 @@ from aiwf.preprocess_ops import (
     register_builtin_preprocess_ops as _register_builtin_preprocess_ops_impl,
 )
 from aiwf.preprocess_runtime import preprocess_rows_impl
+from aiwf.preprocess_stages import (
+    default_pipeline_stage_prepare_config as _default_pipeline_stage_prepare_config_impl,
+    register_builtin_pipeline_stages as _register_builtin_pipeline_stages_impl,
+)
 from aiwf.preprocess_validation import (
     validate_preprocess_pipeline_impl,
     validate_preprocess_spec_impl,
@@ -129,48 +132,10 @@ def validate_preprocess_pipeline(pipeline: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _default_pipeline_stage_prepare_config(context: PipelineStageContext) -> Dict[str, Any]:
-    return dict(context.config)
+    return _default_pipeline_stage_prepare_config_impl(context)
 
 
-def _prepare_extract_stage_config(context: PipelineStageContext) -> Dict[str, Any]:
-    cfg = dict(context.config)
-    cfg.setdefault("output_format", "jsonl")
-    return cfg
-
-
-def _prepare_clean_stage_config(context: PipelineStageContext) -> Dict[str, Any]:
-    cfg = dict(context.config)
-    cfg.setdefault("trim_strings", True)
-    return cfg
-
-
-def _prepare_structure_stage_config(context: PipelineStageContext) -> Dict[str, Any]:
-    cfg = dict(context.config)
-    cfg.setdefault("standardize_evidence", True)
-    cfg.setdefault("output_format", "jsonl")
-    return cfg
-
-
-def _prepare_audit_stage_config(context: PipelineStageContext) -> Dict[str, Any]:
-    cfg = dict(context.config)
-    cfg.setdefault("generate_quality_report", True)
-    cfg.setdefault("output_format", "jsonl")
-    if "quality_report_path" not in cfg:
-        cfg["quality_report_path"] = os.path.join(
-            context.stage_dir,
-            f"pre_stage_{context.stage_index+1}_audit_quality.json",
-        )
-    return cfg
-
-
-def _register_builtin_pipeline_stages() -> None:
-    register_pipeline_stage("extract", prepare_config=_prepare_extract_stage_config)
-    register_pipeline_stage("clean", prepare_config=_prepare_clean_stage_config)
-    register_pipeline_stage("structure", prepare_config=_prepare_structure_stage_config)
-    register_pipeline_stage("audit", prepare_config=_prepare_audit_stage_config)
-
-
-_register_builtin_pipeline_stages()
+_register_builtin_pipeline_stages_impl(register_pipeline_stage)
 
 
 def run_preprocess_pipeline(
@@ -211,35 +176,17 @@ def preprocess_rows(rows: List[Dict[str, Any]], spec: Dict[str, Any]) -> Tuple[L
 
 
 def preprocess_file(input_path: str, output_path: str, spec: Dict[str, Any]) -> Dict[str, Any]:
-    rows, meta = _read_rows(input_path, spec)
-    out_rows, summary = preprocess_rows(rows, spec)
-    out_fmt = _write_rows(output_path, out_rows, spec)
-    quality_report_path = None
-    if bool(spec.get("generate_quality_report", False)):
-        quality_report_path = str(spec.get("quality_report_path") or f"{output_path}.quality.json")
-        report = _build_quality_report(out_rows, summary, spec)
-        _write_json(quality_report_path, report)
-    canonical_bundle = None
-    if bool(spec.get("export_canonical_bundle", False)):
-        canonical_bundle = export_canonical_bundle(
-            rows=out_rows,
-            summary=summary,
-            meta=meta,
-            output_path=output_path,
-            spec=spec,
-        )
-    return {
-        "input_path": input_path,
-        "output_path": output_path,
-        "input_format": meta.get("input_format"),
-        "output_format": out_fmt,
-        "delimiter": meta.get("delimiter"),
-        "skipped_files": meta.get("skipped_files"),
-        "failed_files": meta.get("failed_files"),
-        "quality_report_path": quality_report_path,
-        "canonical_bundle": canonical_bundle,
-        "summary": summary,
-    }
+    return preprocess_file_impl(
+        input_path,
+        output_path,
+        spec,
+        read_rows=_read_rows,
+        preprocess_rows=preprocess_rows,
+        write_rows=_write_rows,
+        build_quality_report=_build_quality_report,
+        write_json=_write_json,
+        export_canonical_bundle=export_canonical_bundle,
+    )
 
 
 def preprocess_csv_file(input_path: str, output_path: str, spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -247,43 +194,16 @@ def preprocess_csv_file(input_path: str, output_path: str, spec: Dict[str, Any])
     return preprocess_file(input_path, output_path, spec)
 
 
-def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="AIWF raw-to-cooked preprocessing")
-    p.add_argument("--input", required=True, help="input path (csv/json/jsonl)")
-    p.add_argument("--output", required=True, help="output path (csv/json/jsonl)")
-    p.add_argument("--config", required=False, help="JSON/YAML config path for preprocess spec")
-    return p.parse_args()
+def _parse_args():
+    return _parse_args_impl()
 
 
 def main() -> int:
-    args = _parse_args()
-    spec: Dict[str, Any] = {}
-    if args.config:
-        with open(args.config, "r", encoding="utf-8-sig") as f:
-            text = f.read()
-        ext = os.path.splitext(args.config)[1].lower()
-        if ext in {".yaml", ".yml"}:
-            try:
-                import yaml  # type: ignore
-            except Exception as e:
-                print(json.dumps({"ok": False, "errors": [f"yaml support requires pyyaml: {e}"]}, ensure_ascii=False))
-                return 2
-            loaded = yaml.safe_load(text)
-        else:
-            loaded = json.loads(text)
-        if isinstance(loaded, dict):
-            spec = loaded.get("preprocess") if isinstance(loaded.get("preprocess"), dict) else loaded
-        else:
-            print(json.dumps({"ok": False, "errors": ["config must be an object"]}, ensure_ascii=False))
-            return 2
-
-    val = validate_preprocess_spec(spec)
-    if not val["ok"]:
-        print(json.dumps(val, ensure_ascii=False))
-        return 2
-    res = preprocess_file(args.input, args.output, spec)
-    print(json.dumps({"ok": True, "result": res, "warnings": val.get("warnings", [])}, ensure_ascii=False))
-    return 0
+    return _run_cli_impl(
+        _parse_args(),
+        validate_preprocess_spec=validate_preprocess_spec,
+        preprocess_file=preprocess_file,
+    )
 
 
 if __name__ == "__main__":

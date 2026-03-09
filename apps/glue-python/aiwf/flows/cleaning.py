@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import csv
 import hashlib
-import io
-import json
 import os
 import time
 from datetime import datetime, timezone
@@ -23,8 +20,28 @@ from aiwf.office_outputs import (
 from aiwf.flows.artifact_selection import validate_artifact_selection_config_with_tokens
 from aiwf.flows.cleaning_artifacts import list_cleaning_artifact_tokens
 from aiwf.flows.office_artifacts import list_office_artifact_tokens
+from aiwf.flows.cleaning_inputs import (
+    load_raw_rows_impl,
+    local_parquet_strict_enabled_impl,
+    maybe_preprocess_input_impl,
+    parse_rows_from_csv_text_impl,
+    read_text_file_with_fallback_impl,
+    require_local_parquet_dependencies_impl,
+    resolve_csv_source_path_impl,
+)
+from aiwf.flows.cleaning_outputs import (
+    write_audit_docx_impl,
+    write_cleaned_csv_impl,
+    write_cleaned_parquet_impl,
+    write_deck_pptx_impl,
+    write_fin_xlsx_impl,
+    write_profile_json_impl,
+)
+from aiwf.flows.cleaning_profile import build_profile_impl
+from aiwf.flows.cleaning_quality import apply_quality_gates_impl
 from aiwf.flows.cleaning_simple_rules import clean_rows_simple as _clean_rows_simple
 from aiwf.flows.cleaning_generic_rules import clean_rows_generic as _clean_rows_generic_external
+from aiwf.paths import resolve_path
 
 
 def _sha256_file(path: str) -> str:
@@ -532,100 +549,48 @@ def validate_cleaning_rules(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _local_parquet_strict_enabled(params: Dict[str, Any]) -> bool:
-    if "local_parquet_strict" in params or "local_parquet_strict" in _rules_dict(params):
-        return _to_bool(_rule_param(params, "local_parquet_strict", True), default=True)
-    return _to_bool(os.getenv("AIWF_GLUE_LOCAL_PARQUET_STRICT", "true"), default=True)
+    return local_parquet_strict_enabled_impl(
+        params,
+        rules_dict=_rules_dict,
+        to_bool=_to_bool,
+        rule_param=_rule_param,
+    )
 
 
 def _require_local_parquet_dependencies(params: Dict[str, Any]) -> None:
-    if not _local_parquet_strict_enabled(params):
-        return
-    try:
-        import pandas as _  # type: ignore
-    except Exception as e:
-        raise RuntimeError(f"local parquet strict mode: missing pandas ({e})")
-    try:
-        import pyarrow as _  # type: ignore
-    except Exception as e:
-        raise RuntimeError(f"local parquet strict mode: missing pyarrow ({e})")
+    return require_local_parquet_dependencies_impl(
+        params,
+        local_parquet_strict_enabled=_local_parquet_strict_enabled,
+    )
 
 
 def _resolve_csv_source_path(params: Dict[str, Any], job_root: Optional[str]) -> Optional[str]:
-    candidate = (
-        params.get("input_csv_path")
-        or params.get("source_csv_path")
-        or params.get("csv_path")
-        or params.get("input_uri")
+    return resolve_csv_source_path_impl(
+        params,
+        job_root,
+        resolve_path=lambda root, path, allow_absolute: resolve_path(root, path, allow_absolute=allow_absolute),
     )
-    if not candidate:
-        return None
-    path = str(candidate).strip()
-    if not path:
-        return None
-    if path.startswith("file://"):
-        path = path[len("file://") :]
-    if os.path.isabs(path):
-        return path
-    if job_root:
-        return os.path.join(job_root, path)
-    return path
 
 
 def _parse_rows_from_csv_text(csv_text: str) -> List[Dict[str, Any]]:
-    if not csv_text or not csv_text.strip():
-        return []
-    out: List[Dict[str, Any]] = []
-    reader = csv.DictReader(csv_text.strip().splitlines())
-    for row in reader:
-        out.append(dict(row))
-    return out
+    return parse_rows_from_csv_text_impl(csv_text)
 
 
 def _read_text_file_with_fallback(path: str, encodings: Optional[List[str]] = None) -> str:
-    tried = encodings or ["utf-8-sig", "utf-8", "gb18030", "gbk"]
-    last_err: Optional[Exception] = None
-    for enc in tried:
-        try:
-            with open(path, "r", encoding=enc, newline="") as f:
-                return f.read()
-        except Exception as e:
-            last_err = e
-    raise RuntimeError(f"failed to decode text file with fallback encodings: {path}, last_err={last_err}")
+    return read_text_file_with_fallback_impl(path, encodings)
 
 
 def _load_raw_rows(params: Dict[str, Any], job_root: Optional[str]) -> Tuple[List[Dict[str, Any]], str]:
-    if isinstance(params.get("rows"), list) and params["rows"]:
-        return list(params["rows"]), "params.rows"
-
-    csv_text = params.get("csv_text")
-    if isinstance(csv_text, str) and csv_text.strip():
-        rows = _parse_rows_from_csv_text(csv_text)
-        if rows:
-            return rows, "params.csv_text"
-
-    source_path = _resolve_csv_source_path(params, job_root)
-    if source_path and os.path.isfile(source_path):
-        csv_text_file = _read_text_file_with_fallback(source_path)
-        with io.StringIO(csv_text_file) as f:
-            reader = csv.DictReader(f)
-            rows = [dict(r) for r in reader]
-        if rows:
-            return rows, source_path
-
-    return [{"id": 1, "amount": 100.0}, {"id": 2, "amount": 200.0}], "default.sample"
+    return load_raw_rows_impl(
+        params,
+        job_root,
+        resolve_csv_source_path=_resolve_csv_source_path,
+        parse_rows_from_csv_text=_parse_rows_from_csv_text,
+        read_text_file_with_fallback=_read_text_file_with_fallback,
+    )
 
 
 def _maybe_preprocess_input(params: Dict[str, Any], job_root: str, stage_dir: str) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
-    """
-    Optional raw-to-cooked preprocessing entry.
-    This is intentionally decoupled from cleaning rules and runs only when enabled.
-    """
-    preprocess_cfg = params.get("preprocess") if isinstance(params.get("preprocess"), dict) else {}
-    enabled = _to_bool(preprocess_cfg.get("enabled"), default=False)
-    input_csv = preprocess_cfg.get("input_path") or params.get("input_csv_path")
-    if not enabled or not input_csv:
-        return params, None
-
     from aiwf.preprocess import (
         preprocess_csv_file,
         run_preprocess_pipeline,
@@ -633,41 +598,17 @@ def _maybe_preprocess_input(params: Dict[str, Any], job_root: str, stage_dir: st
         validate_preprocess_spec,
     )  # local import keeps loose coupling
 
-    input_path = str(input_csv)
-    if not os.path.isabs(input_path):
-        input_path = os.path.join(job_root, input_path)
-    output_path = str(preprocess_cfg.get("output_path") or os.path.join(stage_dir, "preprocessed_input.csv"))
-    if not os.path.isabs(output_path):
-        output_path = os.path.join(job_root, output_path)
-
-    pipeline_cfg = preprocess_cfg.get("pipeline") if isinstance(preprocess_cfg.get("pipeline"), dict) else None
-    if pipeline_cfg and (pipeline_cfg.get("enabled", True)):
-        pipeline = dict(pipeline_cfg)
-        pipeline.pop("enabled", None)
-        vr = validate_preprocess_pipeline(pipeline)
-        if not vr.get("ok"):
-            raise RuntimeError(f"preprocess pipeline invalid: {vr.get('errors')}")
-        res = run_preprocess_pipeline(
-            pipeline=pipeline,
-            job_root=job_root,
-            stage_dir=stage_dir,
-            input_path=input_path,
-            final_output_path=output_path,
-        )
-        output_path = res.get("output_path", output_path)
-    else:
-        spec = dict(preprocess_cfg)
-        spec.pop("enabled", None)
-        spec.pop("input_path", None)
-        spec.pop("output_path", None)
-        vr = validate_preprocess_spec(spec)
-        if not vr.get("ok"):
-            raise RuntimeError(f"preprocess config invalid: {vr.get('errors')}")
-        res = preprocess_csv_file(input_path, output_path, spec)
-
-    next_params = dict(params)
-    next_params["input_csv_path"] = output_path
-    return next_params, res
+    return maybe_preprocess_input_impl(
+        params,
+        job_root,
+        stage_dir,
+        to_bool=_to_bool,
+        resolve_path=lambda root, path, allow_absolute: resolve_path(root, path, allow_absolute=allow_absolute),
+        preprocess_csv_file=preprocess_csv_file,
+        run_preprocess_pipeline=run_preprocess_pipeline,
+        validate_preprocess_pipeline=validate_preprocess_pipeline,
+        validate_preprocess_spec=validate_preprocess_spec,
+    )
 
 
 def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
@@ -715,132 +656,24 @@ def _clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) 
     )
 
 
-def _update_numeric_summary(summary: Dict[str, Any], value: Decimal) -> None:
-    if summary["count"] == 0:
-        summary["min"] = value
-        summary["max"] = value
-    else:
-        if value < summary["min"]:
-            summary["min"] = value
-        if value > summary["max"]:
-            summary["max"] = value
-    summary["count"] += 1
-    summary["sum"] += value
-
-
-def _finalize_numeric_summary(summary: Dict[str, Any]) -> Dict[str, float]:
-    avg = summary["sum"] / Decimal(summary["count"])
-    return {
-        "sum": float(_quantize_decimal(summary["sum"], 2)),
-        "min": float(_quantize_decimal(summary["min"], 2)),
-        "max": float(_quantize_decimal(summary["max"], 2)),
-        "avg": float(_quantize_decimal(avg, 2)),
-    }
-
-
 def _build_profile(rows: List[Dict[str, Any]], quality: Dict[str, Any], source: str) -> Dict[str, Any]:
-    field_set = set()
-    numeric_summaries: Dict[str, Dict[str, Any]] = {}
-    amount_summary = {
-        "count": 0,
-        "sum": Decimal("0"),
-        "min": Decimal("0"),
-        "max": Decimal("0"),
-    }
-
-    for row in rows:
-        amount_value = _to_decimal(row.get("amount"))
-        if amount_value is not None:
-            _update_numeric_summary(amount_summary, amount_value)
-
-        for field, raw_value in row.items():
-            field_set.add(field)
-            numeric_value = _to_decimal(raw_value)
-            if numeric_value is None:
-                continue
-            summary = numeric_summaries.setdefault(
-                field,
-                {
-                    "count": 0,
-                    "sum": Decimal("0"),
-                    "min": Decimal("0"),
-                    "max": Decimal("0"),
-                },
-            )
-            _update_numeric_summary(summary, numeric_value)
-
-    numeric_stats = {
-        field: _finalize_numeric_summary(summary)
-        for field, summary in sorted(numeric_summaries.items())
-        if summary["count"] > 0
-    }
-
-    if amount_summary["count"] > 0:
-        sum_amount = float(_quantize_decimal(amount_summary["sum"], 2))
-        min_amount = float(_quantize_decimal(amount_summary["min"], 2))
-        max_amount = float(_quantize_decimal(amount_summary["max"], 2))
-        avg_amount = float(_quantize_decimal(amount_summary["sum"] / Decimal(amount_summary["count"]), 2))
-    else:
-        sum_amount = 0.0
-        min_amount = 0.0
-        max_amount = 0.0
-        avg_amount = 0.0
-
-    return {
-        "rows": len(rows),
-        "cols": len(field_set),
-        "sum_amount": sum_amount,
-        "min_amount": min_amount,
-        "max_amount": max_amount,
-        "avg_amount": avg_amount,
-        "quality": quality,
-        "fields": sorted(field_set),
-        "numeric_stats": numeric_stats,
-        "source": source,
-    }
+    return build_profile_impl(
+        rows,
+        quality,
+        source,
+        to_decimal=_to_decimal,
+        quantize_decimal=_quantize_decimal,
+    )
 
 
 def _apply_quality_gates(quality: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Enforce optional quality thresholds. Raises RuntimeError when a gate is violated.
-    Rules can be provided via top-level params or params.rules.
-    """
-    input_rows = int(quality.get("input_rows", 0))
-    output_rows = int(quality.get("output_rows", 0))
-    invalid_rows = int(quality.get("invalid_rows", 0))
-    filtered_rows = int(quality.get("filtered_rows", 0))
-
-    max_invalid_rows = _to_int(_rule_param(params, "max_invalid_rows"))
-    max_filtered_rows = _to_int(_rule_param(params, "max_filtered_rows"))
-    min_output_rows = _to_int(_rule_param(params, "min_output_rows"))
-    max_invalid_ratio = _to_decimal(_rule_param(params, "max_invalid_ratio"))
-
-    if max_invalid_rows is not None and invalid_rows > max_invalid_rows:
-        raise RuntimeError(
-            f"quality gate failed: invalid_rows={invalid_rows} exceeds max_invalid_rows={max_invalid_rows}"
-        )
-    if max_filtered_rows is not None and filtered_rows > max_filtered_rows:
-        raise RuntimeError(
-            f"quality gate failed: filtered_rows={filtered_rows} exceeds max_filtered_rows={max_filtered_rows}"
-        )
-    if min_output_rows is not None and output_rows < min_output_rows:
-        raise RuntimeError(
-            f"quality gate failed: output_rows={output_rows} below min_output_rows={min_output_rows}"
-        )
-    if max_invalid_ratio is not None:
-        ratio = (Decimal(invalid_rows) / Decimal(input_rows)) if input_rows > 0 else Decimal("0")
-        if ratio > max_invalid_ratio:
-            raise RuntimeError(
-                f"quality gate failed: invalid_ratio={float(ratio):.6f} exceeds max_invalid_ratio={float(max_invalid_ratio):.6f}"
-            )
-
-    return {
-        "max_invalid_rows": max_invalid_rows,
-        "max_filtered_rows": max_filtered_rows,
-        "min_output_rows": min_output_rows,
-        "max_invalid_ratio": (float(max_invalid_ratio) if max_invalid_ratio is not None else None),
-        "evaluated": True,
-    }
+    return apply_quality_gates_impl(
+        quality,
+        params,
+        to_int=_to_int,
+        to_decimal=_to_decimal,
+        rule_param=_rule_param,
+    )
 
 
 def _default_rows(params: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -850,35 +683,11 @@ def _default_rows(params: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _write_cleaned_csv(csv_path: str, rows: List[Dict[str, Any]]) -> Dict[str, int]:
-    if rows:
-        columns = list(rows[0].keys())
-        seen = set(columns)
-        for r in rows[1:]:
-            for k in r.keys():
-                if k not in seen:
-                    columns.append(k)
-                    seen.add(k)
-    else:
-        columns = ["id", "amount"]
-
-    with open(csv_path, "w", encoding="utf-8", newline="\n") as f:
-        writer = csv.DictWriter(f, fieldnames=columns, lineterminator="\n")
-        writer.writeheader()
-        for r in rows:
-            writer.writerow({c: r.get(c) for c in columns})
-    return {"rows": len(rows), "cols": len(columns)}
+    return write_cleaned_csv_impl(csv_path, rows)
 
 
 def _write_cleaned_parquet(parquet_path: str, rows: List[Dict[str, Any]]) -> None:
-    try:
-        import pandas as pd  # type: ignore
-
-        df = pd.DataFrame(rows)
-        df.to_parquet(parquet_path, index=False)
-    except Exception:
-        # Placeholder remains as compatibility fallback if parquet libs are unavailable.
-        with open(parquet_path, "wb") as f:
-            f.write(b"PARQUET_PLACEHOLDER\n")
+    return write_cleaned_parquet_impl(parquet_path, rows)
 
 
 def _write_fin_xlsx(
@@ -887,11 +696,12 @@ def _write_fin_xlsx(
     image_path: Optional[str] = None,
     params: Optional[Dict[str, Any]] = None,
 ) -> None:
-    _office_write_fin_xlsx(
+    return write_fin_xlsx_impl(
         xlsx_path,
         rows,
         image_path,
         params,
+        office_write_fin_xlsx=_office_write_fin_xlsx,
         to_decimal=_to_decimal,
         build_profile=_build_profile,
         utc_now_str=_utc_now_str,
@@ -905,7 +715,15 @@ def _write_audit_docx(
     image_path: Optional[str] = None,
     params: Optional[Dict[str, Any]] = None,
 ) -> None:
-    _office_write_audit_docx(docx_path, job_id, profile, image_path, params, utc_now_str=_utc_now_str)
+    return write_audit_docx_impl(
+        docx_path,
+        job_id,
+        profile,
+        image_path,
+        params,
+        office_write_audit_docx=_office_write_audit_docx,
+        utc_now_str=_utc_now_str,
+    )
 
 
 def _write_deck_pptx(
@@ -915,16 +733,19 @@ def _write_deck_pptx(
     image_path: Optional[str] = None,
     params: Optional[Dict[str, Any]] = None,
 ) -> None:
-    _office_write_deck_pptx(pptx_path, job_id, profile, image_path, params, utc_now_str=_utc_now_str)
+    return write_deck_pptx_impl(
+        pptx_path,
+        job_id,
+        profile,
+        image_path,
+        params,
+        office_write_deck_pptx=_office_write_deck_pptx,
+        utc_now_str=_utc_now_str,
+    )
 
 
 def _write_profile_json(profile_path: str, profile: Dict[str, Any], params: Dict[str, Any]) -> None:
-    payload = {
-        "profile": profile,
-        "params": params or {},
-    }
-    with open(profile_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return write_profile_json_impl(profile_path, profile, params)
 
 
 
