@@ -67,18 +67,16 @@ public class JobService {
     }
 
     public JobDetailsResp getJob(String jobId) {
-        JobRow job = jobs.getJob(jobId);
-        if (job == null) {
-            throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
-        }
-        return toJobDetails(job);
+        return toJobDetails(requireJob(jobId));
     }
 
     public List<StepResp> listSteps(String jobId) {
+        requireJob(jobId);
         return jobs.listSteps(jobId).stream().map(this::toStepResp).toList();
     }
 
     public List<ArtifactResp> listArtifacts(String jobId) {
+        requireJob(jobId);
         return jobs.listArtifacts(jobId).stream().map(this::toArtifactResp).toList();
     }
 
@@ -117,6 +115,7 @@ public class JobService {
 
     @Transactional
     public StepFailResp failStep(String jobId, String stepId, String actor, String error, String auditDetail) {
+        requireJob(jobId);
         String effectiveActor = defaultIfBlank(actor, "manual");
         String effectiveError = defaultIfBlank(error, "manual stepFail");
         StepTransitionResult result = jobs.markStepFailed(jobId, stepId, effectiveError);
@@ -158,6 +157,14 @@ public class JobService {
 
     private String jobsRoot() {
         return Paths.get(jobsBusRoot, "jobs").toString();
+    }
+
+    private JobRow requireJob(String jobId) {
+        JobRow job = jobs.getJob(jobId);
+        if (job == null) {
+            throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
+        }
+        return job;
     }
 
     private JobDetailsResp toJobDetails(JobRow row) {

@@ -2,6 +2,7 @@ package com.aiwf.base.service;
 
 import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.StepRow;
 import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.glue.GlueGateway;
@@ -44,6 +45,7 @@ class JobServiceTest {
 
     @Test
     void manualStepFailAlsoUpdatesJobStatus() {
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
                         new StepRow("job1", "step1", "FAILED", null, null, "v1", "{}", null, null, null, "boom"),
@@ -61,6 +63,7 @@ class JobServiceTest {
 
     @Test
     void manualStepFailRejectsUnknownStep() {
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobs.markStepFailed("job1", "missing", "boom"))
                 .thenReturn(new StepTransitionResult(null, false));
 
@@ -73,6 +76,7 @@ class JobServiceTest {
 
     @Test
     void manualStepFailRejectsDoneStep() {
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
                         new StepRow("job1", "step1", "DONE", null, null, "v1", "{}", null, null, "abc123", null),
@@ -89,6 +93,7 @@ class JobServiceTest {
 
     @Test
     void manualStepFailIsIdempotentWhenAlreadyFailed() {
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
                         new StepRow("job1", "step1", "FAILED", null, null, "v1", "{}", null, null, null, "boom"),
@@ -100,6 +105,27 @@ class JobServiceTest {
         assertThat(out.ok()).isTrue();
         verify(jobStatus, never()).onStepFail("job1");
         verify(jobs, never()).audit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void manualStepFailRejectsUnknownJob() {
+        when(jobs.getJob("missing-job")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.stepFail("missing-job", "step1", "manual", new StepFailReq(null, "boom")))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("job not found");
+
+        verifyNoInteractions(jobStatus);
+        verify(glue, never()).health();
+    }
+
+    @Test
+    void listStepsRejectsUnknownJob() {
+        when(jobs.getJob("missing-job")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.listSteps("missing-job"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("job not found");
     }
 
     @Test

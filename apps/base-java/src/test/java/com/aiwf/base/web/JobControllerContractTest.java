@@ -130,4 +130,15 @@ class JobControllerContractTest {
                 .andExpect(jsonPath("$.ok").value(false))
                 .andExpect(jsonPath("$.error").value("internal_error"));
     }
+
+    @Test
+    void listStepsReturns404ForUnknownJob() throws Exception {
+        when(jobs.listSteps(eq("missing-job")))
+                .thenThrow(ApiException.notFound("job_not_found", "job not found", java.util.Map.of("job_id", "missing-job")));
+
+        mockMvc.perform(get("/api/v1/jobs/missing-job/steps"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("job_not_found"));
+    }
 }

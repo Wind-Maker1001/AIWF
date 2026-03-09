@@ -76,6 +76,23 @@ class CallbackControllerTest {
     }
 
     @Test
+    void registerArtifactReturnsNotFoundForUnknownJob() throws Exception {
+        when(callbacks.registerArtifact(eq("missing-job"), eq("glue"), any()))
+                .thenThrow(ApiException.notFound("job_not_found", "job not found", java.util.Map.of("job_id", "missing-job")));
+
+        mockMvc.perform(post("/api/v1/jobs/missing-job/artifacts/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "artifact_id": "xlsx_fin_001",
+                                  "kind": "xlsx",
+                                  "path": "D:\\\\AIWF\\\\bus\\\\jobs\\\\x\\\\artifacts\\\\fin.xlsx"
+                                }
+                                """))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void stepFailReturnsNotFoundForUnknownStep() throws Exception {
         when(jobs.failStep(eq("job1"), eq("missing-step"), eq("glue"), eq("boom"), eq("{\"error\":\"boom\"}")))
                 .thenThrow(ApiException.notFound("step_not_found", "step not found", java.util.Map.of("job_id", "job1", "step_id", "missing-step")));

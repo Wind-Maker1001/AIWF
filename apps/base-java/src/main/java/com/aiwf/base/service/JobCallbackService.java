@@ -2,6 +2,7 @@ package com.aiwf.base.service;
 
 import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.StepRow;
 import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.web.ApiException;
@@ -27,6 +28,7 @@ public class JobCallbackService {
 
     @Transactional
     public void stepStart(String jobId, String stepId, String actor, StepStartCallbackReq req) {
+        requireJob(jobId);
         String paramsJson = JsonUtil.toJson(req.payload());
         StepTransitionResult result = jobsRepo.upsertStepRunning(
                 jobId,
@@ -47,6 +49,7 @@ public class JobCallbackService {
 
     @Transactional
     public void stepDone(String jobId, String stepId, String actor, StepDoneCallbackReq req) {
+        requireJob(jobId);
         String detailJson = JsonUtil.toJson(req.payload());
         StepTransitionResult result = jobsRepo.markStepDone(jobId, stepId, req.getOutputHash());
         StepRow step = requireStep(jobId, stepId, result.step());
@@ -62,9 +65,18 @@ public class JobCallbackService {
 
     @Transactional
     public ArtifactRegisterResp registerArtifact(String jobId, String actor, ArtifactRegisterReq body) {
+        requireJob(jobId);
         jobsRepo.upsertArtifact(jobId, body.artifactId(), body.kind(), body.path(), body.sha256());
         jobsRepo.audit(new AuditEvent(jobId, actor, "ARTIFACT_REGISTER", null, JsonUtil.toJson(body.payload())));
         return new ArtifactRegisterResp(true, body.artifactId());
+    }
+
+    private JobRow requireJob(String jobId) {
+        JobRow job = jobsRepo.getJob(jobId);
+        if (job == null) {
+            throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
+        }
+        return job;
     }
 
     private StepRow requireStep(String jobId, String stepId, StepRow step) {
