@@ -4,7 +4,7 @@ import hashlib
 import os
 import time
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from aiwf.office_style import (
     office_rows_subset as _office_rows_subset,
@@ -20,6 +20,18 @@ from aiwf.office_outputs import (
 from aiwf.flows.artifact_selection import validate_artifact_selection_config_with_tokens
 from aiwf.flows.cleaning_artifacts import list_cleaning_artifact_tokens
 from aiwf.flows.office_artifacts import list_office_artifact_tokens
+from aiwf.flows.cleaning_config import (
+    is_generic_rules_enabled as _is_generic_rules_enabled_impl,
+    normalize_key as _normalize_key_impl,
+    quantize_decimal as _quantize_decimal_impl,
+    rule_param as _rule_param_impl,
+    rules_dict as _rules_dict_impl,
+    to_bool as _to_bool_impl,
+    to_decimal as _to_decimal_impl,
+    to_float as _to_float_impl,
+    to_int as _to_int_impl,
+    validate_cleaning_rules_impl,
+)
 from aiwf.flows.cleaning_inputs import (
     load_raw_rows_impl,
     local_parquet_strict_enabled_impl,
@@ -39,6 +51,14 @@ from aiwf.flows.cleaning_outputs import (
 )
 from aiwf.flows.cleaning_profile import build_profile_impl
 from aiwf.flows.cleaning_quality import apply_quality_gates_impl
+from aiwf.flows.cleaning_transport import (
+    base_artifact_upsert_impl,
+    base_step_done_impl,
+    base_step_fail_impl,
+    base_step_start_impl,
+    headers_from_params_impl,
+    post_json_impl,
+)
 from aiwf.flows.cleaning_simple_rules import clean_rows_simple as _clean_rows_simple
 from aiwf.flows.cleaning_generic_rules import clean_rows_generic as _clean_rows_generic_external
 from aiwf.paths import resolve_path
@@ -83,18 +103,11 @@ def _is_valid_parquet_file(path: str) -> bool:
 
 
 def _headers_from_params(params: Dict[str, Any]) -> Dict[str, str]:
-    api_key = params.get("api_key") or os.getenv("AIWF_API_KEY")
-    if api_key:
-        return {"X-API-Key": str(api_key)}
-    return {}
+    return headers_from_params_impl(params, env_api_key=os.getenv("AIWF_API_KEY"))
 
 
 def _post_json(url: str, body: Dict[str, Any], headers: Dict[str, str]) -> None:
-    import requests
-
-    r = requests.post(url, json=body, headers=headers, timeout=30)
-    if r.status_code >= 400:
-        raise RuntimeError(f"POST {url} -> {r.status_code} {r.text}")
+    return post_json_impl(url, body, headers)
 
 
 def _try_accel_cleaning(
@@ -230,14 +243,18 @@ def _base_step_start(
     params: Dict[str, Any],
     headers: Dict[str, str],
 ) -> None:
-    url = f"{base_url}/api/v1/jobs/{job_id}/steps/{step_id}/start?actor={actor}"
-    body = {
-        "ruleset_version": ruleset_version,
-        "input_uri": input_uri,
-        "output_uri": output_uri,
-        "params": params or {},
-    }
-    _post_json(url, body, headers)
+    return base_step_start_impl(
+        base_url=base_url,
+        job_id=job_id,
+        step_id=step_id,
+        actor=actor,
+        ruleset_version=ruleset_version,
+        input_uri=input_uri,
+        output_uri=output_uri,
+        params=params,
+        headers=headers,
+        post_json=_post_json,
+    )
 
 
 def _base_step_done(
@@ -248,9 +265,15 @@ def _base_step_done(
     output_hash: str,
     headers: Dict[str, str],
 ) -> None:
-    url = f"{base_url}/api/v1/jobs/{job_id}/steps/{step_id}/done?actor={actor}"
-    body = {"output_hash": output_hash}
-    _post_json(url, body, headers)
+    return base_step_done_impl(
+        base_url=base_url,
+        job_id=job_id,
+        step_id=step_id,
+        actor=actor,
+        output_hash=output_hash,
+        headers=headers,
+        post_json=_post_json,
+    )
 
 
 def _base_step_fail(
@@ -261,9 +284,15 @@ def _base_step_fail(
     error: str,
     headers: Dict[str, str],
 ) -> None:
-    url = f"{base_url}/api/v1/jobs/{job_id}/steps/{step_id}/fail?actor={actor}"
-    body = {"error": error}
-    _post_json(url, body, headers)
+    return base_step_fail_impl(
+        base_url=base_url,
+        job_id=job_id,
+        step_id=step_id,
+        actor=actor,
+        error=error,
+        headers=headers,
+        post_json=_post_json,
+    )
 
 
 def _base_artifact_upsert(
@@ -277,275 +306,62 @@ def _base_artifact_upsert(
     extra_json: Optional[str],
     headers: Dict[str, str],
 ) -> None:
-    import requests
-
-    candidates = [
-        f"{base_url}/api/v1/jobs/{job_id}/artifacts/upsert?actor={actor}",
-        f"{base_url}/api/v1/jobs/{job_id}/artifacts?actor={actor}",
-        f"{base_url}/api/v1/jobs/{job_id}/artifacts/register?actor={actor}",
-    ]
-    body = {
-        "artifact_id": artifact_id,
-        "kind": kind,
-        "path": path,
-        "sha256": sha256,
-        "extra_json": extra_json,
-    }
-
-    last_err = None
-    for url in candidates:
-        try:
-            r = requests.post(url, json=body, headers=headers, timeout=30)
-            if r.status_code < 400:
-                return
-            last_err = f"{r.status_code} {r.text}"
-        except Exception as e:
-            last_err = str(e)
-
-    raise RuntimeError(f"artifact upsert failed, tried {candidates}, last_err={last_err}")
+    return base_artifact_upsert_impl(
+        base_url=base_url,
+        job_id=job_id,
+        actor=actor,
+        artifact_id=artifact_id,
+        kind=kind,
+        path=path,
+        sha256=sha256,
+        extra_json=extra_json,
+        headers=headers,
+    )
 
 
 def _normalize_key(k: str) -> str:
-    return (k or "").strip().lower()
+    return _normalize_key_impl(k)
 
 
 def _to_int(v: Any) -> Optional[int]:
-    if v is None:
-        return None
-    s = str(v).strip()
-    if not s:
-        return None
-    try:
-        if "." in s:
-            return int(float(s))
-        return int(s)
-    except Exception:
-        return None
+    return _to_int_impl(v)
 
 
 def _to_float(v: Any) -> Optional[float]:
-    if v is None:
-        return None
-    s = str(v).strip()
-    if not s:
-        return None
-    s = s.replace(",", "")
-    if s.startswith("$"):
-        s = s[1:]
-    try:
-        return float(s)
-    except Exception:
-        return None
+    return _to_float_impl(v)
 
 
 def _to_decimal(v: Any) -> Optional[Decimal]:
-    if v is None:
-        return None
-    s = str(v).strip()
-    if not s:
-        return None
-    s = s.replace(",", "")
-    if s.startswith("$"):
-        s = s[1:]
-    try:
-        return Decimal(s)
-    except (InvalidOperation, ValueError):
-        return None
+    return _to_decimal_impl(v)
 
 
 def _to_bool(v: Any, default: bool = False) -> bool:
-    if v is None:
-        return default
-    if isinstance(v, bool):
-        return v
-    s = str(v).strip().lower()
-    if s in {"1", "true", "yes", "on"}:
-        return True
-    if s in {"0", "false", "no", "off"}:
-        return False
-    return default
+    return _to_bool_impl(v, default=default)
 
 
 def _quantize_decimal(v: Decimal, digits: int) -> Decimal:
-    q = Decimal("1").scaleb(-digits)
-    return v.quantize(q, rounding=ROUND_HALF_UP)
+    return _quantize_decimal_impl(v, digits)
 
 
 def _rules_dict(params: Dict[str, Any]) -> Dict[str, Any]:
-    rules = params.get("rules")
-    if isinstance(rules, dict):
-        return rules
-    return {}
+    return _rules_dict_impl(params)
 
 
 def _rule_param(params: Dict[str, Any], key: str, default: Any = None) -> Any:
-    rules = _rules_dict(params)
-    if key in rules:
-        return rules.get(key)
-    return params.get(key, default)
+    return _rule_param_impl(params, key, default)
 
 
 def _is_generic_rules_enabled(params: Dict[str, Any]) -> bool:
-    rules = _rules_dict(params)
-    if str(rules.get("platform_mode", "")).strip().lower() == "generic":
-        return True
-    generic_keys = {
-        "rename_map",
-        "casts",
-        "filters",
-        "required_fields",
-        "default_values",
-        "include_fields",
-        "exclude_fields",
-        "deduplicate_by",
-        "sort_by",
-        "null_values",
-        "trim_strings",
-        "lowercase_fields",
-        "uppercase_fields",
-    }
-    return any(k in rules for k in generic_keys)
+    return _is_generic_rules_enabled_impl(params)
 
 
 def validate_cleaning_rules(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Validate declarative cleaning rules and return structured diagnostics.
-    Accepts full params payload or a direct rules object.
-    """
-    if not isinstance(params, dict):
-        return {"ok": False, "errors": ["params must be an object"], "warnings": []}
-
-    rules = params.get("rules") if isinstance(params.get("rules"), dict) else params
-    if not isinstance(rules, dict):
-        return {"ok": False, "errors": ["rules must be an object"], "warnings": []}
-
-    errors: List[str] = []
-    warnings: List[str] = []
-
-    allowed_keys = {
-        "platform_mode",
-        "rename_map",
-        "casts",
-        "filters",
-        "required_fields",
-        "default_values",
-        "include_fields",
-        "exclude_fields",
-        "deduplicate_by",
-        "deduplicate_keep",
-        "sort_by",
-        "null_values",
-        "trim_strings",
-        "lowercase_fields",
-        "uppercase_fields",
-        "id_field",
-        "amount_field",
-        "amount_round_digits",
-        "drop_negative_amount",
-        "min_amount",
-        "max_amount",
-        "deduplicate_by_id",
-        "sort_by_id",
-        "allow_empty_output",
-        "local_parquet_strict",
-        "max_invalid_rows",
-        "max_filtered_rows",
-        "min_output_rows",
-        "max_invalid_ratio",
-        "max_required_missing_ratio",
-        "force_local_cleaning",
-        "use_rust_v2",
-        "rust_v2_timeout_seconds",
-        "artifact_selection",
-        "office_outputs_enabled",
-        "enabled_office_artifacts",
-        "disabled_office_artifacts",
-        "enabled_core_artifacts",
-        "disabled_core_artifacts",
-    }
-    unknown = [k for k in rules.keys() if k not in allowed_keys]
-    if unknown:
-        warnings.append(f"unknown rule keys: {', '.join(sorted(unknown))}")
-
-    if "platform_mode" in rules and str(rules.get("platform_mode", "")).strip().lower() not in {"generic", ""}:
-        errors.append("platform_mode must be 'generic' when provided")
-
-    if "rename_map" in rules and not isinstance(rules.get("rename_map"), dict):
-        errors.append("rename_map must be an object")
-    if "casts" in rules and not isinstance(rules.get("casts"), dict):
-        errors.append("casts must be an object")
-    if "default_values" in rules and not isinstance(rules.get("default_values"), dict):
-        errors.append("default_values must be an object")
-
-    for key in ["required_fields", "include_fields", "exclude_fields", "deduplicate_by", "lowercase_fields", "uppercase_fields", "null_values"]:
-        if key in rules and not isinstance(rules.get(key), list):
-            errors.append(f"{key} must be an array")
-
-    if "filters" in rules:
-        filters = rules.get("filters")
-        if not isinstance(filters, list):
-            errors.append("filters must be an array")
-        else:
-            allowed_ops = {"eq", "ne", "gt", "gte", "lt", "lte", "in", "not_in", "contains", "regex", "exists", "not_exists"}
-            for i, f in enumerate(filters):
-                if not isinstance(f, dict):
-                    errors.append(f"filters[{i}] must be an object")
-                    continue
-                op = str(f.get("op", "eq")).strip().lower()
-                if op not in allowed_ops:
-                    errors.append(f"filters[{i}].op must be one of {sorted(allowed_ops)}")
-                if op not in {"exists", "not_exists"} and "field" not in f:
-                    errors.append(f"filters[{i}].field is required")
-
-    if "deduplicate_keep" in rules:
-        keep = str(rules.get("deduplicate_keep", "")).strip().lower()
-        if keep not in {"first", "last"}:
-            errors.append("deduplicate_keep must be 'first' or 'last'")
-
-    if "sort_by" in rules:
-        sort_by = rules.get("sort_by")
-        if not isinstance(sort_by, list):
-            errors.append("sort_by must be an array")
-        else:
-            for i, s in enumerate(sort_by):
-                if isinstance(s, str):
-                    continue
-                if not isinstance(s, dict):
-                    errors.append(f"sort_by[{i}] must be a string or object")
-                    continue
-                order = str(s.get("order", "asc")).strip().lower()
-                if order not in {"asc", "desc"}:
-                    errors.append(f"sort_by[{i}].order must be 'asc' or 'desc'")
-
-    if "amount_round_digits" in rules:
-        d = _to_int(rules.get("amount_round_digits"))
-        if d is None or d < 0 or d > 6:
-            errors.append("amount_round_digits must be integer in range [0,6]")
-
-    if "max_invalid_ratio" in rules:
-        r = _to_decimal(rules.get("max_invalid_ratio"))
-        if r is None or r < 0 or r > 1:
-            errors.append("max_invalid_ratio must be a number in [0,1]")
-    if "max_required_missing_ratio" in rules:
-        r2 = _to_decimal(rules.get("max_required_missing_ratio"))
-        if r2 is None or r2 < 0 or r2 > 1:
-            errors.append("max_required_missing_ratio must be a number in [0,1]")
-
-    for key in ["max_invalid_rows", "max_filtered_rows", "min_output_rows"]:
-        if key in rules:
-            iv = _to_int(rules.get(key))
-            if iv is None or iv < 0:
-                errors.append(f"{key} must be a non-negative integer")
-
-    artifact_vr = validate_artifact_selection_config_with_tokens(
+    return validate_cleaning_rules_impl(
         params,
-        allowed_core_tokens=list_cleaning_artifact_tokens(),
-        allowed_office_tokens=list_office_artifact_tokens(),
+        validate_artifact_selection_config_with_tokens=validate_artifact_selection_config_with_tokens,
+        list_cleaning_artifact_tokens=list_cleaning_artifact_tokens,
+        list_office_artifact_tokens=list_office_artifact_tokens,
     )
-    errors.extend(artifact_vr.get("errors", []))
-    warnings.extend(artifact_vr.get("warnings", []))
-
-    return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
 
 
 def _local_parquet_strict_enabled(params: Dict[str, Any]) -> bool:
