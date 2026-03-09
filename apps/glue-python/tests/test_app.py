@@ -356,6 +356,95 @@ class AppRouteTests(unittest.TestCase):
 
         self.assertEqual(len(calls), 1)
 
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_executes_cleaning_end_to_end(self, _make_base_client):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start") as step_start, patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ) as artifact_upsert, patch("aiwf.flows.cleaning._base_step_done") as step_done, patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ) as step_fail, patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._require_local_parquet_dependencies"
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                resp = self.client.post(
+                    "/jobs/job-e2e/run/cleaning",
+                    json={
+                        "actor": "local",
+                        "ruleset_version": "v1",
+                        "params": {
+                            "job_root": local_job_root,
+                            "rows": [{"id": 1, "amount": 10.0}],
+                            "office_outputs_enabled": False,
+                        },
+                    },
+                )
+
+            self.assertEqual(resp.status_code, 200)
+            payload = resp.json()
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["job_id"], "job-e2e")
+            self.assertEqual(payload["flow"], "cleaning")
+            self.assertGreaterEqual(len(payload["artifacts"]), 2)
+            parquet_artifact = next(item for item in payload["artifacts"] if item["kind"] == "parquet")
+            self.assertTrue(parquet_artifact["path"].startswith(local_job_root))
+            step_start.assert_called_once()
+            step_done.assert_called_once()
+            step_fail.assert_not_called()
+            self.assertGreaterEqual(artifact_upsert.call_count, 2)
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_reports_cleaning_failures_via_step_fail(self, _make_base_client):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            with patch("aiwf.flows.cleaning._base_step_start") as step_start, patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ) as artifact_upsert, patch("aiwf.flows.cleaning._base_step_done") as step_done, patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ) as step_fail, patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._require_local_parquet_dependencies"
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=RuntimeError("disk full")
+            ):
+                resp = self.client.post(
+                    "/jobs/job-e2e-fail/run/cleaning",
+                    json={
+                        "actor": "local",
+                        "ruleset_version": "v1",
+                        "params": {
+                            "job_root": local_job_root,
+                            "rows": [{"id": 1, "amount": 10.0}],
+                            "office_outputs_enabled": False,
+                        },
+                    },
+                )
+
+            self.assertEqual(resp.status_code, 500)
+            payload = resp.json()
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["error"], "internal server error")
+            step_start.assert_called_once()
+            step_fail.assert_called_once()
+            step_done.assert_not_called()
+            artifact_upsert.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
