@@ -17,6 +17,11 @@ aiwf:
   lake: ${AIWF_LAKE:.\lake}
   glueUrl: ${AIWF_GLUE_URL:http://127.0.0.1:18081}
   apiKey: ${AIWF_API_KEY:} # optional; when configured requests must carry X-API-Key
+  glueConnectTimeoutMs: ${AIWF_GLUE_CONNECT_TIMEOUT_MS:3000}
+  glueReadTimeoutMs: ${AIWF_GLUE_READ_TIMEOUT_MS:30000}
+  glueRunMaxAttempts: ${AIWF_GLUE_RUN_MAX_ATTEMPTS:1}
+  glueHealthMaxAttempts: ${AIWF_GLUE_HEALTH_MAX_ATTEMPTS:3}
+  glueRetryDelayMs: ${AIWF_GLUE_RETRY_DELAY_MS:250}
 
 spring:
   datasource:
@@ -27,4 +32,3 @@ spring:
       maximum-pool-size: 10
       minimum-idle: 2
       pool-name: AIWF-Hikari
-
