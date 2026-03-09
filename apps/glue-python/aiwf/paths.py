@@ -50,9 +50,16 @@ def is_within_root(path: str, root: str) -> bool:
         return False
 
 
+def _strip_file_uri(path: str) -> str:
+    raw = str(path or "").strip()
+    if raw.lower().startswith("file://"):
+        return raw[7:]
+    return raw
+
+
 def resolve_path_within_root(root: str, path: str | None = None) -> str:
     base_root = os.path.normpath(os.path.abspath(root))
-    raw = str(path or "").strip()
+    raw = _strip_file_uri(path or "")
     if not raw:
         return base_root
     if os.path.isabs(raw):
@@ -62,6 +69,17 @@ def resolve_path_within_root(root: str, path: str | None = None) -> str:
     if not is_within_root(candidate, base_root):
         raise ValueError(f"path escapes root {base_root}: {raw}")
     return candidate
+
+
+def resolve_path(root: str, path: str | None = None, *, allow_absolute: bool = True) -> str:
+    raw = _strip_file_uri(path or "")
+    if not raw:
+        return os.path.normpath(os.path.abspath(root))
+    if os.path.isabs(raw):
+        if not allow_absolute:
+            raise ValueError(f"absolute path is not allowed: {raw}")
+        return os.path.normpath(os.path.abspath(raw))
+    return resolve_path_within_root(root, raw)
 
 
 def _allow_external_job_root_override() -> bool:

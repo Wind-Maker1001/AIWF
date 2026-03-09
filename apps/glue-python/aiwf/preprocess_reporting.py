@@ -6,6 +6,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from aiwf.paths import resolve_path
 from aiwf.preprocess_io import _detect_output_format
 
 
@@ -38,7 +39,12 @@ def export_canonical_bundle(
     output_path: str,
     spec: Dict[str, Any],
 ) -> Dict[str, Any]:
-    bundle_dir = str(spec.get("canonical_bundle_dir") or f"{output_path}.bundle")
+    output_dir = os.path.dirname(os.path.abspath(output_path)) or os.getcwd()
+    bundle_dir = resolve_path(
+        output_dir,
+        str(spec.get("canonical_bundle_dir") or f"{output_path}.bundle"),
+        allow_absolute=True,
+    )
     os.makedirs(bundle_dir, exist_ok=True)
     title = str(spec.get("canonical_title") or "AIWF Canonical Corpus").strip()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
