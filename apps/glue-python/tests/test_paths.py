@@ -26,6 +26,26 @@ class PathResolutionTests(unittest.TestCase):
             self.assertEqual(layout["input_uri"], expected_uri)
             self.assertEqual(layout["output_uri"], expected_uri)
 
+    def test_prepare_job_layout_prefers_job_context_over_params_job_root(self):
+        with patch.dict(os.environ, {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False):
+            layout = prepare_job_layout(
+                "job-ctx",
+                {
+                    "job_root": r"D:\wrong\job",
+                    "job_context": {
+                        "job_root": r"D:\right\job",
+                        "stage_dir": r"D:\right\job\stage-x",
+                        "artifacts_dir": r"D:\right\job\artifacts-x",
+                        "evidence_dir": r"D:\right\job\evidence-x",
+                    },
+                },
+                ensure_dirs=lambda *args: None,
+            )
+        self.assertEqual(layout["job_root"], os.path.normpath(r"D:\right\job"))
+        self.assertEqual(layout["stage_dir"], os.path.normpath(r"D:\right\job\stage-x"))
+        self.assertEqual(layout["artifacts_dir"], os.path.normpath(r"D:\right\job\artifacts-x"))
+        self.assertEqual(layout["evidence_dir"], os.path.normpath(r"D:\right\job\evidence-x"))
+
     def test_resolve_job_root_rejects_traversal_job_id(self):
         with patch.dict(os.environ, {"AIWF_JOBS_ROOT": r"D:\custom\jobs"}, clear=True):
             with self.assertRaises(ValueError):

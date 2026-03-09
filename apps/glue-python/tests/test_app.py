@@ -289,6 +289,36 @@ class AppRouteTests(unittest.TestCase):
             kwargs["params"]["job_root"],
             os.path.join(glue_app.settings.jobs_root, "job-root"),
         )
+        self.assertEqual(
+            kwargs["params"]["job_context"]["job_root"],
+            os.path.join(glue_app.settings.jobs_root, "job-root"),
+        )
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    @patch("aiwf.flows.cleaning.run_cleaning", return_value={"ok": True})
+    def test_run_cleaning_flow_prefers_explicit_job_context_and_trace_id(self, run_cleaning, _make_base_client):
+        req = glue_app.RunReq(
+            actor="local",
+            ruleset_version="v1",
+            trace_id="trace-123",
+            job_context={
+                "job_root": r"D:\ctx\job",
+                "stage_dir": r"D:\ctx\job\stage",
+                "artifacts_dir": r"D:\ctx\job\artifacts",
+                "evidence_dir": r"D:\ctx\job\evidence",
+            },
+            params={"job_root": r"D:\legacy\job", "x": 1},
+        )
+
+        glue_app.run_cleaning_flow("job-root", req)
+
+        kwargs = run_cleaning.call_args.kwargs
+        self.assertEqual(kwargs["params"]["job_root"], os.path.normpath(r"D:\ctx\job"))
+        self.assertEqual(kwargs["params"]["job_context"]["stage_dir"], os.path.normpath(r"D:\ctx\job\stage"))
+        self.assertEqual(kwargs["params"]["job_context"]["artifacts_dir"], os.path.normpath(r"D:\ctx\job\artifacts"))
+        self.assertEqual(kwargs["params"]["job_context"]["evidence_dir"], os.path.normpath(r"D:\ctx\job\evidence"))
+        self.assertEqual(kwargs["params"]["trace_id"], "trace-123")
 
     @patch.object(glue_app, "make_base_client", return_value=None)
     def test_run_flow_with_runner_propagates_runner_typeerror_without_retry(self, _make_base_client):
