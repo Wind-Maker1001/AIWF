@@ -3,7 +3,7 @@ package com.aiwf.base.db.model;
 public record StepRow(
         String jobId,
         String stepId,
-        String status,
+        StepStatus status,
         String inputUri,
         String outputUri,
         String rulesetVersion,

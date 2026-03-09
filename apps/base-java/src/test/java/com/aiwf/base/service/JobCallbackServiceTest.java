@@ -4,6 +4,7 @@ import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.ArtifactRegisterReq;
@@ -49,7 +50,7 @@ class JobCallbackServiceTest {
         when(jobsRepo.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobsRepo.upsertStepRunning(eq("job1"), eq("cleaning"), eq("bus://input.csv"), eq("bus://output.csv"), eq("v3"), any()))
                 .thenReturn(new StepTransitionResult(
-                        new StepRow("job1", "cleaning", "RUNNING", "bus://input.csv", "bus://output.csv", "v3", "{}", null, null, null, null),
+                        new StepRow("job1", "cleaning", StepStatus.RUNNING, "bus://input.csv", "bus://output.csv", "v3", "{}", null, null, null, null),
                         true
                 ));
 
@@ -65,7 +66,7 @@ class JobCallbackServiceTest {
         when(jobsRepo.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobsRepo.markStepDone(eq("job1"), eq("cleaning"), eq(null)))
                 .thenReturn(new StepTransitionResult(
-                        new StepRow("job1", "cleaning", "FAILED", null, null, "v1", "{}", null, null, null, "boom"),
+                        new StepRow("job1", "cleaning", StepStatus.FAILED, null, null, "v1", "{}", null, null, null, "boom"),
                         false
                 ));
 

@@ -5,6 +5,7 @@ import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.glue.GlueGateway;
 import com.aiwf.base.glue.GlueHealthResult;
@@ -123,11 +124,11 @@ public class JobService {
         if (step == null) {
             throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
         }
-        if (!"FAILED".equals(step.status())) {
+        if (step.status() != StepStatus.FAILED) {
             throw ApiException.conflict(
                     "step_transition_conflict",
-                    "step cannot transition to FAILED",
-                    Map.of("job_id", jobId, "step_id", stepId, "current_status", step.status())
+                    "step cannot transition to " + StepStatus.FAILED.toDb(),
+                    Map.of("job_id", jobId, "step_id", stepId, "current_status", step.status().toDb())
             );
         }
 
@@ -175,7 +176,7 @@ public class JobService {
         return new StepResp(
                 row.jobId(),
                 row.stepId(),
-                row.status(),
+                row.status().toDb(),
                 row.inputUri(),
                 row.outputUri(),
                 row.rulesetVersion(),

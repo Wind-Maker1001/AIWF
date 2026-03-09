@@ -4,6 +4,7 @@ import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.glue.GlueGateway;
 import com.aiwf.base.web.ApiException;
@@ -48,7 +49,7 @@ class JobServiceTest {
         when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
-                        new StepRow("job1", "step1", "FAILED", null, null, "v1", "{}", null, null, null, "boom"),
+                        new StepRow("job1", "step1", StepStatus.FAILED, null, null, "v1", "{}", null, null, null, "boom"),
                         true
                 ));
 
@@ -79,7 +80,7 @@ class JobServiceTest {
         when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
-                        new StepRow("job1", "step1", "DONE", null, null, "v1", "{}", null, null, "abc123", null),
+                        new StepRow("job1", "step1", StepStatus.DONE, null, null, "v1", "{}", null, null, "abc123", null),
                         false
                 ));
 
@@ -96,7 +97,7 @@ class JobServiceTest {
         when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
-                        new StepRow("job1", "step1", "FAILED", null, null, "v1", "{}", null, null, null, "boom"),
+                        new StepRow("job1", "step1", StepStatus.FAILED, null, null, "v1", "{}", null, null, null, "boom"),
                         false
                 ));
 

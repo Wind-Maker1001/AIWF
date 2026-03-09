@@ -4,6 +4,7 @@ import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.ArtifactRegisterReq;
@@ -39,8 +40,8 @@ public class JobCallbackService {
                 paramsJson
         );
         StepRow step = requireStep(jobId, stepId, result.step());
-        if (!"RUNNING".equals(step.status())) {
-            throw stepConflict(jobId, stepId, "RUNNING", step.status());
+        if (step.status() != StepStatus.RUNNING) {
+            throw stepConflict(jobId, stepId, StepStatus.RUNNING, step.status());
         }
 
         jobStatus.onStepStart(jobId);
@@ -53,8 +54,8 @@ public class JobCallbackService {
         String detailJson = JsonUtil.toJson(req.payload());
         StepTransitionResult result = jobsRepo.markStepDone(jobId, stepId, req.getOutputHash());
         StepRow step = requireStep(jobId, stepId, result.step());
-        if (!"DONE".equals(step.status())) {
-            throw stepConflict(jobId, stepId, "DONE", step.status());
+        if (step.status() != StepStatus.DONE) {
+            throw stepConflict(jobId, stepId, StepStatus.DONE, step.status());
         }
 
         if (result.changed()) {
@@ -86,11 +87,11 @@ public class JobCallbackService {
         return step;
     }
 
-    private static ApiException stepConflict(String jobId, String stepId, String targetStatus, String currentStatus) {
+    private static ApiException stepConflict(String jobId, String stepId, StepStatus targetStatus, StepStatus currentStatus) {
         return ApiException.conflict(
                 "step_transition_conflict",
-                "step cannot transition to " + targetStatus,
-                Map.of("job_id", jobId, "step_id", stepId, "current_status", currentStatus)
+                "step cannot transition to " + targetStatus.toDb(),
+                Map.of("job_id", jobId, "step_id", stepId, "current_status", currentStatus.toDb())
         );
     }
 }
