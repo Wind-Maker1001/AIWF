@@ -19,6 +19,7 @@ from aiwf.office_outputs import (
 )
 from aiwf.flows.artifact_selection import validate_artifact_selection_config_with_tokens
 from aiwf.flows.cleaning_artifacts import list_cleaning_artifact_tokens
+from aiwf.accel_client import run_cleaning_operator, transform_rows_v2_operator
 from aiwf.flows.office_artifacts import list_office_artifact_tokens
 from aiwf.flows.cleaning_config import (
     is_generic_rules_enabled as _is_generic_rules_enabled_impl,
@@ -119,117 +120,32 @@ def _try_accel_cleaning(
     input_uri: Optional[str],
     output_uri: Optional[str],
 ) -> Dict[str, Any]:
-    """
-    Prefer accel-rust first. If it fails or output is invalid, caller falls back locally.
-    """
-    import requests
-
-    accel_url = str(params.get("accel_url") or os.getenv("AIWF_ACCEL_URL") or "http://127.0.0.1:18082").rstrip("/")
-    timeout = float(params.get("accel_timeout_seconds") or os.getenv("AIWF_ACCEL_TIMEOUT", "10"))
-
-    payload = {
-        "job_id": job_id,
-        "step_id": step_id,
-        "actor": actor,
-        "ruleset_version": ruleset_version,
-        "input_uri": input_uri,
-        "output_uri": output_uri,
-        "job_root": params.get("job_root"),
-        "params": params,
-        # Test-only switch for fallback integration verification.
-        "force_bad_parquet": bool(params.get("accel_force_bad_parquet", False)),
-    }
-
-    try:
-        url = f"{accel_url}/operators/cleaning"
-        resp = requests.post(url, json=payload, timeout=timeout)
-        if resp.status_code >= 400:
-            return {
-                "attempted": True,
-                "ok": False,
-                "url": url,
-                "error": f"{resp.status_code} {resp.text}",
-            }
-
-        try:
-            body = resp.json()
-        except Exception:
-            body = {"raw": resp.text[:500]}
-
-        return {
-            "attempted": True,
-            "ok": True,
-            "url": url,
-            "response": body,
-        }
-    except Exception as e:
-        return {
-            "attempted": True,
-            "ok": False,
-            "url": f"{accel_url}/operators/cleaning",
-            "error": str(e),
-        }
+    return run_cleaning_operator(
+        params=params,
+        job_id=job_id,
+        step_id=step_id,
+        actor=actor,
+        ruleset_version=ruleset_version,
+        input_uri=input_uri,
+        output_uri=output_uri,
+    )
 
 
 def _try_rust_transform_rows_v2(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
-    import requests
-
-    accel_url = str(params.get("accel_url") or os.getenv("AIWF_ACCEL_URL") or "http://127.0.0.1:18082").rstrip("/")
-    timeout = float(params.get("rust_v2_timeout_seconds") or os.getenv("AIWF_RUST_V2_TIMEOUT", "8"))
     rules = _rules_dict(params)
-    payload = {
-        "run_id": str(params.get("job_id") or ""),
-        "rows": raw_rows,
-        "rules": rules,
-        "quality_gates": {
+    return transform_rows_v2_operator(
+        raw_rows=raw_rows,
+        params=params,
+        rules=rules,
+        quality_gates={
             "max_invalid_rows": _rule_param(params, "max_invalid_rows"),
             "min_output_rows": _rule_param(params, "min_output_rows"),
             "max_invalid_ratio": _rule_param(params, "max_invalid_ratio"),
             "required_fields": _rule_param(params, "required_fields"),
             "max_required_missing_ratio": _rule_param(params, "max_required_missing_ratio"),
         },
-        "schema_hint": {"source": "glue-python.cleaning"},
-    }
-
-    try:
-        url = f"{accel_url}/operators/transform_rows_v2"
-        resp = requests.post(url, json=payload, timeout=timeout)
-        if resp.status_code >= 400:
-            return {
-                "attempted": True,
-                "ok": False,
-                "url": url,
-                "error": f"{resp.status_code} {resp.text}",
-            }
-        body = resp.json()
-        rows = body.get("rows") if isinstance(body, dict) else None
-        quality = body.get("quality") if isinstance(body, dict) else None
-        if not isinstance(rows, list) or not isinstance(quality, dict):
-            return {
-                "attempted": True,
-                "ok": False,
-                "url": url,
-                "error": "transform_rows_v2 invalid response shape",
-                "response": body,
-            }
-        quality2 = dict(quality)
-        quality2["rust_v2_used"] = True
-        quality2["rust_v2_trace_id"] = str(body.get("trace_id") or "")
-        return {
-            "attempted": True,
-            "ok": True,
-            "url": url,
-            "rows": rows,
-            "quality": quality2,
-            "response": body,
-        }
-    except Exception as e:
-        return {
-            "attempted": True,
-            "ok": False,
-            "url": f"{accel_url}/operators/transform_rows_v2",
-            "error": str(e),
-        }
+        schema_hint={"source": "glue-python.cleaning"},
+    )
 
 
 def _base_step_start(
