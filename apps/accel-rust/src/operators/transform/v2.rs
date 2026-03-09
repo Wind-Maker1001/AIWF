@@ -21,7 +21,6 @@ use std::{
     collections::HashMap,
     env,
     sync::{Arc, Mutex, atomic::AtomicBool},
-    time::Instant,
 };
 
 use super::types::TransformRowsReq;
