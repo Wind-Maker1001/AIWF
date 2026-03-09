@@ -7,6 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasConnectionIndex.cs" Link="Source\CanvasConnectionIndex.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasSelectionDiff.cs" Link="Source\CanvasSelectionDiff.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasSnapshotWriteDecider.cs" Link="Source\CanvasSnapshotWriteDecider.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\NodeDragMath.cs" Link="Source\NodeDragMath.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\SplitLayoutController.cs" Link="Source\SplitLayoutController.cs" />
   </ItemGroup>

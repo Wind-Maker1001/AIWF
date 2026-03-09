@@ -71,13 +71,21 @@
 - 命令：`dotnet build apps/dify-native-winui/src/WinUI3Bootstrap/WinUI3Bootstrap.csproj -c Debug`
 - 结果：通过（0 errors, 0 warnings）。
 - 命令：`dotnet test apps/dify-native-winui/tests/WinUI3Bootstrap.Tests/WinUI3Bootstrap.Tests.csproj -c Release`
-- 结果：通过（6 passed）。
+- 结果：通过（22 passed）。
+- 命令：`powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_smoke.ps1 -Configuration Release`
+- 结果：通过；已校验窗口激活、构造时长、画布初始化与预热打点。
+- 命令：`powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_uia_smoke.ps1 -Configuration Release`
+- 结果：通过；已校验原生窗口附着、工作台输入编辑、画布命令执行（新建画布 + 快照生成）以及工作台/画布/结果往返导航。
 - 命令：`powershell -ExecutionPolicy Bypass -File .\ops\scripts\capture_native_winui_perf.ps1 -Configuration Release`
-- 结果：通过；已生成启动/纯逻辑基线报告。
+- 结果：通过；已生成启动/纯逻辑基线报告，当前本机样本约为：
+  - `First window activated`: `233.122 ms`
+  - `MainWindow ctor`: `109.549 ms`
+  - `Canvas workspace init`: `24.71 ms`
+  - `Canvas prewarm`: `0.592 ms`
 
 ## 已知问题/风险
 - 当前机器使用 .NET 预览 SDK，会出现 `NETSDK1057` 提示（非阻断）。
-- 画布区域仍有性能优化空间（尤其首次进入和高频拖拽时）。
+- 画布区域仍有性能优化空间（尤其真实 XAML 拖拽/框选/连线场景，当前 perf 仍以启动与纯逻辑基准为主）。
 - Add Node 弹层样式与 Fluent 统一度还可继续打磨。
 - `tests/` 目录下新项目需要确保 `bin/obj` 不入库。
 - 当前性能基线只覆盖启动与纯逻辑微基准，不代表完整 XAML/合成器帧率。

@@ -37,6 +37,16 @@ public sealed partial class MainWindow
             return;
         }
 
+        var point = e.GetCurrentPoint(node);
+        if (!CanvasRuntime.CanvasPointerIntent.ShouldStartPrimaryCanvasAction(
+                point.PointerDeviceType.ToString(),
+                point.Properties.IsLeftButtonPressed,
+                point.Properties.IsMiddleButtonPressed,
+                point.Properties.IsRightButtonPressed))
+        {
+            return;
+        }
+
         if (e.OriginalSource is Ellipse && (e.OriginalSource as FrameworkElement)?.Tag is ConnectorTag)
         {
             return;
@@ -77,7 +87,7 @@ public sealed partial class MainWindow
             point);
         Canvas.SetLeft(node, nextPos.Left);
         Canvas.SetTop(node, nextPos.Top);
-        UpdateAllConnections();
+        UpdateConnectionsForNode(node);
         e.Handled = true;
     }
 
@@ -94,7 +104,7 @@ public sealed partial class MainWindow
             CanvasGridSize);
         Canvas.SetLeft(node, snapped.Left);
         Canvas.SetTop(node, snapped.Top);
-        UpdateAllConnections();
+        UpdateConnectionsForNode(node);
         EnsureCanvasExtentForViewportAndNodes();
         if (!_nodeMovedDuringDrag)
         {

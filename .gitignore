@@ -33,6 +33,7 @@ apps/dify-native-winui/src/WinUI3Bootstrap/bin/
 apps/dify-native-winui/src/WinUI3Bootstrap/obj/
 apps/dify-native-winui/tests/**/bin/
 apps/dify-native-winui/tests/**/obj/
+apps/dify-native-winui/tests/**/TestResults/
 
 # Local runtime/build artifacts
 tmp/

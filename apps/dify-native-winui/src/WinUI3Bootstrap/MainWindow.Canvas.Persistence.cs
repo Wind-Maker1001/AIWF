@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using AIWF.Native.CanvasRuntime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -11,14 +12,28 @@ namespace AIWF.Native;
 
 public sealed partial class MainWindow
 {
-    private void OnSaveCanvasClick(object sender, RoutedEventArgs e)
+    private async void OnSaveCanvasClick(object sender, RoutedEventArgs e)
     {
-        SaveCanvasSnapshot(showStatus: true);
+        try
+        {
+            await SaveCanvasSnapshotAsync(showStatus: true);
+        }
+        catch (Exception ex)
+        {
+            SetInlineStatus($"保存画布失败：{ex.Message}", InlineStatusTone.Error);
+        }
     }
 
-    private void OnLoadCanvasClick(object sender, RoutedEventArgs e)
+    private async void OnLoadCanvasClick(object sender, RoutedEventArgs e)
     {
-        TryLoadCanvasSnapshot(showStatus: true, missingIsError: true);
+        try
+        {
+            await ReloadCanvasSnapshotAsync(showStatus: true, missingIsError: true);
+        }
+        catch (Exception ex)
+        {
+            SetInlineStatus($"加载画布失败：{ex.Message}", InlineStatusTone.Error);
+        }
     }
 
     private void OnNewCanvasClick(object sender, RoutedEventArgs e)
@@ -28,12 +43,12 @@ public sealed partial class MainWindow
 
     private void OnClearCanvasClick(object sender, RoutedEventArgs e)
     {
-        CreateNewCanvas();
-        SetInlineStatus("画布已清空。", InlineStatusTone.Success);
+        CreateNewCanvas("画布已清空。");
     }
 
-    private void CreateNewCanvas()
+    private void CreateNewCanvas(string successMessage = "已新建空白画布。")
     {
+        MarkCanvasSnapshotRestoreSatisfied();
         _suppressCanvasAutosave = true;
         try
         {
@@ -41,18 +56,19 @@ public sealed partial class MainWindow
             _canvasWidth = DefaultCanvasWidth;
             _canvasHeight = DefaultCanvasHeight;
             BuildCanvasGrid();
+            SeedCanvasNodes();
             ResetCanvasView();
             ClampCanvasTransform();
             EnsureCanvasExtentForViewportAndNodes();
             UpdateNodePropertyPanel();
-            SetInlineStatus("已新建空白画布。", InlineStatusTone.Success);
+            SetInlineStatus(successMessage, InlineStatusTone.Success);
         }
         finally
         {
             _suppressCanvasAutosave = false;
         }
 
-        SaveCanvasSnapshot(showStatus: false);
+        RequestCanvasAutosave();
     }
 
     private void RequestCanvasAutosave()
@@ -64,7 +80,7 @@ public sealed partial class MainWindow
 
         if (_canvasAutosaveTimer is null)
         {
-            SaveCanvasSnapshot(showStatus: false);
+            _ = SaveCanvasSnapshotAsync(showStatus: false);
             return;
         }
 
@@ -72,26 +88,38 @@ public sealed partial class MainWindow
         _canvasAutosaveTimer.Start();
     }
 
-    private bool SaveCanvasSnapshot(bool showStatus)
+    private async Task<bool> SaveCanvasSnapshotAsync(bool showStatus)
     {
         if (_suppressCanvasAutosave)
         {
             return false;
         }
 
+        await _canvasSnapshotOperationLock.WaitAsync();
         try
         {
-            var snapshot = BuildCanvasSnapshot();
-            var dir = Path.GetDirectoryName(CanvasStateFilePath) ?? ".";
-            Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(CanvasStateFilePath, json, Encoding.UTF8);
-            if (showStatus)
+            if (_suppressCanvasAutosave)
             {
-                SetInlineStatus($"画布已保存：{CanvasStateFilePath}", InlineStatusTone.Success);
+                return false;
             }
 
-            return true;
+            var snapshot = BuildCanvasSnapshot();
+            var json = JsonSerializer.Serialize(snapshot, CanvasSnapshotJsonOptions);
+            var shouldWrite = await Task.Run(() => PersistCanvasSnapshot(json, _lastSavedCanvasSnapshotJson));
+            if (shouldWrite)
+            {
+                _lastSavedCanvasSnapshotJson = json;
+                if (showStatus)
+                {
+                    SetInlineStatus($"画布已保存：{CanvasStateFilePath}", InlineStatusTone.Success);
+                }
+            }
+            else if (showStatus)
+            {
+                SetInlineStatus("画布无变化，无需保存。", InlineStatusTone.Neutral);
+            }
+
+            return shouldWrite;
         }
         catch (Exception ex)
         {
@@ -102,19 +130,52 @@ public sealed partial class MainWindow
 
             return false;
         }
+        finally
+        {
+            _canvasSnapshotOperationLock.Release();
+        }
+    }
+
+    private static bool PersistCanvasSnapshot(string json, string? previousJson)
+    {
+        var dir = Path.GetDirectoryName(CanvasStateFilePath) ?? ".";
+        Directory.CreateDirectory(dir);
+        var shouldWrite = CanvasSnapshotWriteDecider.ShouldWrite(
+            previousJson,
+            json,
+            File.Exists(CanvasStateFilePath));
+        if (shouldWrite)
+        {
+            File.WriteAllText(CanvasStateFilePath, json, Encoding.UTF8);
+        }
+
+        return shouldWrite;
+    }
+
+    private void TryForceSaveCanvasSnapshotForSmoke()
+    {
+        if (_suppressCanvasAutosave)
+        {
+            return;
+        }
+
+        try
+        {
+            var snapshot = BuildCanvasSnapshot();
+            var json = JsonSerializer.Serialize(snapshot, CanvasSnapshotJsonOptions);
+            if (PersistCanvasSnapshot(json, _lastSavedCanvasSnapshotJson))
+            {
+                _lastSavedCanvasSnapshotJson = json;
+            }
+        }
+        catch
+        {
+        }
     }
 
     private CanvasSnapshot BuildCanvasSnapshot()
     {
-        var snapshot = new CanvasSnapshot
-        {
-            CanvasWidth = _canvasWidth,
-            CanvasHeight = _canvasHeight,
-            ViewScale = Math.Clamp(CanvasTransform.ScaleX, CanvasMinScale, CanvasMaxScale),
-            ViewTranslateX = CanvasTransform.TranslateX,
-            ViewTranslateY = CanvasTransform.TranslateY
-        };
-
+        var nodes = new List<CanvasNodeState>();
         foreach (var node in GetCanvasNodeBorders())
         {
             if (node.Tag is not CanvasNodeTag tag)
@@ -122,45 +183,103 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            snapshot.Nodes.Add(new CanvasNodeDto
-            {
-                NodeKey = tag.NodeKey,
-                Title = tag.TitleBlock?.Text ?? string.Empty,
-                Subtitle = tag.SubtitleBlock?.Text ?? string.Empty,
-                X = Canvas.GetLeft(node),
-                Y = Canvas.GetTop(node),
-                IsUserNode = tag.IsUserNode
-            });
+            nodes.Add(new CanvasNodeState(
+                tag.NodeKey,
+                tag.TitleBlock?.Text ?? string.Empty,
+                tag.SubtitleBlock?.Text ?? string.Empty,
+                Canvas.GetLeft(node),
+                Canvas.GetTop(node),
+                tag.IsUserNode,
+                tag.IsArtifactNode,
+                tag.ArtifactPath,
+                tag.ArtifactKind));
         }
 
-        var keys = snapshot.Nodes.Select(x => x.NodeKey).ToHashSet(StringComparer.Ordinal);
-        foreach (var edge in _connections)
+        var edges = _connections
+            .Select(edge =>
+            {
+                if (edge.Source.Tag is not CanvasNodeTag sourceTag || edge.Target.Tag is not CanvasNodeTag targetTag)
+                {
+                    return null;
+                }
+
+                return new CanvasEdgeState(sourceTag.NodeKey, targetTag.NodeKey);
+            })
+            .Where(static edge => edge is not null)
+            .Cast<CanvasEdgeState>()
+            .ToList();
+
+        return CanvasSnapshotMapper.CreateSnapshot(
+            _canvasWidth,
+            _canvasHeight,
+            CanvasTransform.ScaleX,
+            CanvasTransform.TranslateX,
+            CanvasTransform.TranslateY,
+            nodes,
+            edges,
+            CanvasMinScale,
+            CanvasMaxScale);
+    }
+
+    private sealed record CanvasSnapshotLoadData(bool Exists, string? Json, CanvasSnapshot? Snapshot);
+
+    private static CanvasSnapshotLoadData ReadCanvasSnapshot()
+    {
+        if (!File.Exists(CanvasStateFilePath))
         {
-            if (edge.Source.Tag is not CanvasNodeTag sourceTag || edge.Target.Tag is not CanvasNodeTag targetTag)
-            {
-                continue;
-            }
-
-            if (!keys.Contains(sourceTag.NodeKey) || !keys.Contains(targetTag.NodeKey))
-            {
-                continue;
-            }
-
-            snapshot.Edges.Add(new CanvasEdgeDto
-            {
-                SourceKey = sourceTag.NodeKey,
-                TargetKey = targetTag.NodeKey
-            });
+            return new CanvasSnapshotLoadData(false, null, null);
         }
 
-        return snapshot;
+        var json = File.ReadAllText(CanvasStateFilePath, Encoding.UTF8);
+        var snapshot = JsonSerializer.Deserialize<CanvasSnapshot>(json);
+        return new CanvasSnapshotLoadData(true, json, snapshot);
+    }
+
+    private void ScheduleCanvasSnapshotRestoreIfNeeded()
+    {
+        if (_canvasSnapshotRestoreTask is not null)
+        {
+            return;
+        }
+
+        var version = _canvasSnapshotRestoreVersion;
+        _canvasSnapshotRestoreTask = LoadCanvasSnapshotAsync(
+            showStatus: false,
+            missingIsError: false,
+            restoreVersion: version);
+    }
+
+    private void MarkCanvasSnapshotRestoreSatisfied()
+    {
+        _canvasSnapshotRestoreVersion++;
+        _canvasSnapshotRestoreTask = Task.FromResult(true);
+    }
+
+    private Task<bool> ReloadCanvasSnapshotAsync(bool showStatus, bool missingIsError)
+    {
+        _canvasSnapshotRestoreVersion++;
+        var version = _canvasSnapshotRestoreVersion;
+        _canvasSnapshotRestoreTask = LoadCanvasSnapshotAsync(showStatus, missingIsError, version);
+        return _canvasSnapshotRestoreTask;
     }
 
     private bool TryLoadCanvasSnapshot(bool showStatus, bool missingIsError)
     {
+        return ReloadCanvasSnapshotAsync(showStatus, missingIsError).GetAwaiter().GetResult();
+    }
+
+    private async Task<bool> LoadCanvasSnapshotAsync(bool showStatus, bool missingIsError, int restoreVersion)
+    {
+        await _canvasSnapshotOperationLock.WaitAsync();
         try
         {
-            if (!File.Exists(CanvasStateFilePath))
+            var loadData = await Task.Run(ReadCanvasSnapshot);
+            if (restoreVersion != _canvasSnapshotRestoreVersion)
+            {
+                return false;
+            }
+
+            if (!loadData.Exists)
             {
                 if (showStatus || missingIsError)
                 {
@@ -170,9 +289,7 @@ public sealed partial class MainWindow
                 return false;
             }
 
-            var json = File.ReadAllText(CanvasStateFilePath, Encoding.UTF8);
-            var snapshot = JsonSerializer.Deserialize<CanvasSnapshot>(json);
-            if (snapshot is null)
+            if (loadData.Snapshot is null)
             {
                 if (showStatus)
                 {
@@ -185,7 +302,8 @@ public sealed partial class MainWindow
             _suppressCanvasAutosave = true;
             try
             {
-                ApplyCanvasSnapshot(snapshot);
+                ApplyCanvasSnapshot(loadData.Snapshot);
+                _lastSavedCanvasSnapshotJson = loadData.Json;
             }
             finally
             {
@@ -197,6 +315,7 @@ public sealed partial class MainWindow
                 SetInlineStatus($"画布已加载：{CanvasStateFilePath}", InlineStatusTone.Success);
             }
 
+            _canvasSnapshotRestoreTask = Task.FromResult(true);
             return true;
         }
         catch (Exception ex)
@@ -208,62 +327,64 @@ public sealed partial class MainWindow
 
             return false;
         }
+        finally
+        {
+            _canvasSnapshotOperationLock.Release();
+        }
     }
 
     private void ApplyCanvasSnapshot(CanvasSnapshot snapshot)
     {
         ClearCanvasWorkspaceState();
+        var restorePlan = CanvasSnapshotMapper.CreateRestorePlan(
+            snapshot,
+            DefaultCanvasWidth,
+            DefaultCanvasHeight,
+            CanvasGridSize,
+            CanvasMinScale,
+            CanvasMaxScale);
 
         var map = new Dictionary<string, Border>(StringComparer.Ordinal);
-        var maxX = Math.Max(DefaultCanvasWidth, snapshot.CanvasWidth);
-        var maxY = Math.Max(DefaultCanvasHeight, snapshot.CanvasHeight);
-        foreach (var node in snapshot.Nodes)
+        foreach (var node in restorePlan.Nodes)
         {
-            if (string.IsNullOrWhiteSpace(node.NodeKey))
-            {
-                continue;
-            }
-
-            var x = Math.Max(0, node.X);
-            var y = Math.Max(0, node.Y);
-            maxX = Math.Max(maxX, x + 320);
-            maxY = Math.Max(maxY, y + 220);
             var border = AddCanvasNode(
                 node.NodeKey,
                 string.IsNullOrWhiteSpace(node.Title) ? "节点" : node.Title,
                 node.Subtitle ?? string.Empty,
-                x,
-                y,
-                isUserNode: node.IsUserNode);
+                node.X,
+                node.Y,
+                node.ArtifactPath,
+                node.ArtifactKind,
+                isUserNode: node.IsUserNode,
+                isArtifactNode: node.IsArtifactNode);
             map[node.NodeKey] = border;
+            if (node.IsArtifactNode)
+            {
+                _artifactNodes.Add(border);
+            }
         }
 
-        _canvasWidth = Math.Ceiling(Math.Max(DefaultCanvasWidth, maxX) / CanvasGridSize) * CanvasGridSize;
-        _canvasHeight = Math.Ceiling(Math.Max(DefaultCanvasHeight, maxY) / CanvasGridSize) * CanvasGridSize;
+        _canvasWidth = restorePlan.CanvasWidth;
+        _canvasHeight = restorePlan.CanvasHeight;
         BuildCanvasGrid();
 
-        foreach (var edge in snapshot.Edges)
+        foreach (var edge in restorePlan.Edges)
         {
-            if (string.IsNullOrWhiteSpace(edge.SourceKey) || string.IsNullOrWhiteSpace(edge.TargetKey))
-            {
-                continue;
-            }
-
             if (!map.TryGetValue(edge.SourceKey, out var source) || !map.TryGetValue(edge.TargetKey, out var target))
             {
                 continue;
             }
 
-            AddConnection(source, target, select: false);
+            AddConnection(source, target, select: false, updateGeometry: false, requestAutosave: false);
         }
 
-        var userNodes = snapshot.Nodes.Count(x => x.IsUserNode);
-        _customNodeCounter = Math.Max(1, userNodes + 1);
+        EnsureCoreCanvasWorkflowScaffold();
+        _customNodeCounter = restorePlan.NextCustomNodeCounter;
         UpdateAllConnections();
-        CanvasTransform.ScaleX = Math.Clamp(snapshot.ViewScale, CanvasMinScale, CanvasMaxScale);
-        CanvasTransform.ScaleY = Math.Clamp(snapshot.ViewScale, CanvasMinScale, CanvasMaxScale);
-        CanvasTransform.TranslateX = snapshot.ViewTranslateX;
-        CanvasTransform.TranslateY = snapshot.ViewTranslateY;
+        CanvasTransform.ScaleX = restorePlan.ViewScale;
+        CanvasTransform.ScaleY = restorePlan.ViewScale;
+        CanvasTransform.TranslateX = restorePlan.ViewTranslateX;
+        CanvasTransform.TranslateY = restorePlan.ViewTranslateY;
         ClampCanvasTransform();
         UpdateNodePropertyPanel();
         EnsureCanvasExtentForViewportAndNodes();
@@ -273,9 +394,9 @@ public sealed partial class MainWindow
     {
         CancelConnectionPreview();
         _connections.Clear();
+        _connectionIndex.Clear();
         _artifactNodes.Clear();
-        _selectedConnection = null;
-        _selectedNode = null;
+        ResetCanvasSelectionState();
         _inputNode = null;
         _cleanNode = null;
         _outputNode = null;

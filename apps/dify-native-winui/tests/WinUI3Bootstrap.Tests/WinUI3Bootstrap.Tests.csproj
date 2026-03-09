@@ -21,8 +21,22 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasConnectionIndex.cs" Link="Source\CanvasConnectionIndex.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasWorkflowScaffold.cs" Link="Source\CanvasWorkflowScaffold.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasPointerIntent.cs" Link="Source\CanvasPointerIntent.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasSnapshotMapper.cs" Link="Source\CanvasSnapshotMapper.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasSnapshotModels.cs" Link="Source\CanvasSnapshotModels.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasInteractionMath.cs" Link="Source\CanvasInteractionMath.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasSelectionDiff.cs" Link="Source\CanvasSelectionDiff.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Canvas\CanvasSnapshotWriteDecider.cs" Link="Source\CanvasSnapshotWriteDecider.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\ResultPanelController.cs" Link="Source\ResultPanelController.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\ResultPanelState.cs" Link="Source\ResultPanelState.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\ArtifactPresentationMapper.cs" Link="Source\ArtifactPresentationMapper.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultBindingService.cs" Link="Source\RunResultBindingService.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunFlowCoordinator.cs" Link="Source\RunFlowCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunInputValidator.cs" Link="Source\RunInputValidator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultParser.cs" Link="Source\RunResultParser.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultPresentationMapper.cs" Link="Source\RunResultPresentationMapper.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowRunnerAdapter.cs" Link="Source\WorkflowRunnerAdapter.cs" />
   </ItemGroup>
 </Project>

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import os
+import json
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
@@ -51,6 +52,15 @@ def _api_headers() -> Dict[str, str]:
     return out
 
 
+def _response_json_or_raise(response: Any, context: str) -> Dict[str, Any]:
+    if getattr(response, "status_code", 200) >= 400:
+        raise RuntimeError(f"{context} -> {response.status_code} {getattr(response, 'text', '')}")
+    try:
+        return response.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise RuntimeError(f"{context} returned invalid JSON") from exc
+
+
 @app.get("/health")
 def health() -> Dict[str, Any]:
     return {"ok": True, "service": "dify-console", "base_url": _base_url()}
@@ -63,8 +73,10 @@ def base_health() -> Dict[str, Any]:
     result: Dict[str, Any] = {"ok": True, "base_url": base}
     try:
         with httpx.Client(timeout=8.0) as client:
-            result["actuator"] = client.get(f"{base}/actuator/health", headers=headers).json()
-            result["dify_bridge"] = client.get(f"{base}/api/v1/integrations/dify/health", headers=headers).json()
+            actuator_resp = client.get(f"{base}/actuator/health", headers=headers)
+            dify_bridge_resp = client.get(f"{base}/api/v1/integrations/dify/health", headers=headers)
+            result["actuator"] = _response_json_or_raise(actuator_resp, "GET /actuator/health")
+            result["dify_bridge"] = _response_json_or_raise(dify_bridge_resp, "GET /api/v1/integrations/dify/health")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"base health check failed: {e}")
     return result
@@ -72,7 +84,11 @@ def base_health() -> Dict[str, Any]:
 
 @app.post("/api/run_cleaning")
 async def run_cleaning(request: Request) -> JSONResponse:
-    body = await request.json()
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="request body must be valid JSON") from exc
+
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="request body must be object")
 
@@ -87,7 +103,11 @@ async def run_cleaning(request: Request) -> JSONResponse:
 
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    return JSONResponse(resp.json())
+    try:
+        payload = resp.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="base returned invalid JSON") from exc
+    return JSONResponse(payload)
 
 
 def _index_html() -> str:

@@ -7,6 +7,32 @@ namespace AIWF.Native;
 
 public sealed partial class MainWindow
 {
+    private void ResetCanvasSelectionState()
+    {
+        _selectedNode = null;
+        _selectedConnection = null;
+        _multiSelectedNodes.Clear();
+        _highlightedNodes.Clear();
+        _lastHighlightedConnection = null;
+        _contextNode = null;
+        _contextConnection = null;
+    }
+
+    private void DetachNodeFromSelection(Border node)
+    {
+        _multiSelectedNodes.Remove(node);
+        _highlightedNodes.Remove(node);
+        if (_selectedNode == node)
+        {
+            _selectedNode = null;
+        }
+
+        if (_contextNode == node)
+        {
+            _contextNode = null;
+        }
+    }
+
     private static Border? ResolveNodeFromSource(DependencyObject? source)
     {
         var current = source;
@@ -35,17 +61,37 @@ public sealed partial class MainWindow
 
     private void ApplyNodeSelectionVisuals()
     {
-        foreach (var child in WorkspaceCanvas.Children)
+        var desiredSelection = new HashSet<Border>();
+        if (_selectedNode is not null)
         {
-            if (child is not Border border || border.Tag is not CanvasNodeTag)
-            {
-                continue;
-            }
+            desiredSelection.Add(_selectedNode);
+        }
 
-            var isActive = border == _selectedNode || _multiSelectedNodes.Contains(border);
-            var visual = CanvasSelectionPresenter.ResolveNode(isActive);
-            border.BorderThickness = new Thickness(visual.BorderThickness);
-            border.BorderBrush = new SolidColorBrush(visual.BorderColor);
+        foreach (var node in _multiSelectedNodes)
+        {
+            desiredSelection.Add(node);
+        }
+
+        var delta = CanvasRuntime.CanvasSelectionDiff.Calculate(_highlightedNodes, desiredSelection);
+        if (delta.Activated.Count == 0 && delta.Deactivated.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var node in delta.Deactivated)
+        {
+            ApplyNodeSelectionVisual(node, active: false);
+        }
+
+        foreach (var node in delta.Activated)
+        {
+            ApplyNodeSelectionVisual(node, active: true);
+        }
+
+        _highlightedNodes.Clear();
+        foreach (var node in desiredSelection)
+        {
+            _highlightedNodes.Add(node);
         }
     }
 
@@ -61,13 +107,36 @@ public sealed partial class MainWindow
 
     private void UpdateConnectionVisuals()
     {
-        foreach (var edge in _connections)
+        if (ReferenceEquals(_lastHighlightedConnection, _selectedConnection))
         {
-            var isActive = edge == _selectedConnection;
-            var visual = CanvasSelectionPresenter.ResolveConnection(isActive);
-            edge.Line.StrokeThickness = visual.StrokeThickness;
-            edge.Line.Stroke = new SolidColorBrush(visual.StrokeColor);
+            return;
         }
+
+        if (_lastHighlightedConnection is not null)
+        {
+            ApplyConnectionSelectionVisual(_lastHighlightedConnection, active: false);
+        }
+
+        if (_selectedConnection is not null)
+        {
+            ApplyConnectionSelectionVisual(_selectedConnection, active: true);
+        }
+
+        _lastHighlightedConnection = _selectedConnection;
+    }
+
+    private static void ApplyNodeSelectionVisual(Border border, bool active)
+    {
+        var visual = active ? ActiveNodeSelectionVisual : InactiveNodeSelectionVisual;
+        border.BorderThickness = new Thickness(visual.BorderThickness);
+        border.BorderBrush = active ? ActiveNodeSelectionBrush : InactiveNodeSelectionBrush;
+    }
+
+    private static void ApplyConnectionSelectionVisual(ConnectionEdge edge, bool active)
+    {
+        var visual = active ? ActiveConnectionSelectionVisual : InactiveConnectionSelectionVisual;
+        edge.Line.StrokeThickness = visual.StrokeThickness;
+        edge.Line.Stroke = active ? ActiveConnectionSelectionBrush : InactiveConnectionSelectionBrush;
     }
 
     private void UpdateNodePropertyPanel()

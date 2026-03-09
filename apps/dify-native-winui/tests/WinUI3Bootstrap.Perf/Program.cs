@@ -18,6 +18,8 @@ internal sealed class StartupSummary
     public double? WindowActivatedMs { get; init; }
     public double? MainWindowCtorDurationMs { get; init; }
     public double? ActivateRequestToWindowActivatedMs { get; init; }
+    public double? CanvasWorkspaceInitDurationMs { get; init; }
+    public double? CanvasPrewarmDurationMs { get; init; }
     public Dictionary<string, double> Marks { get; init; } = new(StringComparer.Ordinal);
 }
 
@@ -58,6 +60,9 @@ internal static class Program
         var benchmarks = new[]
         {
             RunNodeDragBenchmark(),
+            RunSelectionDiffBenchmark(),
+            RunConnectionIndexBenchmark(),
+            RunSnapshotWriteDeciderBenchmark(),
             RunSplitColumnsBenchmark(),
             RunSplitRowsBenchmark()
         };
@@ -71,7 +76,7 @@ internal static class Program
             Notes = new[]
             {
                 "Startup timing comes from the instrumented WinUI app and reflects real process startup on this machine.",
-                "Drag and split metrics are pure-logic microbenchmarks. They exclude XAML layout, compositor, and GPU cost.",
+                "Canvas helper benchmarks are pure-logic microbenchmarks. They exclude XAML layout, compositor, and GPU cost.",
                 "Budget60FpsPercent compares benchmark p95 against a 16.67 ms frame budget. Lower is better."
             }
         };
@@ -145,6 +150,8 @@ internal static class Program
             WindowActivatedMs = GetMark(marks, "window_activated"),
             MainWindowCtorDurationMs = GetDelta(marks, "main_window_ctor_enter", "main_window_ctor_exit"),
             ActivateRequestToWindowActivatedMs = GetDelta(marks, "main_window_activated_request", "window_activated"),
+            CanvasWorkspaceInitDurationMs = GetDelta(marks, "canvas_workspace_init_enter", "canvas_workspace_init_exit"),
+            CanvasPrewarmDurationMs = GetDelta(marks, "canvas_prewarm_enter", "canvas_prewarm_exit"),
             Marks = marks
         };
     }
@@ -203,6 +210,71 @@ internal static class Program
         });
 
         return BuildMetric("split_columns_math", "pure_logic", sampleCount, operationsPerSample, sink, samples);
+    }
+
+    private static BenchmarkMetric RunSelectionDiffBenchmark()
+    {
+        const int sampleCount = 240;
+        const int operationsPerSample = 2_000;
+        double sink = 0;
+        var samples = MeasureSamples(sampleCount, operationsPerSample, index =>
+        {
+            var previous = new[]
+            {
+                "n-" + (index % 7),
+                "n-" + ((index + 1) % 7),
+                "n-" + ((index + 2) % 7)
+            };
+            var next = new[]
+            {
+                "n-" + ((index + 1) % 7),
+                "n-" + ((index + 3) % 7),
+                "n-" + ((index + 4) % 7)
+            };
+            var delta = CanvasSelectionDiff.Calculate(previous, next);
+            sink += delta.Activated.Count + delta.Deactivated.Count;
+        });
+
+        return BuildMetric("selection_diff_math", "pure_logic", sampleCount, operationsPerSample, sink, samples);
+    }
+
+    private static BenchmarkMetric RunConnectionIndexBenchmark()
+    {
+        const int sampleCount = 240;
+        const int operationsPerSample = 2_000;
+        double sink = 0;
+        var samples = MeasureSamples(sampleCount, operationsPerSample, index =>
+        {
+            var connectionIndex = new CanvasConnectionIndex<string, string>();
+            for (var i = 0; i < 8; i++)
+            {
+                var edgeId = "e-" + i;
+                connectionIndex.Add("n-" + (i % 4), "n-" + ((i + 1) % 4), edgeId);
+            }
+
+            var lookupNode = "n-" + (index % 4);
+            sink += connectionIndex.Get(lookupNode).Count;
+            connectionIndex.Remove("n-0", "n-1", "e-0");
+            sink += connectionIndex.Get("n-0").Count;
+        });
+
+        return BuildMetric("connection_index_math", "pure_logic", sampleCount, operationsPerSample, sink, samples);
+    }
+
+    private static BenchmarkMetric RunSnapshotWriteDeciderBenchmark()
+    {
+        const int sampleCount = 240;
+        const int operationsPerSample = 2_000;
+        double sink = 0;
+        var samples = MeasureSamples(sampleCount, operationsPerSample, index =>
+        {
+            var previous = (index % 3) == 0 ? null : "{\"nodes\":1}";
+            var next = (index % 5) == 0 ? "{\"nodes\":2}" : "{\"nodes\":1}";
+            var shouldWrite = CanvasSnapshotWriteDecider.ShouldWrite(previous, next, fileExists: (index % 7) != 0);
+            sink += shouldWrite ? 1 : 0;
+        });
+
+        return BuildMetric("snapshot_write_decider", "pure_logic", sampleCount, operationsPerSample, sink, samples);
     }
 
     private static BenchmarkMetric RunSplitRowsBenchmark()
@@ -334,6 +406,8 @@ internal static class Program
             builder.AppendLine($"- First window activated: {FormatMs(report.Startup.WindowActivatedMs)}");
             builder.AppendLine($"- MainWindow ctor duration: {FormatMs(report.Startup.MainWindowCtorDurationMs)}");
             builder.AppendLine($"- Activate request to first activation: {FormatMs(report.Startup.ActivateRequestToWindowActivatedMs)}");
+            builder.AppendLine($"- Canvas workspace init: {FormatMs(report.Startup.CanvasWorkspaceInitDurationMs)}");
+            builder.AppendLine($"- Canvas prewarm: {FormatMs(report.Startup.CanvasPrewarmDurationMs)}");
         }
 
         builder.AppendLine();

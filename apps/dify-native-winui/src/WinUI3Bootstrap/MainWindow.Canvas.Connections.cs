@@ -18,6 +18,16 @@ public sealed partial class MainWindow
             return;
         }
 
+        var point = e.GetCurrentPoint(ellipse);
+        if (!CanvasRuntime.CanvasPointerIntent.ShouldStartPrimaryCanvasAction(
+                point.PointerDeviceType.ToString(),
+                point.Properties.IsLeftButtonPressed,
+                point.Properties.IsMiddleButtonPressed,
+                point.Properties.IsRightButtonPressed))
+        {
+            return;
+        }
+
         if (connectorTag.Kind != "out")
         {
             return;
@@ -84,7 +94,12 @@ public sealed partial class MainWindow
         _connectionPointerId = 0;
     }
 
-    private void AddConnection(Border source, Border target, bool select = true)
+    private void AddConnection(
+        Border source,
+        Border target,
+        bool select = true,
+        bool updateGeometry = true,
+        bool requestAutosave = true)
     {
         foreach (var edge in _connections)
         {
@@ -111,16 +126,24 @@ public sealed partial class MainWindow
             Line = line
         };
         _connections.Add(edgeItem);
+        _connectionIndex.Add(source, target, edgeItem);
         if (select)
         {
             SelectConnection(edgeItem);
         }
 
-        UpdateAllConnections();
-        RequestCanvasAutosave();
+        if (updateGeometry)
+        {
+            UpdateConnectionGeometry(edgeItem);
+        }
+
+        if (requestAutosave)
+        {
+            RequestCanvasAutosave();
+        }
     }
 
-    private void RemoveConnectionsForNode(Border node)
+    private void RemoveConnectionsForNode(Border node, bool refreshUi = true, bool requestAutosave = true)
     {
         var removedAny = false;
         for (var i = _connections.Count - 1; i >= 0; i--)
@@ -136,16 +159,47 @@ public sealed partial class MainWindow
                 _selectedConnection = null;
             }
 
+            if (_lastHighlightedConnection == edge)
+            {
+                _lastHighlightedConnection = null;
+            }
+
+            if (_contextConnection == edge)
+            {
+                _contextConnection = null;
+            }
+
+            _connectionIndex.Remove(edge.Source, edge.Target, edge);
             WorkspaceCanvas.Children.Remove(edge.Line);
             _connections.RemoveAt(i);
             removedAny = true;
         }
 
-        UpdateConnectionVisuals();
-        UpdateNodePropertyPanel();
-        if (removedAny)
+        if (refreshUi)
+        {
+            UpdateConnectionVisuals();
+            UpdateNodePropertyPanel();
+        }
+
+        if (requestAutosave && removedAny)
         {
             RequestCanvasAutosave();
+        }
+    }
+
+    private void RemoveCanvasNode(Border node, bool refreshUi = true)
+    {
+        RemoveConnectionsForNode(node, refreshUi: false, requestAutosave: false);
+        _artifactNodes.Remove(node);
+        DetachNodeFromSelection(node);
+        UnregisterCoreCanvasNodeReference(node);
+        WorkspaceCanvas.Children.Remove(node);
+
+        if (refreshUi)
+        {
+            ApplyNodeSelectionVisuals();
+            UpdateConnectionVisuals();
+            UpdateNodePropertyPanel();
         }
     }
 
@@ -153,13 +207,26 @@ public sealed partial class MainWindow
     {
         foreach (var edge in _connections)
         {
-            var start = GetNodeOutputPoint(edge.Source);
-            var end = GetNodeInputPoint(edge.Target);
-            edge.Line.X1 = start.X;
-            edge.Line.Y1 = start.Y;
-            edge.Line.X2 = end.X;
-            edge.Line.Y2 = end.Y;
+            UpdateConnectionGeometry(edge);
         }
+    }
+
+    private void UpdateConnectionsForNode(Border node)
+    {
+        foreach (var edge in _connectionIndex.Get(node))
+        {
+            UpdateConnectionGeometry(edge);
+        }
+    }
+
+    private static void UpdateConnectionGeometry(ConnectionEdge edge)
+    {
+        var start = GetNodeOutputPoint(edge.Source);
+        var end = GetNodeInputPoint(edge.Target);
+        edge.Line.X1 = start.X;
+        edge.Line.Y1 = start.Y;
+        edge.Line.X2 = end.X;
+        edge.Line.Y2 = end.Y;
     }
 
     private static Point GetNodeOutputPoint(Border node)
@@ -186,8 +253,20 @@ public sealed partial class MainWindow
             return false;
         }
 
-        WorkspaceCanvas.Children.Remove(_selectedConnection.Line);
-        _connections.Remove(_selectedConnection);
+        var edge = _selectedConnection;
+        _connectionIndex.Remove(edge.Source, edge.Target, edge);
+        WorkspaceCanvas.Children.Remove(edge.Line);
+        _connections.Remove(edge);
+        if (_lastHighlightedConnection == edge)
+        {
+            _lastHighlightedConnection = null;
+        }
+
+        if (_contextConnection == edge)
+        {
+            _contextConnection = null;
+        }
+
         _selectedConnection = null;
         UpdateConnectionVisuals();
         UpdateNodePropertyPanel();
@@ -208,8 +287,7 @@ public sealed partial class MainWindow
                     continue;
                 }
 
-                RemoveConnectionsForNode(node);
-                WorkspaceCanvas.Children.Remove(node);
+                RemoveCanvasNode(node, refreshUi: false);
                 removed++;
             }
 
@@ -230,9 +308,10 @@ public sealed partial class MainWindow
             return false;
         }
 
-        RemoveConnectionsForNode(_selectedNode);
-        WorkspaceCanvas.Children.Remove(_selectedNode);
+        RemoveCanvasNode(_selectedNode, refreshUi: false);
         _selectedNode = null;
+        ApplyNodeSelectionVisuals();
+        UpdateConnectionVisuals();
         UpdateNodePropertyPanel();
         SetInlineStatus("已删除节点。", InlineStatusTone.Success);
         RequestCanvasAutosave();

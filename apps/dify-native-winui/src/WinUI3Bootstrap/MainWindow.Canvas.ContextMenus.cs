@@ -131,12 +131,10 @@ public sealed partial class MainWindow
             return;
         }
 
-        _copiedNodeTemplate = new CanvasNodeDto
+        _copiedNodeTemplate = new CopiedNodeTemplate
         {
-            NodeKey = tag.NodeKey,
             Title = tag.TitleBlock?.Text ?? string.Empty,
-            Subtitle = tag.SubtitleBlock?.Text ?? string.Empty,
-            IsUserNode = true
+            Subtitle = tag.SubtitleBlock?.Text ?? string.Empty
         };
         SetInlineStatus("已复制节点。", InlineStatusTone.Success);
     }

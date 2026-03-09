@@ -109,7 +109,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="WorkspaceNavButton" Click="OnWorkspaceNavClick" Content="工作台" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="140">
+                    <Button x:Name="WorkspaceNavButton" AutomationProperties.AutomationId="WorkspaceNavButton" Click="OnWorkspaceNavClick" Content="工作台" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
@@ -118,7 +118,7 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
                         </Button.Resources>
                     </Button>
-                    <Button x:Name="CanvasNavButton" Click="OnCanvasNavClick" Content="画布" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="140">
+                    <Button x:Name="CanvasNavButton" AutomationProperties.AutomationId="CanvasNavButton" Click="OnCanvasNavClick" Content="画布" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
@@ -127,7 +127,7 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
                         </Button.Resources>
                     </Button>
-                    <Button x:Name="ResultNavButton" Click="OnResultNavClick" Content="结果" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="140">
+                    <Button x:Name="ResultNavButton" AutomationProperties.AutomationId="ResultNavButton" Click="OnResultNavClick" Content="结果" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
@@ -139,7 +139,7 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="QuickHealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
+                    <Button x:Name="QuickHealthButton" AutomationProperties.AutomationId="QuickHealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
@@ -147,7 +147,7 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
                         </Button.Resources>
                     </Button>
-                    <Button x:Name="QuickRunButton" Click="OnRunCleaningClick" Content="运行" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
+                    <Button x:Name="QuickRunButton" AutomationProperties.AutomationId="QuickRunButton" Click="OnRunCleaningClick" Content="运行" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
@@ -204,36 +204,36 @@
                             <StackPanel Spacing="8">
                                 <TextBlock Text="连接配置" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
                                 <TextBlock Text="桥接地址" />
-                                <TextBox x:Name="BridgeUrlTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="http://127.0.0.1:18081" />
+                                <TextBox x:Name="BridgeUrlTextBox" AutomationProperties.AutomationId="BridgeUrlTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="http://127.0.0.1:18081" />
                                 <TextBlock Text="API Key（可选）" />
-                                <TextBox x:Name="ApiKeyTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                <TextBox x:Name="ApiKeyTextBox" AutomationProperties.AutomationId="ApiKeyTextBox" Style="{StaticResource TouchTextBoxStyle}" />
                                 <TextBlock Text="所有者" />
-                                <TextBox x:Name="OwnerTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="native" />
+                                <TextBox x:Name="OwnerTextBox" AutomationProperties.AutomationId="OwnerTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="native" />
                                 <TextBlock Text="执行者" />
-                                <TextBox x:Name="ActorTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="native" />
+                                <TextBox x:Name="ActorTextBox" AutomationProperties.AutomationId="ActorTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="native" />
                             </StackPanel>
                         </Border>
 
                         <Border x:Name="ParamsCard" Grid.Column="1" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <TextBlock Text="运行参数" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                <TextBlock Text="Job ID" />
-                                <TextBox x:Name="JobIdTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="smoke" />
+                                <TextBlock Text="Job ID（可留空自动创建）" />
+                                <TextBox x:Name="JobIdTextBox" AutomationProperties.AutomationId="JobIdTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="smoke" />
                                 <TextBlock Text="Flow" />
-                                <TextBox x:Name="FlowTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="cleaning" />
+                                <TextBox x:Name="FlowTextBox" AutomationProperties.AutomationId="FlowTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="cleaning" />
                                 <TextBlock Text="报告标题" />
-                                <TextBox x:Name="ReportTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="Native WinUI Smoke Report" />
+                                <TextBox x:Name="ReportTitleTextBox" AutomationProperties.AutomationId="ReportTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="Native WinUI Smoke Report" />
                                 <TextBlock Text="输入 CSV 路径（可选）" />
-                                <TextBox x:Name="InputCsvTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                <TextBox x:Name="InputCsvTextBox" AutomationProperties.AutomationId="InputCsvTextBox" Style="{StaticResource TouchTextBoxStyle}" />
                                 <TextBlock Text="Office 主题" />
-                                <ComboBox x:Name="OfficeThemeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                <ComboBox x:Name="OfficeThemeComboBox" AutomationProperties.AutomationId="OfficeThemeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                     <ComboBoxItem Content="assignment" />
                                     <ComboBoxItem Content="debate_plus" />
                                     <ComboBoxItem Content="academic" />
                                     <ComboBoxItem Content="professional" />
                                 </ComboBox>
                                 <TextBlock Text="Office 语言" />
-                                <ComboBox x:Name="OfficeLangComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                <ComboBox x:Name="OfficeLangComboBox" AutomationProperties.AutomationId="OfficeLangComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                     <ComboBoxItem Content="zh" />
                                     <ComboBoxItem Content="en" />
                                 </ComboBox>
@@ -243,7 +243,7 @@
                         <Border x:Name="ActionsCard" Grid.Column="2" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="10" VerticalAlignment="Bottom">
                                 <TextBlock Text="操作" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                <Button x:Name="HealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156">
+                                <Button x:Name="HealthButton" AutomationProperties.AutomationId="HealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156">
                                     <Button.Resources>
                                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
                                         <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
@@ -251,7 +251,7 @@
                                         <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
                                     </Button.Resources>
                                 </Button>
-                                <Button x:Name="RunCleaningButton" Click="OnRunCleaningClick" Content="运行清洗" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156">
+                                <Button x:Name="RunCleaningButton" AutomationProperties.AutomationId="RunCleaningButton" Click="OnRunCleaningClick" Content="运行清洗" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156">
                                     <Button.Resources>
                                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
                                         <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
@@ -302,12 +302,12 @@
                                       VerticalScrollMode="Disabled"
                                       ZoomMode="Disabled">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Button x:Name="ResetCanvasViewButton" Click="OnResetCanvasViewClick" Content="定位节点流" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
-                                <Button x:Name="SaveCanvasButton" Click="OnSaveCanvasClick" Content="保存画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
-                                <Button x:Name="LoadCanvasButton" Click="OnLoadCanvasClick" Content="加载画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
-                                <Button x:Name="NewCanvasButton" Click="OnNewCanvasClick" Content="新建画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
-                                <Button x:Name="ClearCanvasButton" Click="OnClearCanvasClick" Content="清空画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False" />
-                                <Button x:Name="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}" IsTabStop="False" UseSystemFocusVisuals="False">
+                                <Button x:Name="ResetCanvasViewButton" AutomationProperties.AutomationId="ResetCanvasViewButton" Click="OnResetCanvasViewClick" Content="定位节点流" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                <Button x:Name="SaveCanvasButton" AutomationProperties.AutomationId="SaveCanvasButton" Click="OnSaveCanvasClick" Content="保存画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                <Button x:Name="LoadCanvasButton" AutomationProperties.AutomationId="LoadCanvasButton" Click="OnLoadCanvasClick" Content="加载画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                <Button x:Name="NewCanvasButton" AutomationProperties.AutomationId="NewCanvasButton" Click="OnNewCanvasClick" Content="新建画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                <Button x:Name="ClearCanvasButton" AutomationProperties.AutomationId="ClearCanvasButton" Click="OnClearCanvasClick" Content="清空画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                <Button x:Name="AddNodeButton" AutomationProperties.AutomationId="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True">
                                     <Button.Resources>
                                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
                                         <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
@@ -348,7 +348,7 @@
                                     </Grid>
                                 </Border>
                                 <Button x:Name="CanvasZoomInButton" Click="OnCanvasZoomInClick" Content="+" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" IsTabStop="False" UseSystemFocusVisuals="False" />
-                                <Button x:Name="CanvasFitButton" Click="OnCanvasFitClick" Content="Fit" MinHeight="32" Padding="10,0" FontWeight="SemiBold" Background="#FFC62828" Foreground="#FFFFFFFF" BorderBrush="#FF991B1B" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                <Button x:Name="CanvasFitButton" AutomationProperties.AutomationId="CanvasFitButton" Click="OnCanvasFitClick" Content="Fit" MinHeight="32" Padding="10,0" FontWeight="SemiBold" Background="#FFC62828" Foreground="#FFFFFFFF" BorderBrush="#FF991B1B" IsTabStop="False" UseSystemFocusVisuals="False" />
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
@@ -458,12 +458,12 @@
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto">
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="节点属性" Style="{StaticResource CanvasSectionTitleStyle}" />
-                                        <TextBlock x:Name="CanvasSelectionInfoTextBlock" Text="未选中节点" Style="{StaticResource CanvasSectionSubtitleStyle}" />
+                                        <TextBlock x:Name="CanvasSelectionInfoTextBlock" AutomationProperties.AutomationId="CanvasSelectionInfoTextBlock" Text="未选中节点" Style="{StaticResource CanvasSectionSubtitleStyle}" />
                                         <TextBlock Text="名称" Style="{StaticResource CanvasFieldLabelStyle}" />
-                                        <TextBox x:Name="NodeTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeTitleChanged" IsEnabled="False" />
+                                        <TextBox x:Name="NodeTitleTextBox" AutomationProperties.AutomationId="NodeTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeTitleChanged" IsEnabled="False" />
                                         <TextBlock Text="说明" Style="{StaticResource CanvasFieldLabelStyle}" />
-                                        <TextBox x:Name="NodeSubtitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeSubtitleChanged" IsEnabled="False" />
-                                        <Button x:Name="DeleteNodeButton" Click="OnDeleteNodeClick" Content="删除节点" MinHeight="42" IsEnabled="False">
+                                        <TextBox x:Name="NodeSubtitleTextBox" AutomationProperties.AutomationId="NodeSubtitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeSubtitleChanged" IsEnabled="False" />
+                                        <Button x:Name="DeleteNodeButton" AutomationProperties.AutomationId="DeleteNodeButton" Click="OnDeleteNodeClick" Content="删除节点" MinHeight="42" IsEnabled="False">
                                             <Button.Resources>
                                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFEE2E2" />
                                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
@@ -472,7 +472,7 @@
                                                 <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF991B1B" />
                                             </Button.Resources>
                                         </Button>
-                                        <Button x:Name="DeleteConnectionButton" Click="OnDeleteConnectionClick" Content="删除连线" MinHeight="42" IsEnabled="False">
+                                        <Button x:Name="DeleteConnectionButton" AutomationProperties.AutomationId="DeleteConnectionButton" Click="OnDeleteConnectionClick" Content="删除连线" MinHeight="42" IsEnabled="False">
                                             <Button.Resources>
                                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
                                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
@@ -536,7 +536,7 @@
                                         <TextBlock x:Name="ArtifactsCountTextBlock" Text="0 项" Foreground="#FF4B5563" />
                                     </Border>
                                 </Grid>
-                                <ListView x:Name="ArtifactsListView" Height="320" MinHeight="320" />
+                                <ListView x:Name="ArtifactsListView" AutomationProperties.AutomationId="ArtifactsListView" Height="320" MinHeight="320" />
                                 <TextBlock Text="原始响应" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" Visibility="Collapsed" />
                                 <TextBox x:Name="RawResponseTextBox" Height="220" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" Visibility="Collapsed" />
                             </StackPanel>
@@ -555,7 +555,7 @@
                                     </Border>
                                 </Grid>
 
-                                <Grid ColumnSpacing="8" Visibility="Collapsed">
+                                <Grid ColumnSpacing="8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
@@ -571,7 +571,7 @@
                                         </Border.Background>
                                         <StackPanel Spacing="2">
                                             <TextBlock Text="OK" Foreground="#FF374151" />
-                                            <TextBlock x:Name="OkMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
+                                            <TextBlock x:Name="OkMetricTextBlock" AutomationProperties.AutomationId="OkMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
                                         </StackPanel>
                                     </Border>
 
@@ -584,7 +584,7 @@
                                         </Border.Background>
                                         <StackPanel Spacing="2">
                                             <TextBlock Text="模式" Foreground="#FF374151" />
-                                            <TextBlock x:Name="ModeMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="ModeMetricTextBlock" AutomationProperties.AutomationId="ModeMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                     </Border>
 
@@ -597,23 +597,23 @@
                                         </Border.Background>
                                         <StackPanel Spacing="2">
                                             <TextBlock Text="耗时" Foreground="#FF374151" />
-                                            <TextBlock x:Name="DurationMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
+                                            <TextBlock x:Name="DurationMetricTextBlock" AutomationProperties.AutomationId="DurationMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
                                         </StackPanel>
                                     </Border>
                                 </Grid>
 
                                 <Border BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="10" Padding="10">
                                     <StackPanel Spacing="8">
-                                        <TextBlock Text="作业 ID" FontWeight="SemiBold" Foreground="#FF374151" Visibility="Collapsed" />
-                                        <TextBlock x:Name="JobIdTextBlock" Text="-" TextWrapping="Wrap" Visibility="Collapsed" />
-                                        <TextBlock Text="自动重试" FontWeight="SemiBold" Foreground="#FF374151" Visibility="Collapsed" />
-                                        <TextBlock x:Name="RetryInfoTextBlock" Text="未重试" TextWrapping="Wrap" Visibility="Collapsed" />
+                                        <TextBlock Text="作业 ID" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock x:Name="JobIdTextBlock" AutomationProperties.AutomationId="JobIdTextBlock" Text="-" TextWrapping="Wrap" />
+                                        <TextBlock Text="自动重试" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock x:Name="RetryInfoTextBlock" AutomationProperties.AutomationId="RetryInfoTextBlock" Text="未重试" TextWrapping="Wrap" />
                                         <TextBlock Text="结果说明" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="RunResultTextBlock" Text="-" TextWrapping="Wrap" />
-                                        <TextBlock Text="运行模式" FontWeight="SemiBold" Foreground="#FF374151" Visibility="Collapsed" />
-                                        <TextBlock x:Name="RunModeTextBlock" Text="-" TextWrapping="Wrap" Visibility="Collapsed" />
-                                        <TextBlock Text="耗时（ms）" FontWeight="SemiBold" Foreground="#FF374151" Visibility="Collapsed" />
-                                        <TextBlock x:Name="DurationTextBlock" Text="-" TextWrapping="Wrap" Visibility="Collapsed" />
+                                        <TextBlock x:Name="RunResultTextBlock" AutomationProperties.AutomationId="RunResultTextBlock" Text="-" TextWrapping="Wrap" />
+                                        <TextBlock Text="运行模式" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock x:Name="RunModeTextBlock" AutomationProperties.AutomationId="RunModeTextBlock" Text="-" TextWrapping="Wrap" />
+                                        <TextBlock Text="耗时（ms）" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock x:Name="DurationTextBlock" AutomationProperties.AutomationId="DurationTextBlock" Text="-" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -624,4 +624,3 @@
         </Grid>
     </Grid>
 </Window>
-

@@ -12,25 +12,39 @@ This folder is the starting point for migrating the desktop GUI from Electron we
   - artifacts/result panel
 - Minimal bridge integration:
   - `GET /health`
-  - `POST /run-cleaning`
+  - `POST /jobs/{job_id}/run/{flow}`
 
 ## Build and smoke
 
-Build (VS MSBuild):
+Build:
 
 ```powershell
-"D:\Environments\Microsoft Visual Studio\insiders\MSBuild\Current\Bin\amd64\MSBuild.exe" `
-  .\AIWF.Native.WinUI.sln `
-  /t:Restore,Build `
-  /p:Configuration=Release `
-  /p:Platform=x64
+dotnet build .\src\WinUI3Bootstrap\WinUI3Bootstrap.csproj -c Release
+```
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_native_winui.ps1 -Configuration Debug
 ```
 
 Smoke check:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_smoke.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_smoke.ps1 -Configuration Release
 ```
+
+The smoke script now verifies startup marks and can enforce optional startup budgets
+for first activation, `MainWindow` ctor, canvas init, and canvas prewarm.
+
+UI Automation smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_uia_smoke.ps1 -Configuration Release
+```
+
+The UIA smoke covers native window attach, workspace input edit, canvas command execution
+(`新建画布` + snapshot file creation), and round-trip navigation across workspace/canvas/results.
 
 ## Planned migration order
 

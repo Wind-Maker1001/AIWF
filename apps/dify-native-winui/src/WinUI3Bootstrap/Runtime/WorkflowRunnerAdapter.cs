@@ -1,8 +1,14 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
 
 namespace AIWF.Native.Runtime;
+
+public sealed record WorkflowHttpResult(
+    HttpStatusCode StatusCode,
+    bool IsSuccessStatusCode,
+    string Body);
 
 public sealed class WorkflowRunnerAdapter
 {
@@ -13,18 +19,18 @@ public sealed class WorkflowRunnerAdapter
         _http = http;
     }
 
-    public async Task<(HttpResponseMessage Response, string Body)> CheckHealthAsync(
+    public async Task<WorkflowHttpResult> CheckHealthAsync(
         string baseUrl,
         string? apiKey,
         CancellationToken cancellationToken = default)
     {
         using var request = BuildRequest(HttpMethod.Get, baseUrl, "/health", apiKey);
-        var response = await _http.SendAsync(request, cancellationToken);
+        using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        return (response, body);
+        return new WorkflowHttpResult(response.StatusCode, response.IsSuccessStatusCode, body);
     }
 
-    public async Task<(HttpResponseMessage Response, string Body)> RunFlowAsync(
+    public async Task<WorkflowHttpResult> RunFlowAsync(
         string baseUrl,
         string? apiKey,
         string jobId,
@@ -36,9 +42,9 @@ public sealed class WorkflowRunnerAdapter
         var encodedFlow = Uri.EscapeDataString(flow.Trim());
         using var request = BuildRequest(HttpMethod.Post, baseUrl, $"/jobs/{encodedJobId}/run/{encodedFlow}", apiKey);
         request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
-        var response = await _http.SendAsync(request, cancellationToken);
+        using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        return (response, body);
+        return new WorkflowHttpResult(response.StatusCode, response.IsSuccessStatusCode, body);
     }
 
     private static HttpRequestMessage BuildRequest(HttpMethod method, string baseUrl, string endpointPath, string? apiKey)
