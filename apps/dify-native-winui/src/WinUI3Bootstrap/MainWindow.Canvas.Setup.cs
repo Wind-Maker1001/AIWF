@@ -16,7 +16,6 @@ public sealed partial class MainWindow
         WorkspaceCanvas.RightTapped += OnWorkspaceCanvasRightTapped;
         BuildCanvasGrid();
         SeedCanvasNodes();
-        TryLoadCanvasSnapshot(showStatus: false, missingIsError: false);
         UpdateNodePropertyPanel();
         UpdateCanvasZoomIndicator();
     }

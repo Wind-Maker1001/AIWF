@@ -107,7 +107,6 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer? _canvasAutosaveTimer;
     private readonly DispatcherQueueTimer? _statusDecayTimer;
     private readonly DispatcherQueueTimer? _canvasInteractionSettleTimer;
-    private readonly DispatcherQueueTimer? _canvasUiaSmokeTimer;
     private readonly SemaphoreSlim _canvasSnapshotOperationLock = new(1, 1);
     private bool _hasPendingPanelSplit;
     private double _pendingLeftWidth;
@@ -150,6 +149,8 @@ public sealed partial class MainWindow : Window
     private bool _isCanvasWorkspaceInitialized;
     private bool _didPrewarmCanvasSection;
     private bool _didScheduleCanvasWarmup;
+    private Task<bool>? _canvasSnapshotRestoreTask;
+    private int _canvasSnapshotRestoreVersion;
     private string? _lastSavedCanvasSnapshotJson;
     private static readonly JsonSerializerOptions CanvasSnapshotJsonOptions = new()
     {
@@ -285,18 +286,6 @@ public sealed partial class MainWindow : Window
             {
                 _canvasInteractionSettleTimer.Stop();
                 CanvasGridLayer.Visibility = Visibility.Visible;
-            };
-
-            _canvasUiaSmokeTimer = dispatcherQueue.CreateTimer();
-            _canvasUiaSmokeTimer.Interval = TimeSpan.FromMilliseconds(3000);
-            _canvasUiaSmokeTimer.IsRepeating = false;
-            _canvasUiaSmokeTimer.Tick += (_, _) =>
-            {
-                _canvasUiaSmokeTimer.Stop();
-                if (_activeSection == NavSection.Canvas)
-                {
-                    _ = SaveCanvasSnapshotAsync(showStatus: false);
-                }
             };
 
         }

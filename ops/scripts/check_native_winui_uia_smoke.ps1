@@ -39,7 +39,7 @@ catch {
 
 if (-not $SkipBuild) {
   Info "building native winui project"
-  dotnet build $projectPath -c $Configuration
+  dotnet build $projectPath -c $Configuration -p:Platform=x64
   if ($LASTEXITCODE -ne 0) {
     throw "native winui build failed"
   }
@@ -53,6 +53,20 @@ if (-not $exePath) {
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class NativeMouse
+{
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+}
+"@
 
 function Wait-Until([string]$Label, [int]$TimeoutSec, [scriptblock]$Probe) {
   $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
@@ -112,7 +126,31 @@ function Invoke-Element($Element, [string]$Label) {
     throw "element '$Label' does not support InvokePattern"
   }
 
-  ([System.Windows.Automation.InvokePattern]$patternObject).Invoke()
+  try {
+    ([System.Windows.Automation.InvokePattern]$patternObject).Invoke()
+  }
+  catch {
+    try {
+      Start-Sleep -Milliseconds 300
+      ([System.Windows.Automation.InvokePattern]$patternObject).Invoke()
+    }
+    catch {
+      try {
+        $Element.SetFocus()
+        Start-Sleep -Milliseconds 150
+        [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+      }
+      catch {
+        $rect = $Element.Current.BoundingRectangle
+        $centerX = [int][Math]::Round($rect.Left + ($rect.Width / 2.0))
+        $centerY = [int][Math]::Round($rect.Top + ($rect.Height / 2.0))
+        [NativeMouse]::SetCursorPos($centerX, $centerY) | Out-Null
+        Start-Sleep -Milliseconds 120
+        [NativeMouse]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+        [NativeMouse]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
+      }
+    }
+  }
 }
 
 function Set-ElementValue($Element, [string]$Value, [string]$Label) {
@@ -146,14 +184,6 @@ try {
 
   $bridgeUrlTextBox = Wait-VisibleElement $window "BridgeUrlTextBox" $TimeoutSeconds
   $ownerTextBox = Wait-VisibleElement $window "OwnerTextBox" $TimeoutSeconds
-  Set-ElementValue $ownerTextBox "uia-smoke-owner" "OwnerTextBox"
-  Ok "workspace controls are visible and editable"
-
-  Invoke-Element $canvasNav "CanvasNavButton"
-  $addNodeButton = Wait-VisibleElement $window "AddNodeButton" $TimeoutSeconds
-  $canvasFitButton = Wait-VisibleElement $window "CanvasFitButton" $TimeoutSeconds
-  $newCanvasButton = Wait-VisibleElement $window "NewCanvasButton" $TimeoutSeconds
-  $saveCanvasButton = Wait-VisibleElement $window "SaveCanvasButton" $TimeoutSeconds
   $canvasStatePath = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) "AIWF\\canvas-workflow.json"
   $canvasStateBackupPath = $canvasStatePath + ".uia-smoke-backup"
   if (Test-Path $canvasStateBackupPath) {
@@ -163,6 +193,15 @@ try {
   if (Test-Path $canvasStatePath) {
     Move-Item -Force $canvasStatePath $canvasStateBackupPath
   }
+
+  Set-ElementValue $ownerTextBox "uia-smoke-owner" "OwnerTextBox"
+  Ok "workspace controls are visible and editable"
+
+  Invoke-Element $canvasNav "CanvasNavButton"
+  $addNodeButton = Wait-VisibleElement $window "AddNodeButton" $TimeoutSeconds
+  $canvasFitButton = Wait-VisibleElement $window "CanvasFitButton" $TimeoutSeconds
+  $newCanvasButton = Wait-VisibleElement $window "NewCanvasButton" $TimeoutSeconds
+  $saveCanvasButton = Wait-VisibleElement $window "SaveCanvasButton" $TimeoutSeconds
 
   Ok "canvas section is visible"
   $canvasSelectionInfo = Wait-VisibleElement $window "CanvasSelectionInfoTextBlock" $TimeoutSeconds

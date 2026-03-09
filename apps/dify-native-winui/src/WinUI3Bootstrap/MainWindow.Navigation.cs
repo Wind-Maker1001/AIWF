@@ -52,10 +52,14 @@ public sealed partial class MainWindow
         };
         PlaySectionEntrance(activeElement);
 
-        if (section == NavSection.Canvas && IsUiaSmokeMode && _canvasUiaSmokeTimer is not null)
+        if (section == NavSection.Canvas && !IsUiaSmokeMode)
         {
-            _canvasUiaSmokeTimer.Stop();
-            _canvasUiaSmokeTimer.Start();
+            ScheduleCanvasSnapshotRestoreIfNeeded();
+        }
+
+        if (section == NavSection.Canvas && IsUiaSmokeMode)
+        {
+            TryForceSaveCanvasSnapshotForSmoke();
         }
     }
 

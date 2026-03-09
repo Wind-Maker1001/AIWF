@@ -24,9 +24,16 @@ public sealed partial class MainWindow
         }
     }
 
-    private void OnLoadCanvasClick(object sender, RoutedEventArgs e)
+    private async void OnLoadCanvasClick(object sender, RoutedEventArgs e)
     {
-        TryLoadCanvasSnapshot(showStatus: true, missingIsError: true);
+        try
+        {
+            await ReloadCanvasSnapshotAsync(showStatus: true, missingIsError: true);
+        }
+        catch (Exception ex)
+        {
+            SetInlineStatus($"加载画布失败：{ex.Message}", InlineStatusTone.Error);
+        }
     }
 
     private void OnNewCanvasClick(object sender, RoutedEventArgs e)
@@ -41,6 +48,7 @@ public sealed partial class MainWindow
 
     private void CreateNewCanvas(string successMessage = "已新建空白画布。")
     {
+        MarkCanvasSnapshotRestoreSatisfied();
         _suppressCanvasAutosave = true;
         try
         {
@@ -144,6 +152,27 @@ public sealed partial class MainWindow
         return shouldWrite;
     }
 
+    private void TryForceSaveCanvasSnapshotForSmoke()
+    {
+        if (_suppressCanvasAutosave)
+        {
+            return;
+        }
+
+        try
+        {
+            var snapshot = BuildCanvasSnapshot();
+            var json = JsonSerializer.Serialize(snapshot, CanvasSnapshotJsonOptions);
+            if (PersistCanvasSnapshot(json, _lastSavedCanvasSnapshotJson))
+            {
+                _lastSavedCanvasSnapshotJson = json;
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private CanvasSnapshot BuildCanvasSnapshot()
     {
         var nodes = new List<CanvasNodeState>();
@@ -192,11 +221,65 @@ public sealed partial class MainWindow
             CanvasMaxScale);
     }
 
+    private sealed record CanvasSnapshotLoadData(bool Exists, string? Json, CanvasSnapshot? Snapshot);
+
+    private static CanvasSnapshotLoadData ReadCanvasSnapshot()
+    {
+        if (!File.Exists(CanvasStateFilePath))
+        {
+            return new CanvasSnapshotLoadData(false, null, null);
+        }
+
+        var json = File.ReadAllText(CanvasStateFilePath, Encoding.UTF8);
+        var snapshot = JsonSerializer.Deserialize<CanvasSnapshot>(json);
+        return new CanvasSnapshotLoadData(true, json, snapshot);
+    }
+
+    private void ScheduleCanvasSnapshotRestoreIfNeeded()
+    {
+        if (_canvasSnapshotRestoreTask is not null)
+        {
+            return;
+        }
+
+        var version = _canvasSnapshotRestoreVersion;
+        _canvasSnapshotRestoreTask = LoadCanvasSnapshotAsync(
+            showStatus: false,
+            missingIsError: false,
+            restoreVersion: version);
+    }
+
+    private void MarkCanvasSnapshotRestoreSatisfied()
+    {
+        _canvasSnapshotRestoreVersion++;
+        _canvasSnapshotRestoreTask = Task.FromResult(true);
+    }
+
+    private Task<bool> ReloadCanvasSnapshotAsync(bool showStatus, bool missingIsError)
+    {
+        _canvasSnapshotRestoreVersion++;
+        var version = _canvasSnapshotRestoreVersion;
+        _canvasSnapshotRestoreTask = LoadCanvasSnapshotAsync(showStatus, missingIsError, version);
+        return _canvasSnapshotRestoreTask;
+    }
+
     private bool TryLoadCanvasSnapshot(bool showStatus, bool missingIsError)
     {
+        return ReloadCanvasSnapshotAsync(showStatus, missingIsError).GetAwaiter().GetResult();
+    }
+
+    private async Task<bool> LoadCanvasSnapshotAsync(bool showStatus, bool missingIsError, int restoreVersion)
+    {
+        await _canvasSnapshotOperationLock.WaitAsync();
         try
         {
-            if (!File.Exists(CanvasStateFilePath))
+            var loadData = await Task.Run(ReadCanvasSnapshot);
+            if (restoreVersion != _canvasSnapshotRestoreVersion)
+            {
+                return false;
+            }
+
+            if (!loadData.Exists)
             {
                 if (showStatus || missingIsError)
                 {
@@ -206,9 +289,7 @@ public sealed partial class MainWindow
                 return false;
             }
 
-            var json = File.ReadAllText(CanvasStateFilePath, Encoding.UTF8);
-            var snapshot = JsonSerializer.Deserialize<CanvasSnapshot>(json);
-            if (snapshot is null)
+            if (loadData.Snapshot is null)
             {
                 if (showStatus)
                 {
@@ -221,8 +302,8 @@ public sealed partial class MainWindow
             _suppressCanvasAutosave = true;
             try
             {
-                ApplyCanvasSnapshot(snapshot);
-                _lastSavedCanvasSnapshotJson = json;
+                ApplyCanvasSnapshot(loadData.Snapshot);
+                _lastSavedCanvasSnapshotJson = loadData.Json;
             }
             finally
             {
@@ -234,6 +315,7 @@ public sealed partial class MainWindow
                 SetInlineStatus($"画布已加载：{CanvasStateFilePath}", InlineStatusTone.Success);
             }
 
+            _canvasSnapshotRestoreTask = Task.FromResult(true);
             return true;
         }
         catch (Exception ex)
@@ -244,6 +326,10 @@ public sealed partial class MainWindow
             }
 
             return false;
+        }
+        finally
+        {
+            _canvasSnapshotOperationLock.Release();
         }
     }
 

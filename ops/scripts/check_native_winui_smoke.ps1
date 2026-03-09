@@ -44,7 +44,7 @@ catch {
 
 if (-not $SkipBuild) {
   Info "building native winui project"
-  dotnet build $projectPath -c $Configuration
+  dotnet build $projectPath -c $Configuration -p:Platform=x64
   if ($LASTEXITCODE -ne 0) {
     throw "native winui build failed"
   }
