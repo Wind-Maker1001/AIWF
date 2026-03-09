@@ -1,42 +1,23 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-
+from aiwf.accel_transport import (
+    DEFAULT_ACCEL_BASE_URL,
+    get_json as _get_json_impl,
+    operator_url as _operator_url,
+    post_json as _post_json_impl,
+)
 
 def _url(base: str, path: str) -> str:
-    b = str(base or "http://127.0.0.1:18082").rstrip("/")
-    p = str(path or "").strip()
-    if not p.startswith("/"):
-        p = "/" + p
-    return b + p
-
-
-def _json_or_ok(response: Any, context: str) -> Dict[str, Any]:
-    if not getattr(response, "content", b""):
-        return {"ok": True}
-    try:
-        return response.json()
-    except ValueError as exc:
-        preview = str(getattr(response, "text", "") or "")[:200]
-        raise RuntimeError(f"{context} returned invalid JSON: {preview}") from exc
+    return _operator_url(base, path)
 
 
 def post_json(path: str, payload: Dict[str, Any], base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
-    import requests
-
-    r = requests.post(_url(base_url, path), json=payload, timeout=timeout)
-    if r.status_code >= 400:
-        raise RuntimeError(f"POST {path} -> {r.status_code} {r.text}")
-    return _json_or_ok(r, f"POST {path}")
+    return _post_json_impl(path, payload, base_url=base_url or DEFAULT_ACCEL_BASE_URL, timeout=timeout)
 
 
 def get_json(path: str, base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
-    import requests
-
-    r = requests.get(_url(base_url, path), timeout=timeout)
-    if r.status_code >= 400:
-        raise RuntimeError(f"GET {path} -> {r.status_code} {r.text}")
-    return _json_or_ok(r, f"GET {path}")
+    return _get_json_impl(path, base_url=base_url or DEFAULT_ACCEL_BASE_URL, timeout=timeout)
 
 
 def transform_rows_v2(

@@ -7,6 +7,40 @@ from aiwf import rust_client
 
 
 class HttpClientTests(unittest.TestCase):
+    def test_accel_cleaning_request_serializes_expected_fields(self):
+        req = accel_client.CleaningOperatorRequest(
+            job_id="job-1",
+            step_id="cleaning",
+            actor="local",
+            ruleset_version="v1",
+            input_uri="in",
+            output_uri="out",
+            job_root="D:/job",
+            params={"rows": [{"id": 1}]},
+            force_bad_parquet=True,
+        )
+
+        payload = req.to_payload()
+        self.assertEqual(payload["job_id"], "job-1")
+        self.assertEqual(payload["step_id"], "cleaning")
+        self.assertEqual(payload["params"]["rows"][0]["id"], 1)
+        self.assertTrue(payload["force_bad_parquet"])
+
+    def test_accel_transform_rows_v2_request_serializes_expected_fields(self):
+        req = accel_client.TransformRowsV2OperatorRequest(
+            run_id="job-1",
+            rows=[{"id": 1}],
+            rules={"max_amount": 10},
+            quality_gates={"min_output_rows": 1},
+            schema_hint={"source": "test"},
+        )
+
+        payload = req.to_payload()
+        self.assertEqual(payload["run_id"], "job-1")
+        self.assertEqual(payload["rows"][0]["id"], 1)
+        self.assertEqual(payload["rules"]["max_amount"], 10)
+        self.assertEqual(payload["quality_gates"]["min_output_rows"], 1)
+
     def test_base_client_returns_ok_for_empty_success_body(self):
         client = BaseClient("http://base")
 
