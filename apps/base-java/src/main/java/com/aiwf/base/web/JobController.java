@@ -1,9 +1,11 @@
 package com.aiwf.base.web;
 
 import com.aiwf.base.service.JobService;
+import com.aiwf.base.glue.GlueRunResult;
 import com.aiwf.base.web.dto.CreateJobPolicyReq;
 import com.aiwf.base.web.dto.GlueHealthResp;
 import com.aiwf.base.web.dto.JobCreateResp;
+import com.aiwf.base.web.dto.JobDetailsResp;
 import com.aiwf.base.web.dto.StepResp;
 import com.aiwf.base.web.dto.ArtifactResp;
 import com.aiwf.base.web.dto.RunFlowReq;
@@ -37,7 +39,7 @@ public class JobController {
     }
 
     @GetMapping("/{jobId}")
-    public Object getJob(@PathVariable("jobId") @NotBlank String jobId) {
+    public JobDetailsResp getJob(@PathVariable("jobId") @NotBlank String jobId) {
         return jobs.getJob(jobId);
     }
 
@@ -52,7 +54,7 @@ public class JobController {
     }
 
     @PostMapping("/{jobId}/run/{flow}")
-    public Object runFlow(
+    public GlueRunResult runFlow(
             @PathVariable("jobId") @NotBlank String jobId,
             @PathVariable("flow") @NotBlank String flow,
             @RequestBody RunFlowReq body

@@ -105,4 +105,17 @@ class DifyControllerTest {
         verify(jobs).createJob(eq("dify"), anyMap());
         verify(jobs).runFlow(eq("j101"), eq("cleaning"), eq("dify"), eq("v1"), anyMap());
     }
+
+    @Test
+    void runCleaningRejectsEmptyJobIdFromCreateJob() throws Exception {
+        when(jobs.createJob(eq("dify"), anyMap()))
+                .thenReturn(new JobCreateResp("", "dify", "RUNNING", "D:\\AIWF\\bus\\jobs\\missing", null));
+
+        mockMvc.perform(post("/api/v1/integrations/dify/run_cleaning")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("job_create_failed"));
+    }
 }
