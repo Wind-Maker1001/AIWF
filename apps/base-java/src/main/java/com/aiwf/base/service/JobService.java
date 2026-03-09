@@ -4,7 +4,9 @@ import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
+import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.glue.GlueGateway;
 import com.aiwf.base.glue.GlueHealthResult;
@@ -55,7 +57,7 @@ public class JobService {
     public JobCreateResp createJob(String owner) {
         String jobId = jobs.createJob(owner);
         ensureJobDirs(jobId);
-        return new JobCreateResp(jobId, owner, "RUNNING", Paths.get(jobsRoot(), jobId).toString(), null);
+        return new JobCreateResp(jobId, owner, JobStatus.RUNNING.toDb(), Paths.get(jobsRoot(), jobId).toString(), null);
     }
 
     public JobCreateResp createJob(String owner, Map<String, Object> policy) {
@@ -123,11 +125,11 @@ public class JobService {
         if (step == null) {
             throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
         }
-        if (!"FAILED".equals(step.status())) {
+        if (step.status() != StepStatus.FAILED) {
             throw ApiException.conflict(
                     "step_transition_conflict",
-                    "step cannot transition to FAILED",
-                    Map.of("job_id", jobId, "step_id", stepId, "current_status", step.status())
+                    "step cannot transition to " + StepStatus.FAILED.toDb(),
+                    Map.of("job_id", jobId, "step_id", stepId, "current_status", step.status().toDb())
             );
         }
 
@@ -168,14 +170,14 @@ public class JobService {
     }
 
     private JobDetailsResp toJobDetails(JobRow row) {
-        return new JobDetailsResp(row.jobId(), row.owner(), row.status(), row.createdAt());
+        return new JobDetailsResp(row.jobId(), row.owner(), row.status().toDb(), row.createdAt());
     }
 
     private StepResp toStepResp(StepRow row) {
         return new StepResp(
                 row.jobId(),
                 row.stepId(),
-                row.status(),
+                row.status().toDb(),
                 row.inputUri(),
                 row.outputUri(),
                 row.rulesetVersion(),

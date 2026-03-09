@@ -2,6 +2,7 @@ package com.aiwf.base.db;
 
 import com.aiwf.base.db.model.RuntimeTaskCancelResult;
 import com.aiwf.base.db.model.RuntimeTaskRow;
+import com.aiwf.base.db.model.RuntimeTaskStatus;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,7 +23,7 @@ public class RuntimeTaskRepository {
             String taskId,
             String tenantId,
             String operator,
-            String status,
+            RuntimeTaskStatus status,
             long createdAtEpoch,
             long updatedAtEpoch,
             String resultJson,
@@ -43,7 +44,7 @@ public class RuntimeTaskRepository {
                 """,
                 tenantId,
                 operator,
-                status,
+                status.toDb(),
                 updatedAtEpoch,
                 resultJson,
                 error,
@@ -62,7 +63,7 @@ public class RuntimeTaskRepository {
                         taskId,
                         tenantId,
                         operator,
-                        status,
+                        status.toDb(),
                         createdAtEpoch,
                         updatedAtEpoch,
                         resultJson,
@@ -83,7 +84,7 @@ public class RuntimeTaskRepository {
                         """,
                         tenantId,
                         operator,
-                        status,
+                        status.toDb(),
                         updatedAtEpoch,
                         resultJson,
                         error,
@@ -105,7 +106,7 @@ public class RuntimeTaskRepository {
                         rs.getString("task_id"),
                         rs.getString("tenant_id"),
                         rs.getString("operator"),
-                        rs.getString("status"),
+                        RuntimeTaskStatus.fromDb(rs.getString("status")),
                         rs.getLong("created_at_epoch"),
                         rs.getLong("updated_at_epoch"),
                         rs.getString("result_json"),
@@ -123,12 +124,15 @@ public class RuntimeTaskRepository {
         int changed = jdbc.update(
                 """
                 UPDATE dbo.workflow_tasks
-                SET status = 'cancelled',
+                SET status = ?,
                     updated_at_epoch = ?
-                WHERE task_id = ? AND status IN ('queued', 'running')
+                WHERE task_id = ? AND status IN (?, ?)
                 """,
+                RuntimeTaskStatus.CANCELLED.toDb(),
                 updatedAtEpoch,
-                taskId
+                taskId,
+                RuntimeTaskStatus.QUEUED.toDb(),
+                RuntimeTaskStatus.RUNNING.toDb()
         );
         return new RuntimeTaskCancelResult(changed > 0, getTask(taskId));
     }
@@ -146,7 +150,7 @@ public class RuntimeTaskRepository {
                         rs.getString("task_id"),
                         rs.getString("tenant_id"),
                         rs.getString("operator"),
-                        rs.getString("status"),
+                        RuntimeTaskStatus.fromDb(rs.getString("status")),
                         rs.getLong("created_at_epoch"),
                         rs.getLong("updated_at_epoch"),
                         rs.getString("result_json"),

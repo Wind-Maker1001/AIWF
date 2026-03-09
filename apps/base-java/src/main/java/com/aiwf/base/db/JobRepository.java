@@ -3,7 +3,9 @@ package com.aiwf.base.db;
 import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
+import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -31,7 +33,7 @@ public class JobRepository {
                 """,
                 jobId,
                 owner,
-                "RUNNING"
+                JobStatus.RUNNING.toDb()
         );
         audit(new AuditEvent(jobId, owner, "JOB_CREATE", null, null));
         return jobId;
@@ -45,7 +47,7 @@ public class JobRepository {
                             rs.getString("job_id"),
                             rs.getObject("created_at"),
                             rs.getString("owner"),
-                            rs.getString("status")
+                            JobStatus.fromDb(rs.getString("status"))
                     ),
                     jobId
             );
@@ -66,7 +68,7 @@ public class JobRepository {
                 (rs, rowNum) -> new StepRow(
                         rs.getString("job_id"),
                         rs.getString("step_id"),
-                        rs.getString("status"),
+                        StepStatus.fromDb(rs.getString("status")),
                         rs.getString("input_uri"),
                         rs.getString("output_uri"),
                         rs.getString("ruleset_version"),
@@ -92,7 +94,7 @@ public class JobRepository {
                     (rs, rowNum) -> new StepRow(
                             rs.getString("job_id"),
                             rs.getString("step_id"),
-                            rs.getString("status"),
+                            StepStatus.fromDb(rs.getString("status")),
                             rs.getString("input_uri"),
                             rs.getString("output_uri"),
                             rs.getString("ruleset_version"),
@@ -123,20 +125,22 @@ public class JobRepository {
         int updated = jdbc.update(
                 """
                 UPDATE dbo.steps
-                SET status = 'RUNNING',
+                SET status = ?,
                     input_uri = ?,
                     output_uri = ?,
                     ruleset_version = ?,
                     params_json = ?,
                     started_at = COALESCE(started_at, SYSDATETIME())
-                WHERE job_id = ? AND step_id = ? AND status = 'RUNNING'
+                WHERE job_id = ? AND step_id = ? AND status = ?
                 """,
+                StepStatus.RUNNING.toDb(),
                 inputUri,
                 outputUri,
                 rv,
                 paramsJson,
                 jobId,
-                stepId
+                stepId,
+                StepStatus.RUNNING.toDb()
         );
 
         if (updated > 0) {
@@ -149,10 +153,11 @@ public class JobRepository {
                     INSERT INTO dbo.steps
                         (job_id, step_id, status, input_uri, output_uri, ruleset_version, params_json, started_at)
                     VALUES
-                        (?, ?, 'RUNNING', ?, ?, ?, ?, SYSDATETIME())
+                        (?, ?, ?, ?, ?, ?, ?, SYSDATETIME())
                     """,
                     jobId,
                     stepId,
+                    StepStatus.RUNNING.toDb(),
                     inputUri,
                     outputUri,
                     rv,
@@ -163,20 +168,22 @@ public class JobRepository {
             int retried = jdbc.update(
                     """
                     UPDATE dbo.steps
-                    SET status = 'RUNNING',
+                    SET status = ?,
                         input_uri = ?,
                         output_uri = ?,
                         ruleset_version = ?,
                         params_json = ?,
                         started_at = COALESCE(started_at, SYSDATETIME())
-                    WHERE job_id = ? AND step_id = ? AND status = 'RUNNING'
+                    WHERE job_id = ? AND step_id = ? AND status = ?
                     """,
+                    StepStatus.RUNNING.toDb(),
                     inputUri,
                     outputUri,
                     rv,
                     paramsJson,
                     jobId,
-                    stepId
+                    stepId,
+                    StepStatus.RUNNING.toDb()
             );
             return new StepTransitionResult(getStep(jobId, stepId), retried > 0);
         }
@@ -186,14 +193,16 @@ public class JobRepository {
         int updated = jdbc.update(
                 """
                 UPDATE dbo.steps
-                SET status = 'DONE',
+                SET status = ?,
                     output_hash = ?,
                     ended_at = SYSDATETIME()
-                WHERE job_id = ? AND step_id = ? AND status = 'RUNNING'
+                WHERE job_id = ? AND step_id = ? AND status = ?
                 """,
+                StepStatus.DONE.toDb(),
                 outputHash,
                 jobId,
-                stepId
+                stepId,
+                StepStatus.RUNNING.toDb()
         );
         return new StepTransitionResult(getStep(jobId, stepId), updated > 0);
     }
@@ -202,14 +211,16 @@ public class JobRepository {
         int updated = jdbc.update(
                 """
                 UPDATE dbo.steps
-                SET status = 'FAILED',
+                SET status = ?,
                     error = ?,
                     ended_at = SYSDATETIME()
-                WHERE job_id = ? AND step_id = ? AND status = 'RUNNING'
+                WHERE job_id = ? AND step_id = ? AND status = ?
                 """,
+                StepStatus.FAILED.toDb(),
                 error,
                 jobId,
-                stepId
+                stepId,
+                StepStatus.RUNNING.toDb()
         );
         return new StepTransitionResult(getStep(jobId, stepId), updated > 0);
     }
