@@ -4,7 +4,8 @@ use crate::{
         NormalizeSchemaReq, NormalizeSchemaResp, RulesPackageGetReq, RulesPackagePublishReq,
         RulesPackageResp, TextPreprocessReq, TextPreprocessResp,
     },
-    load_sqlite_rows, load_sqlserver_rows, parse_agg_specs,
+    operators::analytics::parse_agg_specs,
+    row_io::{load_sqlite_rows, load_sqlserver_rows},
     transform_support::{
         collapse_ws, validate_sql_identifier, validate_where_clause, value_to_string_or_null,
     },

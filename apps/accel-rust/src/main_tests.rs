@@ -12,15 +12,15 @@ use super::{
     TaskStoreConfig, TemplateBindReq, TimeSeriesForecastReq, TransformCacheEntry, TransformRowsReq,
     TransformRowsV3Req, UdfWasmReq, UdfWasmV2Req, VectorIndexBuildReq, VectorIndexSearchReq,
     WindowRowsV1Req, WorkflowRunReq, build_router, can_cancel_status, evaluate_quality_gates,
-    load_and_clean_rows, load_parquet_rows, load_rows_from_uri_limited, prune_tasks,
-    run_aggregate_rows_v1, run_aggregate_rows_v2, run_aggregate_rows_v3, run_aggregate_rows_v4,
-    run_anomaly_explain_v1, run_columnar_eval_v1, run_evidence_rank_v1, run_explain_plan_v1,
-    run_fact_crosscheck_v1, run_finance_ratio_v1, run_join_rows_v2, run_join_rows_v3,
-    run_join_rows_v4, run_lineage_v3, run_load_rows_v3, run_optimizer_v1, run_parquet_io_v2,
-    run_plugin_exec_v1, run_plugin_operator_v1, run_plugin_registry_v1, run_provenance_sign_v1,
-    run_quality_check_v1, run_quality_check_v3, run_quality_check_v4, run_query_lang_v1,
-    run_rules_package_get_v1, run_rules_package_publish_v1, run_runtime_stats_v1,
-    run_schema_registry_check_compat_v2, run_schema_registry_get_v1, run_schema_registry_infer_v1,
+    load_and_clean_rows, load_parquet_rows, load_rows_from_uri_limited, run_aggregate_rows_v1,
+    run_aggregate_rows_v2, run_aggregate_rows_v3, run_aggregate_rows_v4, run_anomaly_explain_v1,
+    run_columnar_eval_v1, run_evidence_rank_v1, run_explain_plan_v1, run_fact_crosscheck_v1,
+    run_finance_ratio_v1, run_join_rows_v2, run_join_rows_v3, run_join_rows_v4, run_lineage_v3,
+    run_load_rows_v3, run_optimizer_v1, run_parquet_io_v2, run_plugin_exec_v1,
+    run_plugin_operator_v1, run_plugin_registry_v1, run_provenance_sign_v1, run_quality_check_v1,
+    run_quality_check_v3, run_quality_check_v4, run_query_lang_v1, run_rules_package_get_v1,
+    run_rules_package_publish_v1, run_runtime_stats_v1, run_schema_registry_check_compat_v2,
+    run_schema_registry_get_v1, run_schema_registry_infer_v1,
     run_schema_registry_suggest_migration_v2, run_sketch_v1, run_stream_state_load_v1,
     run_stream_state_save_v1, run_stream_state_v2, run_stream_window_v1, run_stream_window_v2,
     run_template_bind_v1, run_timeseries_forecast_v1, run_transform_rows_v2,
@@ -29,6 +29,7 @@ use super::{
     save_rows_parquet, utc_now_iso, validate_where_clause, value_to_string, write_cleaned_parquet,
 };
 use crate::operators::transform::run_transform_rows_v2_with_cancel;
+use accel_rust::task_store::prune_tasks;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},

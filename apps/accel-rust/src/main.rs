@@ -1,71 +1,29 @@
-use arrow_array::{
-    Array, ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt32Array,
-    builder::{BooleanBuilder, Float64Builder, Int64Builder, StringBuilder},
-};
-use arrow_ord::sort::{SortColumn, SortOptions, lexsort_to_indices};
-use arrow_schema::{DataType, Field, Schema};
-use arrow_select::take::take;
-use axum::{
-    Json,
-    extract::{Path as AxPath, State},
-    http::StatusCode,
-    response::IntoResponse,
-};
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD as BASE64_STD;
 use odbc_api::Environment;
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{Resource, propagation::TraceContextPropagator, trace as sdktrace};
-use parquet::{
-    basic::{Compression, LogicalType, Repetition, Type as PhysicalType},
-    column::reader::ColumnReader,
-    column::writer::ColumnWriter,
-    data_type::ByteArray,
-    file::reader::{FileReader, SerializedFileReader},
-    file::{properties::WriterProperties, writer::SerializedFileWriter},
-    schema::types::Type,
-};
-use regex::Regex;
-use rusqlite::Connection as SqliteConnection;
-use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    env, fs,
-    io::{BufRead, BufReader},
-    path::{Path, PathBuf},
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    collections::HashMap,
+    env,
+    sync::{Arc, Mutex},
 };
 use tokio::time::{Duration, sleep};
 use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
-use wasmtime::{
-    Engine as WasmEngine, Linker as WasmLinker, Module as WasmModule, Store as WasmStore,
-};
 
 use accel_rust::{
-    app_state::{
-        AppState, ServiceMetrics, TaskState, TaskStoreConfig, TransformCacheEntry,
-        TransformRowsResp, TransformRowsStats,
-    },
+    app_state::{AppState, ServiceMetrics, TaskStoreConfig},
     config::{ServerBind, allow_egress_enabled, is_local_endpoint},
-    metrics::{
-        acquire_file_lock, load_metrics_v2_samples, observe_operator_latency_v2,
-        percentile_from_sorted, release_file_lock,
-    },
+    metrics::load_metrics_v2_samples,
     task_store::{
-        escape_tsql, load_tasks_from_store, parse_sqlserver_conn_str, persist_tasks_to_store,
-        probe_remote_task_store, prune_tasks, resolve_task_store_backend, run_sqlcmd_query,
-        task_store_cancel_task, task_store_config_from_env, task_store_get_task,
-        task_store_remote_enabled, task_store_upsert_task,
+        load_tasks_from_store, probe_remote_task_store, resolve_task_store_backend,
+        task_store_config_from_env, task_store_remote_enabled,
     },
 };
+
+#[cfg(test)]
+use accel_rust::app_state::{TaskState, TransformCacheEntry};
 
 mod analysis_ops;
 mod api_types;
@@ -101,6 +59,8 @@ use http::routes::build_router;
 use load_ops::*;
 #[allow(unused_imports)]
 use misc_ops::*;
+#[cfg(test)]
+#[allow(unused_imports)]
 pub(crate) use operators::analytics::{
     AggregateRowsReq, AggregateRowsV2Req, AggregateRowsV3Req, AggregateRowsV4Req, QualityCheckReq,
     QualityCheckV2Req, QualityCheckV3Req, QualityCheckV4Req, approx_percentile, compute_aggregate,
@@ -108,16 +68,22 @@ pub(crate) use operators::analytics::{
     run_aggregate_rows_v4, run_quality_check_v1, run_quality_check_v2, run_quality_check_v3,
     run_quality_check_v4,
 };
+#[cfg(test)]
+#[allow(unused_imports)]
 pub(crate) use operators::join::{
     JoinRowsReq, JoinRowsV2Req, JoinRowsV3Req, JoinRowsV4Req, run_join_rows_v1, run_join_rows_v2,
     run_join_rows_v3, run_join_rows_v4,
 };
+#[cfg(test)]
+#[allow(unused_imports)]
 pub(crate) use operators::transform::{
     TransformRowsReq, TransformRowsV3Req, collect_expr_lineage, observe_transform_success,
     run_transform_rows_v2, run_transform_rows_v2_with_cache, run_transform_rows_v3,
 };
 #[cfg(test)]
 pub(crate) use operators::workflow::run_workflow;
+#[cfg(test)]
+#[allow(unused_imports)]
 pub(crate) use operators::workflow::{
     LineageV2Req, LineageV3Req, WorkflowRunReq, run_lineage_v2, run_lineage_v3,
 };

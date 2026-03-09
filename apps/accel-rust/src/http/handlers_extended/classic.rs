@@ -1,5 +1,4 @@
 use crate::{
-    LineageV2Req,
     analysis_ops::{
         run_chart_data_prep_v1, run_constraint_solver_v1, run_diff_audit_v1, run_entity_linking_v1,
         run_feature_store_get_v1, run_feature_store_upsert_v1, run_rule_simulator_v1, run_stats_v1,
@@ -13,10 +12,13 @@ use crate::{
         TimeSeriesForecastReq, TimeSeriesReq, UdfWasmReq, VectorIndexBuildReq,
         VectorIndexSearchReq,
     },
-    run_anomaly_explain_v1, run_evidence_rank_v1, run_fact_crosscheck_v1, run_finance_ratio_v1,
-    run_lineage_v2, run_provenance_sign_v1, run_query_lang_v1, run_stream_state_load_v1,
-    run_stream_state_save_v1, run_template_bind_v1, run_timeseries_forecast_v1,
-    run_vector_index_build_v1, run_vector_index_search_v1,
+    operators::workflow::{LineageV2Req, run_lineage_v2},
+    platform_ops::{
+        run_anomaly_explain_v1, run_evidence_rank_v1, run_fact_crosscheck_v1, run_finance_ratio_v1,
+        run_provenance_sign_v1, run_query_lang_v1, run_stream_state_load_v1,
+        run_stream_state_save_v1, run_template_bind_v1, run_timeseries_forecast_v1,
+        run_vector_index_build_v1, run_vector_index_search_v1,
+    },
     wasm_ops::run_udf_wasm_v1,
 };
 use accel_rust::{app_state::AppState, metrics::observe_operator_latency_v2};
