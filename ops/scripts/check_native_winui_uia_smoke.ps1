@@ -217,6 +217,13 @@ try {
   Invoke-Element $resultNav "ResultNavButton"
   $artifactsListView = Wait-VisibleElement $window "ArtifactsListView" $TimeoutSeconds
   $runResultTextBlock = Wait-VisibleElement $window "RunResultTextBlock" $TimeoutSeconds
+  $jobIdTextBlock = Wait-VisibleElement $window "JobIdTextBlock" $TimeoutSeconds
+  $retryInfoTextBlock = Wait-VisibleElement $window "RetryInfoTextBlock" $TimeoutSeconds
+  $runModeTextBlock = Wait-VisibleElement $window "RunModeTextBlock" $TimeoutSeconds
+  $durationTextBlock = Wait-VisibleElement $window "DurationTextBlock" $TimeoutSeconds
+  $okMetricTextBlock = Wait-VisibleElement $window "OkMetricTextBlock" $TimeoutSeconds
+  $modeMetricTextBlock = Wait-VisibleElement $window "ModeMetricTextBlock" $TimeoutSeconds
+  $durationMetricTextBlock = Wait-VisibleElement $window "DurationMetricTextBlock" $TimeoutSeconds
   Ok "results section is visible"
 
   Invoke-Element $workspaceNav "WorkspaceNavButton"

@@ -571,7 +571,7 @@
                                         </Border.Background>
                                         <StackPanel Spacing="2">
                                             <TextBlock Text="OK" Foreground="#FF374151" />
-                                            <TextBlock x:Name="OkMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
+                                            <TextBlock x:Name="OkMetricTextBlock" AutomationProperties.AutomationId="OkMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
                                         </StackPanel>
                                     </Border>
 
@@ -584,7 +584,7 @@
                                         </Border.Background>
                                         <StackPanel Spacing="2">
                                             <TextBlock Text="模式" Foreground="#FF374151" />
-                                            <TextBlock x:Name="ModeMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="ModeMetricTextBlock" AutomationProperties.AutomationId="ModeMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                     </Border>
 
@@ -597,7 +597,7 @@
                                         </Border.Background>
                                         <StackPanel Spacing="2">
                                             <TextBlock Text="耗时" Foreground="#FF374151" />
-                                            <TextBlock x:Name="DurationMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
+                                            <TextBlock x:Name="DurationMetricTextBlock" AutomationProperties.AutomationId="DurationMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
                                         </StackPanel>
                                     </Border>
                                 </Grid>
@@ -605,15 +605,15 @@
                                 <Border BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="10" Padding="10">
                                     <StackPanel Spacing="8">
                                         <TextBlock Text="作业 ID" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="JobIdTextBlock" Text="-" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="JobIdTextBlock" AutomationProperties.AutomationId="JobIdTextBlock" Text="-" TextWrapping="Wrap" />
                                         <TextBlock Text="自动重试" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="RetryInfoTextBlock" Text="未重试" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="RetryInfoTextBlock" AutomationProperties.AutomationId="RetryInfoTextBlock" Text="未重试" TextWrapping="Wrap" />
                                         <TextBlock Text="结果说明" FontWeight="SemiBold" Foreground="#FF374151" />
                                         <TextBlock x:Name="RunResultTextBlock" AutomationProperties.AutomationId="RunResultTextBlock" Text="-" TextWrapping="Wrap" />
                                         <TextBlock Text="运行模式" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="RunModeTextBlock" Text="-" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="RunModeTextBlock" AutomationProperties.AutomationId="RunModeTextBlock" Text="-" TextWrapping="Wrap" />
                                         <TextBlock Text="耗时（ms）" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="DurationTextBlock" Text="-" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="DurationTextBlock" AutomationProperties.AutomationId="DurationTextBlock" Text="-" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
