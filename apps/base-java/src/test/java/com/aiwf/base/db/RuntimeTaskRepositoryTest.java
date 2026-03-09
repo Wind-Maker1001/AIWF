@@ -7,6 +7,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.aiwf.base.db.model.RuntimeTaskStatus;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -32,7 +34,7 @@ class RuntimeTaskRepositoryTest {
         when(jdbc.update(startsWith("UPDATE dbo.workflow_tasks"), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(1);
 
-        repository.upsertTask("task1", "tenant-a", "transform_rows_v2", "done", 111L, 222L, "{\"rows\":1}", null, "accel-rust");
+        repository.upsertTask("task1", "tenant-a", "transform_rows_v2", RuntimeTaskStatus.DONE, 111L, 222L, "{\"rows\":1}", null, "accel-rust");
 
         verify(jdbc).update(
                 startsWith("UPDATE dbo.workflow_tasks"),
