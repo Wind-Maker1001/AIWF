@@ -3,6 +3,17 @@ from __future__ import annotations
 import os
 from typing import Any, Callable, Dict, List, Optional
 
+from aiwf.flows.cleaning_artifacts import (
+    CleaningArtifactContext,
+    materialize_accel_cleaning_artifacts,
+    materialize_local_cleaning_artifacts,
+)
+from aiwf.flows.office_artifacts import (
+    OfficeArtifactContext,
+    select_office_artifact_registrations,
+)
+from aiwf.paths import resolve_bus_root, resolve_job_root
+
 
 def resolve_base_url(s: Optional[Any], base: Optional[Any]) -> str:
     if s is not None and getattr(s, "base_url", None):
@@ -18,14 +29,15 @@ def prepare_job_layout(
     *,
     ensure_dirs: Callable[..., Any],
 ) -> Dict[str, str]:
-    bus_root = str(os.environ.get("AIWF_BUS", "")).strip() or os.path.join(os.path.expanduser("~"), "AIWF")
-    job_root = params.get("job_root") or os.path.join(bus_root, "jobs", job_id)
+    bus_root = resolve_bus_root()
+    job_root = resolve_job_root(job_id, override=params.get("job_root"))
     stage_dir = os.path.join(job_root, "stage")
     artifacts_dir = os.path.join(job_root, "artifacts")
     evidence_dir = os.path.join(job_root, "evidence")
     ensure_dirs(stage_dir, artifacts_dir, evidence_dir)
-    input_uri = params.get("input_uri") or (job_root + "\\")
-    output_uri = params.get("output_uri") or (job_root + "\\")
+    job_root_uri = os.path.join(job_root, "")
+    input_uri = params.get("input_uri") or job_root_uri
+    output_uri = params.get("output_uri") or job_root_uri
     return {
         "bus_root": bus_root,
         "job_root": job_root,
@@ -143,9 +155,13 @@ def materialize_office_outputs(
     write_deck_pptx: Callable[..., Any],
     sha256_file: Callable[..., str],
 ) -> Dict[str, Any]:
-    xlsx_path = os.path.join(artifacts_dir, "fin.xlsx")
-    docx_path = os.path.join(artifacts_dir, "audit.docx")
-    pptx_path = os.path.join(artifacts_dir, "deck.pptx")
+    registrations = select_office_artifact_registrations(params_effective)
+    if not registrations:
+        return {
+            "office_profile": None,
+            "office_artifacts": [],
+        }
+
     illustration_path = os.path.join(artifacts_dir, "summary_visual.png")
 
     office_rows, office_truncated = office_rows_subset(rows, params_effective)
@@ -154,19 +170,42 @@ def materialize_office_outputs(
     office_profile["office_rows_used"] = len(office_rows)
 
     write_profile_illustration_png(illustration_path, office_profile, params_effective)
-    write_fin_xlsx(xlsx_path, office_rows, illustration_path, params_effective)
-    write_audit_docx(docx_path, job_id, office_profile, illustration_path, params_effective)
-    write_deck_pptx(pptx_path, job_id, office_profile, illustration_path, params_effective)
+    context = OfficeArtifactContext(
+        job_id=job_id,
+        artifacts_dir=artifacts_dir,
+        params_effective=params_effective,
+        rows=rows,
+        quality=quality,
+        profile_source=profile_source,
+        office_rows=office_rows,
+        office_profile=office_profile,
+        illustration_path=illustration_path,
+        write_fin_xlsx=write_fin_xlsx,
+        write_audit_docx=write_audit_docx,
+        write_deck_pptx=write_deck_pptx,
+        sha256_file=sha256_file,
+    )
 
-    return {
-        "xlsx_path": xlsx_path,
-        "docx_path": docx_path,
-        "pptx_path": pptx_path,
-        "sha_xlsx": sha256_file(xlsx_path),
-        "sha_docx": sha256_file(docx_path),
-        "sha_pptx": sha256_file(pptx_path),
+    out: Dict[str, Any] = {
         "office_profile": office_profile,
+        "office_artifacts": [],
     }
+    for registration in registrations:
+        output_path = os.path.join(artifacts_dir, registration.filename)
+        registration.writer(context, output_path)
+        sha = sha256_file(output_path)
+        out[registration.path_key] = output_path
+        out[registration.sha_key] = sha
+        out["office_artifacts"].append(
+            {
+                "artifact_id": registration.artifact_id,
+                "kind": registration.kind,
+                "path": output_path,
+                "sha256": sha,
+            }
+        )
+
+    return out
 
 
 def materialize_accel_outputs(
@@ -181,27 +220,20 @@ def materialize_accel_outputs(
     sha256_file: Callable[..., str],
     materialize_office_outputs_fn: Callable[..., Dict[str, Any]],
 ) -> Dict[str, Any]:
-    csv_obj = accel_outputs.get("cleaned_csv") or {}
-    parquet_obj = accel_outputs.get("cleaned_parquet") or {}
-    profile_obj = accel_outputs.get("profile_json") or {}
-
-    cleaned_csv = str(csv_obj.get("path", ""))
-    cleaned_parquet = str(parquet_obj.get("path", ""))
-    profile_json = str(profile_obj.get("path", ""))
-
     out = {
-        "cleaned_csv": cleaned_csv,
-        "cleaned_parquet": cleaned_parquet,
-        "profile_json": profile_json,
-        "sha_csv": str(csv_obj.get("sha256") or (sha256_file(cleaned_csv) if cleaned_csv else "")),
-        "sha_parquet": str(parquet_obj.get("sha256") or (sha256_file(cleaned_parquet) if cleaned_parquet else "")),
-        "sha_profile": str(profile_obj.get("sha256") or (sha256_file(profile_json) if profile_json else "")),
         "profile": {
             "rows": int((accel_profile or {}).get("rows", 0)),
             "cols": int((accel_profile or {}).get("cols", 2)),
             "source": "accel",
         },
     }
+    out.update(
+        materialize_accel_cleaning_artifacts(
+            accel_outputs,
+            params_effective=params_effective,
+            sha256_file=sha256_file,
+        )
+    )
     out.update(
         materialize_office_outputs_fn(
             job_id=job_id,
@@ -243,33 +275,32 @@ def materialize_local_outputs(
     if not rows and not to_bool(rule_param(params_effective, "allow_empty_output", True), default=True):
         raise RuntimeError("cleaning produced empty result")
 
-    cleaned_csv = os.path.join(stage_dir, "cleaned.csv")
-    cleaned_parquet = os.path.join(stage_dir, "cleaned.parquet")
-    profile_json = os.path.join(evidence_dir, "profile.json")
-
     require_local_parquet_dependencies(params_effective)
-    write_cleaned_csv(cleaned_csv, rows)
-    write_cleaned_parquet(cleaned_parquet, rows)
-    parquet_valid_local = is_valid_parquet_file(cleaned_parquet)
-    if not parquet_valid_local and local_parquet_strict_enabled(params_effective):
-        raise RuntimeError(
-            "local parquet generation invalid; strict mode enabled (set local_parquet_strict=false to bypass)"
-        )
 
     profile = build_profile(rows, quality, source)
     profile["quality_gate"] = quality_gate
     profile["preprocess"] = preprocess_result
-    write_profile_json(profile_json, profile, params_effective)
-
-    out = {
-        "cleaned_csv": cleaned_csv,
-        "cleaned_parquet": cleaned_parquet,
-        "profile_json": profile_json,
-        "sha_csv": sha256_file(cleaned_csv),
-        "sha_parquet": sha256_file(cleaned_parquet),
-        "sha_profile": sha256_file(profile_json),
-        "profile": profile,
-    }
+    out = {"profile": profile}
+    out.update(
+        materialize_local_cleaning_artifacts(
+            CleaningArtifactContext(
+                stage_dir=stage_dir,
+                evidence_dir=evidence_dir,
+                rows=rows,
+                profile=profile,
+                params_effective=params_effective,
+                write_cleaned_csv=write_cleaned_csv,
+                write_cleaned_parquet=write_cleaned_parquet,
+                write_profile_json=write_profile_json,
+                sha256_file=sha256_file,
+            )
+        )
+    )
+    parquet_valid_local = is_valid_parquet_file(str(out.get("cleaned_parquet") or ""))
+    if not parquet_valid_local and local_parquet_strict_enabled(params_effective):
+        raise RuntimeError(
+            "local parquet generation invalid; strict mode enabled (set local_parquet_strict=false to bypass)"
+        )
     out.update(
         materialize_office_outputs_fn(
             job_id=job_id,

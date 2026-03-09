@@ -20,6 +20,9 @@ from aiwf.office_outputs import (
     write_audit_docx as _office_write_audit_docx,
     write_deck_pptx as _office_write_deck_pptx,
 )
+from aiwf.flows.artifact_selection import validate_artifact_selection_config_with_tokens
+from aiwf.flows.cleaning_artifacts import list_cleaning_artifact_tokens
+from aiwf.flows.office_artifacts import list_office_artifact_tokens
 from aiwf.flows.cleaning_simple_rules import clean_rows_simple as _clean_rows_simple
 from aiwf.flows.cleaning_generic_rules import clean_rows_generic as _clean_rows_generic_external
 
@@ -436,6 +439,12 @@ def validate_cleaning_rules(params: Dict[str, Any]) -> Dict[str, Any]:
         "force_local_cleaning",
         "use_rust_v2",
         "rust_v2_timeout_seconds",
+        "artifact_selection",
+        "office_outputs_enabled",
+        "enabled_office_artifacts",
+        "disabled_office_artifacts",
+        "enabled_core_artifacts",
+        "disabled_core_artifacts",
     }
     unknown = [k for k in rules.keys() if k not in allowed_keys]
     if unknown:
@@ -510,6 +519,14 @@ def validate_cleaning_rules(params: Dict[str, Any]) -> Dict[str, Any]:
             iv = _to_int(rules.get(key))
             if iv is None or iv < 0:
                 errors.append(f"{key} must be a non-negative integer")
+
+    artifact_vr = validate_artifact_selection_config_with_tokens(
+        params,
+        allowed_core_tokens=list_cleaning_artifact_tokens(),
+        allowed_office_tokens=list_office_artifact_tokens(),
+    )
+    errors.extend(artifact_vr.get("errors", []))
+    warnings.extend(artifact_vr.get("warnings", []))
 
     return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
 
@@ -698,42 +715,84 @@ def _clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) 
     )
 
 
+def _update_numeric_summary(summary: Dict[str, Any], value: Decimal) -> None:
+    if summary["count"] == 0:
+        summary["min"] = value
+        summary["max"] = value
+    else:
+        if value < summary["min"]:
+            summary["min"] = value
+        if value > summary["max"]:
+            summary["max"] = value
+    summary["count"] += 1
+    summary["sum"] += value
+
+
+def _finalize_numeric_summary(summary: Dict[str, Any]) -> Dict[str, float]:
+    avg = summary["sum"] / Decimal(summary["count"])
+    return {
+        "sum": float(_quantize_decimal(summary["sum"], 2)),
+        "min": float(_quantize_decimal(summary["min"], 2)),
+        "max": float(_quantize_decimal(summary["max"], 2)),
+        "avg": float(_quantize_decimal(avg, 2)),
+    }
+
+
 def _build_profile(rows: List[Dict[str, Any]], quality: Dict[str, Any], source: str) -> Dict[str, Any]:
     field_set = set()
-    for r in rows:
-        field_set.update(r.keys())
+    numeric_summaries: Dict[str, Dict[str, Any]] = {}
+    amount_summary = {
+        "count": 0,
+        "sum": Decimal("0"),
+        "min": Decimal("0"),
+        "max": Decimal("0"),
+    }
 
-    numeric_stats: Dict[str, Dict[str, float]] = {}
-    for field in sorted(field_set):
-        vals: List[Decimal] = []
-        for r in rows:
-            d = _to_decimal(r.get(field))
-            if d is not None:
-                vals.append(d)
-        if vals:
-            total_f = sum(vals, Decimal("0"))
-            min_f = min(vals)
-            max_f = max(vals)
-            avg_f = total_f / Decimal(len(vals))
-            numeric_stats[field] = {
-                "sum": float(_quantize_decimal(total_f, 2)),
-                "min": float(_quantize_decimal(min_f, 2)),
-                "max": float(_quantize_decimal(max_f, 2)),
-                "avg": float(_quantize_decimal(avg_f, 2)),
-            }
+    for row in rows:
+        amount_value = _to_decimal(row.get("amount"))
+        if amount_value is not None:
+            _update_numeric_summary(amount_summary, amount_value)
 
-    amounts = [_to_decimal(r.get("amount")) or Decimal("0") for r in rows]
-    total = sum(amounts, Decimal("0")) if amounts else Decimal("0")
-    min_amount = min(amounts) if amounts else Decimal("0")
-    max_amount = max(amounts) if amounts else Decimal("0")
-    avg_amount = (total / Decimal(len(amounts))) if amounts else Decimal("0")
+        for field, raw_value in row.items():
+            field_set.add(field)
+            numeric_value = _to_decimal(raw_value)
+            if numeric_value is None:
+                continue
+            summary = numeric_summaries.setdefault(
+                field,
+                {
+                    "count": 0,
+                    "sum": Decimal("0"),
+                    "min": Decimal("0"),
+                    "max": Decimal("0"),
+                },
+            )
+            _update_numeric_summary(summary, numeric_value)
+
+    numeric_stats = {
+        field: _finalize_numeric_summary(summary)
+        for field, summary in sorted(numeric_summaries.items())
+        if summary["count"] > 0
+    }
+
+    if amount_summary["count"] > 0:
+        sum_amount = float(_quantize_decimal(amount_summary["sum"], 2))
+        min_amount = float(_quantize_decimal(amount_summary["min"], 2))
+        max_amount = float(_quantize_decimal(amount_summary["max"], 2))
+        avg_amount = float(_quantize_decimal(amount_summary["sum"] / Decimal(amount_summary["count"]), 2))
+    else:
+        sum_amount = 0.0
+        min_amount = 0.0
+        max_amount = 0.0
+        avg_amount = 0.0
+
     return {
         "rows": len(rows),
-        "cols": 2,
-        "sum_amount": float(_quantize_decimal(total, 2)),
-        "min_amount": float(_quantize_decimal(min_amount, 2)),
-        "max_amount": float(_quantize_decimal(max_amount, 2)),
-        "avg_amount": float(_quantize_decimal(avg_amount, 2)),
+        "cols": len(field_set),
+        "sum_amount": sum_amount,
+        "min_amount": min_amount,
+        "max_amount": max_amount,
+        "avg_amount": avg_amount,
         "quality": quality,
         "fields": sorted(field_set),
         "numeric_stats": numeric_stats,
@@ -803,10 +862,10 @@ def _write_cleaned_csv(csv_path: str, rows: List[Dict[str, Any]]) -> Dict[str, i
         columns = ["id", "amount"]
 
     with open(csv_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(",".join(columns) + "\n")
+        writer = csv.DictWriter(f, fieldnames=columns, lineterminator="\n")
+        writer.writeheader()
         for r in rows:
-            vals = ["" if r.get(c) is None else str(r.get(c)) for c in columns]
-            f.write(",".join(vals) + "\n")
+            writer.writerow({c: r.get(c) for c in columns})
     return {"rows": len(rows), "cols": len(columns)}
 
 

@@ -1,7 +1,9 @@
 package com.aiwf.base.web;
 
 import com.aiwf.base.config.AppProperties;
-import com.aiwf.base.db.AiWfDao;
+import com.aiwf.base.db.RuntimeTaskRepository;
+import com.aiwf.base.db.model.RuntimeTaskCancelResult;
+import com.aiwf.base.db.model.RuntimeTaskRow;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -9,8 +11,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -27,7 +27,7 @@ class RuntimeTaskControllerTest {
     private MockMvc mockMvc;
 
     @MockBean
-    private AiWfDao dao;
+    private RuntimeTaskRepository tasks;
 
     @MockBean
     private AppProperties appProperties;
@@ -37,14 +37,15 @@ class RuntimeTaskControllerTest {
         mockMvc.perform(post("/api/v1/runtime/tasks/upsert")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"queued\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.ok").value(false));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("task_id_required"));
     }
 
     @Test
     void getTaskReturnsTask() throws Exception {
-        when(dao.getWorkflowTask(eq("t1")))
-                .thenReturn(Map.of("task_id", "t1", "status", "done", "operator", "transform_rows_v2"));
+        when(tasks.getTask(eq("t1")))
+                .thenReturn(new RuntimeTaskRow("t1", "default", "transform_rows_v2", "done", 1L, 2L, null, null, "accel-rust"));
         mockMvc.perform(get("/api/v1/runtime/tasks/t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ok").value(true))
@@ -52,9 +53,20 @@ class RuntimeTaskControllerTest {
     }
 
     @Test
+    void getTaskReturnsNotFoundShape() throws Exception {
+        when(tasks.getTask(eq("missing"))).thenReturn(null);
+
+        mockMvc.perform(get("/api/v1/runtime/tasks/missing"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("task_not_found"))
+                .andExpect(jsonPath("$.task_id").value("missing"));
+    }
+
+    @Test
     void cancelTaskReturnsCancelled() throws Exception {
-        when(dao.cancelWorkflowTask(eq("t2"), anyLong()))
-                .thenReturn(Map.of("cancelled", true, "task", Map.of("status", "cancelled")));
+        when(tasks.cancelTask(eq("t2"), anyLong()))
+                .thenReturn(new RuntimeTaskCancelResult(true, new RuntimeTaskRow("t2", "default", "transform_rows_v2", "cancelled", 1L, 2L, null, null, "accel-rust")));
         mockMvc.perform(post("/api/v1/runtime/tasks/t2/cancel"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ok").value(true))

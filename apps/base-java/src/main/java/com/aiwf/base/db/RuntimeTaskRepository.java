@@ -1,0 +1,171 @@
+package com.aiwf.base.db;
+
+import com.aiwf.base.db.model.RuntimeTaskCancelResult;
+import com.aiwf.base.db.model.RuntimeTaskRow;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public class RuntimeTaskRepository {
+
+    private final JdbcTemplate jdbc;
+
+    public RuntimeTaskRepository(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    public void upsertTask(
+            String taskId,
+            String tenantId,
+            String operator,
+            String status,
+            long createdAtEpoch,
+            long updatedAtEpoch,
+            String resultJson,
+            String error,
+            String source
+    ) {
+        int updated = jdbc.update(
+                """
+                UPDATE dbo.workflow_tasks
+                SET tenant_id = ?,
+                    operator = ?,
+                    status = ?,
+                    updated_at_epoch = ?,
+                    result_json = ?,
+                    error = ?,
+                    source = ?
+                WHERE task_id = ?
+                """,
+                tenantId,
+                operator,
+                status,
+                updatedAtEpoch,
+                resultJson,
+                error,
+                source,
+                taskId
+        );
+
+        completeUpsert(
+                updated,
+                () -> jdbc.update(
+                        """
+                        INSERT INTO dbo.workflow_tasks
+                            (task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        taskId,
+                        tenantId,
+                        operator,
+                        status,
+                        createdAtEpoch,
+                        updatedAtEpoch,
+                        resultJson,
+                        error,
+                        source
+                ),
+                () -> jdbc.update(
+                        """
+                        UPDATE dbo.workflow_tasks
+                        SET tenant_id = ?,
+                            operator = ?,
+                            status = ?,
+                            updated_at_epoch = ?,
+                            result_json = ?,
+                            error = ?,
+                            source = ?
+                        WHERE task_id = ?
+                        """,
+                        tenantId,
+                        operator,
+                        status,
+                        updatedAtEpoch,
+                        resultJson,
+                        error,
+                        source,
+                        taskId
+                )
+        );
+    }
+
+    public RuntimeTaskRow getTask(String taskId) {
+        try {
+            return jdbc.queryForObject(
+                """
+                SELECT task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source
+                FROM dbo.workflow_tasks
+                WHERE task_id = ?
+                """,
+                (rs, rowNum) -> new RuntimeTaskRow(
+                        rs.getString("task_id"),
+                        rs.getString("tenant_id"),
+                        rs.getString("operator"),
+                        rs.getString("status"),
+                        rs.getLong("created_at_epoch"),
+                        rs.getLong("updated_at_epoch"),
+                        rs.getString("result_json"),
+                        rs.getString("error"),
+                        rs.getString("source")
+                ),
+                taskId
+            );
+        } catch (EmptyResultDataAccessException e) {
+            return null;
+        }
+    }
+
+    public RuntimeTaskCancelResult cancelTask(String taskId, long updatedAtEpoch) {
+        int changed = jdbc.update(
+                """
+                UPDATE dbo.workflow_tasks
+                SET status = 'cancelled',
+                    updated_at_epoch = ?
+                WHERE task_id = ? AND status IN ('queued', 'running')
+                """,
+                updatedAtEpoch,
+                taskId
+        );
+        return new RuntimeTaskCancelResult(changed > 0, getTask(taskId));
+    }
+
+    public List<RuntimeTaskRow> listTasksByTenant(String tenantId, int limit) {
+        int n = Math.max(1, Math.min(500, limit));
+        return jdbc.query(
+                """
+                SELECT TOP (?) task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source
+                FROM dbo.workflow_tasks
+                WHERE tenant_id = ?
+                ORDER BY updated_at_epoch DESC
+                """,
+                (rs, rowNum) -> new RuntimeTaskRow(
+                        rs.getString("task_id"),
+                        rs.getString("tenant_id"),
+                        rs.getString("operator"),
+                        rs.getString("status"),
+                        rs.getLong("created_at_epoch"),
+                        rs.getLong("updated_at_epoch"),
+                        rs.getString("result_json"),
+                        rs.getString("error"),
+                        rs.getString("source")
+                ),
+                n,
+                tenantId
+        );
+    }
+
+    private void completeUpsert(int updated, Runnable insertAction, Runnable retryUpdateAction) {
+        if (updated > 0) {
+            return;
+        }
+        try {
+            insertAction.run();
+        } catch (DuplicateKeyException e) {
+            retryUpdateAction.run();
+        }
+    }
+}

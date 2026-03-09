@@ -1,7 +1,14 @@
-use crate::*;
+use crate::transform_support::{utc_now_iso, value_to_string_or_null};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs,
+    path::PathBuf,
+};
+
+type IndexedRow = (usize, Map<String, Value>);
+type JoinIndex = HashMap<String, Vec<IndexedRow>>;
 
 #[derive(Deserialize)]
 pub(crate) struct JoinRowsReq {
@@ -152,7 +159,7 @@ pub(crate) fn run_join_rows_v2(req: JoinRowsV2Req) -> Result<JoinRowsResp, Strin
     ) {
         return Err(format!("unsupported join_type: {join_type}"));
     }
-    let mut right_index: HashMap<String, Vec<(usize, Map<String, Value>)>> = HashMap::new();
+    let mut right_index: JoinIndex = HashMap::new();
     for (idx, row) in req.right_rows.into_iter().enumerate() {
         if let Some(obj) = row.as_object() {
             let k = join_key_multi(obj, &right_keys);
@@ -244,28 +251,28 @@ pub(crate) fn run_join_rows_v3(req: JoinRowsV3Req) -> Result<JoinRowsResp, Strin
     };
     let mut spill_written = false;
     let mut spill_file = None::<String>;
-    if left_n.saturating_add(right_n) > chunk_size {
-        if let Some(path) = req.spill_path.as_ref() {
-            let p = PathBuf::from(path);
-            if let Some(parent) = p.parent() {
-                fs::create_dir_all(parent).map_err(|e| format!("create spill dir: {e}"))?;
-            }
-            let payload = json!({
-                "strategy": selected,
-                "left_rows": left_n,
-                "right_rows": right_n,
-                "chunk_size": chunk_size,
-                "created_at": utc_now_iso()
-            });
-            fs::write(
-                &p,
-                serde_json::to_string_pretty(&payload)
-                    .map_err(|e| format!("serialize spill marker: {e}"))?,
-            )
-            .map_err(|e| format!("write spill marker: {e}"))?;
-            spill_written = true;
-            spill_file = Some(p.to_string_lossy().to_string());
+    if left_n.saturating_add(right_n) > chunk_size
+        && let Some(path) = req.spill_path.as_ref()
+    {
+        let p = PathBuf::from(path);
+        if let Some(parent) = p.parent() {
+            fs::create_dir_all(parent).map_err(|e| format!("create spill dir: {e}"))?;
         }
+        let payload = json!({
+            "strategy": selected,
+            "left_rows": left_n,
+            "right_rows": right_n,
+            "chunk_size": chunk_size,
+            "created_at": utc_now_iso()
+        });
+        fs::write(
+            &p,
+            serde_json::to_string_pretty(&payload)
+                .map_err(|e| format!("serialize spill marker: {e}"))?,
+        )
+        .map_err(|e| format!("write spill marker: {e}"))?;
+        spill_written = true;
+        spill_file = Some(p.to_string_lossy().to_string());
     }
     let mut resp = run_join_rows_v2(JoinRowsV2Req {
         run_id: req.run_id,
