@@ -1,8 +1,9 @@
-use super::engine::{
-    execute_workflow_step, push_failed_workflow_step, push_success_workflow_step,
-    record_workflow_runtime_stat, workflow_error,
-};
+use super::engine::execute_workflow_step;
 use super::lineage::summarize_value;
+use super::support::{
+    push_failed_workflow_step, push_success_workflow_step, record_workflow_runtime_stat,
+    workflow_error,
+};
 use super::*;
 
 #[cfg(test)]

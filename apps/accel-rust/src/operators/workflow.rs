@@ -104,7 +104,9 @@ pub(crate) use types::*;
 mod lineage;
 pub(crate) use lineage::{run_lineage_v2, run_lineage_v3};
 
+mod custom;
 mod engine;
+mod support;
 
 mod runner;
 #[cfg(test)]

@@ -1,115 +1,16 @@
-use super::lineage::summarize_value;
+use super::custom::{
+    workflow_plugin_health_v1_handler, workflow_schema_registry_v2_get_handler,
+    workflow_schema_registry_v2_infer_handler, workflow_schema_registry_v2_register_handler,
+    workflow_transform_rows_v2_handler,
+};
+use super::support::{run_stateful_workflow_step, run_stateless_workflow_step, workflow_error};
 use super::*;
-
-pub(super) fn workflow_error(code: &str, operator: &str, message: impl Into<String>) -> String {
-    AccelError::new(code, message)
-        .with_operator(operator)
-        .to_string()
-}
-
-pub(super) fn record_workflow_runtime_stat(
-    run_id: Option<String>,
-    op: &str,
-    ok: bool,
-    error: Option<&str>,
-    duration_ms: u128,
-) {
-    let _ = run_runtime_stats_v1(RuntimeStatsV1Req {
-        run_id,
-        op: "record".to_string(),
-        operator: Some(op.to_string()),
-        ok: Some(ok),
-        error_code: error.map(normalize_error_code),
-        duration_ms: Some(duration_ms),
-        rows_in: None,
-        rows_out: None,
-    });
-}
-
-pub(super) fn push_failed_workflow_step(
-    trace: &mut Vec<WorkflowStepReplay>,
-    id: &str,
-    op: &str,
-    started_at: String,
-    duration_ms: u128,
-    input_summary: Value,
-    error: String,
-) {
-    trace.push(WorkflowStepReplay {
-        id: id.to_string(),
-        operator: op.to_string(),
-        status: "failed".to_string(),
-        started_at,
-        finished_at: utc_now_iso(),
-        duration_ms,
-        input_summary,
-        output_summary: None,
-        error: Some(error),
-    });
-}
-
-pub(super) fn push_success_workflow_step(
-    trace: &mut Vec<WorkflowStepReplay>,
-    step_key: (&str, &str),
-    started_at: String,
-    finished_at: String,
-    duration_ms: u128,
-    input_summary: Value,
-    output: &Value,
-) {
-    let (id, op) = step_key;
-    trace.push(WorkflowStepReplay {
-        id: id.to_string(),
-        operator: op.to_string(),
-        status: "done".to_string(),
-        started_at,
-        finished_at,
-        duration_ms,
-        input_summary,
-        output_summary: Some(summarize_value(output)),
-        error: None,
-    });
-}
 
 type WorkflowStepHandler = fn(&AppState, Value) -> Result<Value, String>;
 
 struct WorkflowStepDefinition {
     op: &'static str,
     handler: WorkflowStepHandler,
-}
-
-fn parse_workflow_input<T: DeserializeOwned>(input: Value) -> Result<T, String> {
-    serde_json::from_value::<T>(input).map_err(|e| e.to_string())
-}
-
-fn serialize_workflow_output<T: Serialize>(output: T) -> Result<Value, String> {
-    serde_json::to_value(output).map_err(|e| e.to_string())
-}
-
-fn run_stateless_workflow_step<T, R, F>(input: Value, runner: F) -> Result<Value, String>
-where
-    T: DeserializeOwned,
-    R: Serialize,
-    F: FnOnce(T) -> Result<R, String>,
-{
-    let req = parse_workflow_input::<T>(input)?;
-    let resp = runner(req)?;
-    serialize_workflow_output(resp)
-}
-
-fn run_stateful_workflow_step<T, R, F>(
-    state: &AppState,
-    input: Value,
-    runner: F,
-) -> Result<Value, String>
-where
-    T: DeserializeOwned,
-    R: Serialize,
-    F: FnOnce(&AppState, T) -> Result<R, String>,
-{
-    let req = parse_workflow_input::<T>(input)?;
-    let resp = runner(state, req)?;
-    serialize_workflow_output(resp)
 }
 
 macro_rules! define_stateless_workflow_handlers {
@@ -143,60 +44,6 @@ macro_rules! define_workflow_step_registry {
             )+
         ];
     };
-}
-
-fn workflow_transform_rows_v2_handler(state: &AppState, input: Value) -> Result<Value, String> {
-    let req = parse_workflow_input::<TransformRowsReq>(input)?;
-    let resp = run_transform_rows_v2_with_cache(
-        req,
-        None,
-        Some(&state.transform_cache),
-        Some(&state.metrics),
-    )?;
-    serialize_workflow_output(resp)
-}
-
-fn workflow_plugin_health_v1_handler(_: &AppState, input: Value) -> Result<Value, String> {
-    let req = parse_workflow_input::<PluginHealthReq>(input)?;
-    let plugin = safe_pkg_token(&req.plugin)?;
-    let details = run_plugin_healthcheck(&plugin, req.tenant_id.as_deref())?;
-    Ok(json!({
-        "ok": true,
-        "operator": "plugin_health_v1",
-        "status": "done",
-        "plugin": plugin,
-        "details": details
-    }))
-}
-
-fn workflow_schema_registry_v2_register_handler(
-    state: &AppState,
-    input: Value,
-) -> Result<Value, String> {
-    let req = parse_workflow_input::<SchemaRegisterReq>(input)?;
-    let mut resp = run_schema_registry_register_v1(state, req)?;
-    resp.operator = "schema_registry_v2_register".to_string();
-    serialize_workflow_output(resp)
-}
-
-fn workflow_schema_registry_v2_get_handler(
-    state: &AppState,
-    input: Value,
-) -> Result<Value, String> {
-    let req = parse_workflow_input::<SchemaGetReq>(input)?;
-    let mut resp = run_schema_registry_get_v1(state, req)?;
-    resp.operator = "schema_registry_v2_get".to_string();
-    serialize_workflow_output(resp)
-}
-
-fn workflow_schema_registry_v2_infer_handler(
-    state: &AppState,
-    input: Value,
-) -> Result<Value, String> {
-    let req = parse_workflow_input::<SchemaInferReq>(input)?;
-    let mut resp = run_schema_registry_infer_v1(state, req)?;
-    resp.operator = "schema_registry_v2_infer".to_string();
-    serialize_workflow_output(resp)
 }
 
 define_stateless_workflow_handlers! {
