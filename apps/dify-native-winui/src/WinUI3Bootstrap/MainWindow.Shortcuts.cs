@@ -15,15 +15,22 @@ public sealed partial class MainWindow
             return;
         }
 
-        AddShortcut(rootElement, Windows.System.VirtualKey.S, Windows.System.VirtualKeyModifiers.Control, (_, args) =>
+        AddShortcut(rootElement, Windows.System.VirtualKey.S, Windows.System.VirtualKeyModifiers.Control, async (_, args) =>
         {
             if (_activeSection != NavSection.Canvas)
             {
                 return;
             }
 
-            SaveCanvasSnapshot(showStatus: true);
             args.Handled = true;
+            try
+            {
+                await SaveCanvasSnapshotAsync(showStatus: true);
+            }
+            catch (Exception ex)
+            {
+                SetInlineStatus($"保存画布失败：{ex.Message}", InlineStatusTone.Error);
+            }
         });
 
         AddShortcut(rootElement, Windows.System.VirtualKey.O, Windows.System.VirtualKeyModifiers.Control, (_, args) =>
@@ -33,8 +40,8 @@ public sealed partial class MainWindow
                 return;
             }
 
-            TryLoadCanvasSnapshot(showStatus: true, missingIsError: true);
             args.Handled = true;
+            TryLoadCanvasSnapshot(showStatus: true, missingIsError: true);
         });
 
         AddShortcut(rootElement, Windows.System.VirtualKey.N, Windows.System.VirtualKeyModifiers.Control, (_, args) =>
@@ -44,8 +51,8 @@ public sealed partial class MainWindow
                 return;
             }
 
-            CreateNewCanvas();
             args.Handled = true;
+            CreateNewCanvas();
         });
 
         AddShortcut(rootElement, Windows.System.VirtualKey.Number0, Windows.System.VirtualKeyModifiers.Control, (_, args) =>

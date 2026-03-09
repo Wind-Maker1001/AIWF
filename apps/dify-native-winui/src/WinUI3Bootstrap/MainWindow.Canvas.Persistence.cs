@@ -12,9 +12,16 @@ namespace AIWF.Native;
 
 public sealed partial class MainWindow
 {
-    private void OnSaveCanvasClick(object sender, RoutedEventArgs e)
+    private async void OnSaveCanvasClick(object sender, RoutedEventArgs e)
     {
-        SaveCanvasSnapshot(showStatus: true);
+        try
+        {
+            await SaveCanvasSnapshotAsync(showStatus: true);
+        }
+        catch (Exception ex)
+        {
+            SetInlineStatus($"保存画布失败：{ex.Message}", InlineStatusTone.Error);
+        }
     }
 
     private void OnLoadCanvasClick(object sender, RoutedEventArgs e)
@@ -29,11 +36,10 @@ public sealed partial class MainWindow
 
     private void OnClearCanvasClick(object sender, RoutedEventArgs e)
     {
-        CreateNewCanvas();
-        SetInlineStatus("画布已清空。", InlineStatusTone.Success);
+        CreateNewCanvas("画布已清空。");
     }
 
-    private void CreateNewCanvas()
+    private void CreateNewCanvas(string successMessage = "已新建空白画布。")
     {
         _suppressCanvasAutosave = true;
         try
@@ -47,14 +53,14 @@ public sealed partial class MainWindow
             ClampCanvasTransform();
             EnsureCanvasExtentForViewportAndNodes();
             UpdateNodePropertyPanel();
-            SetInlineStatus("已新建空白画布。", InlineStatusTone.Success);
+            SetInlineStatus(successMessage, InlineStatusTone.Success);
         }
         finally
         {
             _suppressCanvasAutosave = false;
         }
 
-        SaveCanvasSnapshot(showStatus: false);
+        RequestCanvasAutosave();
     }
 
     private void RequestCanvasAutosave()
@@ -66,7 +72,7 @@ public sealed partial class MainWindow
 
         if (_canvasAutosaveTimer is null)
         {
-            SaveCanvasSnapshot(showStatus: false);
+            _ = SaveCanvasSnapshotAsync(showStatus: false);
             return;
         }
 
@@ -74,26 +80,26 @@ public sealed partial class MainWindow
         _canvasAutosaveTimer.Start();
     }
 
-    private bool SaveCanvasSnapshot(bool showStatus)
+    private async Task<bool> SaveCanvasSnapshotAsync(bool showStatus)
     {
         if (_suppressCanvasAutosave)
         {
             return false;
         }
 
+        await _canvasSnapshotOperationLock.WaitAsync();
         try
         {
+            if (_suppressCanvasAutosave)
+            {
+                return false;
+            }
+
             var snapshot = BuildCanvasSnapshot();
-            var dir = Path.GetDirectoryName(CanvasStateFilePath) ?? ".";
-            Directory.CreateDirectory(dir);
-            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
-            var shouldWrite = CanvasSnapshotWriteDecider.ShouldWrite(
-                _lastSavedCanvasSnapshotJson,
-                json,
-                File.Exists(CanvasStateFilePath));
+            var json = JsonSerializer.Serialize(snapshot, CanvasSnapshotJsonOptions);
+            var shouldWrite = await Task.Run(() => PersistCanvasSnapshot(json, _lastSavedCanvasSnapshotJson));
             if (shouldWrite)
             {
-                File.WriteAllText(CanvasStateFilePath, json, Encoding.UTF8);
                 _lastSavedCanvasSnapshotJson = json;
                 if (showStatus)
                 {
@@ -116,6 +122,26 @@ public sealed partial class MainWindow
 
             return false;
         }
+        finally
+        {
+            _canvasSnapshotOperationLock.Release();
+        }
+    }
+
+    private static bool PersistCanvasSnapshot(string json, string? previousJson)
+    {
+        var dir = Path.GetDirectoryName(CanvasStateFilePath) ?? ".";
+        Directory.CreateDirectory(dir);
+        var shouldWrite = CanvasSnapshotWriteDecider.ShouldWrite(
+            previousJson,
+            json,
+            File.Exists(CanvasStateFilePath));
+        if (shouldWrite)
+        {
+            File.WriteAllText(CanvasStateFilePath, json, Encoding.UTF8);
+        }
+
+        return shouldWrite;
     }
 
     private CanvasSnapshot BuildCanvasSnapshot()

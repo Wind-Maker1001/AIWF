@@ -107,6 +107,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer? _canvasAutosaveTimer;
     private readonly DispatcherQueueTimer? _statusDecayTimer;
     private readonly DispatcherQueueTimer? _canvasInteractionSettleTimer;
+    private readonly SemaphoreSlim _canvasSnapshotOperationLock = new(1, 1);
     private bool _hasPendingPanelSplit;
     private double _pendingLeftWidth;
     private double _pendingRightWidth;
@@ -145,6 +146,10 @@ public sealed partial class MainWindow : Window
     private bool _didPrewarmCanvasSection;
     private bool _didScheduleCanvasWarmup;
     private string? _lastSavedCanvasSnapshotJson;
+    private static readonly JsonSerializerOptions CanvasSnapshotJsonOptions = new()
+    {
+        WriteIndented = true
+    };
     private static readonly string CanvasStateFilePath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "AIWF",
@@ -250,7 +255,7 @@ public sealed partial class MainWindow : Window
             _canvasAutosaveTimer.Tick += (_, _) =>
             {
                 _canvasAutosaveTimer.Stop();
-                SaveCanvasSnapshot(showStatus: false);
+                _ = SaveCanvasSnapshotAsync(showStatus: false);
             };
 
             _statusDecayTimer = dispatcherQueue.CreateTimer();
