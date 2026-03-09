@@ -107,6 +107,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherQueueTimer? _canvasAutosaveTimer;
     private readonly DispatcherQueueTimer? _statusDecayTimer;
     private readonly DispatcherQueueTimer? _canvasInteractionSettleTimer;
+    private readonly DispatcherQueueTimer? _canvasUiaSmokeTimer;
     private readonly SemaphoreSlim _canvasSnapshotOperationLock = new(1, 1);
     private bool _hasPendingPanelSplit;
     private double _pendingLeftWidth;
@@ -136,6 +137,10 @@ public sealed partial class MainWindow : Window
     private const int MinWindowWidth = 900;
     private const int MinWindowHeight = 620;
     private const string DefaultInlineStatusText = "就绪";
+    private static readonly bool IsUiaSmokeMode = string.Equals(
+        Environment.GetEnvironmentVariable("AIWF_NATIVE_UIA_SMOKE"),
+        "1",
+        StringComparison.Ordinal);
     private static readonly TimeSpan SuccessStatusDuration = TimeSpan.FromMilliseconds(1800);
     private static readonly TimeSpan NeutralStatusDuration = TimeSpan.FromMilliseconds(1500);
     private double _canvasWidth = DefaultCanvasWidth;
@@ -280,6 +285,18 @@ public sealed partial class MainWindow : Window
             {
                 _canvasInteractionSettleTimer.Stop();
                 CanvasGridLayer.Visibility = Visibility.Visible;
+            };
+
+            _canvasUiaSmokeTimer = dispatcherQueue.CreateTimer();
+            _canvasUiaSmokeTimer.Interval = TimeSpan.FromMilliseconds(3000);
+            _canvasUiaSmokeTimer.IsRepeating = false;
+            _canvasUiaSmokeTimer.Tick += (_, _) =>
+            {
+                _canvasUiaSmokeTimer.Stop();
+                if (_activeSection == NavSection.Canvas)
+                {
+                    _ = SaveCanvasSnapshotAsync(showStatus: false);
+                }
             };
 
         }

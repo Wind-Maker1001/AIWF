@@ -51,6 +51,12 @@ public sealed partial class MainWindow
             _ => ResultsSectionGrid
         };
         PlaySectionEntrance(activeElement);
+
+        if (section == NavSection.Canvas && IsUiaSmokeMode && _canvasUiaSmokeTimer is not null)
+        {
+            _canvasUiaSmokeTimer.Stop();
+            _canvasUiaSmokeTimer.Start();
+        }
     }
 
     private void PrewarmCanvasSection()
