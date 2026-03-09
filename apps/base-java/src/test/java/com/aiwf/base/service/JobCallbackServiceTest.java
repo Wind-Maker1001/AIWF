@@ -3,6 +3,7 @@ package com.aiwf.base.service;
 import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
+import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
 import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
@@ -47,7 +48,7 @@ class JobCallbackServiceTest {
         req.setInputUri("bus://input.csv");
         req.setOutputUri("bus://output.csv");
         req.setRulesetVersion("v3");
-        when(jobsRepo.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
+        when(jobsRepo.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
         when(jobsRepo.upsertStepRunning(eq("job1"), eq("cleaning"), eq("bus://input.csv"), eq("bus://output.csv"), eq("v3"), any()))
                 .thenReturn(new StepTransitionResult(
                         new StepRow("job1", "cleaning", StepStatus.RUNNING, "bus://input.csv", "bus://output.csv", "v3", "{}", null, null, null, null),
@@ -63,7 +64,7 @@ class JobCallbackServiceTest {
     @Test
     void stepDoneConflictDoesNotAudit() {
         StepDoneCallbackReq req = new StepDoneCallbackReq();
-        when(jobsRepo.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
+        when(jobsRepo.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
         when(jobsRepo.markStepDone(eq("job1"), eq("cleaning"), eq(null)))
                 .thenReturn(new StepTransitionResult(
                         new StepRow("job1", "cleaning", StepStatus.FAILED, null, null, "v1", "{}", null, null, null, "boom"),
@@ -81,7 +82,7 @@ class JobCallbackServiceTest {
     @Test
     void registerArtifactAuditsAndReturnsResponse() {
         ArtifactRegisterReq req = new ArtifactRegisterReq("art1", "xlsx", "D:\\AIWF\\bus\\jobs\\j1\\artifacts\\a.xlsx", "sha", null);
-        when(jobsRepo.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
+        when(jobsRepo.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
 
         ArtifactRegisterResp resp = service.registerArtifact("job1", "glue", req);
 

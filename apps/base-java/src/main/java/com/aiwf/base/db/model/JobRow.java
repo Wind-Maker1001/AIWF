@@ -4,6 +4,6 @@ public record JobRow(
         String jobId,
         Object createdAt,
         String owner,
-        String status
+        JobStatus status
 ) {
 }

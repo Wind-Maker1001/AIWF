@@ -3,6 +3,7 @@ package com.aiwf.base.db;
 import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
+import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
 import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
@@ -32,7 +33,7 @@ public class JobRepository {
                 """,
                 jobId,
                 owner,
-                "RUNNING"
+                JobStatus.RUNNING.toDb()
         );
         audit(new AuditEvent(jobId, owner, "JOB_CREATE", null, null));
         return jobId;
@@ -46,7 +47,7 @@ public class JobRepository {
                             rs.getString("job_id"),
                             rs.getObject("created_at"),
                             rs.getString("owner"),
-                            rs.getString("status")
+                            JobStatus.fromDb(rs.getString("status"))
                     ),
                     jobId
             );

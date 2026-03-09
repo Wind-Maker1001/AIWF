@@ -29,8 +29,11 @@ class JobStatusServiceTest {
         service.onStepStart("job1");
 
         verify(jdbc).update(
-                argThat(sql -> sql.contains("status <> 'FAILED'")),
+                argThat(sql -> sql.contains("status <> ?")),
+                eq("RUNNING"),
                 eq("job1")
+                ,
+                eq("FAILED")
         );
     }
 }

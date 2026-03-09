@@ -1,5 +1,6 @@
 package com.aiwf.base.service;
 
+import com.aiwf.base.db.model.JobStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -16,18 +17,18 @@ public class JobStatusService {
     public void onStepStart(String jobId) {
         jdbc.update("""
                 UPDATE dbo.jobs
-                SET status = 'RUNNING'
-                WHERE job_id = ? AND status <> 'FAILED'
-                """, jobId);
+                SET status = ?
+                WHERE job_id = ? AND status <> ?
+                """, JobStatus.RUNNING.toDb(), jobId, JobStatus.FAILED.toDb());
     }
 
     /** A single failed step makes the job failed and keeps it there. */
     public void onStepFail(String jobId) {
         jdbc.update("""
                 UPDATE dbo.jobs
-                SET status = 'FAILED'
-                WHERE job_id = ? AND status <> 'FAILED'
-                """, jobId);
+                SET status = ?
+                WHERE job_id = ? AND status <> ?
+                """, JobStatus.FAILED.toDb(), jobId, JobStatus.FAILED.toDb());
     }
 
     /**
@@ -63,15 +64,15 @@ public class JobStatusService {
         if (counts.notDone() == 0) {
             jdbc.update("""
                     UPDATE dbo.jobs
-                    SET status='DONE'
-                    WHERE job_id=? AND status<>'FAILED'
-                    """, jobId);
+                    SET status=?
+                    WHERE job_id=? AND status<>?
+                    """, JobStatus.DONE.toDb(), jobId, JobStatus.FAILED.toDb());
         } else {
             jdbc.update("""
                     UPDATE dbo.jobs
-                    SET status='RUNNING'
-                    WHERE job_id=? AND status NOT IN ('FAILED', 'RUNNING')
-                    """, jobId);
+                    SET status=?
+                    WHERE job_id=? AND status NOT IN (?, ?)
+                    """, JobStatus.RUNNING.toDb(), jobId, JobStatus.FAILED.toDb(), JobStatus.RUNNING.toDb());
         }
     }
 

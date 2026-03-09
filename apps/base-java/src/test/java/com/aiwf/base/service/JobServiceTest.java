@@ -3,6 +3,7 @@ package com.aiwf.base.service;
 import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
+import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
 import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
@@ -46,7 +47,7 @@ class JobServiceTest {
 
     @Test
     void manualStepFailAlsoUpdatesJobStatus() {
-        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
                         new StepRow("job1", "step1", StepStatus.FAILED, null, null, "v1", "{}", null, null, null, "boom"),
@@ -64,7 +65,7 @@ class JobServiceTest {
 
     @Test
     void manualStepFailRejectsUnknownStep() {
-        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
         when(jobs.markStepFailed("job1", "missing", "boom"))
                 .thenReturn(new StepTransitionResult(null, false));
 
@@ -77,7 +78,7 @@ class JobServiceTest {
 
     @Test
     void manualStepFailRejectsDoneStep() {
-        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
                         new StepRow("job1", "step1", StepStatus.DONE, null, null, "v1", "{}", null, null, "abc123", null),
@@ -94,7 +95,7 @@ class JobServiceTest {
 
     @Test
     void manualStepFailIsIdempotentWhenAlreadyFailed() {
-        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "RUNNING"));
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
         when(jobs.markStepFailed("job1", "step1", "boom"))
                 .thenReturn(new StepTransitionResult(
                         new StepRow("job1", "step1", StepStatus.FAILED, null, null, "v1", "{}", null, null, null, "boom"),
