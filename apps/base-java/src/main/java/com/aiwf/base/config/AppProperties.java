@@ -1,20 +1,33 @@
 package com.aiwf.base.config;
 
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.validation.annotation.Validated;
 
 
+@Validated
 @ConfigurationProperties(prefix = "aiwf")
 public class AppProperties {
+    @NotBlank
     private String root;
+    @NotBlank
     private String bus;
+    @NotBlank
     private String lake;
+    @NotBlank
     private String glueUrl;
     private String apiKey;
+    @Min(1)
     private int glueConnectTimeoutMs = 3000;
+    @Min(1)
     private int glueReadTimeoutMs = 30000;
+    @Min(1)
     private int glueRunMaxAttempts = 1;
+    @Min(1)
     private int glueHealthMaxAttempts = 3;
+    @PositiveOrZero
     private long glueRetryDelayMs = 250L;
 
     public String getRoot() { return root; }
