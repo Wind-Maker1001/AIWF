@@ -50,6 +50,76 @@ class TransformRowsV2OperatorRequest:
         }
 
 
+@dataclass(frozen=True)
+class CleaningOperatorResponse:
+    outputs: Dict[str, Any] = field(default_factory=dict)
+    profile: Dict[str, Any] = field(default_factory=dict)
+    office_generation_mode: Optional[str] = None
+    office_generation_warning: Optional[str] = None
+    raw: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_body(cls, body: Dict[str, Any]) -> "CleaningOperatorResponse":
+        outputs = body.get("outputs") if isinstance(body.get("outputs"), dict) else {}
+        profile = body.get("profile") if isinstance(body.get("profile"), dict) else {}
+        return cls(
+            outputs=outputs,
+            profile=profile,
+            office_generation_mode=(str(body.get("office_generation_mode")) if body.get("office_generation_mode") is not None else None),
+            office_generation_warning=(
+                str(body.get("office_generation_warning"))
+                if body.get("office_generation_warning") is not None
+                else None
+            ),
+            raw=dict(body),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dict(self.raw)
+
+
+@dataclass(frozen=True)
+class TransformRowsV2OperatorResponse:
+    rows: list[dict[str, Any]] = field(default_factory=list)
+    quality: Dict[str, Any] = field(default_factory=dict)
+    trace_id: str = ""
+    raw: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_body(cls, body: Dict[str, Any]) -> "TransformRowsV2OperatorResponse":
+        rows = body.get("rows")
+        quality = body.get("quality")
+        if not isinstance(rows, list) or not isinstance(quality, dict):
+            raise ValueError("transform_rows_v2 invalid response shape")
+        return cls(
+            rows=rows,
+            quality=quality,
+            trace_id=str(body.get("trace_id") or ""),
+            raw=dict(body),
+        )
+
+
+@dataclass(frozen=True)
+class OperatorCallResult:
+    attempted: bool
+    ok: bool
+    url: str
+    error: Optional[str] = None
+    response: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "attempted": self.attempted,
+            "ok": self.ok,
+            "url": self.url,
+        }
+        if self.error is not None:
+            payload["error"] = self.error
+        if self.response is not None:
+            payload["response"] = self.response
+        return payload
+
+
 def resolve_accel_base_url(params: Dict[str, Any]) -> str:
     return str(params.get("accel_url") or os.getenv("AIWF_ACCEL_URL") or DEFAULT_ACCEL_BASE_URL).rstrip("/")
 
@@ -68,24 +138,22 @@ def resolve_accel_timeout(
 
 
 def _error_result(url: str, error: str, *, response: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    result = {
-        "attempted": True,
-        "ok": False,
-        "url": url,
-        "error": error,
-    }
-    if response is not None:
-        result["response"] = response
-    return result
+    return OperatorCallResult(
+        attempted=True,
+        ok=False,
+        url=url,
+        error=error,
+        response=response,
+    ).to_dict()
 
 
 def _success_result(url: str, body: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "attempted": True,
-        "ok": True,
-        "url": url,
-        "response": body,
-    }
+    return OperatorCallResult(
+        attempted=True,
+        ok=True,
+        url=url,
+        response=body,
+    ).to_dict()
 
 
 def _post_operator_payload(url: str, payload: Dict[str, Any], *, timeout: float) -> Dict[str, Any]:
@@ -132,7 +200,11 @@ def run_cleaning_operator(
     )
 
     try:
-        return _post_operator_payload(url, request.to_payload(), timeout=timeout)
+        result = _post_operator_payload(url, request.to_payload(), timeout=timeout)
+        if result.get("ok") and isinstance(result.get("response"), dict):
+            response = CleaningOperatorResponse.from_body(result["response"])
+            result["response"] = response.to_dict()
+        return result
     except Exception as exc:
         return _error_result(url, str(exc))
 
@@ -166,20 +238,20 @@ def transform_rows_v2_operator(
         if not result.get("ok"):
             return result
         body = result["response"]
-        rows = body.get("rows") if isinstance(body, dict) else None
-        quality = body.get("quality") if isinstance(body, dict) else None
-        if not isinstance(rows, list) or not isinstance(quality, dict):
+        try:
+            response = TransformRowsV2OperatorResponse.from_body(body)
+        except ValueError:
             return _error_result(url, "transform_rows_v2 invalid response shape", response=body)
-        quality2 = dict(quality)
+        quality2 = dict(response.quality)
         quality2["rust_v2_used"] = True
-        quality2["rust_v2_trace_id"] = str(body.get("trace_id") or "")
+        quality2["rust_v2_trace_id"] = response.trace_id
         return {
             "attempted": True,
             "ok": True,
             "url": url,
-            "rows": rows,
+            "rows": response.rows,
             "quality": quality2,
-            "response": body,
+            "response": response.raw,
         }
     except Exception as exc:
         return _error_result(url, str(exc))

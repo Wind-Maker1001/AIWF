@@ -41,6 +41,25 @@ class HttpClientTests(unittest.TestCase):
         self.assertEqual(payload["rules"]["max_amount"], 10)
         self.assertEqual(payload["quality_gates"]["min_output_rows"], 1)
 
+    def test_accel_cleaning_response_parses_known_fields(self):
+        parsed = accel_client.CleaningOperatorResponse.from_body(
+            {
+                "outputs": {"cleaned_parquet": {"path": "x.parquet"}},
+                "profile": {"rows": 1},
+                "office_generation_mode": "python",
+                "office_generation_warning": "warn",
+            }
+        )
+
+        self.assertEqual(parsed.outputs["cleaned_parquet"]["path"], "x.parquet")
+        self.assertEqual(parsed.profile["rows"], 1)
+        self.assertEqual(parsed.office_generation_mode, "python")
+        self.assertEqual(parsed.office_generation_warning, "warn")
+
+    def test_accel_transform_response_rejects_invalid_shape(self):
+        with self.assertRaisesRegex(ValueError, "invalid response shape"):
+            accel_client.TransformRowsV2OperatorResponse.from_body({"rows": "bad", "quality": {}})
+
     def test_base_client_returns_ok_for_empty_success_body(self):
         client = BaseClient("http://base")
 
