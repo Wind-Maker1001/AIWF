@@ -437,6 +437,57 @@ class AppRouteTests(unittest.TestCase):
 
     @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
     @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_prefers_job_context_over_legacy_job_root(self, _make_base_client):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "ctx-job")
+            legacy_job_root = os.path.join(tmp, "legacy-job")
+
+            def write_valid_parquet(path, rows):
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._require_local_parquet_dependencies"
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                resp = self.client.post(
+                    "/jobs/job-ctx-route/run/cleaning",
+                    json={
+                        "actor": "local",
+                        "ruleset_version": "v1",
+                        "trace_id": "trace-route-1",
+                        "job_context": {
+                            "job_root": local_job_root,
+                            "stage_dir": os.path.join(local_job_root, "stage-x"),
+                            "artifacts_dir": os.path.join(local_job_root, "artifacts-x"),
+                            "evidence_dir": os.path.join(local_job_root, "evidence-x"),
+                        },
+                        "params": {
+                            "job_root": legacy_job_root,
+                            "rows": [{"id": 1, "amount": 10.0}],
+                            "office_outputs_enabled": False,
+                        },
+                    },
+                )
+
+            self.assertEqual(resp.status_code, 200)
+            payload = resp.json()
+            self.assertTrue(payload["ok"])
+            parquet_artifact = next(item for item in payload["artifacts"] if item["kind"] == "parquet")
+            self.assertTrue(parquet_artifact["path"].startswith(local_job_root))
+            self.assertFalse(parquet_artifact["path"].startswith(legacy_job_root))
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
     def test_run_flow_route_reports_cleaning_failures_via_step_fail(self, _make_base_client):
         with tempfile.TemporaryDirectory() as tmp:
             local_job_root = os.path.join(tmp, "job")
