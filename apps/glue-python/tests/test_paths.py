@@ -28,23 +28,35 @@ class PathResolutionTests(unittest.TestCase):
 
     def test_prepare_job_layout_prefers_job_context_over_params_job_root(self):
         with patch.dict(os.environ, {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False):
-            layout = prepare_job_layout(
-                "job-ctx",
-                {
-                    "job_root": r"D:\wrong\job",
-                    "job_context": {
-                        "job_root": r"D:\right\job",
-                        "stage_dir": r"D:\right\job\stage-x",
-                        "artifacts_dir": r"D:\right\job\artifacts-x",
-                        "evidence_dir": r"D:\right\job\evidence-x",
+            with self.assertNoLogs("glue.flow_context", level="WARNING"):
+                layout = prepare_job_layout(
+                    "job-ctx",
+                    {
+                        "job_root": r"D:\wrong\job",
+                        "job_context": {
+                            "job_root": r"D:\right\job",
+                            "stage_dir": r"D:\right\job\stage-x",
+                            "artifacts_dir": r"D:\right\job\artifacts-x",
+                            "evidence_dir": r"D:\right\job\evidence-x",
+                        },
                     },
-                },
-                ensure_dirs=lambda *args: None,
-            )
+                    ensure_dirs=lambda *args: None,
+                )
         self.assertEqual(layout["job_root"], os.path.normpath(r"D:\right\job"))
         self.assertEqual(layout["stage_dir"], os.path.normpath(r"D:\right\job\stage-x"))
         self.assertEqual(layout["artifacts_dir"], os.path.normpath(r"D:\right\job\artifacts-x"))
         self.assertEqual(layout["evidence_dir"], os.path.normpath(r"D:\right\job\evidence-x"))
+
+    def test_prepare_job_layout_warns_when_legacy_params_job_root_is_used(self):
+        with patch.dict(os.environ, {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False):
+            with self.assertLogs("glue.flow_context", level="WARNING") as logs:
+                layout = prepare_job_layout(
+                    "job-legacy",
+                    {"job_root": r"D:\legacy\job"},
+                    ensure_dirs=lambda *args: None,
+                )
+        self.assertEqual(layout["job_root"], os.path.normpath(r"D:\legacy\job"))
+        self.assertTrue(any("params.job_root" in entry for entry in logs.output))
 
     def test_resolve_job_root_rejects_traversal_job_id(self):
         with patch.dict(os.environ, {"AIWF_JOBS_ROOT": r"D:\custom\jobs"}, clear=True):
