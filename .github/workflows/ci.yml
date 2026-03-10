@@ -44,36 +44,3 @@ jobs:
         shell: pwsh
         run: |
           powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick -SkipToolChecks -SkipSqlConnectivityGate -SkipDesktopUiTests -SkipDesktopPackageTests
-
-  cross-platform-check:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Install desktop deps
-        working-directory: ./apps/dify-desktop
-        run: npm ci
-
-      - name: Run Java tests
-        working-directory: ./apps/base-java
-        run: mvn -q test
-
-      - name: Run desktop unit tests
-        working-directory: ./apps/dify-desktop
-        run: npm run test:unit

@@ -85,6 +85,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipSmoke
   - Trigger: push / pull_request
   - Runner: `windows-latest` (GitHub-hosted)
   - Runs: `ci_check.ps1 -SkipSmoke` (unit/module checks only)
+  - Current scope: Windows-only; `ubuntu` / `macOS` checks are paused
 
 - `.github/workflows/full-integration-self-hosted.yml`
   - Trigger: manual (`workflow_dispatch`)
