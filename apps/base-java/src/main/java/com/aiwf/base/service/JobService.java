@@ -4,10 +4,14 @@ import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
+import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepStatus;
+import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.glue.GlueGateway;
 import com.aiwf.base.glue.GlueHealthResult;
-import com.aiwf.base.glue.GlueRunRequest;
+import com.aiwf.base.glue.GlueJobContext;
+import com.aiwf.base.glue.GlueRunFlowReq;
 import com.aiwf.base.glue.GlueRunResult;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.ArtifactResp;
@@ -24,8 +28,10 @@ import org.springframework.web.client.RestClientException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class JobService {
@@ -54,7 +60,7 @@ public class JobService {
     public JobCreateResp createJob(String owner) {
         String jobId = jobs.createJob(owner);
         ensureJobDirs(jobId);
-        return new JobCreateResp(jobId, owner, "RUNNING", Paths.get(jobsRoot(), jobId).toString(), null);
+        return new JobCreateResp(jobId, owner, JobStatus.RUNNING.toDb(), Paths.get(jobsRoot(), jobId).toString(), null);
     }
 
     public JobCreateResp createJob(String owner, Map<String, Object> policy) {
@@ -66,18 +72,16 @@ public class JobService {
     }
 
     public JobDetailsResp getJob(String jobId) {
-        JobRow job = jobs.getJob(jobId);
-        if (job == null) {
-            throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
-        }
-        return toJobDetails(job);
+        return toJobDetails(requireJob(jobId));
     }
 
     public List<StepResp> listSteps(String jobId) {
+        requireJob(jobId);
         return jobs.listSteps(jobId).stream().map(this::toStepResp).toList();
     }
 
     public List<ArtifactResp> listArtifacts(String jobId) {
+        requireJob(jobId);
         return jobs.listArtifacts(jobId).stream().map(this::toArtifactResp).toList();
     }
 
@@ -98,7 +102,16 @@ public class JobService {
         String effectiveRuleset = (rulesetVersion == null || rulesetVersion.isBlank()) ? "v1" : rulesetVersion;
 
         try {
-            return glue.runFlow(jobId, flow, new GlueRunRequest(effectiveActor, effectiveRuleset, params));
+            GlueJobContext jobContext = buildJobContext(jobId);
+            return glue.runFlow(jobId, flow, new GlueRunFlowReq(
+                    jobId,
+                    flow,
+                    effectiveActor,
+                    effectiveRuleset,
+                    newTraceId(),
+                    jobContext,
+                    buildGlueParams(jobContext, params)
+            ));
         } catch (RestClientException e) {
             jobs.audit(new AuditEvent(jobId, effectiveActor, "FLOW_RUN_FAIL", flow, e.getMessage()));
             return GlueRunResult.failed(jobId, flow, e.getMessage());
@@ -116,15 +129,26 @@ public class JobService {
 
     @Transactional
     public StepFailResp failStep(String jobId, String stepId, String actor, String error, String auditDetail) {
+        requireJob(jobId);
         String effectiveActor = defaultIfBlank(actor, "manual");
         String effectiveError = defaultIfBlank(error, "manual stepFail");
-        int updated = jobs.markStepFailed(jobId, stepId, effectiveError);
-        if (updated == 0) {
+        StepTransitionResult result = jobs.markStepFailed(jobId, stepId, effectiveError);
+        StepRow step = result.step();
+        if (step == null) {
             throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
         }
+        if (step.status() != StepStatus.FAILED) {
+            throw ApiException.conflict(
+                    "step_transition_conflict",
+                    "step cannot transition to " + StepStatus.FAILED.toDb(),
+                    Map.of("job_id", jobId, "step_id", stepId, "current_status", step.status().toDb())
+            );
+        }
 
-        jobs.audit(new AuditEvent(jobId, effectiveActor, "STEP_FAIL", stepId, defaultIfBlank(auditDetail, effectiveError)));
-        jobStatus.onStepFail(jobId);
+        if (result.changed()) {
+            jobs.audit(new AuditEvent(jobId, effectiveActor, "STEP_FAIL", stepId, defaultIfBlank(auditDetail, effectiveError)));
+            jobStatus.onStepFail(jobId);
+        }
         return new StepFailResp(true, jobId, stepId);
     }
 
@@ -149,15 +173,43 @@ public class JobService {
         return Paths.get(jobsBusRoot, "jobs").toString();
     }
 
+    private GlueJobContext buildJobContext(String jobId) {
+        Path jobRoot = Paths.get(jobsRoot(), jobId);
+        return new GlueJobContext(
+                jobRoot.toString(),
+                jobRoot.resolve("stage").toString(),
+                jobRoot.resolve("artifacts").toString(),
+                jobRoot.resolve("evidence").toString()
+        );
+    }
+
+    private Map<String, Object> buildGlueParams(GlueJobContext jobContext, Map<String, Object> params) {
+        Map<String, Object> out = params == null ? new LinkedHashMap<>() : new LinkedHashMap<>(params);
+        out.putIfAbsent("job_root", jobContext.jobRoot());
+        return out;
+    }
+
+    private String newTraceId() {
+        return UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private JobRow requireJob(String jobId) {
+        JobRow job = jobs.getJob(jobId);
+        if (job == null) {
+            throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
+        }
+        return job;
+    }
+
     private JobDetailsResp toJobDetails(JobRow row) {
-        return new JobDetailsResp(row.jobId(), row.owner(), row.status(), row.createdAt());
+        return new JobDetailsResp(row.jobId(), row.owner(), row.status().toDb(), row.createdAt());
     }
 
     private StepResp toStepResp(StepRow row) {
         return new StepResp(
                 row.jobId(),
                 row.stepId(),
-                row.status(),
+                row.status().toDb(),
                 row.inputUri(),
                 row.outputUri(),
                 row.rulesetVersion(),

@@ -41,6 +41,14 @@ public class ApiException extends RuntimeException {
         return new ApiException(HttpStatus.NOT_FOUND, error, message, details);
     }
 
+    public static ApiException conflict(String error, String message, Map<String, Object> details) {
+        return new ApiException(HttpStatus.CONFLICT, error, message, details);
+    }
+
+    public static ApiException internalServerError(String error, String message, Map<String, Object> details) {
+        return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, error, message, details);
+    }
+
     public static ApiException serviceUnavailable(String error, String message) {
         return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, error, message, Map.of());
     }

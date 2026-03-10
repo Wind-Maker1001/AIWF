@@ -22,7 +22,7 @@ public class DifyController {
      * create job -> run cleaning -> return run/steps/artifacts snapshot.
      */
     @PostMapping("/run_cleaning")
-    public Object runCleaning(
+    public DifyRunCleaningResp runCleaning(
             @RequestBody(required = false) DifyRunCleaningReq body
     ) {
         DifyRunCleaningReq req = body == null ? new DifyRunCleaningReq(null, null, null, null, null) : body;
@@ -30,7 +30,11 @@ public class DifyController {
         var job = jobs.createJob(req.ownerOrDefault("dify"), req.policyOrEmpty());
         String jobId = job.jobId();
         if (jobId == null || jobId.isBlank()) {
-            return java.util.Map.of("ok", false, "error", "create_job failed: empty job_id");
+            throw ApiException.internalServerError(
+                    "job_create_failed",
+                    "create_job returned empty job_id",
+                    Map.of("owner", req.ownerOrDefault("dify"))
+            );
         }
 
         var run = jobs.runFlow(

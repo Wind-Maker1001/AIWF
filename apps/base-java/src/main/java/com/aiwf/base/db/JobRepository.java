@@ -3,7 +3,10 @@ package com.aiwf.base.db;
 import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
 import com.aiwf.base.db.model.JobRow;
+import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
+import com.aiwf.base.db.model.StepStatus;
+import com.aiwf.base.db.model.StepTransitionResult;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -30,7 +33,7 @@ public class JobRepository {
                 """,
                 jobId,
                 owner,
-                "RUNNING"
+                JobStatus.RUNNING.toDb()
         );
         audit(new AuditEvent(jobId, owner, "JOB_CREATE", null, null));
         return jobId;
@@ -44,7 +47,7 @@ public class JobRepository {
                             rs.getString("job_id"),
                             rs.getObject("created_at"),
                             rs.getString("owner"),
-                            rs.getString("status")
+                            JobStatus.fromDb(rs.getString("status"))
                     ),
                     jobId
             );
@@ -65,7 +68,7 @@ public class JobRepository {
                 (rs, rowNum) -> new StepRow(
                         rs.getString("job_id"),
                         rs.getString("step_id"),
-                        rs.getString("status"),
+                        StepStatus.fromDb(rs.getString("status")),
                         rs.getString("input_uri"),
                         rs.getString("output_uri"),
                         rs.getString("ruleset_version"),
@@ -79,7 +82,37 @@ public class JobRepository {
         );
     }
 
-    public void upsertStepRunning(
+    public StepRow getStep(String jobId, String stepId) {
+        try {
+            return jdbc.queryForObject(
+                    """
+                    SELECT job_id, step_id, status, input_uri, output_uri, ruleset_version, params_json,
+                           started_at, ended_at, output_hash, error
+                    FROM dbo.steps
+                    WHERE job_id = ? AND step_id = ?
+                    """,
+                    (rs, rowNum) -> new StepRow(
+                            rs.getString("job_id"),
+                            rs.getString("step_id"),
+                            StepStatus.fromDb(rs.getString("status")),
+                            rs.getString("input_uri"),
+                            rs.getString("output_uri"),
+                            rs.getString("ruleset_version"),
+                            rs.getString("params_json"),
+                            rs.getObject("started_at"),
+                            rs.getObject("ended_at"),
+                            rs.getString("output_hash"),
+                            rs.getString("error")
+                    ),
+                    jobId,
+                    stepId
+            );
+        } catch (EmptyResultDataAccessException e) {
+            return null;
+        }
+    }
+
+    public StepTransitionResult upsertStepRunning(
             String jobId,
             String stepId,
             String inputUri,
@@ -92,87 +125,104 @@ public class JobRepository {
         int updated = jdbc.update(
                 """
                 UPDATE dbo.steps
-                SET status = 'RUNNING',
+                SET status = ?,
                     input_uri = ?,
                     output_uri = ?,
                     ruleset_version = ?,
                     params_json = ?,
                     started_at = COALESCE(started_at, SYSDATETIME())
-                WHERE job_id = ? AND step_id = ?
+                WHERE job_id = ? AND step_id = ? AND status = ?
                 """,
+                StepStatus.RUNNING.toDb(),
                 inputUri,
                 outputUri,
                 rv,
                 paramsJson,
                 jobId,
-                stepId
+                stepId,
+                StepStatus.RUNNING.toDb()
         );
 
-        completeUpsert(
-                updated,
-                () -> jdbc.update(
-                        """
-                        INSERT INTO dbo.steps
-                            (job_id, step_id, status, input_uri, output_uri, ruleset_version, params_json, started_at)
-                        VALUES
-                            (?, ?, 'RUNNING', ?, ?, ?, ?, SYSDATETIME())
-                        """,
-                        jobId,
-                        stepId,
-                        inputUri,
-                        outputUri,
-                        rv,
-                        paramsJson
-                ),
-                () -> jdbc.update(
-                        """
-                        UPDATE dbo.steps
-                        SET status = 'RUNNING',
-                            input_uri = ?,
-                            output_uri = ?,
-                            ruleset_version = ?,
-                            params_json = ?,
-                            started_at = COALESCE(started_at, SYSDATETIME())
-                        WHERE job_id = ? AND step_id = ?
-                        """,
-                        inputUri,
-                        outputUri,
-                        rv,
-                        paramsJson,
-                        jobId,
-                        stepId
-                )
-        );
+        if (updated > 0) {
+            return new StepTransitionResult(getStep(jobId, stepId), true);
+        }
+
+        try {
+            jdbc.update(
+                    """
+                    INSERT INTO dbo.steps
+                        (job_id, step_id, status, input_uri, output_uri, ruleset_version, params_json, started_at)
+                    VALUES
+                        (?, ?, ?, ?, ?, ?, ?, SYSDATETIME())
+                    """,
+                    jobId,
+                    stepId,
+                    StepStatus.RUNNING.toDb(),
+                    inputUri,
+                    outputUri,
+                    rv,
+                    paramsJson
+            );
+            return new StepTransitionResult(getStep(jobId, stepId), true);
+        } catch (DuplicateKeyException e) {
+            int retried = jdbc.update(
+                    """
+                    UPDATE dbo.steps
+                    SET status = ?,
+                        input_uri = ?,
+                        output_uri = ?,
+                        ruleset_version = ?,
+                        params_json = ?,
+                        started_at = COALESCE(started_at, SYSDATETIME())
+                    WHERE job_id = ? AND step_id = ? AND status = ?
+                    """,
+                    StepStatus.RUNNING.toDb(),
+                    inputUri,
+                    outputUri,
+                    rv,
+                    paramsJson,
+                    jobId,
+                    stepId,
+                    StepStatus.RUNNING.toDb()
+            );
+            return new StepTransitionResult(getStep(jobId, stepId), retried > 0);
+        }
     }
 
-    public int markStepDone(String jobId, String stepId, String outputHash) {
-        return jdbc.update(
+    public StepTransitionResult markStepDone(String jobId, String stepId, String outputHash) {
+        int updated = jdbc.update(
                 """
                 UPDATE dbo.steps
-                SET status = 'DONE',
+                SET status = ?,
                     output_hash = ?,
                     ended_at = SYSDATETIME()
-                WHERE job_id = ? AND step_id = ?
+                WHERE job_id = ? AND step_id = ? AND status = ?
                 """,
+                StepStatus.DONE.toDb(),
                 outputHash,
                 jobId,
-                stepId
+                stepId,
+                StepStatus.RUNNING.toDb()
         );
+        return new StepTransitionResult(getStep(jobId, stepId), updated > 0);
     }
 
-    public int markStepFailed(String jobId, String stepId, String error) {
-        return jdbc.update(
+    public StepTransitionResult markStepFailed(String jobId, String stepId, String error) {
+        int updated = jdbc.update(
                 """
                 UPDATE dbo.steps
-                SET status = 'FAILED',
+                SET status = ?,
                     error = ?,
                     ended_at = SYSDATETIME()
-                WHERE job_id = ? AND step_id = ?
+                WHERE job_id = ? AND step_id = ? AND status = ?
                 """,
+                StepStatus.FAILED.toDb(),
                 error,
                 jobId,
-                stepId
+                stepId,
+                StepStatus.RUNNING.toDb()
         );
+        return new StepTransitionResult(getStep(jobId, stepId), updated > 0);
     }
 
     public List<ArtifactRow> listArtifacts(String jobId) {

@@ -1,9 +1,7 @@
 package com.aiwf.base.web;
 
-import com.aiwf.base.db.JobRepository;
-import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.service.JobCallbackService;
 import com.aiwf.base.service.JobService;
-import com.aiwf.base.service.JobStatusService;
 import com.aiwf.base.service.JsonUtil;
 import com.aiwf.base.web.dto.ArtifactRegisterReq;
 import com.aiwf.base.web.dto.ArtifactRegisterResp;
@@ -16,19 +14,15 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-
 @RestController
 @RequestMapping("/api/v1")
 public class CallbackController {
 
-    private final JobRepository jobsRepo;
-    private final JobStatusService jobStatus;
+    private final JobCallbackService callbacks;
     private final JobService jobs;
 
-    public CallbackController(JobRepository jobsRepo, JobStatusService jobStatus, JobService jobs) {
-        this.jobsRepo = jobsRepo;
-        this.jobStatus = jobStatus;
+    public CallbackController(JobCallbackService callbacks, JobService jobs) {
+        this.callbacks = callbacks;
         this.jobs = jobs;
     }
 
@@ -39,19 +33,7 @@ public class CallbackController {
             @RequestParam(defaultValue = "glue") String actor,
             @RequestBody(required = false) StepStartCallbackReq body
     ) {
-        StepStartCallbackReq req = body == null ? new StepStartCallbackReq() : body;
-        jobStatus.onStepStart(jobId);
-
-        String paramsJson = JsonUtil.toJson(req.payload());
-        jobsRepo.upsertStepRunning(
-                jobId,
-                stepId,
-                req.getInputUri() == null ? "" : req.getInputUri(),
-                req.getOutputUri() == null ? "" : req.getOutputUri(),
-                req.getRulesetVersion(),
-                paramsJson
-        );
-        jobsRepo.audit(new AuditEvent(jobId, actor, "STEP_START", stepId, paramsJson));
+        callbacks.stepStart(jobId, stepId, actor, body == null ? new StepStartCallbackReq() : body);
         return OkResp.success();
     }
 
@@ -62,16 +44,7 @@ public class CallbackController {
             @RequestParam(defaultValue = "glue") String actor,
             @RequestBody(required = false) StepDoneCallbackReq body
     ) {
-        StepDoneCallbackReq req = body == null ? new StepDoneCallbackReq() : body;
-        String detailJson = JsonUtil.toJson(req.payload());
-
-        int updated = jobsRepo.markStepDone(jobId, stepId, req.getOutputHash());
-        if (updated == 0) {
-            throw ApiException.notFound("step_not_found", "step not found", Map.of("job_id", jobId, "step_id", stepId));
-        }
-        jobsRepo.audit(new AuditEvent(jobId, actor, "STEP_DONE", stepId, detailJson));
-
-        jobStatus.onStepDone(jobId);
+        callbacks.stepDone(jobId, stepId, actor, body == null ? new StepDoneCallbackReq() : body);
         return OkResp.success();
     }
 
@@ -93,8 +66,6 @@ public class CallbackController {
             @RequestParam(defaultValue = "glue") String actor,
             @Valid @RequestBody ArtifactRegisterReq body
     ) {
-        jobsRepo.upsertArtifact(jobId, body.artifactId(), body.kind(), body.path(), body.sha256());
-        jobsRepo.audit(new AuditEvent(jobId, actor, "ARTIFACT_REGISTER", null, JsonUtil.toJson(body.payload())));
-        return new ArtifactRegisterResp(true, body.artifactId());
+        return callbacks.registerArtifact(jobId, actor, body);
     }
 }
