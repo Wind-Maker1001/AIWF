@@ -27,6 +27,10 @@ Expected high-level signals:
 - `artifacts : 6`
 - `[ OK ] smoke test finished`
 
+Contract note:
+- callers should send top-level `job_context`
+- legacy path fields under `params` are no longer supported
+
 ## 3. Invalid Parquet Fallback Integration Test
 
 Purpose:
@@ -51,6 +55,9 @@ Expected high-level signals:
 - `accel_attempted : True`
 - `accel_used_fallback : True`
 - `[ OK ] invalid parquet fallback test passed`
+
+Operational note:
+- if a chained `smoke_test.ps1 -WithInvalidParquetFallbackTest` run ever shows a transient base-health failure in the fallback sub-step, rerun `test_invalid_parquet_fallback.ps1` directly before treating it as a regression
 
 ## 4. Notes
 
@@ -78,6 +85,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipSmoke
   - Trigger: push / pull_request
   - Runner: `windows-latest` (GitHub-hosted)
   - Runs: `ci_check.ps1 -SkipSmoke` (unit/module checks only)
+  - Current scope: Windows-only; `ubuntu` / `macOS` checks are paused
 
 - `.github/workflows/full-integration-self-hosted.yml`
   - Trigger: manual (`workflow_dispatch`)

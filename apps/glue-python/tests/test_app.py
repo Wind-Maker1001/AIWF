@@ -10,7 +10,7 @@ import sys
 from fastapi.testclient import TestClient
 
 from aiwf import extensions
-from aiwf.flows.registry import get_flow_runner, register_flow, unregister_flow
+from aiwf.flows.registry import get_flow_registration, get_flow_runner, register_flow, unregister_flow
 from aiwf.registry_events import clear_registry_events
 
 
@@ -25,6 +25,16 @@ def _load_module(module_name: str, module_path: Path):
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 glue_app = _load_module("aiwf_glue_python_app", PROJECT_ROOT / "app.py")
+
+
+def make_job_context(job_root: str) -> dict[str, str]:
+    job_root = os.path.normpath(job_root)
+    return {
+        "job_root": job_root,
+        "stage_dir": os.path.join(job_root, "stage"),
+        "artifacts_dir": os.path.join(job_root, "artifacts"),
+        "evidence_dir": os.path.join(job_root, "evidence"),
+    }
 
 
 class AppRouteTests(unittest.TestCase):
@@ -141,10 +151,36 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("traceback", payload)
         self.assertEqual(payload["exception"], "boom")
 
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    @patch("aiwf.flows.cleaning.run_cleaning", return_value={"ok": True})
+    def test_run_flow_route_rejects_invalid_job_context_path_as_bad_request(self, run_cleaning, _make_base_client):
+        resp = self.client.post(
+            "/jobs/job-bad-ctx/run/cleaning",
+            json={
+                "actor": "local",
+                "ruleset_version": "v1",
+                "job_context": {
+                    "job_root": r"D:\ctx\job",
+                    "stage_dir": r"..\escape",
+                },
+                "params": {"x": 1},
+            },
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job-bad-ctx")
+        self.assertEqual(payload["flow"], "cleaning")
+        self.assertIn("error", payload)
+        run_cleaning.assert_not_called()
+
     def test_custom_registered_flow_dispatches_without_editing_app(self):
         def run_custom_flow(**kwargs):
             params = kwargs.get("params") or {}
-            return {"ok": True, "custom": True, "job_root": params.get("job_root")}
+            context = params.get("job_context") if isinstance(params.get("job_context"), dict) else {}
+            return {"ok": True, "custom": True, "job_root": context.get("job_root")}
 
         register_flow("custom", runner=run_custom_flow, aliases=("custom-alias",))
         try:
@@ -188,6 +224,32 @@ class AppRouteTests(unittest.TestCase):
             self.assertEqual(ext_flow["source_module"], module_name)
             unregister_flow("ext_flow")
 
+    def test_extension_loader_force_reload_reexecutes_module_registration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            module_name = "aiwf_test_ext_reload_module"
+            module_path = os.path.join(tmp, f"{module_name}.py")
+            with open(module_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "from aiwf.flows.registry import register_flow\n"
+                    "register_flow('ext_reload_flow', runner=lambda **kwargs: {'ok': True, 'reloaded': True})\n"
+                )
+
+            sys.path.insert(0, tmp)
+            unregister_flow("ext_reload_flow")
+            try:
+                with patch.dict("os.environ", {"AIWF_EXT_MODULES": module_name}, clear=False):
+                    extensions.reset_extension_state_for_tests()
+                    extensions.load_extension_modules(force=True)
+                    unregister_flow("ext_reload_flow")
+                    status = extensions.load_extension_modules(force=True)
+            finally:
+                if tmp in sys.path:
+                    sys.path.remove(tmp)
+
+            self.assertIn(module_name, status["loaded"])
+            self.assertTrue(get_flow_runner("ext_reload_flow")()["reloaded"])
+            unregister_flow("ext_reload_flow")
+
     def test_register_flow_keep_policy_preserves_existing_runner(self):
         def first_runner(**kwargs):
             return {"ok": True, "runner": "first"}
@@ -224,6 +286,32 @@ class AppRouteTests(unittest.TestCase):
         finally:
             unregister_flow("warn_flow")
 
+    def test_register_flow_rejects_alias_that_matches_existing_flow_name(self):
+        register_flow("alias-root", runner=lambda **kwargs: {"ok": True})
+        try:
+            with self.assertRaises(RuntimeError):
+                register_flow("alias-child", runner=lambda **kwargs: {"ok": True}, aliases=("alias-root",))
+        finally:
+            unregister_flow("alias-root")
+            unregister_flow("alias-child")
+
+    def test_register_flow_reassigns_shared_alias_without_hiding_original_flow(self):
+        def flow_a(**kwargs):
+            return {"runner": "a"}
+
+        def flow_b(**kwargs):
+            return {"runner": "b"}
+
+        register_flow("flow-a", runner=flow_a, aliases=("shared-alias",))
+        try:
+            register_flow("flow-b", runner=flow_b, aliases=("shared-alias",), on_conflict="warn")
+            self.assertEqual(get_flow_runner("shared-alias")()["runner"], "b")
+            self.assertEqual(get_flow_runner("flow-a")()["runner"], "a")
+            self.assertEqual(get_flow_registration("flow-a").aliases, ())
+        finally:
+            unregister_flow("flow-a")
+            unregister_flow("flow-b")
+
     @patch.object(glue_app, "make_base_client", return_value=None)
     @patch("aiwf.flows.cleaning.run_cleaning", return_value={"ok": True})
     def test_run_cleaning_flow_injects_default_job_root(self, run_cleaning, _make_base_client):
@@ -234,9 +322,40 @@ class AppRouteTests(unittest.TestCase):
         kwargs = run_cleaning.call_args.kwargs
         self.assertEqual(kwargs["params"]["x"], 1)
         self.assertEqual(
-            kwargs["params"]["job_root"],
+            kwargs["params"]["job_context"]["job_root"],
             os.path.join(glue_app.settings.jobs_root, "job-root"),
         )
+        self.assertNotIn("job_root", kwargs["params"])
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    @patch("aiwf.flows.cleaning.run_cleaning", return_value={"ok": True})
+    def test_run_cleaning_flow_prefers_explicit_job_context_and_trace_id(self, run_cleaning, _make_base_client):
+        req = glue_app.RunReq(
+            actor="local",
+            ruleset_version="v1",
+            trace_id="trace-123",
+            job_context={
+                "job_root": r"D:\ctx\job",
+                "stage_dir": r"D:\ctx\job\stage",
+                "artifacts_dir": r"D:\ctx\job\artifacts",
+                "evidence_dir": r"D:\ctx\job\evidence",
+            },
+            params={"x": 1},
+        )
+
+        glue_app.run_cleaning_flow("job-root", req)
+
+        kwargs = run_cleaning.call_args.kwargs
+        self.assertEqual(kwargs["params"]["job_context"]["job_root"], os.path.normpath(r"D:\ctx\job"))
+        self.assertEqual(kwargs["params"]["job_context"]["stage_dir"], os.path.normpath(r"D:\ctx\job\stage"))
+        self.assertEqual(kwargs["params"]["job_context"]["artifacts_dir"], os.path.normpath(r"D:\ctx\job\artifacts"))
+        self.assertEqual(kwargs["params"]["job_context"]["evidence_dir"], os.path.normpath(r"D:\ctx\job\evidence"))
+        self.assertEqual(kwargs["params"]["trace_id"], "trace-123")
+        self.assertNotIn("job_root", kwargs["params"])
+        self.assertNotIn("stage_dir", kwargs["params"])
+        self.assertNotIn("artifacts_dir", kwargs["params"])
+        self.assertNotIn("evidence_dir", kwargs["params"])
 
     @patch.object(glue_app, "make_base_client", return_value=None)
     def test_run_flow_with_runner_propagates_runner_typeerror_without_retry(self, _make_base_client):
@@ -303,6 +422,165 @@ class AppRouteTests(unittest.TestCase):
                 glue_app.make_base_client()
 
         self.assertEqual(len(calls), 1)
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_executes_cleaning_end_to_end(self, _make_base_client):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start") as step_start, patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ) as artifact_upsert, patch("aiwf.flows.cleaning._base_step_done") as step_done, patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ) as step_fail, patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._require_local_parquet_dependencies"
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                resp = self.client.post(
+                    "/jobs/job-e2e/run/cleaning",
+                    json={
+                        "actor": "local",
+                        "ruleset_version": "v1",
+                        "job_context": make_job_context(local_job_root),
+                        "params": {
+                            "rows": [{"id": 1, "amount": 10.0}],
+                            "office_outputs_enabled": False,
+                        },
+                    },
+                )
+
+            self.assertEqual(resp.status_code, 200)
+            payload = resp.json()
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["job_id"], "job-e2e")
+            self.assertEqual(payload["flow"], "cleaning")
+            self.assertGreaterEqual(len(payload["artifacts"]), 2)
+            parquet_artifact = next(item for item in payload["artifacts"] if item["kind"] == "parquet")
+            self.assertTrue(parquet_artifact["path"].startswith(local_job_root))
+            step_start.assert_called_once()
+            step_done.assert_called_once()
+            step_fail.assert_not_called()
+            self.assertGreaterEqual(artifact_upsert.call_count, 2)
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_uses_explicit_job_context(self, _make_base_client):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "ctx-job")
+
+            def write_valid_parquet(path, rows):
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._require_local_parquet_dependencies"
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                resp = self.client.post(
+                    "/jobs/job-ctx-route/run/cleaning",
+                    json={
+                        "actor": "local",
+                        "ruleset_version": "v1",
+                        "trace_id": "trace-route-1",
+                        "job_context": {
+                            "job_root": local_job_root,
+                            "stage_dir": os.path.join(local_job_root, "stage-x"),
+                            "artifacts_dir": os.path.join(local_job_root, "artifacts-x"),
+                            "evidence_dir": os.path.join(local_job_root, "evidence-x"),
+                        },
+                        "params": {
+                            "rows": [{"id": 1, "amount": 10.0}],
+                            "office_outputs_enabled": False,
+                        },
+                    },
+                )
+
+            self.assertEqual(resp.status_code, 200)
+            payload = resp.json()
+            self.assertTrue(payload["ok"])
+            parquet_artifact = next(item for item in payload["artifacts"] if item["kind"] == "parquet")
+            self.assertTrue(parquet_artifact["path"].startswith(local_job_root))
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_rejects_legacy_path_params(self, _make_base_client):
+        resp = self.client.post(
+            "/jobs/job-strict/run/cleaning",
+            json={
+                "actor": "local",
+                "ruleset_version": "v1",
+                "params": {
+                    "job_root": r"D:\legacy\job",
+                    "rows": [{"id": 1, "amount": 10.0}],
+                },
+            },
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job-strict")
+        self.assertEqual(payload["flow"], "cleaning")
+        self.assertIn("legacy flow path params are no longer supported", payload["error"])
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_reports_cleaning_failures_via_step_fail(self, _make_base_client):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            with patch("aiwf.flows.cleaning._base_step_start") as step_start, patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ) as artifact_upsert, patch("aiwf.flows.cleaning._base_step_done") as step_done, patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ) as step_fail, patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._require_local_parquet_dependencies"
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=RuntimeError("disk full")
+            ):
+                resp = self.client.post(
+                    "/jobs/job-e2e-fail/run/cleaning",
+                    json={
+                        "actor": "local",
+                        "ruleset_version": "v1",
+                        "job_context": make_job_context(local_job_root),
+                        "params": {
+                            "rows": [{"id": 1, "amount": 10.0}],
+                            "office_outputs_enabled": False,
+                        },
+                    },
+                )
+
+            self.assertEqual(resp.status_code, 500)
+            payload = resp.json()
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["error"], "internal server error")
+            step_start.assert_called_once()
+            step_fail.assert_called_once()
+            step_done.assert_not_called()
+            artifact_upsert.assert_not_called()
 
 
 if __name__ == "__main__":

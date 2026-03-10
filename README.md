@@ -50,6 +50,10 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_glue_python.ps1
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_base_java.ps1
 ```
 
+Notes:
+- Glue flow requests should use top-level `job_context`.
+- Legacy path fields under `params` such as `params.job_root` / `params.stage_dir` / `params.artifacts_dir` / `params.evidence_dir` are no longer supported.
+
 4. Run smoke test:
 
 ```powershell
@@ -61,14 +65,6 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1 -WithInvalidParquetFallbackTest
 ```
-
-6. Optional: run lightweight `base-java` smoke without Docker:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_base_java_smoke.ps1 -Mode Auto
-```
-
-If `base-java` is already running locally, `Auto` prefers live HTTP smoke; otherwise it falls back to a curated Maven contract smoke suite.
 
 ## Local Verification
 
@@ -91,10 +87,12 @@ This runs:
 - `accel-rust` tests
 - `glue-python` unit tests
 - smoke + invalid parquet fallback integration check
+- explicit `job_context` transport validation through the normal startup path
 
 ## GitHub Actions
 
 - `Quick CI` runs on push / pull request for fast feedback.
+- `Quick CI` is currently Windows-only; `ubuntu` / `macOS` checks are paused.
 - `Full Integration (Self-Hosted)` is intended for the Windows self-hosted runner and also runs nightly at `18:00 UTC`.
 - Manual full runs accept `ci_profile=Full` and `run_full_integration=true`.
 - Self-hosted full runs now write the local transcript path into the job summary instead of uploading an artifact. The transcript itself stays on the runner workspace under `ops/logs/ci`.

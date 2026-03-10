@@ -21,6 +21,7 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $tmp = Join-Path $env:TEMP "aiwf_regression_quality.py"
 $py = @'
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,7 @@ dataset = Path(sys.argv[2])
 out_dir = Path(sys.argv[3])
 out_dir.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(repo / "apps" / "glue-python"))
+os.environ.setdefault("AIWF_ALLOW_EXTERNAL_JOB_ROOT", "true")
 
 from aiwf import preprocess
 from aiwf.flows import cleaning
@@ -66,7 +68,12 @@ clean_res = cleaning.run_cleaning(
     job_id=f"reg_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
     actor="regression",
     params={
-        "job_root": str(clean_job_root),
+        "job_context": {
+            "job_root": str(clean_job_root),
+            "stage_dir": str(clean_job_root / "stage"),
+            "artifacts_dir": str(clean_job_root / "artifacts"),
+            "evidence_dir": str(clean_job_root / "evidence"),
+        },
         "input_csv_path": str(finance_pre),
         "local_parquet_strict": False,
         "drop_negative_amount": True,
