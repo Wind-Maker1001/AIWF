@@ -149,7 +149,7 @@ class JobServiceTest {
 
     @Test
     void runFlowBuildsExplicitJobContextWithoutLegacyPathParams() {
-        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "running"));
         when(glue.runFlow(org.mockito.ArgumentMatchers.eq("job1"), org.mockito.ArgumentMatchers.eq("cleaning"), any()))
                 .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "job1", "flow", "cleaning"), "job1", "cleaning"));
 
