@@ -21,9 +21,9 @@ pub(super) fn base_api_probe_task_store(cfg: &TaskStoreConfig) -> bool {
         .unwrap_or(false)
 }
 
-pub(super) fn base_api_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) {
+pub(super) fn base_api_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) -> Result<(), String> {
     let Some(base) = &cfg.base_api_url else {
-        return;
+        return Err("base_api task store requires AIWF_BASE_URL".to_string());
     };
     let url = format!("{}/api/v1/runtime/tasks/upsert", base.trim_end_matches('/'));
     let payload = json!({
@@ -43,12 +43,14 @@ pub(super) fn base_api_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) {
     if let Some(k) = &cfg.base_api_key {
         req = req.set("X-API-Key", k);
     }
-    let _ = req.send_json(payload);
+    req.send_json(payload)
+        .map_err(|e| format!("base_api upsert task: {e}"))?;
+    Ok(())
 }
 
-pub(super) fn base_api_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<TaskState> {
+pub(super) fn base_api_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<TaskState>, String> {
     let Some(base) = &cfg.base_api_url else {
-        return None;
+        return Err("base_api task store requires AIWF_BASE_URL".to_string());
     };
     let url = format!(
         "{}/api/v1/runtime/tasks/{}",
@@ -59,15 +61,25 @@ pub(super) fn base_api_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<
     if let Some(k) = &cfg.base_api_key {
         req = req.set("X-API-Key", k);
     }
-    let resp = req.call().ok()?;
-    let body: Value = resp.into_json().ok()?;
-    let task = body.get("task")?;
+    let resp = match req.call() {
+        Ok(resp) => resp,
+        Err(ureq::Error::Status(404, _)) => return Ok(None),
+        Err(e) => return Err(format!("base_api get task: {e}")),
+    };
+    let body: Value = resp
+        .into_json()
+        .map_err(|e| format!("base_api get task json: {e}"))?;
+    let Some(task) = body.get("task") else {
+        return Ok(None);
+    };
     parse_task_from_runtime_row(task)
+        .map(Some)
+        .ok_or_else(|| "base_api get task: invalid task payload".to_string())
 }
 
-pub(super) fn base_api_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<Value> {
+pub(super) fn base_api_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<Value>, String> {
     let Some(base) = &cfg.base_api_url else {
-        return None;
+        return Err("base_api task store requires AIWF_BASE_URL".to_string());
     };
     let url = format!(
         "{}/api/v1/runtime/tasks/{}/cancel",
@@ -78,6 +90,13 @@ pub(super) fn base_api_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Opti
     if let Some(k) = &cfg.base_api_key {
         req = req.set("X-API-Key", k);
     }
-    let resp = req.send_string("{}").ok()?;
-    resp.into_json().ok()
+    let resp = match req.send_string("{}") {
+        Ok(resp) => resp,
+        Err(ureq::Error::Status(404, _)) => return Ok(None),
+        Err(e) => return Err(format!("base_api cancel task: {e}")),
+    };
+    let body = resp
+        .into_json()
+        .map_err(|e| format!("base_api cancel task json: {e}"))?;
+    Ok(Some(body))
 }

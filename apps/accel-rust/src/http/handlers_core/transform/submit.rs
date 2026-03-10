@@ -72,7 +72,7 @@ pub(crate) async fn transform_rows_v2_submit_operator(
     let task_id = next_submit_task_id(&req, &id_full);
     let task = TaskState {
         task_id: task_id.clone(),
-        tenant_id,
+        tenant_id: tenant_id.clone(),
         operator: "transform_rows_v2".to_string(),
         status: "queued".to_string(),
         created_at: now.clone(),
@@ -82,7 +82,20 @@ pub(crate) async fn transform_rows_v2_submit_operator(
         idempotency_key: id_key,
         attempts: 0,
     };
-    task_store_upsert_task(&task, &cfg);
+    if let Err(e) = task_store_upsert_task(&task, &cfg) {
+        release_tenant_slot(&state, &tenant_id);
+        tracing::error!("task-store upsert failed before queue insert task_id={task_id}: {e}");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ErrResp {
+                ok: false,
+                operator: "transform_rows_v2".to_string(),
+                status: "failed".to_string(),
+                error: format!("task store unavailable: {e}"),
+            }),
+        )
+            .into_response();
+    }
     let cancel_flag = Arc::new(AtomicBool::new(false));
     if let Ok(mut flags) = state.cancel_flags.lock() {
         flags.insert(task_id.clone(), Arc::clone(&cancel_flag));
@@ -118,16 +131,46 @@ pub(crate) async fn transform_rows_v2_submit_operator(
     let tenant_for_worker = task.tenant_id.clone();
     let id_full_for_worker = id_full.clone();
     tokio::spawn(async move {
-        if let Ok(mut t) = tasks.lock()
-            && let Some(cur) = t.get_mut(&task_id_for_worker)
-            && cur.status != "cancelled"
-        {
-            cur.status = "running".to_string();
-            cur.updated_at = utc_now_iso();
-            let cur_snapshot = cur.clone();
-            let _ = prune_tasks(&mut t, &task_cfg);
-            persist_tasks_to_store(&t, task_cfg.store_path.as_ref());
-            task_store_upsert_task(&cur_snapshot, &task_cfg);
+        let mut abort_before_execution = false;
+        if let Ok(mut t) = tasks.lock() {
+            let mut cur_snapshot = None;
+            if let Some(cur) = t.get_mut(&task_id_for_worker)
+                && cur.status != "cancelled"
+            {
+                cur.status = "running".to_string();
+                cur.updated_at = utc_now_iso();
+                cur_snapshot = Some(cur.clone());
+            }
+            if let Some(snapshot) = cur_snapshot {
+                let _ = prune_tasks(&mut t, &task_cfg);
+                persist_tasks_to_store(&t, task_cfg.store_path.as_ref());
+                if let Err(e) = task_store_upsert_task(&snapshot, &task_cfg) {
+                    tracing::error!(
+                        "task-store upsert failed before execution task_id={task_id_for_worker}: {e}"
+                    );
+                    if let Some(cur) = t.get_mut(&task_id_for_worker) {
+                        cur.status = "failed".to_string();
+                        cur.error = Some(format!("task store unavailable before execution: {e}"));
+                        cur.updated_at = utc_now_iso();
+                    }
+                    let _ = prune_tasks(&mut t, &task_cfg);
+                    persist_tasks_to_store(&t, task_cfg.store_path.as_ref());
+                    abort_before_execution = true;
+                }
+            }
+        }
+        if abort_before_execution {
+            cleanup_task_flag(&task_id_for_worker, &cancel_flags, &metrics);
+            if let Ok(mut running) = tenant_running.lock()
+                && let Some(v) = running.get_mut(&tenant_for_worker)
+                && *v > 0
+            {
+                *v -= 1;
+            }
+            if let Ok(mut idx) = idempotency_index.lock() {
+                idx.remove(&id_full_for_worker);
+            }
+            return;
         }
 
         if let Ok(t) = tasks.lock()
@@ -174,13 +217,17 @@ pub(crate) async fn transform_rows_v2_submit_operator(
             }
         }
 
-        if let Ok(mut t) = tasks.lock()
-            && let Some(cur) = t.get_mut(&task_id_for_worker)
-        {
-            if cur.status == "cancelled" {
+        if let Ok(mut t) = tasks.lock() {
+            if let Some(cur) = t.get(&task_id_for_worker)
+                && cur.status == "cancelled"
+            {
                 let cur_snapshot = cur.clone();
                 persist_tasks_to_store(&t, task_cfg.store_path.as_ref());
-                task_store_upsert_task(&cur_snapshot, &task_cfg);
+                if let Err(e) = task_store_upsert_task(&cur_snapshot, &task_cfg) {
+                    tracing::error!(
+                        "task-store upsert failed for cancelled task task_id={task_id_for_worker}: {e}"
+                    );
+                }
                 cleanup_task_flag(&task_id_for_worker, &cancel_flags, &metrics);
                 if let Ok(mut running) = tenant_running.lock()
                     && let Some(v) = running.get_mut(&tenant_for_worker)
@@ -190,30 +237,50 @@ pub(crate) async fn transform_rows_v2_submit_operator(
                 }
                 return;
             }
-            match res {
-                Ok(resp) => {
-                    observe_transform_success(&metrics, &resp);
-                    cur.status = "done".to_string();
-                    cur.result = Some(serde_json::to_value(resp).unwrap_or_else(|_| json!({})));
-                    cur.attempts = local_attempt;
-                    cur.updated_at = utc_now_iso();
-                }
-                Err(e) => {
-                    cur.status = "failed".to_string();
-                    cur.error = Some(e);
-                    cur.attempts = local_attempt;
-                    cur.updated_at = utc_now_iso();
-                    if let Ok(mut m) = metrics.lock() {
-                        m.transform_rows_v2_errors += 1;
+
+            let mut cur_snapshot = None;
+            if let Some(cur) = t.get_mut(&task_id_for_worker) {
+                match res {
+                    Ok(resp) => {
+                        observe_transform_success(&metrics, &resp);
+                        cur.status = "done".to_string();
+                        cur.result = Some(serde_json::to_value(resp).unwrap_or_else(|_| json!({})));
+                        cur.attempts = local_attempt;
+                        cur.updated_at = utc_now_iso();
+                    }
+                    Err(e) => {
+                        cur.status = "failed".to_string();
+                        cur.error = Some(e);
+                        cur.attempts = local_attempt;
+                        cur.updated_at = utc_now_iso();
+                        if let Ok(mut m) = metrics.lock() {
+                            m.transform_rows_v2_errors += 1;
+                        }
                     }
                 }
+                cur_snapshot = Some(cur.clone());
             }
-            let cur_snapshot = cur.clone();
             let _ = prune_tasks(&mut t, &task_cfg);
             persist_tasks_to_store(&t, task_cfg.store_path.as_ref());
-            task_store_upsert_task(&cur_snapshot, &task_cfg);
-            cleanup_task_flag(&task_id_for_worker, &cancel_flags, &metrics);
+            if let Some(snapshot) = cur_snapshot
+                && let Err(e) = task_store_upsert_task(&snapshot, &task_cfg)
+            {
+                tracing::error!(
+                    "task-store upsert failed after execution task_id={task_id_for_worker}: {e}"
+                );
+                if let Some(cur) = t.get_mut(&task_id_for_worker) {
+                    let message = format!("task store unavailable after execution: {e}");
+                    cur.error = Some(match cur.error.take() {
+                        Some(existing) if !existing.is_empty() => format!("{existing}; {message}"),
+                        _ => message,
+                    });
+                    cur.updated_at = utc_now_iso();
+                }
+                let _ = prune_tasks(&mut t, &task_cfg);
+                persist_tasks_to_store(&t, task_cfg.store_path.as_ref());
+            }
         }
+        cleanup_task_flag(&task_id_for_worker, &cancel_flags, &metrics);
         if let Ok(mut running) = tenant_running.lock()
             && let Some(v) = running.get_mut(&tenant_for_worker)
             && *v > 0

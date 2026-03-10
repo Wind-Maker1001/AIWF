@@ -40,9 +40,9 @@ pub fn probe_remote_task_store(cfg: &TaskStoreConfig) -> bool {
     }
 }
 
-pub fn task_store_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) {
+pub fn task_store_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) -> Result<(), String> {
     if !task_store_remote_enabled(cfg) {
-        return;
+        return Ok(());
     }
     match cfg.backend.as_str() {
         "odbc" => odbc_upsert_task(task, cfg),
@@ -51,9 +51,9 @@ pub fn task_store_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) {
     }
 }
 
-pub fn task_store_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<TaskState> {
+pub fn task_store_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<TaskState>, String> {
     if !task_store_remote_enabled(cfg) {
-        return None;
+        return Ok(None);
     }
     match cfg.backend.as_str() {
         "odbc" => odbc_get_task(task_id, cfg),
@@ -62,9 +62,9 @@ pub fn task_store_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<TaskS
     }
 }
 
-pub fn task_store_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<Value> {
+pub fn task_store_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<Value>, String> {
     if !task_store_remote_enabled(cfg) {
-        return None;
+        return Ok(None);
     }
     match cfg.backend.as_str() {
         "odbc" => odbc_cancel_task(task_id, cfg),

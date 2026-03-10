@@ -70,7 +70,7 @@ pub(super) fn odbc_probe_task_store(cfg: &TaskStoreConfig) -> bool {
     }
 }
 
-pub(super) fn odbc_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) {
+pub(super) fn odbc_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) -> Result<(), String> {
     let task_id = task.task_id.clone();
     let tenant_id = task.tenant_id.clone();
     let operator = task.operator.clone();
@@ -118,24 +118,30 @@ END";
         error,
         source,
     ];
-    let _ = run_odbc_exec(cfg, q, &params);
+    run_odbc_exec(cfg, q, &params)
 }
 
-pub(super) fn odbc_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<TaskState> {
+pub(super) fn odbc_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<TaskState>, String> {
     let q = "SET NOCOUNT ON;\
 DECLARE @task_id NVARCHAR(128)=?;\
 SELECT TOP 1 task_id,tenant_id,operator,status,created_at_epoch,updated_at_epoch,result_json,error\
 FROM dbo.workflow_tasks WHERE task_id=@task_id FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;";
-    let out = run_odbc_query_first_text(cfg, q, &[task_id.to_string()]).ok()??;
+    let out = match run_odbc_query_first_text(cfg, q, &[task_id.to_string()])? {
+        Some(value) => value,
+        None => return Ok(None),
+    };
     let s = out.trim();
     if s.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let row: Value = serde_json::from_str(s).ok()?;
+    let row: Value =
+        serde_json::from_str(s).map_err(|e| format!("odbc get task json parse: {e}"))?;
     parse_task_from_runtime_row(&row)
+        .map(Some)
+        .ok_or_else(|| "odbc get task: invalid task payload".to_string())
 }
 
-pub(super) fn odbc_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<Value> {
+pub(super) fn odbc_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<Value>, String> {
     let now = utc_now_epoch_string()
         .parse::<u64>()
         .unwrap_or(0)
@@ -146,17 +152,21 @@ DECLARE @now BIGINT=CAST(? AS BIGINT);\
 UPDATE dbo.workflow_tasks SET status=N'cancelled',updated_at_epoch=@now\
 WHERE task_id=@task_id AND status IN (N'queued',N'running');\
 SELECT TOP 1 task_id,status FROM dbo.workflow_tasks WHERE task_id=@task_id FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;";
-    let out = run_odbc_query_first_text(cfg, q, &[task_id.to_string(), now]).ok()??;
-    let row: Value = serde_json::from_str(out.trim()).ok()?;
+    let out = match run_odbc_query_first_text(cfg, q, &[task_id.to_string(), now])? {
+        Some(value) => value,
+        None => return Ok(None),
+    };
+    let row: Value = serde_json::from_str(out.trim())
+        .map_err(|e| format!("odbc cancel task json parse: {e}"))?;
     let status = row
         .get("status")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown")
         .to_string();
-    Some(json!({
+    Ok(Some(json!({
         "ok": true,
         "task_id": row.get("task_id").and_then(|v| v.as_str()).unwrap_or(""),
         "cancelled": status == "cancelled",
         "status": status
-    }))
+    })))
 }

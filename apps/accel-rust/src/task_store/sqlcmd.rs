@@ -41,7 +41,7 @@ pub(super) fn sqlcmd_probe_task_store(cfg: &TaskStoreConfig) -> bool {
     out.trim().ends_with('1')
 }
 
-pub(super) fn sqlcmd_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) {
+pub(super) fn sqlcmd_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) -> Result<(), String> {
     let task_id = escape_tsql(&task.task_id);
     let tenant_id = escape_tsql(&task.tenant_id);
     let operator = escape_tsql(&task.operator);
@@ -58,7 +58,7 @@ pub(super) fn sqlcmd_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) {
     let q = format!(
         "SET NOCOUNT ON; IF EXISTS (SELECT 1 FROM dbo.workflow_tasks WHERE task_id=N'{task_id}') BEGIN UPDATE dbo.workflow_tasks SET tenant_id=N'{tenant_id}',operator=N'{operator}',status=N'{status}',created_at_epoch={created},updated_at_epoch={updated},result_json=N'{result_json}',error=N'{error}',source=N'accel-rust' WHERE task_id=N'{task_id}'; END ELSE BEGIN INSERT INTO dbo.workflow_tasks (task_id,tenant_id,operator,status,created_at_epoch,updated_at_epoch,result_json,error,source) VALUES (N'{task_id}',N'{tenant_id}',N'{operator}',N'{status}',{created},{updated},N'{result_json}',N'{error}',N'accel-rust'); END"
     );
-    let _ = run_sqlcmd_query(cfg, &q);
+    run_sqlcmd_query(cfg, &q).map(|_| ())
 }
 
 pub(super) fn sqlcmd_get_task_query(task_id: &str) -> String {
@@ -68,36 +68,44 @@ pub(super) fn sqlcmd_get_task_query(task_id: &str) -> String {
     )
 }
 
-pub(super) fn sqlcmd_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<TaskState> {
+pub(super) fn sqlcmd_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<TaskState>, String> {
     let q = sqlcmd_get_task_query(task_id);
-    let out = run_sqlcmd_query(cfg, &q).ok()?;
+    let out = run_sqlcmd_query(cfg, &q)?;
     let s = out.trim();
     if s.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let row: Value = serde_json::from_str(s).ok()?;
+    let row: Value =
+        serde_json::from_str(s).map_err(|e| format!("sqlcmd get task json parse: {e}"))?;
     parse_task_from_runtime_row(&row)
+        .map(Some)
+        .ok_or_else(|| "sqlcmd get task: invalid task payload".to_string())
 }
 
-pub(super) fn sqlcmd_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Option<Value> {
+pub(super) fn sqlcmd_cancel_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<Value>, String> {
     let task_id = escape_tsql(task_id);
     let now = utc_now_epoch_string().parse::<u64>().unwrap_or(0);
     let q = format!(
         "SET NOCOUNT ON; UPDATE dbo.workflow_tasks SET status=N'cancelled',updated_at_epoch={now} WHERE task_id=N'{task_id}' AND status IN (N'queued',N'running'); SELECT TOP 1 task_id,status FROM dbo.workflow_tasks WHERE task_id=N'{task_id}' FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;"
     );
-    let out = run_sqlcmd_query(cfg, &q).ok()?;
-    let row: Value = serde_json::from_str(out.trim()).ok()?;
+    let out = run_sqlcmd_query(cfg, &q)?;
+    let trimmed = out.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let row: Value =
+        serde_json::from_str(trimmed).map_err(|e| format!("sqlcmd cancel task json parse: {e}"))?;
     let status = row
         .get("status")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown")
         .to_string();
-    Some(json!({
+    Ok(Some(json!({
         "ok": true,
         "task_id": row.get("task_id").and_then(|v| v.as_str()).unwrap_or(""),
         "cancelled": status == "cancelled",
         "status": status
-    }))
+    })))
 }
 
 #[cfg(test)]
