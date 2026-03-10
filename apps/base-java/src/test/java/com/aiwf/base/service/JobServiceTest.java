@@ -176,10 +176,10 @@ class JobServiceTest {
         assertThat(req.rulesetVersion()).isEqualTo("v2");
         assertThat(req.traceId()).isNotBlank();
         assertThat(req.jobContext()).isNotNull();
-        assertThat(req.jobContext().jobRoot()).endsWith("jobs\\job1");
-        assertThat(req.jobContext().stageDir()).endsWith("jobs\\job1\\stage");
-        assertThat(req.jobContext().artifactsDir()).endsWith("jobs\\job1\\artifacts");
-        assertThat(req.jobContext().evidenceDir()).endsWith("jobs\\job1\\evidence");
+        assertThat(req.jobContext().jobRoot()).endsWith(Path.of("jobs", "job1").toString());
+        assertThat(req.jobContext().stageDir()).endsWith(Path.of("jobs", "job1", "stage").toString());
+        assertThat(req.jobContext().artifactsDir()).endsWith(Path.of("jobs", "job1", "artifacts").toString());
+        assertThat(req.jobContext().evidenceDir()).endsWith(Path.of("jobs", "job1", "evidence").toString());
         assertThat(req.params()).containsEntry("sample", true);
         assertThat(req.params()).doesNotContainKeys(
                 "job_root",
