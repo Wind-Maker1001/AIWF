@@ -6,7 +6,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-pub fn observe_operator_latency_v2(metrics: &Arc<Mutex<ServiceMetrics>>, op: &str, latency_ms: u128) {
+pub fn observe_operator_latency_v2(
+    metrics: &Arc<Mutex<ServiceMetrics>>,
+    op: &str,
+    latency_ms: u128,
+) {
     if let Ok(mut m) = metrics.lock() {
         let entry = m
             .operator_latency_samples
