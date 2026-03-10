@@ -207,6 +207,10 @@ public sealed partial class MainWindow
 
     private void FitCanvasToNodes()
     {
+        CanvasSplitLayoutGrid.UpdateLayout();
+        CanvasEditorHostGrid.UpdateLayout();
+        CanvasViewport.UpdateLayout();
+
         var allNodes = GetCanvasNodeBorders().ToList();
         var userNodes = allNodes
             .Where(x => x.Tag is CanvasNodeTag tag && tag.IsUserNode)
@@ -274,7 +278,9 @@ public sealed partial class MainWindow
 
         var viewportWidth = Math.Max(CanvasViewport.ActualWidth, 1.0);
         var viewportHeight = Math.Max(CanvasViewport.ActualHeight, 1.0);
-        const double padding = 64;
+        var horizontalPadding = Math.Clamp(viewportWidth * 0.09, 52, 108);
+        var verticalPadding = Math.Clamp(viewportHeight * 0.11, 56, 104);
+        var effectivePadding = Math.Min(horizontalPadding, verticalPadding);
         var fit = CanvasRuntime.CanvasFitCalculator.Calculate(
             minLeft,
             minTop,
@@ -284,11 +290,12 @@ public sealed partial class MainWindow
             viewportHeight,
             CanvasMinScale,
             CanvasMaxScale,
-            padding);
+            effectivePadding);
         CanvasTransform.ScaleX = fit.Scale;
         CanvasTransform.ScaleY = fit.Scale;
         CanvasTransform.TranslateX = fit.TranslateX;
         CanvasTransform.TranslateY = fit.TranslateY;
+        ClampCanvasTransform();
         UpdateCanvasZoomIndicator();
         SetInlineStatus("已定位至节点流。", InlineStatusTone.Success);
     }
@@ -379,5 +386,12 @@ public sealed partial class MainWindow
     private void DismissCanvasHint()
     {
         CanvasHintPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void UpdateCanvasHintVisibility()
+    {
+        CanvasHintPanel.Visibility = GetCanvasNodeBorders().Any()
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 }

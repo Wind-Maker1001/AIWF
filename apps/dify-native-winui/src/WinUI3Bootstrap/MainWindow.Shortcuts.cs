@@ -15,6 +15,8 @@ public sealed partial class MainWindow
             return;
         }
 
+        rootElement.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementMode.Hidden;
+
         AddShortcut(rootElement, Windows.System.VirtualKey.S, Windows.System.VirtualKeyModifiers.Control, async (_, args) =>
         {
             if (_activeSection != NavSection.Canvas)

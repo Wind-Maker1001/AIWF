@@ -27,12 +27,12 @@ public sealed partial class MainWindow
             Text = title,
             FontSize = 16,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x11, 0x11, 0x11))
+            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x11, 0x13, 0x17))
         };
         var subtitleBlock = new TextBlock
         {
             Text = subtitle,
-            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x6B, 0x72, 0x80))
+            Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x59, 0x60, 0x6B))
         };
 
         var card = new Border
@@ -47,22 +47,22 @@ public sealed partial class MainWindow
                 TitleBlock = titleBlock,
                 SubtitleBlock = subtitleBlock
             },
-            Width = 220,
-            MinHeight = 96,
-            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x66, 0xC6, 0x28, 0x28)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Background = TryGetResourceBrush("CardAcrylicBrush") ?? new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
-            Padding = new Thickness(12)
+            Width = 236,
+            MinHeight = 108,
+            BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(0x77, 0x30, 0x36, 0x40)),
+            BorderThickness = new Thickness(1.25),
+            CornerRadius = new CornerRadius(16),
+            Background = TryGetResourceBrush("CardAcrylicBrush") ?? new SolidColorBrush(Windows.UI.Color.FromArgb(0xFA, 0xFF, 0xFF, 0xFF)),
+            Padding = new Thickness(14, 12, 14, 12)
         };
         card.Shadow = new ThemeShadow();
-        card.Translation = new Vector3(0, 0, 14);
+        card.Translation = new Vector3(0, 0, 10);
 
         var inputConnector = new Ellipse
         {
             Width = 12,
             Height = 12,
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x6B, 0x72, 0x80)),
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0x2A, 0x2F, 0x37)),
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0),
@@ -76,7 +76,7 @@ public sealed partial class MainWindow
         {
             Width = 12,
             Height = 12,
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xC6, 0x28, 0x28)),
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, 0xD7, 0x26, 0x2E)),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 0, 0),
@@ -127,7 +127,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            card.Translation = new Vector3(0, 0, 20);
+            card.Translation = new Vector3(0, 0, 14);
         };
         card.PointerExited += (_, _) =>
         {
@@ -136,7 +136,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            card.Translation = new Vector3(0, 0, 14);
+            card.Translation = new Vector3(0, 0, 10);
         };
 
         Canvas.SetLeft(card, left);

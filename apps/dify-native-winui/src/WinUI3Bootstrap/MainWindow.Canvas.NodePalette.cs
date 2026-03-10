@@ -1,6 +1,7 @@
 using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Foundation;
 
 namespace AIWF.Native;
@@ -9,64 +10,7 @@ public sealed partial class MainWindow
 {
     private void OnAddNodeClick(object sender, RoutedEventArgs e)
     {
-        PrepareAddNodeFlyoutLayout();
-        var viewportWidth = Math.Max(CanvasViewport.ActualWidth, 360);
-        var viewportHeight = Math.Max(CanvasViewport.ActualHeight, 280);
-        var popupWidth = _addNodeFlyoutRoot?.Width ?? 500;
-        var popupHeight = _addNodeFlyoutRoot?.Height > 0 ? _addNodeFlyoutRoot.Height : (_addNodeFlyoutRoot?.MaxHeight ?? 560);
-        var anchor = new Point(12, 12);
-        if (sender is FrameworkElement element)
-        {
-            try
-            {
-                var transform = element.TransformToVisual(CanvasViewport);
-                anchor = transform.TransformPoint(new Point(0, element.ActualHeight + 6));
-            }
-            catch
-            {
-                anchor = new Point(12, 12);
-            }
-        }
-
-        var x = Math.Clamp(anchor.X, 8, Math.Max(8, viewportWidth - popupWidth - 8));
-        var y = Math.Clamp(anchor.Y, 8, Math.Max(8, viewportHeight - popupHeight - 8));
-        _addNodeFlyout.ShowAt(CanvasViewport, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions
-        {
-            Position = new Point(x, y)
-        });
-    }
-
-    private void PrepareAddNodeFlyoutLayout()
-    {
-        if (_addNodeFlyoutRoot is null)
-        {
-            return;
-        }
-
-        var viewportWidth = Math.Max(CanvasViewport.ActualWidth, 360);
-        var viewportHeight = Math.Max(CanvasViewport.ActualHeight, 280);
-        var targetWidth = Math.Clamp(viewportWidth - 16, 420, 620);
-        var targetHeight = Math.Clamp(viewportHeight - 16, 260, 760);
-        _addNodeFlyoutRoot.Width = targetWidth;
-        _addNodeFlyoutRoot.MaxHeight = targetHeight;
-        _addNodeFlyoutRoot.Height = targetHeight;
-
-        var stackWidth = Math.Max(320, targetWidth - 44);
-        if (_addNodeFlyoutStack is not null)
-        {
-            _addNodeFlyoutStack.Width = stackWidth;
-        }
-
-        if (_addNodeFlyoutScroller is not null)
-        {
-            _addNodeFlyoutScroller.Width = Math.Max(320, targetWidth - 20);
-            _addNodeFlyoutScroller.Height = Math.Max(140, targetHeight - 86);
-        }
-
-        for (var i = 0; i < _addNodeFlyoutGroupGrids.Count; i++)
-        {
-            _addNodeFlyoutGroupGrids[i].Width = stackWidth;
-        }
+        ToggleNodeLibraryDrawer();
     }
 
     private void OnAddNodeTemplateClick(object sender, RoutedEventArgs e)
@@ -76,8 +20,96 @@ public sealed partial class MainWindow
             return;
         }
 
-        _addNodeFlyout.Hide();
+        SetNodeLibraryOpen(false);
+
         SpawnNodeFromTemplate(template);
+    }
+
+    private void OnNodeLibraryCloseClick(object sender, RoutedEventArgs e)
+    {
+        SetNodeLibraryOpen(false);
+    }
+
+    private void OnNodeLibrarySearchTextChanged(object sender, TextChangedEventArgs e)
+    {
+        RebuildNodeLibraryItems(NodeLibrarySearchTextBox?.Text);
+    }
+
+    private void ToggleNodeLibraryDrawer()
+    {
+        SetNodeLibraryOpen(!_isNodeLibraryOpen);
+    }
+
+    private void SetNodeLibraryOpen(bool isOpen)
+    {
+        if (NodeLibraryPane is null)
+        {
+            return;
+        }
+
+        if (isOpen == _isNodeLibraryOpen && NodeLibraryPane.Visibility == (isOpen ? Visibility.Visible : Visibility.Collapsed))
+        {
+            return;
+        }
+
+        _isNodeLibraryOpen = isOpen;
+        var targetWidth = isOpen ? CalculateNodeLibraryWidth() : 0;
+        var fromWidth = NodeLibraryPane.ActualWidth > 0 ? NodeLibraryPane.ActualWidth : NodeLibraryPane.Width;
+        var fromOpacity = NodeLibraryPane.Opacity;
+        var toOpacity = isOpen ? 1.0 : 0.0;
+
+        if (isOpen)
+        {
+            NodeLibraryPane.Visibility = Visibility.Visible;
+            if (NodeLibraryItemsPanel is not null && NodeLibraryItemsPanel.Children.Count == 0)
+            {
+                InitializeNodeLibraryDrawer();
+            }
+        }
+
+        var storyboard = new Storyboard();
+        var widthAnimation = new DoubleAnimation
+        {
+            From = fromWidth,
+            To = targetWidth,
+            Duration = TimeSpan.FromMilliseconds(170),
+            EnableDependentAnimation = true
+        };
+        Storyboard.SetTarget(widthAnimation, NodeLibraryPane);
+        Storyboard.SetTargetProperty(widthAnimation, "Width");
+        storyboard.Children.Add(widthAnimation);
+
+        var opacityAnimation = new DoubleAnimation
+        {
+            From = fromOpacity,
+            To = toOpacity,
+            Duration = TimeSpan.FromMilliseconds(140),
+            EnableDependentAnimation = true
+        };
+        Storyboard.SetTarget(opacityAnimation, NodeLibraryPane);
+        Storyboard.SetTargetProperty(opacityAnimation, "Opacity");
+        storyboard.Children.Add(opacityAnimation);
+
+        storyboard.Completed += (_, _) =>
+        {
+            NodeLibraryPane.Width = targetWidth;
+            NodeLibraryPane.Opacity = toOpacity;
+            NodeLibraryPane.Visibility = isOpen ? Visibility.Visible : Visibility.Collapsed;
+            if (isOpen)
+            {
+                NodeLibrarySearchTextBox?.Focus(FocusState.Programmatic);
+                NodeLibrarySearchTextBox?.SelectAll();
+            }
+            FitCanvasToNodes();
+        };
+        storyboard.Begin();
+    }
+
+    private double CalculateNodeLibraryWidth()
+    {
+        var availableWidth = Math.Max(CanvasEditorPane.ActualWidth, 720);
+        var preferred = availableWidth * 0.29;
+        return Math.Clamp(preferred, NodeLibraryMinWidth, NodeLibraryMaxWidth);
     }
 
     private void SpawnNodeFromTemplate(NodeTemplate template)

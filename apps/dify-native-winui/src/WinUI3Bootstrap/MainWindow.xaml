@@ -6,68 +6,104 @@
     <Grid Padding="20" RowSpacing="14">
         <Grid.Background>
             <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="#CCF1F1F2" Offset="0" />
-                <GradientStop Color="#CCE5E7EB" Offset="0.48" />
-                <GradientStop Color="#CCF6F6F7" Offset="1" />
+                <GradientStop Color="#FFF1F2F4" Offset="0" />
+                <GradientStop Color="#FFE3E6EA" Offset="0.40" />
+                <GradientStop Color="#FFFAFAFB" Offset="1" />
             </LinearGradientBrush>
         </Grid.Background>
 
         <Grid.Resources>
-            <AcrylicBrush x:Key="SurfaceAcrylicBrush" TintColor="#FFF6F6F7" TintOpacity="0.70" FallbackColor="#FFF6F6F7" />
-            <AcrylicBrush x:Key="CardAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.56" FallbackColor="#FFFCFCFC" />
-            <AcrylicBrush x:Key="PanelAcrylicBrush" TintColor="#FFF2F3F5" TintOpacity="0.64" FallbackColor="#FFF2F3F5" />
-            <AcrylicBrush x:Key="HeroAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.60" FallbackColor="#FFF7F7F7" />
+            <AcrylicBrush x:Key="SurfaceAcrylicBrush" TintColor="#FFFCFCFD" TintOpacity="0.78" FallbackColor="#FFFCFCFD" />
+            <AcrylicBrush x:Key="CardAcrylicBrush" TintColor="#FFFDFDFD" TintOpacity="0.68" FallbackColor="#FFFDFDFD" />
+            <AcrylicBrush x:Key="PanelAcrylicBrush" TintColor="#FFF5F5F6" TintOpacity="0.72" FallbackColor="#FFF5F5F6" />
+            <AcrylicBrush x:Key="HeroAcrylicBrush" TintColor="#FFFFFFFF" TintOpacity="0.84" FallbackColor="#FFFFFFFF" />
+            <SolidColorBrush x:Key="AccentBrush" Color="#FFD7262E" />
+            <SolidColorBrush x:Key="AccentDarkBrush" Color="#FF8E1218" />
+            <SolidColorBrush x:Key="AccentBrushMuted" Color="#FFB51C23" />
+            <SolidColorBrush x:Key="ChromeBrush" Color="#FF171A1F" />
+            <SolidColorBrush x:Key="ChromeAltBrush" Color="#FFF2F3F5" />
+            <SolidColorBrush x:Key="AccentSoftBrush" Color="#1FD7262E" />
+            <SolidColorBrush x:Key="AccentSoftStrongBrush" Color="#33D7262E" />
+            <SolidColorBrush x:Key="InkLineBrush" Color="#66363D47" />
+            <SolidColorBrush x:Key="CardBorderBrush" Color="#1F20242B" />
+            <SolidColorBrush x:Key="PrimaryTextBrush" Color="#FF111317" />
+            <SolidColorBrush x:Key="SecondaryTextBrush" Color="#FF525A66" />
+            <SolidColorBrush x:Key="MutedTextBrush" Color="#FF7A828D" />
+            <SolidColorBrush x:Key="OnDarkTextBrush" Color="#FFF8F9FA" />
+            <SolidColorBrush x:Key="OnDarkSecondaryBrush" Color="#FFD6DAE0" />
             <Style x:Key="TouchTextBoxStyle" TargetType="TextBox">
                 <Setter Property="MinHeight" Value="44" />
                 <Setter Property="UseSystemFocusVisuals" Value="True" />
-                <Setter Property="BorderBrush" Value="#66555555" />
-                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Background" Value="#FFFDFDFD" />
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+                <Setter Property="BorderBrush" Value="#66363D47" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="10" />
             </Style>
             <Style x:Key="TouchComboBoxStyle" TargetType="ComboBox">
                 <Setter Property="MinHeight" Value="44" />
                 <Setter Property="UseSystemFocusVisuals" Value="True" />
-                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Background" Value="#FFFDFDFD" />
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+                <Setter Property="BorderBrush" Value="#66363D47" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="10" />
             </Style>
             <Style x:Key="CardBorderStyle" TargetType="Border">
-                <Setter Property="BorderBrush" Value="#1F0F172A" />
+                <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="Background" Value="{StaticResource CardAcrylicBrush}" />
-                <Setter Property="CornerRadius" Value="14" />
-                <Setter Property="Padding" Value="12" />
+                <Setter Property="CornerRadius" Value="18" />
+                <Setter Property="Padding" Value="18" />
             </Style>
             <Style TargetType="Button">
-                <Setter Property="CornerRadius" Value="9" />
+                <Setter Property="CornerRadius" Value="10" />
                 <Setter Property="MinHeight" Value="40" />
                 <Setter Property="UseSystemFocusVisuals" Value="True" />
             </Style>
             <Style x:Key="CanvasSectionTitleStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="16" />
                 <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="Foreground" Value="#FF111111" />
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
             </Style>
             <Style x:Key="CanvasSectionSubtitleStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="13" />
-                <Setter Property="Foreground" Value="#FF4B5563" />
+                <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
             </Style>
             <Style x:Key="CanvasFieldLabelStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="13" />
-                <Setter Property="Foreground" Value="#FF374151" />
+                <Setter Property="Foreground" Value="#FF3D434D" />
+            </Style>
+            <Style x:Key="InspectorSectionTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+                <Setter Property="CharacterSpacing" Value="30" />
+            </Style>
+            <Style x:Key="PanelTitleStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="15" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+            </Style>
+            <Style x:Key="PanelCaptionStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
             </Style>
             <Style x:Key="CanvasSecondaryButtonStyle" TargetType="Button">
                 <Setter Property="CornerRadius" Value="9" />
                 <Setter Property="MinHeight" Value="36" />
                 <Setter Property="Padding" Value="12,0" />
-                <Setter Property="Background" Value="#FFF8FAFC" />
-                <Setter Property="BorderBrush" Value="#FFD1D5DB" />
-                <Setter Property="Foreground" Value="#FF111111" />
+                <Setter Property="Background" Value="#FFFFFFFF" />
+                <Setter Property="BorderBrush" Value="#88363D47" />
+                <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
                 <Setter Property="UseSystemFocusVisuals" Value="True" />
             </Style>
             <Style x:Key="CanvasPrimaryButtonStyle" TargetType="Button">
                 <Setter Property="CornerRadius" Value="9" />
                 <Setter Property="MinHeight" Value="36" />
                 <Setter Property="Padding" Value="14,0" />
-                <Setter Property="Background" Value="#FFC62828" />
-                <Setter Property="BorderBrush" Value="#FF991B1B" />
+                <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource AccentDarkBrush}" />
                 <Setter Property="Foreground" Value="#FFFFFFFF" />
                 <Setter Property="UseSystemFocusVisuals" Value="True" />
             </Style>
@@ -79,29 +115,47 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border x:Name="HeroHeaderBorder" Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource HeroAcrylicBrush}" CornerRadius="16" Padding="16" Opacity="0">
+        <Canvas Grid.RowSpan="3" IsHitTestVisible="False">
+            <Rectangle Width="280" Height="280" Fill="{StaticResource AccentSoftBrush}" Canvas.Left="-70" Canvas.Top="610">
+                <Rectangle.RenderTransform>
+                    <CompositeTransform Rotation="14" />
+                </Rectangle.RenderTransform>
+            </Rectangle>
+            <Rectangle Width="420" Height="110" Fill="#12000000" Canvas.Left="1080" Canvas.Top="34">
+                <Rectangle.RenderTransform>
+                    <CompositeTransform Rotation="-8" />
+                </Rectangle.RenderTransform>
+            </Rectangle>
+            <Rectangle Width="210" Height="210" Fill="#10000000" Canvas.Left="1240" Canvas.Top="700">
+                <Rectangle.RenderTransform>
+                    <CompositeTransform Rotation="11" />
+                </Rectangle.RenderTransform>
+            </Rectangle>
+        </Canvas>
+
+        <Border x:Name="HeroHeaderBorder" Grid.Row="0" BorderBrush="#2220242B" BorderThickness="1" Background="{StaticResource HeroAcrylicBrush}" CornerRadius="18" Padding="14" Opacity="0">
             <Grid ColumnSpacing="14">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="6" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Border Grid.ColumnSpan="2" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="12" IsHitTestVisible="False" />
+                <Border Grid.ColumnSpan="2" BorderBrush="#12FFFFFF" BorderThickness="1" CornerRadius="14" IsHitTestVisible="False" />
                 <Border Grid.Column="0" CornerRadius="3">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="#FFC62828" Offset="0" />
-                            <GradientStop Color="#FFEF4444" Offset="1" />
+                            <GradientStop Color="#FFD7262E" Offset="0" />
+                            <GradientStop Color="#FFB51C23" Offset="1" />
                         </LinearGradientBrush>
                     </Border.Background>
                 </Border>
                 <StackPanel Grid.Column="1" Spacing="4">
-                    <TextBlock Text="AIWF 原生桌面" FontSize="28" FontWeight="SemiBold" Foreground="#FF111111" />
-                    <TextBlock Text="Fluent 风格触控优先工作台" Opacity="0.85" Foreground="#FF374151" />
+                    <TextBlock Text="AIWF 原生桌面" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+                    <TextBlock Text="Fluent 风格触控优先工作台" Opacity="0.90" Foreground="{StaticResource SecondaryTextBrush}" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Border x:Name="NavShellBorder" Grid.Row="1" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource SurfaceAcrylicBrush}" CornerRadius="14" Padding="8" Opacity="0">
+        <Border x:Name="NavShellBorder" Grid.Row="1" BorderBrush="#2220242B" BorderThickness="1" Background="{StaticResource SurfaceAcrylicBrush}" CornerRadius="16" Padding="8" Opacity="0">
             <Grid ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -111,43 +165,43 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button x:Name="WorkspaceNavButton" AutomationProperties.AutomationId="WorkspaceNavButton" Click="OnWorkspaceNavClick" Content="工作台" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
-                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
-                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
-                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF111111" />
-                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFBD5D5" />
-                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF7F7F8" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF454C57" />
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF111317" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE9EBEE" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF343A42" />
                         </Button.Resources>
                     </Button>
                     <Button x:Name="CanvasNavButton" AutomationProperties.AutomationId="CanvasNavButton" Click="OnCanvasNavClick" Content="画布" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
-                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
-                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
-                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF111111" />
-                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFBD5D5" />
-                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF0D7D9" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFD7262E" />
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFD7262E" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1218" />
                         </Button.Resources>
                     </Button>
                     <Button x:Name="ResultNavButton" AutomationProperties.AutomationId="ResultNavButton" Click="OnResultNavClick" Content="结果" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
-                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
-                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
-                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF111111" />
-                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFBD5D5" />
-                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF7F7F8" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF454C57" />
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF111317" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE9EBEE" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF343A42" />
                         </Button.Resources>
                     </Button>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="QuickHealthButton" AutomationProperties.AutomationId="QuickHealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
+                    <Button x:Name="QuickHealthButton" AutomationProperties.AutomationId="QuickHealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120" Background="#FFFFFFFF" BorderBrush="#88454C57" Foreground="{StaticResource PrimaryTextBrush}">
                         <Button.Resources>
-                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
-                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
-                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE5E7EB" />
-                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF7F7F8" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF454C57" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE9EBEE" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF343A42" />
                         </Button.Resources>
                     </Button>
-                    <Button x:Name="QuickRunButton" AutomationProperties.AutomationId="QuickRunButton" Click="OnRunCleaningClick" Content="运行" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
+                    <Button x:Name="QuickRunButton" AutomationProperties.AutomationId="QuickRunButton" Click="OnRunCleaningClick" Content="运行" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120" Background="{StaticResource AccentBrush}" BorderBrush="{StaticResource AccentDarkBrush}" Foreground="#FFFFFFFF">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
@@ -164,25 +218,9 @@
         <Grid x:Name="ContentHostGrid" Grid.Row="2" Opacity="0">
             <Grid x:Name="WorkspaceSectionGrid">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-
-                <Border Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="12" Padding="10">
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="4" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Background="#FFC62828" CornerRadius="2" />
-                        <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock Text="工作台" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                            <TextBlock Text="连接、参数与操作" Foreground="#FF4B5563" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto" HorizontalScrollMode="Disabled" Margin="0,10,0,0">
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto" HorizontalScrollMode="Disabled">
                     <Grid x:Name="WorkspaceCardsGrid" ColumnSpacing="14" RowSpacing="14">
                         <Grid.Transitions>
                             <TransitionCollection>
@@ -200,9 +238,10 @@
                             <ColumnDefinition x:Name="WorkspaceCol2" Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <Border x:Name="ConnectionCard" Grid.Column="0" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="ConnectionCard" Grid.Column="0" Grid.Row="0" Style="{StaticResource CardBorderStyle}" Background="#FFFFFFFF">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="连接配置" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock Text="连接配置" Style="{StaticResource PanelTitleStyle}" />
+                                <TextBlock Text="桥接与身份信息" Style="{StaticResource PanelCaptionStyle}" />
                                 <TextBlock Text="桥接地址" />
                                 <TextBox x:Name="BridgeUrlTextBox" AutomationProperties.AutomationId="BridgeUrlTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="http://127.0.0.1:18081" />
                                 <TextBlock Text="API Key（可选）" />
@@ -214,9 +253,10 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="ParamsCard" Grid.Column="1" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="ParamsCard" Grid.Column="1" Grid.Row="0" Style="{StaticResource CardBorderStyle}" Background="#FFFBFBFC">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="运行参数" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock Text="运行参数" Style="{StaticResource PanelTitleStyle}" />
+                                <TextBlock Text="流程、标题与输入源" Style="{StaticResource PanelCaptionStyle}" />
                                 <TextBlock Text="Job ID（可留空自动创建）" />
                                 <TextBox x:Name="JobIdTextBox" AutomationProperties.AutomationId="JobIdTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="smoke" />
                                 <TextBlock Text="Flow" />
@@ -240,18 +280,19 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="ActionsCard" Grid.Column="2" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="ActionsCard" Grid.Column="2" Grid.Row="0" Style="{StaticResource CardBorderStyle}" Background="{StaticResource ChromeBrush}" BorderBrush="#FF2A2F37">
                             <StackPanel Spacing="10" VerticalAlignment="Bottom">
-                                <TextBlock Text="操作" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                <Button x:Name="HealthButton" AutomationProperties.AutomationId="HealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156">
+                                <TextBlock Text="运行控制" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource OnDarkTextBrush}" />
+                                <TextBlock Text="执行前校验与状态摘要" Foreground="{StaticResource OnDarkSecondaryBrush}" />
+                                <Button x:Name="HealthButton" AutomationProperties.AutomationId="HealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156" Background="#FFFDFDFD" BorderBrush="#88454C57" Foreground="{StaticResource PrimaryTextBrush}">
                                     <Button.Resources>
-                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
-                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
-                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE5E7EB" />
-                                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
+                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF7F7F8" />
+                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF454C57" />
+                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE9EBEE" />
+                                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF343A42" />
                                     </Button.Resources>
                                 </Button>
-                                <Button x:Name="RunCleaningButton" AutomationProperties.AutomationId="RunCleaningButton" Click="OnRunCleaningClick" Content="运行清洗" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156">
+                                <Button x:Name="RunCleaningButton" AutomationProperties.AutomationId="RunCleaningButton" Click="OnRunCleaningClick" Content="运行清洗" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156" Background="{StaticResource AccentBrush}" BorderBrush="{StaticResource AccentDarkBrush}" Foreground="#FFFFFFFF">
                                     <Button.Resources>
                                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
                                         <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
@@ -261,13 +302,13 @@
                                         <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#FFFFFF" />
                                     </Button.Resources>
                                 </Button>
-                                <Border BorderBrush="#33222222" BorderThickness="1" CornerRadius="10" Background="{StaticResource PanelAcrylicBrush}" Padding="10">
-                                    <TextBlock x:Name="StatusTextBlock" Text="就绪" TextWrapping="Wrap" Foreground="#FF111111" />
+                                <Border BorderBrush="#33454C57" BorderThickness="1" CornerRadius="10" Background="#14FFFFFF" Padding="10">
+                                    <TextBlock x:Name="StatusTextBlock" Text="就绪" TextWrapping="Wrap" Foreground="{StaticResource OnDarkTextBrush}" />
                                 </Border>
-                                <Border BorderBrush="#33222222" BorderThickness="1" CornerRadius="10" Background="{StaticResource PanelAcrylicBrush}" Padding="10">
+                                <Border BorderBrush="#33454C57" BorderThickness="1" CornerRadius="10" Background="#10FFFFFF" Padding="10">
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="运行说明" FontWeight="SemiBold" Foreground="#FF374151" />
-                                        <TextBlock x:Name="RunReferenceTextBlock" Text="-" TextWrapping="Wrap" Foreground="#FF111111" />
+                                        <TextBlock Text="运行说明" FontWeight="SemiBold" Foreground="{StaticResource OnDarkSecondaryBrush}" />
+                                        <TextBlock x:Name="RunReferenceTextBlock" Text="-" TextWrapping="Wrap" Foreground="{StaticResource OnDarkTextBrush}" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
@@ -283,75 +324,76 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="12" Padding="10">
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="4" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Background="#FFC62828" CornerRadius="2" />
-                        <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock Text="画布" Style="{StaticResource CanvasSectionTitleStyle}" />
-                            <TextBlock Text="独立可视化工作区" Style="{StaticResource CanvasSectionSubtitleStyle}" />
-                        </StackPanel>
-                        <ScrollViewer Grid.Column="2"
+                <Border Grid.Row="0" BorderBrush="#2220242B" BorderThickness="1" Background="{StaticResource SurfaceAcrylicBrush}" CornerRadius="14" Padding="10">
+                    <ScrollViewer HorizontalAlignment="Stretch"
                                       HorizontalScrollBarVisibility="Hidden"
                                       HorizontalScrollMode="Auto"
                                       VerticalScrollBarVisibility="Disabled"
                                       VerticalScrollMode="Disabled"
                                       ZoomMode="Disabled">
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Button x:Name="ResetCanvasViewButton" AutomationProperties.AutomationId="ResetCanvasViewButton" Click="OnResetCanvasViewClick" Content="定位节点流" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
-                                <Button x:Name="SaveCanvasButton" AutomationProperties.AutomationId="SaveCanvasButton" Click="OnSaveCanvasClick" Content="保存画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
-                                <Button x:Name="LoadCanvasButton" AutomationProperties.AutomationId="LoadCanvasButton" Click="OnLoadCanvasClick" Content="加载画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
-                                <Button x:Name="NewCanvasButton" AutomationProperties.AutomationId="NewCanvasButton" Click="OnNewCanvasClick" Content="新建画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
-                                <Button x:Name="ClearCanvasButton" AutomationProperties.AutomationId="ClearCanvasButton" Click="OnClearCanvasClick" Content="清空画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
-                                <Button x:Name="AddNodeButton" AutomationProperties.AutomationId="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True">
-                                    <Button.Resources>
-                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
-                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
-                                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF" />
-                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF6E1111" />
-                                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF6E1111" />
-                                        <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#FFFFFFFF" />
-                                    </Button.Resources>
-                                </Button>
-                                <Border Width="1" Height="28" VerticalAlignment="Center" Background="#33A1A1AA" Margin="2,0" />
-                                <Button x:Name="CanvasZoomOutButton" Click="OnCanvasZoomOutClick" Content="−" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" IsTabStop="False" UseSystemFocusVisuals="False" />
-                                <Border MinWidth="46"
-                                        MinHeight="32"
-                                        CornerRadius="8"
-                                        Background="#FFF9FAFB"
-                                        BorderBrush="#FFD1D5DB"
-                                        BorderThickness="1"
-                                        VerticalAlignment="Center"
-                                        Tapped="OnCanvasZoomPercentTapped">
-                                    <Grid>
-                                        <TextBlock x:Name="CanvasZoomTextBlock"
-                                                   Text="100%"
-                                                   VerticalAlignment="Center"
-                                                   HorizontalAlignment="Center"
-                                                   FontSize="13"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="#FF111111" />
-                                        <TextBox x:Name="CanvasZoomEditTextBox"
-                                                 Visibility="Collapsed"
-                                                 MinWidth="52"
-                                                 Height="28"
-                                                 HorizontalContentAlignment="Center"
-                                                 TextAlignment="Center"
-                                                 BorderThickness="0"
-                                                 Background="#00FFFFFF"
-                                                 KeyDown="OnCanvasZoomEditTextBoxKeyDown"
-                                                 LostFocus="OnCanvasZoomEditTextBoxLostFocus" />
-                                    </Grid>
-                                </Border>
-                                <Button x:Name="CanvasZoomInButton" Click="OnCanvasZoomInClick" Content="+" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="#FFF3F4F6" BorderBrush="#FF9CA3AF" Foreground="#FF111111" IsTabStop="False" UseSystemFocusVisuals="False" />
-                                <Button x:Name="CanvasFitButton" AutomationProperties.AutomationId="CanvasFitButton" Click="OnCanvasFitClick" Content="Fit" MinHeight="32" Padding="10,0" FontWeight="SemiBold" Background="#FFC62828" Foreground="#FFFFFFFF" BorderBrush="#FF991B1B" IsTabStop="False" UseSystemFocusVisuals="False" />
-                            </StackPanel>
-                        </ScrollViewer>
-                    </Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <Border Background="#0D000000" BorderBrush="#22363D47" BorderThickness="1" CornerRadius="12" Padding="8,6">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="AddNodeButton" AutomationProperties.AutomationId="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True">
+                                        <Button.Resources>
+                                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
+                                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF" />
+                                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF6E1111" />
+                                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF6E1111" />
+                                            <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#FFFFFFFF" />
+                                        </Button.Resources>
+                                    </Button>
+                                    <Button x:Name="SaveCanvasButton" AutomationProperties.AutomationId="SaveCanvasButton" Click="OnSaveCanvasClick" Content="保存" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                    <Button x:Name="LoadCanvasButton" AutomationProperties.AutomationId="LoadCanvasButton" Click="OnLoadCanvasClick" Content="加载" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                    <Button x:Name="ClearCanvasButton" AutomationProperties.AutomationId="ClearCanvasButton" Click="OnClearCanvasClick" Content="清空" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                </StackPanel>
+                            </Border>
+                            <Border Width="1" Height="28" VerticalAlignment="Center" Background="#3320242B" />
+                            <Border Background="#0D000000" BorderBrush="#22363D47" BorderThickness="1" CornerRadius="12" Padding="8,6">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="ResetCanvasViewButton" AutomationProperties.AutomationId="ResetCanvasViewButton" Click="OnResetCanvasViewClick" Content="定位" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                    <Button x:Name="NewCanvasButton" AutomationProperties.AutomationId="NewCanvasButton" Click="OnNewCanvasClick" Content="新建画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                </StackPanel>
+                            </Border>
+                            <Border Width="1" Height="28" VerticalAlignment="Center" Background="#3320242B" />
+                            <Border Background="#0D000000" BorderBrush="#22363D47" BorderThickness="1" CornerRadius="12" Padding="8,6">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="CanvasZoomOutButton" Click="OnCanvasZoomOutClick" Content="−" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="{StaticResource ChromeBrush}" BorderBrush="#FF48505A" Foreground="{StaticResource OnDarkTextBrush}" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                    <Border MinWidth="46"
+                                            MinHeight="32"
+                                            CornerRadius="8"
+                                            Background="#FFFDFDFD"
+                                            BorderBrush="#FF303640"
+                                            BorderThickness="1"
+                                            VerticalAlignment="Center"
+                                            Tapped="OnCanvasZoomPercentTapped">
+                                        <Grid>
+                                            <TextBlock x:Name="CanvasZoomTextBlock"
+                                                       Text="100%"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Center"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource PrimaryTextBrush}" />
+                                            <TextBox x:Name="CanvasZoomEditTextBox"
+                                                     Visibility="Collapsed"
+                                                     MinWidth="52"
+                                                     Height="28"
+                                                     HorizontalContentAlignment="Center"
+                                                     TextAlignment="Center"
+                                                     BorderThickness="0"
+                                                     Background="#00FFFFFF"
+                                                     KeyDown="OnCanvasZoomEditTextBoxKeyDown"
+                                                     LostFocus="OnCanvasZoomEditTextBoxLostFocus" />
+                                        </Grid>
+                                    </Border>
+                                    <Button x:Name="CanvasZoomInButton" Click="OnCanvasZoomInClick" Content="+" MinWidth="34" MinHeight="32" FontSize="18" FontWeight="SemiBold" Background="{StaticResource ChromeBrush}" BorderBrush="#FF48505A" Foreground="{StaticResource OnDarkTextBrush}" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                    <Button x:Name="CanvasFitButton" AutomationProperties.AutomationId="CanvasFitButton" Click="OnCanvasFitClick" Content="适应窗口" MinHeight="32" Padding="10,0" FontWeight="SemiBold" Background="{StaticResource AccentBrush}" Foreground="#FFFFFFFF" BorderBrush="{StaticResource AccentDarkBrush}" IsTabStop="False" UseSystemFocusVisuals="False" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
 
                 <Border Grid.Row="1" Margin="0,10,0,0" Style="{StaticResource CardBorderStyle}" Padding="12">
@@ -368,16 +410,70 @@
                                 <RowDefinition x:Name="CanvasLayoutRow2" Height="0" />
                             </Grid.RowDefinitions>
 
-                            <Border x:Name="CanvasEditorPane" Grid.Column="0" Grid.Row="0" BorderBrush="#33C62828" BorderThickness="1" CornerRadius="12" Background="{StaticResource PanelAcrylicBrush}" Padding="10">
-                                <Grid RowSpacing="10">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="0" />
-                                    </Grid.RowDefinitions>
+                            <Border x:Name="CanvasEditorPane" Grid.Column="0" Grid.Row="0" BorderBrush="#A020242B" BorderThickness="1.5" CornerRadius="16" Background="#FFF8F9FA" Padding="10">
+                                <Grid x:Name="CanvasEditorHostGrid" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border x:Name="NodeLibraryPane"
+                                            Grid.Column="0"
+                                            Width="0"
+                                            MinWidth="0"
+                                            Visibility="Collapsed"
+                                            Opacity="0"
+                                            BorderBrush="#3320242B"
+                                            BorderThickness="1"
+                                            Background="#F6FFFFFF"
+                                            CornerRadius="12"
+                                            Padding="8,10,10,10"
+                                            Margin="0,0,6,0">
+                                        <Grid RowSpacing="10">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <Grid Grid.Row="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Text="添加节点" Style="{StaticResource CanvasSectionTitleStyle}" />
+                                                    <TextBlock Text="选择一个动作放到当前画布" Style="{StaticResource CanvasSectionSubtitleStyle}" Foreground="{StaticResource MutedTextBrush}" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1"
+                                                        x:Name="NodeLibraryCloseButton"
+                                                        Click="OnNodeLibraryCloseClick"
+                                                        Content="关闭"
+                                                        Style="{StaticResource CanvasSecondaryButtonStyle}"
+                                                        MinHeight="32"
+                                                        Padding="12,0" />
+                                            </Grid>
+
+                                            <TextBox Grid.Row="1"
+                                                     x:Name="NodeLibrarySearchTextBox"
+                                                     PlaceholderText="搜索节点"
+                                                     Style="{StaticResource TouchTextBoxStyle}"
+                                                     TextChanged="OnNodeLibrarySearchTextChanged" />
+
+                                            <ScrollViewer Grid.Row="2"
+                                                          HorizontalScrollMode="Disabled"
+                                                          HorizontalScrollBarVisibility="Hidden"
+                                                          VerticalScrollMode="Auto"
+                                                          VerticalScrollBarVisibility="Auto">
+                                                <StackPanel x:Name="NodeLibraryItemsPanel" Spacing="6" />
+                                            </ScrollViewer>
+                                        </Grid>
+                                    </Border>
+
                                     <Grid x:Name="CanvasViewport"
-                                          Grid.Row="0"
+                                          Grid.Column="1"
                                           MinHeight="320"
-                                          Background="#10FFFFFF"
+                                          Background="#15FFFFFF"
                                           ManipulationMode="TranslateX,TranslateY,Scale,TranslateInertia,ScaleInertia"
                                           PointerPressed="OnCanvasPointerPressed"
                                           PointerMoved="OnCanvasPointerMoved"
@@ -400,11 +496,11 @@
                                                 VerticalAlignment="Top"
                                                 IsHitTestVisible="False"
                                                 BorderThickness="1"
-                                                BorderBrush="#FFC62828"
-                                                Background="#22C62828" />
-                                        <StackPanel x:Name="CanvasHintPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" IsHitTestVisible="False">
-                                            <TextBlock Text="画布交互区" FontSize="20" FontWeight="SemiBold" Foreground="#FF374151" HorizontalAlignment="Center" />
-                                            <TextBlock Text="左键框选 / 空格+拖拽平移 / 滚轮缩放" Foreground="#FF6B7280" HorizontalAlignment="Center" />
+                                                BorderBrush="{StaticResource AccentBrush}"
+                                                Background="{StaticResource AccentSoftBrush}" />
+                                        <StackPanel x:Name="CanvasHintPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4" IsHitTestVisible="False">
+                                            <TextBlock Text="空白画布" FontSize="16" FontWeight="SemiBold" Foreground="#FF262B33" HorizontalAlignment="Center" />
+                                            <TextBlock Text="从左侧节点库添加节点，或使用快捷操作开始构建流程。" Foreground="{StaticResource SecondaryTextBrush}" HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="320" />
                                         </StackPanel>
                                     </Grid>
                                 </Grid>
@@ -415,19 +511,37 @@
                                   Grid.Row="0"
                                   Background="{x:Null}">
                                 <Border x:Name="CanvasSplitGrip"
-                                        Width="12"
+                                        Width="18"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Stretch"
-                                        Background="#01000000"
+                                        Background="#00000000"
+                                        CornerRadius="9"
                                         RenderTransformOrigin="0.5,0.5"
                                         PointerPressed="OnCanvasSplitHandlePointerPressed"
+                                        PointerEntered="OnCanvasSplitHandlePointerEntered"
+                                        PointerExited="OnCanvasSplitHandlePointerExited"
                                         PointerMoved="OnCanvasSplitHandlePointerMoved"
                                         PointerReleased="OnCanvasSplitHandlePointerReleased"
                                         PointerCanceled="OnCanvasSplitHandlePointerReleased">
                                     <Border.RenderTransform>
                                         <CompositeTransform x:Name="CanvasSplitGripTransform" />
                                     </Border.RenderTransform>
-                                    <Border Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#55C62828" CornerRadius="3" IsHitTestVisible="False" />
+                                    <Grid IsHitTestVisible="False">
+                                        <Border x:Name="CanvasSplitTrack"
+                                                Width="2"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Stretch"
+                                                Background="#3A6B7280"
+                                                CornerRadius="2" />
+                                        <StackPanel x:Name="CanvasSplitDots"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    Spacing="4">
+                                            <Ellipse Width="3" Height="3" Fill="#66808690" />
+                                            <Ellipse Width="3" Height="3" Fill="#66808690" />
+                                            <Ellipse Width="3" Height="3" Fill="#66808690" />
+                                        </StackPanel>
+                                    </Grid>
                                 </Border>
                             </Grid>
 
@@ -438,48 +552,90 @@
                                   Background="{x:Null}"
                                   Visibility="Collapsed">
                                 <Border x:Name="CanvasStackSplitGrip"
-                                        Height="12"
+                                        Height="18"
                                         HorizontalAlignment="Stretch"
                                         VerticalAlignment="Center"
-                                        Background="#01000000"
+                                        Background="#00000000"
+                                        CornerRadius="9"
                                         RenderTransformOrigin="0.5,0.5"
                                         PointerPressed="OnCanvasStackSplitHandlePointerPressed"
+                                        PointerEntered="OnCanvasStackSplitHandlePointerEntered"
+                                        PointerExited="OnCanvasStackSplitHandlePointerExited"
                                         PointerMoved="OnCanvasStackSplitHandlePointerMoved"
                                         PointerReleased="OnCanvasStackSplitHandlePointerReleased"
                                         PointerCanceled="OnCanvasStackSplitHandlePointerReleased">
                                     <Border.RenderTransform>
                                         <CompositeTransform x:Name="CanvasStackSplitGripTransform" />
                                     </Border.RenderTransform>
-                                    <Border Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#55C62828" CornerRadius="3" IsHitTestVisible="False" />
+                                    <Grid IsHitTestVisible="False">
+                                        <Border x:Name="CanvasStackSplitTrack"
+                                                Height="2"
+                                                HorizontalAlignment="Stretch"
+                                                VerticalAlignment="Center"
+                                                Background="#3A6B7280"
+                                                CornerRadius="2" />
+                                        <StackPanel x:Name="CanvasStackSplitDots"
+                                                    Orientation="Horizontal"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    Spacing="4">
+                                            <Ellipse Width="3" Height="3" Fill="#66808690" />
+                                            <Ellipse Width="3" Height="3" Fill="#66808690" />
+                                            <Ellipse Width="3" Height="3" Fill="#66808690" />
+                                        </StackPanel>
+                                    </Grid>
                                 </Border>
                             </Grid>
 
-                            <Border x:Name="CanvasPropertyPane" Grid.Column="2" Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" CornerRadius="12" Background="{StaticResource PanelAcrylicBrush}" Padding="12">
+                            <Border x:Name="CanvasPropertyPane" Grid.Column="2" Grid.Row="0" BorderBrush="#AA20242B" BorderThickness="1.5" CornerRadius="16" Background="#FFF7F8F9" Padding="14">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock Text="节点属性" Style="{StaticResource CanvasSectionTitleStyle}" />
-                                        <TextBlock x:Name="CanvasSelectionInfoTextBlock" AutomationProperties.AutomationId="CanvasSelectionInfoTextBlock" Text="未选中节点" Style="{StaticResource CanvasSectionSubtitleStyle}" />
-                                        <TextBlock Text="名称" Style="{StaticResource CanvasFieldLabelStyle}" />
-                                        <TextBox x:Name="NodeTitleTextBox" AutomationProperties.AutomationId="NodeTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeTitleChanged" IsEnabled="False" />
-                                        <TextBlock Text="说明" Style="{StaticResource CanvasFieldLabelStyle}" />
-                                        <TextBox x:Name="NodeSubtitleTextBox" AutomationProperties.AutomationId="NodeSubtitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeSubtitleChanged" IsEnabled="False" />
-                                        <Button x:Name="DeleteNodeButton" AutomationProperties.AutomationId="DeleteNodeButton" Click="OnDeleteNodeClick" Content="删除节点" MinHeight="42" IsEnabled="False">
-                                            <Button.Resources>
-                                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFEE2E2" />
-                                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
-                                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF7F1D1D" />
-                                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFECACA" />
-                                                <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF991B1B" />
-                                            </Button.Resources>
-                                        </Button>
-                                        <Button x:Name="DeleteConnectionButton" AutomationProperties.AutomationId="DeleteConnectionButton" Click="OnDeleteConnectionClick" Content="删除连线" MinHeight="42" IsEnabled="False">
-                                            <Button.Resources>
-                                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
-                                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
-                                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE5E7EB" />
-                                                <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
-                                            </Button.Resources>
-                                        </Button>
+                                    <StackPanel Spacing="14">
+                                        <TextBlock Text="属性检查器" Style="{StaticResource CanvasSectionTitleStyle}" />
+
+                                        <TextBlock Text="当前对象" Style="{StaticResource InspectorSectionTitleStyle}" />
+                                        <Border BorderBrush="#2220242B" BorderThickness="1" CornerRadius="12" Background="#FFF7F7F8" Padding="12">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock x:Name="CanvasSelectionInfoTextBlock" AutomationProperties.AutomationId="CanvasSelectionInfoTextBlock" Text="未选中内容" Style="{StaticResource CanvasSectionSubtitleStyle}" FontSize="14" Foreground="{StaticResource PrimaryTextBrush}" />
+                                                <TextBlock Text="选择节点后查看基础属性、说明与操作。" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <TextBlock Text="基础属性" Style="{StaticResource InspectorSectionTitleStyle}" />
+                                        <Border BorderBrush="#2220242B" BorderThickness="1" CornerRadius="12" Background="#FFFFFFFF" Padding="12">
+                                            <StackPanel Spacing="10">
+                                                <TextBlock Text="名称" Style="{StaticResource CanvasFieldLabelStyle}" />
+                                                <TextBox x:Name="NodeTitleTextBox" AutomationProperties.AutomationId="NodeTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeTitleChanged" IsEnabled="False" />
+                                                <TextBlock Text="说明" Style="{StaticResource CanvasFieldLabelStyle}" />
+                                                <TextBox x:Name="NodeSubtitleTextBox" AutomationProperties.AutomationId="NodeSubtitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeSubtitleChanged" IsEnabled="False" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <TextBlock Text="操作" Style="{StaticResource InspectorSectionTitleStyle}" />
+                                        <Border BorderBrush="#2220242B" BorderThickness="1" CornerRadius="12" Background="#FFF7F7F8" Padding="12">
+                                            <StackPanel Spacing="10">
+                                                <TextBlock x:Name="InspectorActionEmptyText"
+                                                           Text="当前对象暂无可用快捷操作。"
+                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                           TextWrapping="Wrap" />
+                                                <Button x:Name="DeleteNodeButton" AutomationProperties.AutomationId="DeleteNodeButton" Click="OnDeleteNodeClick" Content="删除节点" MinHeight="42" IsEnabled="False" Visibility="Collapsed">
+                                                    <Button.Resources>
+                                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFEE2E2" />
+                                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
+                                                        <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF7F1D1D" />
+                                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFECACA" />
+                                                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF991B1B" />
+                                                    </Button.Resources>
+                                                </Button>
+                                                <Button x:Name="DeleteConnectionButton" AutomationProperties.AutomationId="DeleteConnectionButton" Click="OnDeleteConnectionClick" Content="删除连线" MinHeight="42" IsEnabled="False" Visibility="Collapsed">
+                                                    <Button.Resources>
+                                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
+                                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
+                                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE5E7EB" />
+                                                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
+                                                    </Button.Resources>
+                                                </Button>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </ScrollViewer>
                             </Border>
@@ -490,25 +646,9 @@
 
             <Grid x:Name="ResultsSectionGrid">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-
-                <Border Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="12" Padding="10">
-                    <Grid ColumnSpacing="10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="4" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Background="#FFC62828" CornerRadius="2" />
-                        <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock Text="结果" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                            <TextBlock Text="产物、响应内容与运行诊断" Foreground="#FF4B5563" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto" HorizontalScrollMode="Disabled" Margin="0,10,0,0">
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto" HorizontalScrollMode="Disabled">
                     <Grid x:Name="ResultsCardsGrid" ColumnSpacing="14" RowSpacing="14">
                         <Grid.Transitions>
                             <TransitionCollection>
@@ -531,9 +671,9 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="输出文件" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                    <Border Grid.Column="1" CornerRadius="999" Padding="10,4" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}">
-                                        <TextBlock x:Name="ArtifactsCountTextBlock" Text="0 项" Foreground="#FF4B5563" />
+                                    <TextBlock Text="输出文件" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+                                    <Border Grid.Column="1" CornerRadius="999" Padding="10,4" BorderBrush="#FF2A2F37" BorderThickness="1" Background="{StaticResource ChromeBrush}">
+                                        <TextBlock x:Name="ArtifactsCountTextBlock" Text="0 项" Foreground="{StaticResource OnDarkTextBrush}" />
                                     </Border>
                                 </Grid>
                                 <ListView x:Name="ArtifactsListView" AutomationProperties.AutomationId="ArtifactsListView" Height="320" MinHeight="320" />
@@ -549,9 +689,9 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="运行结果" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                    <Border x:Name="RunStatusBadgeBorder" Grid.Column="1" CornerRadius="999" Padding="10,4" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}">
-                                        <TextBlock x:Name="RunStatusBadgeText" Text="待运行" FontWeight="SemiBold" Foreground="#FF4B5563" />
+                                    <TextBlock Text="运行结果" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+                                    <Border x:Name="RunStatusBadgeBorder" Grid.Column="1" CornerRadius="999" Padding="10,4" BorderBrush="#FF2A2F37" BorderThickness="1" Background="{StaticResource ChromeBrush}">
+                                        <TextBlock x:Name="RunStatusBadgeText" Text="待运行" FontWeight="SemiBold" Foreground="{StaticResource OnDarkTextBrush}" />
                                     </Border>
                                 </Grid>
 
@@ -562,57 +702,39 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
 
-                                    <Border Grid.Column="0" BorderBrush="#33C62828" BorderThickness="1" CornerRadius="10" Padding="10">
-                                        <Border.Background>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                <GradientStop Color="#FFFFF1F1" Offset="0" />
-                                                <GradientStop Color="#FFFEE2E2" Offset="1" />
-                                            </LinearGradientBrush>
-                                        </Border.Background>
+                                    <Border Grid.Column="0" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1.5" CornerRadius="12" Padding="10" Background="{StaticResource ChromeBrush}">
                                         <StackPanel Spacing="2">
-                                            <TextBlock Text="OK" Foreground="#FF374151" />
-                                            <TextBlock x:Name="OkMetricTextBlock" AutomationProperties.AutomationId="OkMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
+                                            <TextBlock Text="OK" Foreground="{StaticResource OnDarkSecondaryBrush}" />
+                                            <TextBlock x:Name="OkMetricTextBlock" AutomationProperties.AutomationId="OkMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource OnDarkTextBrush}" />
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Grid.Column="1" BorderBrush="#33C62828" BorderThickness="1" CornerRadius="10" Padding="10">
-                                        <Border.Background>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                <GradientStop Color="#FFFFF1F1" Offset="0" />
-                                                <GradientStop Color="#FFFEE2E2" Offset="1" />
-                                            </LinearGradientBrush>
-                                        </Border.Background>
+                                    <Border Grid.Column="1" BorderBrush="#88454C57" BorderThickness="1.5" CornerRadius="12" Padding="10" Background="#FFFFFFFF">
                                         <StackPanel Spacing="2">
-                                            <TextBlock Text="模式" Foreground="#FF374151" />
-                                            <TextBlock x:Name="ModeMetricTextBlock" AutomationProperties.AutomationId="ModeMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="模式" Foreground="{StaticResource SecondaryTextBrush}" />
+                                            <TextBlock x:Name="ModeMetricTextBlock" AutomationProperties.AutomationId="ModeMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Grid.Column="2" BorderBrush="#33C62828" BorderThickness="1" CornerRadius="10" Padding="10">
-                                        <Border.Background>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                <GradientStop Color="#FFFFF1F1" Offset="0" />
-                                                <GradientStop Color="#FFFEE2E2" Offset="1" />
-                                            </LinearGradientBrush>
-                                        </Border.Background>
+                                    <Border Grid.Column="2" BorderBrush="{StaticResource AccentDarkBrush}" BorderThickness="1.5" CornerRadius="12" Padding="10" Background="{StaticResource AccentBrushMuted}">
                                         <StackPanel Spacing="2">
-                                            <TextBlock Text="耗时" Foreground="#FF374151" />
-                                            <TextBlock x:Name="DurationMetricTextBlock" AutomationProperties.AutomationId="DurationMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FF111111" />
+                                            <TextBlock Text="耗时" Foreground="#FFFDD7DA" />
+                                            <TextBlock x:Name="DurationMetricTextBlock" AutomationProperties.AutomationId="DurationMetricTextBlock" Text="-" FontSize="18" FontWeight="SemiBold" Foreground="#FFFFFFFF" />
                                         </StackPanel>
                                     </Border>
                                 </Grid>
 
-                                <Border BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="10" Padding="10">
+                                <Border BorderBrush="#AA20242B" BorderThickness="1.5" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="12" Padding="10">
                                     <StackPanel Spacing="8">
-                                        <TextBlock Text="作业 ID" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock Text="作业 ID" FontWeight="SemiBold" Foreground="{StaticResource SecondaryTextBrush}" />
                                         <TextBlock x:Name="JobIdTextBlock" AutomationProperties.AutomationId="JobIdTextBlock" Text="-" TextWrapping="Wrap" />
-                                        <TextBlock Text="自动重试" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock Text="自动重试" FontWeight="SemiBold" Foreground="{StaticResource SecondaryTextBrush}" />
                                         <TextBlock x:Name="RetryInfoTextBlock" AutomationProperties.AutomationId="RetryInfoTextBlock" Text="未重试" TextWrapping="Wrap" />
-                                        <TextBlock Text="结果说明" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock Text="结果说明" FontWeight="SemiBold" Foreground="{StaticResource SecondaryTextBrush}" />
                                         <TextBlock x:Name="RunResultTextBlock" AutomationProperties.AutomationId="RunResultTextBlock" Text="-" TextWrapping="Wrap" />
-                                        <TextBlock Text="运行模式" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock Text="运行模式" FontWeight="SemiBold" Foreground="{StaticResource SecondaryTextBrush}" />
                                         <TextBlock x:Name="RunModeTextBlock" AutomationProperties.AutomationId="RunModeTextBlock" Text="-" TextWrapping="Wrap" />
-                                        <TextBlock Text="耗时（ms）" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <TextBlock Text="耗时（ms）" FontWeight="SemiBold" Foreground="{StaticResource SecondaryTextBrush}" />
                                         <TextBlock x:Name="DurationTextBlock" AutomationProperties.AutomationId="DurationTextBlock" Text="-" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>

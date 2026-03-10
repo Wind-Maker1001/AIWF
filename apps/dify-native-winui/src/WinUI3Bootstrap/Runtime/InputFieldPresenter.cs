@@ -7,7 +7,7 @@ public static class InputFieldPresenter
     public static Color ResolveBorderColor(bool hasError)
     {
         return hasError
-            ? Color.FromArgb(0xFF, 0xC6, 0x28, 0x28)
-            : Color.FromArgb(0x66, 0x55, 0x55, 0x55);
+            ? Color.FromArgb(0xFF, 0xD7, 0x26, 0x2E)
+            : Color.FromArgb(0x99, 0x34, 0x3A, 0x42);
     }
 }

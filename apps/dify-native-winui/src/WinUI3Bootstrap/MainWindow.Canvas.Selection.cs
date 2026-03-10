@@ -141,6 +141,8 @@ public sealed partial class MainWindow
 
     private void UpdateNodePropertyPanel()
     {
+        UpdateCanvasHintVisibility();
+
         if (_selectedConnection is not null)
         {
             CanvasSelectionInfoTextBlock.Text = "已选中连线";
@@ -150,6 +152,9 @@ public sealed partial class MainWindow
             NodeSubtitleTextBox.IsEnabled = false;
             DeleteNodeButton.IsEnabled = false;
             DeleteConnectionButton.IsEnabled = true;
+            DeleteNodeButton.Visibility = Visibility.Collapsed;
+            DeleteConnectionButton.Visibility = Visibility.Visible;
+            InspectorActionEmptyText.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -162,6 +167,9 @@ public sealed partial class MainWindow
             NodeSubtitleTextBox.IsEnabled = false;
             DeleteNodeButton.IsEnabled = true;
             DeleteConnectionButton.IsEnabled = false;
+            DeleteNodeButton.Visibility = Visibility.Visible;
+            DeleteConnectionButton.Visibility = Visibility.Collapsed;
+            InspectorActionEmptyText.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -174,6 +182,10 @@ public sealed partial class MainWindow
             NodeSubtitleTextBox.IsEnabled = false;
             DeleteNodeButton.IsEnabled = false;
             DeleteConnectionButton.IsEnabled = false;
+            DeleteNodeButton.Visibility = Visibility.Collapsed;
+            DeleteConnectionButton.Visibility = Visibility.Collapsed;
+            InspectorActionEmptyText.Text = "当前对象暂无可用快捷操作。";
+            InspectorActionEmptyText.Visibility = Visibility.Visible;
             return;
         }
 
@@ -184,5 +196,9 @@ public sealed partial class MainWindow
         NodeSubtitleTextBox.IsEnabled = true;
         DeleteNodeButton.IsEnabled = tag.IsUserNode;
         DeleteConnectionButton.IsEnabled = false;
+        DeleteNodeButton.Visibility = tag.IsUserNode ? Visibility.Visible : Visibility.Collapsed;
+        DeleteConnectionButton.Visibility = Visibility.Collapsed;
+        InspectorActionEmptyText.Text = tag.IsUserNode ? string.Empty : "系统节点当前仅支持查看与说明编辑。";
+        InspectorActionEmptyText.Visibility = tag.IsUserNode ? Visibility.Collapsed : Visibility.Visible;
     }
 }

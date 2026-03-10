@@ -111,8 +111,10 @@ public sealed partial class MainWindow
 
         var line = new Line
         {
-            StrokeThickness = 2,
-            Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0x11, 0x11, 0x11)),
+            StrokeThickness = 2.25,
+            Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(0xCC, 0x34, 0x3A, 0x42)),
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
             IsHitTestVisible = true
         };
         line.PointerPressed += OnConnectionPointerPressed;
