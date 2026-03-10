@@ -7,7 +7,9 @@ import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
 import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
+import com.aiwf.base.glue.GlueRunFlowReq;
 import com.aiwf.base.glue.GlueGateway;
+import com.aiwf.base.glue.GlueRunResult;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.StepFailReq;
 import com.aiwf.base.web.dto.StepFailResp;
@@ -16,11 +18,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -41,8 +47,10 @@ class JobServiceTest {
     private JobService service;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         service = new JobService(jobs, jobStatus, glue);
+        Path busRoot = Files.createTempDirectory("aiwf-jobservice-test");
+        ReflectionTestUtils.setField(service, "jobsBusRoot", busRoot.toString());
     }
 
     @Test
@@ -139,5 +147,49 @@ class JobServiceTest {
                 .hasMessageContaining("job not found");
 
         verifyNoInteractions(glue);
+    }
+
+    @Test
+    void runFlowBuildsExplicitJobContextWhileKeepingJobRootFallback() {
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "running"));
+        when(glue.runFlow(org.mockito.ArgumentMatchers.eq("job1"), org.mockito.ArgumentMatchers.eq("cleaning"), any()))
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "job1", "flow", "cleaning"), "job1", "cleaning"));
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<GlueRunFlowReq> reqCap = org.mockito.ArgumentCaptor.forClass(GlueRunFlowReq.class);
+
+        GlueRunResult out = service.runFlow("job1", "cleaning", "ops", "v2", Map.of(
+                "sample", true,
+                "job_root", "D:\\legacy\\job1",
+                "stage_dir", "D:\\legacy\\job1\\stage",
+                "artifacts_dir", "D:\\legacy\\job1\\artifacts",
+                "evidence_dir", "D:\\legacy\\job1\\evidence",
+                "job_context", Map.of("job_root", "D:\\legacy\\nested"),
+                "trace_id", "legacy-trace"
+        ));
+
+        assertThat(out.isOk()).isTrue();
+        verify(glue).runFlow(org.mockito.ArgumentMatchers.eq("job1"), org.mockito.ArgumentMatchers.eq("cleaning"), reqCap.capture());
+
+        GlueRunFlowReq req = reqCap.getValue();
+        assertThat(req.jobId()).isEqualTo("job1");
+        assertThat(req.flow()).isEqualTo("cleaning");
+        assertThat(req.actor()).isEqualTo("ops");
+        assertThat(req.rulesetVersion()).isEqualTo("v2");
+        assertThat(req.traceId()).isNotBlank();
+        assertThat(req.jobContext()).isNotNull();
+        assertThat(req.jobContext().jobRoot()).endsWith(Path.of("jobs", "job1").toString());
+        assertThat(req.jobContext().stageDir()).endsWith(Path.of("jobs", "job1", "stage").toString());
+        assertThat(req.jobContext().artifactsDir()).endsWith(Path.of("jobs", "job1", "artifacts").toString());
+        assertThat(req.jobContext().evidenceDir()).endsWith(Path.of("jobs", "job1", "evidence").toString());
+        assertThat(req.params()).containsEntry("sample", true);
+        assertThat(req.params()).containsEntry("job_root", "D:\\legacy\\job1");
+        assertThat(req.params()).doesNotContainKeys(
+                "stage_dir",
+                "artifacts_dir",
+                "evidence_dir",
+                "job_context",
+                "trace_id"
+        );
     }
 }

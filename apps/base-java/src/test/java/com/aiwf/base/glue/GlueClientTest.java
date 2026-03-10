@@ -52,7 +52,15 @@ class GlueClientTest {
         server.start();
 
         GlueClient glueClient = new GlueClient(appProperties(serverBaseUrl()), RestClient.builder());
-        GlueRunResult result = glueClient.runFlow("job-1", "cleaning", new GlueRunRequest("local", "v1", Map.of("batch", 3)));
+        GlueRunResult result = glueClient.runFlow("job-1", "cleaning", new GlueRunFlowReq(
+                "job-1",
+                "cleaning",
+                "local",
+                "v1",
+                "trace-1",
+                new GlueJobContext("D:\\AIWF\\bus\\jobs\\job-1", "D:\\AIWF\\bus\\jobs\\job-1\\stage", "D:\\AIWF\\bus\\jobs\\job-1\\artifacts", "D:\\AIWF\\bus\\jobs\\job-1\\evidence"),
+                Map.of("batch", 3)
+        ));
 
         assertThat(result.isOk()).isTrue();
         assertThat(result.getJobId()).isEqualTo("job-1");
@@ -60,8 +68,17 @@ class GlueClientTest {
         assertThat(result.extras()).containsEntry("seconds", 1.25);
         assertThat(method.get()).isEqualTo("POST");
         assertThat(path.get()).isEqualTo("/jobs/job-1/run/cleaning");
+        assertThat(body.get()).containsEntry("job_id", "job-1");
+        assertThat(body.get()).containsEntry("flow", "cleaning");
         assertThat(body.get()).containsEntry("actor", "local");
         assertThat(body.get()).containsEntry("ruleset_version", "v1");
+        assertThat(body.get()).containsEntry("trace_id", "trace-1");
+        assertThat(body.get()).containsKey("job_context");
+        assertThat(castMap(body.get().get("job_context")))
+                .containsEntry("job_root", "D:\\AIWF\\bus\\jobs\\job-1")
+                .containsEntry("stage_dir", "D:\\AIWF\\bus\\jobs\\job-1\\stage")
+                .containsEntry("artifacts_dir", "D:\\AIWF\\bus\\jobs\\job-1\\artifacts")
+                .containsEntry("evidence_dir", "D:\\AIWF\\bus\\jobs\\job-1\\evidence");
         assertThat(body.get()).containsKey("params");
         assertThat(castMap(body.get().get("params"))).containsEntry("batch", 3);
     }
@@ -132,7 +149,15 @@ class GlueClientTest {
         props.setGlueRetryDelayMs(1);
         GlueClient glueClient = new GlueClient(props, RestClient.builder());
 
-        GlueRunResult result = glueClient.runFlow("job-2", "cleaning", new GlueRunRequest("ops", "v2", Map.of()));
+        GlueRunResult result = glueClient.runFlow("job-2", "cleaning", new GlueRunFlowReq(
+                "job-2",
+                "cleaning",
+                "ops",
+                "v2",
+                "trace-2",
+                new GlueJobContext("D:\\AIWF\\bus\\jobs\\job-2", "D:\\AIWF\\bus\\jobs\\job-2\\stage", "D:\\AIWF\\bus\\jobs\\job-2\\artifacts", "D:\\AIWF\\bus\\jobs\\job-2\\evidence"),
+                Map.of()
+        ));
 
         assertThat(result.isOk()).isTrue();
         assertThat(result.getJobId()).isEqualTo("job-2");

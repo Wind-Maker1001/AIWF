@@ -10,7 +10,8 @@ import com.aiwf.base.db.model.StepStatus;
 import com.aiwf.base.db.model.StepTransitionResult;
 import com.aiwf.base.glue.GlueGateway;
 import com.aiwf.base.glue.GlueHealthResult;
-import com.aiwf.base.glue.GlueRunRequest;
+import com.aiwf.base.glue.GlueJobContext;
+import com.aiwf.base.glue.GlueRunFlowReq;
 import com.aiwf.base.glue.GlueRunResult;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.ArtifactResp;
@@ -27,11 +28,25 @@ import org.springframework.web.client.RestClientException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class JobService {
+    private static final Set<String> RESERVED_GLUE_PARAM_KEYS = Set.of(
+            "job_id",
+            "flow",
+            "actor",
+            "ruleset_version",
+            "trace_id",
+            "job_context",
+            "stage_dir",
+            "artifacts_dir",
+            "evidence_dir"
+    );
 
     private final JobRepository jobs;
     private final JobStatusService jobStatus;
@@ -99,7 +114,16 @@ public class JobService {
         String effectiveRuleset = (rulesetVersion == null || rulesetVersion.isBlank()) ? "v1" : rulesetVersion;
 
         try {
-            return glue.runFlow(jobId, flow, new GlueRunRequest(effectiveActor, effectiveRuleset, params));
+            GlueJobContext jobContext = buildJobContext(jobId);
+            return glue.runFlow(jobId, flow, new GlueRunFlowReq(
+                    jobId,
+                    flow,
+                    effectiveActor,
+                    effectiveRuleset,
+                    newTraceId(),
+                    jobContext,
+                    buildGlueParams(params)
+            ));
         } catch (RestClientException e) {
             jobs.audit(new AuditEvent(jobId, effectiveActor, "FLOW_RUN_FAIL", flow, e.getMessage()));
             return GlueRunResult.failed(jobId, flow, e.getMessage());
@@ -159,6 +183,34 @@ public class JobService {
 
     private String jobsRoot() {
         return Paths.get(jobsBusRoot, "jobs").toString();
+    }
+
+    private GlueJobContext buildJobContext(String jobId) {
+        Path jobRoot = Paths.get(jobsRoot(), jobId);
+        return new GlueJobContext(
+                jobRoot.toString(),
+                jobRoot.resolve("stage").toString(),
+                jobRoot.resolve("artifacts").toString(),
+                jobRoot.resolve("evidence").toString()
+        );
+    }
+
+    private Map<String, Object> buildGlueParams(Map<String, Object> params) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (params == null || params.isEmpty()) {
+            return out;
+        }
+        // Keep the Glue transport contract explicit, but preserve job_root until master-side glue consumes only job_context.
+        params.forEach((key, value) -> {
+            if (!RESERVED_GLUE_PARAM_KEYS.contains(key)) {
+                out.put(key, value);
+            }
+        });
+        return out;
+    }
+
+    private String newTraceId() {
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     private JobRow requireJob(String jobId) {

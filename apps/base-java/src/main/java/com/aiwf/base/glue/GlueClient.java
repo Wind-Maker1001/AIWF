@@ -39,7 +39,7 @@ public class GlueClient implements GlueGateway {
 
     @Override
     @SuppressWarnings("unchecked")
-    public GlueRunResult runFlow(String jobId, String flow, GlueRunRequest request) {
+    public GlueRunResult runFlow(String jobId, String flow, GlueRunFlowReq request) {
         String path = "/jobs/%s/run/%s".formatted(jobId, flow);
         Map<String, Object> response = executeWithRetry(
                 "POST",
@@ -48,11 +48,11 @@ public class GlueClient implements GlueGateway {
                 () -> client.post()
                         .uri("/jobs/{jobId}/run/{flow}", jobId, flow)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .body(request == null ? Map.of() : request.toPayload())
+                        .body(request == null ? Map.of() : request)
                         .retrieve()
                         .body(Map.class)
         );
-        return GlueRunResult.fromMap(response, jobId, flow);
+        return GlueRunFlowResp.fromMap(response, jobId, flow).toRunResult();
     }
 
     @Override

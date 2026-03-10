@@ -1,0 +1,17 @@
+{
+  "job_id": "job-123",
+  "flow": "cleaning",
+  "actor": "local",
+  "ruleset_version": "v1",
+  "trace_id": "trace-123",
+  "job_context": {
+    "job_root": "D:\\AIWF\\bus\\jobs\\job-123",
+    "stage_dir": "D:\\AIWF\\bus\\jobs\\job-123\\stage",
+    "artifacts_dir": "D:\\AIWF\\bus\\jobs\\job-123\\artifacts",
+    "evidence_dir": "D:\\AIWF\\bus\\jobs\\job-123\\evidence"
+  },
+  "params": {
+    "office_lang": "zh",
+    "job_root": "D:\\AIWF\\bus\\jobs\\job-123"
+  }
+}

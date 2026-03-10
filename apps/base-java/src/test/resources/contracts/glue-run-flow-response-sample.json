@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "job_id": "job-123",
+  "flow": "cleaning",
+  "seconds": 1.25,
+  "output_hash": "abc123",
+  "artifacts": [
+    {
+      "artifact_id": "xlsx_fin_001",
+      "kind": "xlsx"
+    }
+  ],
+  "profile": {
+    "rows": 128
+  },
+  "accel": {
+    "ok": true
+  },
+  "error_id": "trace-123"
+}
