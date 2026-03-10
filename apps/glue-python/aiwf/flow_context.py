@@ -8,6 +8,14 @@ from aiwf.paths import resolve_job_root, resolve_path_within_root
 
 log = logging.getLogger("glue.flow_context")
 
+RESERVED_ATTACHED_PARAM_KEYS = frozenset({
+    "job_context",
+    "trace_id",
+    "stage_dir",
+    "artifacts_dir",
+    "evidence_dir",
+})
+
 
 def normalize_job_context(
     job_id: str,
@@ -56,7 +64,11 @@ def attach_job_context(
     job_context: Dict[str, str],
     trace_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    out = dict(params or {})
+    out = {
+        key: value
+        for key, value in dict(params or {}).items()
+        if key not in RESERVED_ATTACHED_PARAM_KEYS
+    }
     out["job_context"] = dict(job_context)
     out["job_root"] = job_context["job_root"]
     if trace_id:

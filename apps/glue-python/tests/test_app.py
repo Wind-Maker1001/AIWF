@@ -308,13 +308,22 @@ class AppRouteTests(unittest.TestCase):
                 "artifacts_dir": r"D:\ctx\job\artifacts",
                 "evidence_dir": r"D:\ctx\job\evidence",
             },
-            params={"job_root": r"D:\legacy\job", "x": 1},
+            params={
+                "job_root": r"D:\legacy\job",
+                "stage_dir": r"D:\legacy\job\stage",
+                "artifacts_dir": r"D:\legacy\job\artifacts",
+                "evidence_dir": r"D:\legacy\job\evidence",
+                "job_context": {"job_root": r"D:\legacy\nested"},
+                "trace_id": "legacy-trace",
+                "x": 1,
+            },
         )
 
         glue_app.run_cleaning_flow("job-root", req)
 
         kwargs = run_cleaning.call_args.kwargs
         self.assertEqual(kwargs["params"]["job_root"], os.path.normpath(r"D:\ctx\job"))
+        self.assertEqual(kwargs["params"]["job_context"]["job_root"], os.path.normpath(r"D:\ctx\job"))
         self.assertEqual(kwargs["params"]["job_context"]["stage_dir"], os.path.normpath(r"D:\ctx\job\stage"))
         self.assertEqual(kwargs["params"]["job_context"]["artifacts_dir"], os.path.normpath(r"D:\ctx\job\artifacts"))
         self.assertEqual(kwargs["params"]["job_context"]["evidence_dir"], os.path.normpath(r"D:\ctx\job\evidence"))
