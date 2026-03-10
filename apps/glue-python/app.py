@@ -101,11 +101,14 @@ def _run_flow_with_runner(job_id: str, req: RunReq, runner):
     """Compatibility wrapper for flow runners with mixed signatures."""
     base = make_base_client()
 
-    normalized_context = normalize_job_context(
-        job_id,
-        params=req.params,
-        job_context=req.job_context,
-    )
+    try:
+        normalized_context = normalize_job_context(
+            job_id,
+            params=req.params,
+            job_context=req.job_context,
+        )
+    except ValueError as exc:
+        raise LegacyFlowPathParamsError(str(exc)) from exc
     params_obj = attach_job_context(
         req.params,
         job_context=normalized_context,

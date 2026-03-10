@@ -151,6 +151,31 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("traceback", payload)
         self.assertEqual(payload["exception"], "boom")
 
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    @patch("aiwf.flows.cleaning.run_cleaning", return_value={"ok": True})
+    def test_run_flow_route_rejects_invalid_job_context_path_as_bad_request(self, run_cleaning, _make_base_client):
+        resp = self.client.post(
+            "/jobs/job-bad-ctx/run/cleaning",
+            json={
+                "actor": "local",
+                "ruleset_version": "v1",
+                "job_context": {
+                    "job_root": r"D:\ctx\job",
+                    "stage_dir": r"..\escape",
+                },
+                "params": {"x": 1},
+            },
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job-bad-ctx")
+        self.assertEqual(payload["flow"], "cleaning")
+        self.assertIn("error", payload)
+        run_cleaning.assert_not_called()
+
     def test_custom_registered_flow_dispatches_without_editing_app(self):
         def run_custom_flow(**kwargs):
             params = kwargs.get("params") or {}
