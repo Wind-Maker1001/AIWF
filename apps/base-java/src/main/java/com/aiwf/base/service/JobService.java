@@ -41,7 +41,6 @@ public class JobService {
             "ruleset_version",
             "trace_id",
             "job_context",
-            "job_root",
             "stage_dir",
             "artifacts_dir",
             "evidence_dir"
@@ -199,7 +198,7 @@ public class JobService {
         if (params == null || params.isEmpty()) {
             return out;
         }
-        // Keep the Glue transport contract explicit: context-owned fields stay top-level.
+        // Keep the Glue transport contract explicit, but preserve job_root until master-side glue consumes only job_context.
         params.forEach((key, value) -> {
             if (!RESERVED_GLUE_PARAM_KEYS.contains(key)) {
                 out.put(key, value);

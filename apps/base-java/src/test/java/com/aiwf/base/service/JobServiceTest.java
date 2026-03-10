@@ -148,7 +148,7 @@ class JobServiceTest {
     }
 
     @Test
-    void runFlowBuildsExplicitJobContextWithoutLegacyPathParams() {
+    void runFlowBuildsExplicitJobContextWhileKeepingJobRootFallback() {
         when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", "running"));
         when(glue.runFlow(org.mockito.ArgumentMatchers.eq("job1"), org.mockito.ArgumentMatchers.eq("cleaning"), any()))
                 .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "job1", "flow", "cleaning"), "job1", "cleaning"));
@@ -181,8 +181,8 @@ class JobServiceTest {
         assertThat(req.jobContext().artifactsDir()).endsWith(Path.of("jobs", "job1", "artifacts").toString());
         assertThat(req.jobContext().evidenceDir()).endsWith(Path.of("jobs", "job1", "evidence").toString());
         assertThat(req.params()).containsEntry("sample", true);
+        assertThat(req.params()).containsEntry("job_root", "D:\\legacy\\job1");
         assertThat(req.params()).doesNotContainKeys(
-                "job_root",
                 "stage_dir",
                 "artifacts_dir",
                 "evidence_dir",

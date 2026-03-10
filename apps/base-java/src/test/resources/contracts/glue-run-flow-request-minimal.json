@@ -11,6 +11,7 @@
     "evidence_dir": "D:\\AIWF\\bus\\jobs\\job-123\\evidence"
   },
   "params": {
-    "office_lang": "zh"
+    "office_lang": "zh",
+    "job_root": "D:\\AIWF\\bus\\jobs\\job-123"
   }
 }

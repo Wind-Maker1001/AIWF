@@ -25,6 +25,7 @@ class GlueRunFlowContractTest {
         );
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("office_lang", "zh");
+        params.put("job_root", jobContext.jobRoot());
 
         GlueRunFlowReq req = new GlueRunFlowReq(
                 "job-123",
