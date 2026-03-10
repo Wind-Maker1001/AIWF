@@ -2,10 +2,10 @@
   function createWorkflowWindow(options = {}) {
     const debugApi = !!options.debugApi;
     const win = new BrowserWindow({
-      width: 1440,
-      height: 920,
-      minWidth: 1180,
-      minHeight: 760,
+      width: 1560,
+      height: 980,
+      minWidth: 900,
+      minHeight: 680,
       backgroundColor: "#f3f6fb",
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
@@ -33,10 +33,10 @@
   function createWindow() {
     appMenu();
     const win = new BrowserWindow({
-      width: 1360,
-      height: 900,
-      minWidth: 1100,
-      minHeight: 760,
+      width: 1440,
+      height: 940,
+      minWidth: 860,
+      minHeight: 680,
       backgroundColor: "#eef6ff",
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
@@ -79,5 +79,4 @@
 }
 
 module.exports = { createWindowSupport };
-
 

@@ -187,6 +187,7 @@ def run_cleaning_operator(
         default=10.0,
     )
     url = operator_url(base_url, "/operators/cleaning")
+    job_context = params.get("job_context") if isinstance(params.get("job_context"), dict) else {}
     request = CleaningOperatorRequest(
         job_id=job_id,
         step_id=step_id,
@@ -194,7 +195,7 @@ def run_cleaning_operator(
         ruleset_version=ruleset_version,
         input_uri=input_uri,
         output_uri=output_uri,
-        job_root=params.get("job_root"),
+        job_root=job_context.get("job_root") or params.get("job_root"),
         params=params,
         force_bad_parquet=bool(params.get("accel_force_bad_parquet", False)),
     )

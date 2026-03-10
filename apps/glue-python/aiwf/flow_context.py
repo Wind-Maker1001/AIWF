@@ -59,9 +59,6 @@ def attach_job_context(
     out = dict(params or {})
     out["job_context"] = dict(job_context)
     out["job_root"] = job_context["job_root"]
-    out["stage_dir"] = job_context["stage_dir"]
-    out["artifacts_dir"] = job_context["artifacts_dir"]
-    out["evidence_dir"] = job_context["evidence_dir"]
     if trace_id:
         out["trace_id"] = trace_id
     return out

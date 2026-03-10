@@ -319,6 +319,9 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(kwargs["params"]["job_context"]["artifacts_dir"], os.path.normpath(r"D:\ctx\job\artifacts"))
         self.assertEqual(kwargs["params"]["job_context"]["evidence_dir"], os.path.normpath(r"D:\ctx\job\evidence"))
         self.assertEqual(kwargs["params"]["trace_id"], "trace-123")
+        self.assertNotIn("stage_dir", kwargs["params"])
+        self.assertNotIn("artifacts_dir", kwargs["params"])
+        self.assertNotIn("evidence_dir", kwargs["params"])
 
     @patch.object(glue_app, "make_base_client", return_value=None)
     def test_run_flow_with_runner_propagates_runner_typeerror_without_retry(self, _make_base_client):

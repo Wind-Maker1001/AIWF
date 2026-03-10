@@ -2,17 +2,18 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <title>AIWF Workflow Studio</title>
-    <link rel="stylesheet" href="./fluent-shell.css" />
+  <link rel="stylesheet" href="./fluent-shell.css" />
   <script type="module" src="./vendor/fluent-web-components.min.js"></script>
   <script type="module" src="./fluent-init.js"></script>
 </head>
 <body class="page-workflow">
   <div class="wrap">
     <section class="hero">
-      <h2 style="margin:0">Workflow Studio</h2><div style="margin-top:6px;display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.22);font-size:12px;font-weight:700;letter-spacing:.3px">Fluent Rebuild v2</div>
-      <div style="margin-top:4px">可自由拖拽节点、连线、运行。数据计算节点默认走 Rust。</div>
+      <h2 style="margin:0">Workflow Studio</h2><div class="hero-badge">Fluent Canvas</div>
+      <div class="hero-copy">可自由拖拽节点、连线、运行。支持触屏平移/捏合缩放，数据计算节点默认走 Rust。</div>
     </section>
     <section class="main">
       <article class="card">
@@ -133,20 +134,21 @@
       <article class="card">
         <div class="hd">流程画布</div>
         <div class="bd">
-          <div class="btns" style="margin-bottom:8px">
+          <div class="toolbar-row">
             <fluent-button id="btnZoomOut" class="btn secondary">缩小</fluent-button>
             <fluent-button id="btnZoomIn" class="btn secondary">放大</fluent-button>
             <fluent-button id="btnZoomReset" class="btn secondary">100%</fluent-button>
-            <span id="zoomText" style="display:inline-flex;align-items:center;color:#4f6378;font-size:12px;padding:0 4px">100%</span>
+            <fluent-button id="btnFitCanvas" class="btn secondary">适配视图</fluent-button>
+            <span id="zoomText" class="zoom-chip">100%</span>
           </div>
-          <div class="btns" style="margin-bottom:8px">
+          <div class="toolbar-row">
             <fluent-button id="btnAlignLeft" class="btn secondary">左对齐</fluent-button>
             <fluent-button id="btnAlignTop" class="btn secondary">上对齐</fluent-button>
             <fluent-button id="btnDistributeH" class="btn secondary">水平分布</fluent-button>
             <fluent-button id="btnDistributeV" class="btn secondary">垂直分布</fluent-button>
             <fluent-button id="btnUnlinkSelected" class="btn danger">取消框选节点连线</fluent-button>
           </div>
-          <div class="hint">连接方式：按住节点右侧绿色输出点，拖到目标节点左侧蓝色输入点。多选可用框选或 Shift/Ctrl 点击。点击连线可编辑条件，Shift+点击连线可删除。</div>
+          <div class="hint">连接方式：按住节点右侧绿色输出点，拖到目标节点左侧蓝色输入点。桌面端支持框选与 Ctrl+滚轮缩放；触屏支持单指平移、双指缩放，并可点“适配视图”快速回到全局视角。</div>
           <div id="canvasWrap" class="canvas-wrap">
             <div id="canvasSurface" class="canvas-surface">
               <svg id="edges" class="edges"></svg>
@@ -542,5 +544,3 @@
   <script type="module" src="./workflow/app.js"></script>
 </body>
 </html>
-
-

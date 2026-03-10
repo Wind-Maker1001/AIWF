@@ -1,34 +1,203 @@
-﻿function snap(v, grid, enabled) {
+function snap(v, grid, enabled) {
   if (!enabled) return Math.round(v);
   return Math.round(v / grid) * grid;
 }
 
+function isTouchLike(evt) {
+  const pointerType = String(evt?.pointerType || "");
+  return pointerType === "touch" || pointerType === "pen";
+}
+
+function isPrimaryPointer(evt) {
+  if (isTouchLike(evt)) return evt.isPrimary !== false;
+  return evt.button === 0;
+}
+
+function storePointer(ctx, evt) {
+  if (!Number.isFinite(evt?.pointerId)) return;
+  ctx.activePointers.set(evt.pointerId, {
+    pointerId: evt.pointerId,
+    clientX: Number(evt.clientX || 0),
+    clientY: Number(evt.clientY || 0),
+    pointerType: String(evt.pointerType || "mouse"),
+  });
+}
+
+function dropPointer(ctx, evt) {
+  if (!Number.isFinite(evt?.pointerId)) return;
+  ctx.activePointers.delete(evt.pointerId);
+}
+
+function touchPointers(ctx) {
+  return Array.from(ctx.activePointers.values()).filter((p) => p.pointerType === "touch" || p.pointerType === "pen");
+}
+
+function distance(a, b) {
+  const dx = Number(a?.clientX || 0) - Number(b?.clientX || 0);
+  const dy = Number(a?.clientY || 0) - Number(b?.clientY || 0);
+  return Math.hypot(dx, dy);
+}
+
+function midpoint(a, b) {
+  return {
+    clientX: (Number(a?.clientX || 0) + Number(b?.clientX || 0)) / 2,
+    clientY: (Number(a?.clientY || 0) + Number(b?.clientY || 0)) / 2,
+  };
+}
+
+function beginTouchPan(ctx, pointer) {
+  if (!pointer) return;
+  ctx.touchPan = {
+    pointerId: pointer.pointerId,
+    startClientX: pointer.clientX,
+    startClientY: pointer.clientY,
+    startScrollLeft: ctx.canvasWrap.scrollLeft,
+    startScrollTop: ctx.canvasWrap.scrollTop,
+    moved: false,
+  };
+}
+
+function beginTouchPinch(ctx) {
+  const points = touchPointers(ctx);
+  if (points.length < 2) return;
+  const [a, b] = points;
+  const startDistance = distance(a, b);
+  if (startDistance < 8) return;
+  ctx.touchPan = null;
+  ctx.touchPinch = {
+    pointerIds: [a.pointerId, b.pointerId],
+    startDistance,
+    startZoom: ctx.zoom,
+    startMid: midpoint(a, b),
+    startScrollLeft: ctx.canvasWrap.scrollLeft,
+    startScrollTop: ctx.canvasWrap.scrollTop,
+  };
+}
+
+function maybeRefreshTouchGesture(ctx) {
+  if (ctx.drag || ctx.linking || ctx.marquee) return;
+  const points = touchPointers(ctx);
+  if (points.length >= 2) {
+    const ids = points.slice(0, 2).map((p) => p.pointerId).sort((a, b) => a - b).join("|");
+    const current = Array.isArray(ctx.touchPinch?.pointerIds)
+      ? ctx.touchPinch.pointerIds.slice().sort((a, b) => a - b).join("|")
+      : "";
+    if (!ctx.touchPinch || ids !== current) beginTouchPinch(ctx);
+    return;
+  }
+  ctx.touchPinch = null;
+  if (points.length === 1 && !ctx.touchPan) beginTouchPan(ctx, points[0]);
+}
+
+function updateTouchPan(ctx, evt) {
+  if (!ctx.touchPan || ctx.touchPan.pointerId !== evt.pointerId) return false;
+  const dx = evt.clientX - ctx.touchPan.startClientX;
+  const dy = evt.clientY - ctx.touchPan.startClientY;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) ctx.touchPan.moved = true;
+  ctx.canvasWrap.scrollLeft = Math.max(0, ctx.touchPan.startScrollLeft - dx);
+  ctx.canvasWrap.scrollTop = Math.max(0, ctx.touchPan.startScrollTop - dy);
+  ctx.requestMinimap();
+  ctx.requestEdgeFrame();
+  return true;
+}
+
+function updateTouchPinch(ctx) {
+  if (!ctx.touchPinch || !Array.isArray(ctx.touchPinch.pointerIds) || ctx.touchPinch.pointerIds.length < 2) return false;
+  const a = ctx.activePointers.get(ctx.touchPinch.pointerIds[0]);
+  const b = ctx.activePointers.get(ctx.touchPinch.pointerIds[1]);
+  if (!a || !b) return false;
+  const nextDistance = distance(a, b);
+  if (nextDistance < 8) return true;
+  const mid = midpoint(a, b);
+  const nextZoom = ctx.touchPinch.startZoom * (nextDistance / ctx.touchPinch.startDistance);
+  ctx.setZoom(nextZoom, mid);
+  const dx = mid.clientX - ctx.touchPinch.startMid.clientX;
+  const dy = mid.clientY - ctx.touchPinch.startMid.clientY;
+  ctx.canvasWrap.scrollLeft = Math.max(0, ctx.touchPinch.startScrollLeft - dx);
+  ctx.canvasWrap.scrollTop = Math.max(0, ctx.touchPinch.startScrollTop - dy);
+  ctx.requestMinimap();
+  return true;
+}
+
+function jumpMinimap(ctx, clientX, clientY) {
+  const rect = ctx.minimapCanvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  const mx = clientX - rect.left;
+  const my = clientY - rect.top;
+  const worldW = ctx.surfaceWidth;
+  const worldH = ctx.surfaceHeight;
+  const worldX = (mx / rect.width) * worldW - ctx.offsetX;
+  const worldY = (my / rect.height) * worldH - ctx.offsetY;
+  const sx = (worldX + ctx.offsetX) * ctx.zoom - ctx.canvasWrap.clientWidth / 2;
+  const sy = (worldY + ctx.offsetY) * ctx.zoom - ctx.canvasWrap.clientHeight / 2;
+  ctx.canvasWrap.scrollLeft = Math.max(0, sx);
+  ctx.canvasWrap.scrollTop = Math.max(0, sy);
+  ctx.render();
+}
+
 function bindCanvasEvents(ctx) {
-  window.addEventListener("mousemove", (evt) => {
+  window.addEventListener("pointermove", (evt) => {
     ctx.lastClient = { x: evt.clientX, y: evt.clientY };
-    if (ctx.drag) ctx.onDragMove(evt);
-    if (ctx.marquee) ctx.onMarqueeMove(evt);
-    if (ctx.linking) ctx.requestRender(false);
+    storePointer(ctx, evt);
+
+    if (ctx.touchPinch && updateTouchPinch(ctx)) return;
+    if (ctx.touchPan && updateTouchPan(ctx, evt)) return;
+    if (ctx.drag && (!Number.isFinite(ctx.drag.pointerId) || ctx.drag.pointerId === evt.pointerId)) {
+      ctx.onDragMove(evt);
+      return;
+    }
+    if (ctx.marquee && (!Number.isFinite(ctx.marquee.pointerId) || ctx.marquee.pointerId === evt.pointerId)) {
+      ctx.onMarqueeMove(evt);
+      return;
+    }
+    if (ctx.linking && (!Number.isFinite(ctx.linking.pointerId) || ctx.linking.pointerId === evt.pointerId)) {
+      ctx.requestRender(false);
+    }
   });
 
-  window.addEventListener("mouseup", (evt) => {
-    if (ctx.drag) ctx.onDragEnd();
-    if (ctx.marquee) ctx.onMarqueeEnd(evt);
-    if (ctx.linking) ctx.finishLinkByEvent(evt);
-  });
+  const finishPointer = (evt) => {
+    if (ctx.drag && (!Number.isFinite(ctx.drag.pointerId) || ctx.drag.pointerId === evt.pointerId)) ctx.onDragEnd();
+    if (ctx.marquee && (!Number.isFinite(ctx.marquee.pointerId) || ctx.marquee.pointerId === evt.pointerId)) ctx.onMarqueeEnd(evt);
+    if (ctx.linking && (!Number.isFinite(ctx.linking.pointerId) || ctx.linking.pointerId === evt.pointerId)) ctx.finishLinkByEvent(evt);
+    if (ctx.touchPan && ctx.touchPan.pointerId === evt.pointerId) ctx.touchPan = null;
+    if (ctx.touchPinch && Array.isArray(ctx.touchPinch.pointerIds) && ctx.touchPinch.pointerIds.includes(evt.pointerId)) ctx.touchPinch = null;
+    dropPointer(ctx, evt);
+    maybeRefreshTouchGesture(ctx);
+  };
+
+  window.addEventListener("pointerup", finishPointer);
+  window.addEventListener("pointercancel", finishPointer);
 
   ctx.canvasWrap.addEventListener("scroll", () => {
     if (ctx.linking) ctx.requestRender(false);
     ctx.requestMinimap();
   });
 
-  ctx.canvasSurface.addEventListener("mousedown", (evt) => {
-    if (evt.button !== 0) return;
+  ctx.canvasSurface.addEventListener("pointerdown", (evt) => {
+    ctx.lastClient = { x: evt.clientX, y: evt.clientY };
+    storePointer(ctx, evt);
+
     const target = evt.target;
-    if (target.closest && (target.closest(".node") || target.closest(".port") || target.closest(".edge-hit") || target.closest(".minimap-wrap"))) return;
+    if (target.closest && (target.closest(".node") || target.closest(".port") || target.closest(".edge-hit") || target.closest(".minimap-wrap"))) {
+      maybeRefreshTouchGesture(ctx);
+      return;
+    }
+
     if (ctx.onEdgeSelect) ctx.onEdgeSelect(null);
+    if (isTouchLike(evt)) {
+      ctx.clearSelection();
+      beginTouchPan(ctx, {
+        pointerId: evt.pointerId,
+        clientX: evt.clientX,
+        clientY: evt.clientY,
+      });
+      ctx.requestRender(false);
+      return;
+    }
+
+    if (!isPrimaryPointer(evt)) return;
     const s = ctx.clientToSurface(evt.clientX, evt.clientY);
-    ctx.marquee = { x0: s.x, y0: s.y, x1: s.x, y1: s.y };
+    ctx.marquee = { x0: s.x, y0: s.y, x1: s.x, y1: s.y, pointerId: evt.pointerId };
     ctx.clearSelection();
     ctx.requestRender(false);
   });
@@ -36,20 +205,18 @@ function bindCanvasEvents(ctx) {
 
 function bindMinimapEvents(ctx) {
   if (!ctx.minimapCanvas) return;
-  ctx.minimapCanvas.addEventListener("mousedown", (evt) => {
-    const rect = ctx.minimapCanvas.getBoundingClientRect();
-    const mx = evt.clientX - rect.left;
-    const my = evt.clientY - rect.top;
-    const worldW = ctx.surfaceWidth;
-    const worldH = ctx.surfaceHeight;
-    const worldX = (mx / rect.width) * worldW - ctx.offsetX;
-    const worldY = (my / rect.height) * worldH - ctx.offsetY;
-    const sx = (worldX + ctx.offsetX) * ctx.zoom - ctx.canvasWrap.clientWidth / 2;
-    const sy = (worldY + ctx.offsetY) * ctx.zoom - ctx.canvasWrap.clientHeight / 2;
-    ctx.canvasWrap.scrollLeft = Math.max(0, sx);
-    ctx.canvasWrap.scrollTop = Math.max(0, sy);
-    ctx.render();
+  const finish = () => { ctx.minimapPointerId = null; };
+  ctx.minimapCanvas.addEventListener("pointerdown", (evt) => {
+    if (!isPrimaryPointer(evt)) return;
+    ctx.minimapPointerId = evt.pointerId;
+    jumpMinimap(ctx, evt.clientX, evt.clientY);
   });
+  ctx.minimapCanvas.addEventListener("pointermove", (evt) => {
+    if (ctx.minimapPointerId !== evt.pointerId) return;
+    jumpMinimap(ctx, evt.clientX, evt.clientY);
+  });
+  ctx.minimapCanvas.addEventListener("pointerup", finish);
+  ctx.minimapCanvas.addEventListener("pointercancel", finish);
 }
 
 function renderGuides(ctx, createEl) {
@@ -117,11 +284,14 @@ function onMarqueeEnd(ctx, nodeW, nodeH, evt) {
 
 function renderMinimap(ctx, nodeW, nodeH) {
   if (!ctx.minimapCanvas) return;
+  const metrics = ctx.ensureMinimapBitmap ? ctx.ensureMinimapBitmap() : null;
   const g = ctx.minimapCanvas.getContext("2d");
   if (!g) return;
 
-  const w = ctx.minimapCanvas.width;
-  const h = ctx.minimapCanvas.height;
+  const w = Number(metrics?.cssW || ctx.minimapCanvas.width || 180);
+  const h = Number(metrics?.cssH || ctx.minimapCanvas.height || 120);
+  const dpr = Number(metrics?.dpr || 1);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, h);
   g.fillStyle = "#ecf4fe";
   g.fillRect(0, 0, w, h);
@@ -176,12 +346,16 @@ function onDragStart(ctx, evt, nodeId) {
     const n = ctx.store.state.graph.nodes.find((it) => it.id === id);
     if (n) startMap.set(id, { x: Number(n.x || 0), y: Number(n.y || 0) });
   }
+  if (Number.isFinite(evt.pointerId)) {
+    storePointer(ctx, evt);
+  }
   ctx.drag = {
     id: nodeId,
     offsetX: pos.x - Number(node.x || 0),
     offsetY: pos.y - Number(node.y || 0),
     selected,
     startMap,
+    pointerId: Number.isFinite(evt.pointerId) ? evt.pointerId : null,
   };
 }
 
@@ -237,7 +411,11 @@ function onLinkStart(ctx, evt, fromId) {
   evt.preventDefault();
   evt.stopPropagation();
   ctx.lastClient = { x: evt.clientX, y: evt.clientY };
-  ctx.linking = { from: fromId };
+  if (Number.isFinite(evt.pointerId)) storePointer(ctx, evt);
+  ctx.linking = {
+    from: fromId,
+    pointerId: Number.isFinite(evt.pointerId) ? evt.pointerId : null,
+  };
   markLinkTargets(ctx);
   ctx.requestRender(false);
 }
