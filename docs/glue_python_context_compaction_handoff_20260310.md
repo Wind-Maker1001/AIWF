@@ -49,17 +49,22 @@ This initial bug led to a broader stabilization / modularization / contract-tigh
 ### Current tracking state
 - `git status -sb` currently shows branch tracking:
   - `origin/codex/rust-module-review-20260309`
-- After the 2026-03-10 cleanup pass, this branch also contains a local follow-up commit:
-  - `27b683b`
-  - This commit message is desktop-oriented, but it also includes the small Python follow-up that compacted legacy path propagation.
+- After the 2026-03-10 cleanup and contract-freeze pass, this branch also contains these additional local commits:
+  - `27b683b` `refactor(desktop): modularize shell and workflow canvas`
+  - `bbe1b56` `refactor(base-java): strip legacy glue path params`
+  - `a970919` `refactor(glue-python): sanitize attached flow context params`
+  - `29e7508` `feat(glue-python): add strict job context mode`
+  - `14a0c7d` `chore(ops): enable strict job context rollout`
 
 ### Current local working tree status relevant to Python
-At the time of this handoff refresh, the previously local-only Python follow-up has already been landed locally in `27b683b`:
+At the time of this handoff refresh, the previously local-only Python follow-up has already been landed locally across:
 - `apps/glue-python/aiwf/accel_client.py`
 - `apps/glue-python/aiwf/flow_context.py`
+- `apps/glue-python/app.py`
 - `apps/glue-python/tests/test_app.py`
+- `apps/glue-python/tests/test_paths.py`
 
-That batch is committed locally but not yet pushed.
+The working tree is currently clean.
 
 ### Non-Python dirty files
 - The worktree is also dirty in many non-Python areas (Desktop mainly).
@@ -98,10 +103,13 @@ The Java contract work was later landed in the same branch and validated:
 - Java still keeps `params.job_root` as compatibility fallback during migration.
 
 ### 5.3 Cross-service state
-The contract migration is in **phase 1 complete** state:
+The contract migration is now in **phase 2 rollout-active** state:
 - Java can emit explicit `job_context`
 - Python can consume it and prefers it over `params.job_root`
-- legacy fallback still exists for compatibility
+- Java no longer re-injects legacy path fields into Glue `params`
+- Python sanitizes attached flow params before dispatch
+- Python still retains legacy fallback internally when strict mode is disabled
+- strict mode is now available and enabled by default in the Glue startup script
 
 ---
 
@@ -132,6 +140,12 @@ Below are the most relevant Python-side commits already committed and pushed dur
 
 ### Legacy fallback observability
 - `1c68c84` `chore: warn on legacy glue-python path fallbacks`
+
+### Contract-freeze follow-up
+- `bbe1b56` `refactor(base-java): strip legacy glue path params`
+- `a970919` `refactor(glue-python): sanitize attached flow context params`
+- `29e7508` `feat(glue-python): add strict job context mode`
+- `14a0c7d` `chore(ops): enable strict job context rollout`
 
 ### Handoff doc
 - `449c430` `docs: add glue-python compaction handoff`
@@ -220,6 +234,12 @@ Below are the most relevant Python-side commits already committed and pushed dur
 - Python now accepts and prefers explicit `job_context`
 - `trace_id` is also carried through request normalization
 
+### 8.6 Contract-freeze hardening
+- Java no longer forwards transport-owned path/context fields inside Glue `params`
+- Python strips duplicate `job_context/trace_id/stage_dir/artifacts_dir/evidence_dir` entries before runner dispatch
+- Python can now reject legacy `params.job_root` / `params.stage_dir` / `params.artifacts_dir` / `params.evidence_dir` inputs when strict mode is enabled
+- Ops rollout now defaults Glue startup to strict job-context mode unless explicitly overridden
+
 ---
 
 ## 9. Validation Performed
@@ -232,7 +252,7 @@ Repeatedly executed during this workstream:
 
 ### 9.2 Latest known Python result
 - `apps/glue-python` pytest:
-  - `109 passed`
+  - `112 passed`
 - App-specific contract tests:
   - `tests/test_app.py` passing
 - HTTP client / accel client tests:
@@ -244,6 +264,7 @@ Repeatedly executed during this workstream:
 Performed from the current working tree:
 - `ops/scripts/restart_services.ps1`
 - `ops/scripts/smoke_test.ps1`
+- `ops/scripts/run_regression_quality.ps1`
 - `ops/scripts/test_invalid_parquet_fallback.ps1`
 
 Result:
@@ -254,7 +275,14 @@ Result:
   - cleaning flow run
   - SQL persistence
   - office artifact quality
+  - strict job-context startup rollout
+  - regression quality script using explicit `job_context`
   - invalid parquet fallback path
+
+Note:
+- one earlier chained run of `smoke_test.ps1 -WithInvalidParquetFallbackTest` saw a transient base-health connectivity failure during the fallback sub-step
+- re-running `test_invalid_parquet_fallback.ps1` directly from the same service state passed cleanly
+- current evidence points to a timing / transient connectivity issue, not a strict job-context regression
 
 ### 9.4 Explicit `job_context` live priority validation
 A live request was sent directly to `glue-python` with conflicting values:
@@ -298,22 +326,29 @@ The Java side now sends a stable flow request containing:
 - Phase 1 complete:
   - Java emits explicit `job_context`
   - Python consumes and prefers it
-- Phase 2 not yet complete:
-  - `params.job_root` is still retained as migration fallback
+- Phase 2 rollout active:
+  - Java transport no longer emits legacy path fields in `params`
+  - Glue startup defaults to strict mode via `ops/scripts/run_glue_python.ps1`
+  - `ops/config/dev.env.example` now documents `AIWF_STRICT_JOB_CONTEXT=true`
+- Fallback retirement is not yet globally complete:
+  - `params.job_root` is still retained in Python compatibility logic when strict mode is disabled
 
 ---
 
 ## 11. Latest Local Python Follow-Up
 
-The latest locally landed Python follow-up is included in commit `27b683b` and touches:
+The latest locally landed Python follow-up spans:
 - `apps/glue-python/aiwf/accel_client.py`
 - `apps/glue-python/aiwf/flow_context.py`
+- `apps/glue-python/app.py`
 - `apps/glue-python/tests/test_app.py`
+- `apps/glue-python/tests/test_paths.py`
 
 ### What that landed follow-up does
 - Prefer `params.job_context.job_root` when building accel cleaning operator requests
 - Stop re-flattening `stage_dir`, `artifacts_dir`, and `evidence_dir` back into top-level `params`
 - Extend route-level contract coverage so those legacy top-level path fields stay absent
+- Add a strict-mode gate that returns `400` for legacy path params when `AIWF_STRICT_JOB_CONTEXT` is enabled
 
 ### Validation status
 - `tests/test_app.py`: passing
@@ -332,18 +367,19 @@ The latest locally landed Python follow-up is included in commit `27b683b` and t
 3. Avoid broad staging due to dirty non-Python tree
 4. Continue the migration in this order:
    - keep `job_context.*` primary
-   - keep `params.job_root` as compatibility fallback
-   - add / observe fallback warnings
-   - only remove fallback after repeated green live runs
+   - run strict mode in real environments
+   - observe whether any external caller still depends on legacy path params
+   - only remove compatibility fallback after repeated green live runs and caller cleanup
 
 ### If freezing Python for now
 - Also valid.
 - The Python module is already in a stable, maintainable state.
 
 ### If continuing Java-Python contract tightening
-- The safest next step is **not** more Python restructuring.
+- The safest next step is **not** more broad Python restructuring.
 - It is:
   - continue Java/Python smoke using explicit `job_context`
+  - keep strict mode enabled in dev / ops rollout
   - then eventually remove `params.job_root` fallback after confidence is high enough
 
 ---
@@ -365,10 +401,10 @@ The latest locally landed Python follow-up is included in commit `27b683b` and t
 
 ### Don't
 - Do not commit dirty Desktop / Rust / Java files unintentionally
-- Do not remove `params.job_root` fallback yet unless explicitly asked and after live validation
+- Do not remove `params.job_root` fallback yet unless explicitly asked and after more than one clean live validation cycle
 - Do not treat the locally committed follow-up as already published
 
 ---
 
 ## 14. One-Sentence Pickup Summary
-- `glue-python` has already fixed the original pipeline output/path bug, been modularized heavily, now accepts explicit Java `job_context`, has a tightened accel client boundary, and has been live-validated across services; the latest small follow-up that reduces legacy path-field propagation is now committed locally, and the remaining open work is the broader contract freeze and eventual fallback retirement.
+- `glue-python` has already fixed the original pipeline output/path bug, been modularized heavily, now accepts explicit Java `job_context`, runs with a stricter transport contract, has strict-mode enforcement available in the runtime path, and has been live-validated across services; the main remaining work is eventual full retirement of the compatibility fallback when confidence is high enough.
