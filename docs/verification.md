@@ -28,8 +28,8 @@ Expected high-level signals:
 - `[ OK ] smoke test finished`
 
 Contract note:
-- current startup path runs `glue-python` with strict `job_context` mode by default
-- callers should send top-level `job_context`; legacy path fields under `params` are for compatibility only and can be rejected when strict mode is enabled
+- callers should send top-level `job_context`
+- legacy path fields under `params` are no longer supported
 
 ## 3. Invalid Parquet Fallback Integration Test
 

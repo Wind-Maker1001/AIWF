@@ -27,6 +27,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 glue_app = _load_module("aiwf_glue_python_app", PROJECT_ROOT / "app.py")
 
 
+def make_job_context(job_root: str) -> dict[str, str]:
+    job_root = os.path.normpath(job_root)
+    return {
+        "job_root": job_root,
+        "stage_dir": os.path.join(job_root, "stage"),
+        "artifacts_dir": os.path.join(job_root, "artifacts"),
+        "evidence_dir": os.path.join(job_root, "evidence"),
+    }
+
+
 class AppRouteTests(unittest.TestCase):
     def setUp(self):
         self._old_level = glue_app.log.level
@@ -144,7 +154,8 @@ class AppRouteTests(unittest.TestCase):
     def test_custom_registered_flow_dispatches_without_editing_app(self):
         def run_custom_flow(**kwargs):
             params = kwargs.get("params") or {}
-            return {"ok": True, "custom": True, "job_root": params.get("job_root")}
+            context = params.get("job_context") if isinstance(params.get("job_context"), dict) else {}
+            return {"ok": True, "custom": True, "job_root": context.get("job_root")}
 
         register_flow("custom", runner=run_custom_flow, aliases=("custom-alias",))
         try:
@@ -286,13 +297,10 @@ class AppRouteTests(unittest.TestCase):
         kwargs = run_cleaning.call_args.kwargs
         self.assertEqual(kwargs["params"]["x"], 1)
         self.assertEqual(
-            kwargs["params"]["job_root"],
-            os.path.join(glue_app.settings.jobs_root, "job-root"),
-        )
-        self.assertEqual(
             kwargs["params"]["job_context"]["job_root"],
             os.path.join(glue_app.settings.jobs_root, "job-root"),
         )
+        self.assertNotIn("job_root", kwargs["params"])
 
     @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
     @patch.object(glue_app, "make_base_client", return_value=None)
@@ -308,26 +316,18 @@ class AppRouteTests(unittest.TestCase):
                 "artifacts_dir": r"D:\ctx\job\artifacts",
                 "evidence_dir": r"D:\ctx\job\evidence",
             },
-            params={
-                "job_root": r"D:\legacy\job",
-                "stage_dir": r"D:\legacy\job\stage",
-                "artifacts_dir": r"D:\legacy\job\artifacts",
-                "evidence_dir": r"D:\legacy\job\evidence",
-                "job_context": {"job_root": r"D:\legacy\nested"},
-                "trace_id": "legacy-trace",
-                "x": 1,
-            },
+            params={"x": 1},
         )
 
         glue_app.run_cleaning_flow("job-root", req)
 
         kwargs = run_cleaning.call_args.kwargs
-        self.assertEqual(kwargs["params"]["job_root"], os.path.normpath(r"D:\ctx\job"))
         self.assertEqual(kwargs["params"]["job_context"]["job_root"], os.path.normpath(r"D:\ctx\job"))
         self.assertEqual(kwargs["params"]["job_context"]["stage_dir"], os.path.normpath(r"D:\ctx\job\stage"))
         self.assertEqual(kwargs["params"]["job_context"]["artifacts_dir"], os.path.normpath(r"D:\ctx\job\artifacts"))
         self.assertEqual(kwargs["params"]["job_context"]["evidence_dir"], os.path.normpath(r"D:\ctx\job\evidence"))
         self.assertEqual(kwargs["params"]["trace_id"], "trace-123")
+        self.assertNotIn("job_root", kwargs["params"])
         self.assertNotIn("stage_dir", kwargs["params"])
         self.assertNotIn("artifacts_dir", kwargs["params"])
         self.assertNotIn("evidence_dir", kwargs["params"])
@@ -426,8 +426,8 @@ class AppRouteTests(unittest.TestCase):
                     json={
                         "actor": "local",
                         "ruleset_version": "v1",
+                        "job_context": make_job_context(local_job_root),
                         "params": {
-                            "job_root": local_job_root,
                             "rows": [{"id": 1, "amount": 10.0}],
                             "office_outputs_enabled": False,
                         },
@@ -449,10 +449,9 @@ class AppRouteTests(unittest.TestCase):
 
     @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
     @patch.object(glue_app, "make_base_client", return_value=None)
-    def test_run_flow_route_prefers_job_context_over_legacy_job_root(self, _make_base_client):
+    def test_run_flow_route_uses_explicit_job_context(self, _make_base_client):
         with tempfile.TemporaryDirectory() as tmp:
             local_job_root = os.path.join(tmp, "ctx-job")
-            legacy_job_root = os.path.join(tmp, "legacy-job")
 
             def write_valid_parquet(path, rows):
                 os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -484,7 +483,6 @@ class AppRouteTests(unittest.TestCase):
                             "evidence_dir": os.path.join(local_job_root, "evidence-x"),
                         },
                         "params": {
-                            "job_root": legacy_job_root,
                             "rows": [{"id": 1, "amount": 10.0}],
                             "office_outputs_enabled": False,
                         },
@@ -496,18 +494,10 @@ class AppRouteTests(unittest.TestCase):
             self.assertTrue(payload["ok"])
             parquet_artifact = next(item for item in payload["artifacts"] if item["kind"] == "parquet")
             self.assertTrue(parquet_artifact["path"].startswith(local_job_root))
-            self.assertFalse(parquet_artifact["path"].startswith(legacy_job_root))
 
-    @patch.dict(
-        "os.environ",
-        {
-            "AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true",
-            "AIWF_STRICT_JOB_CONTEXT": "true",
-        },
-        clear=False,
-    )
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
     @patch.object(glue_app, "make_base_client", return_value=None)
-    def test_run_flow_route_rejects_legacy_path_params_in_strict_mode(self, _make_base_client):
+    def test_run_flow_route_rejects_legacy_path_params(self, _make_base_client):
         resp = self.client.post(
             "/jobs/job-strict/run/cleaning",
             json={
@@ -525,7 +515,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job-strict")
         self.assertEqual(payload["flow"], "cleaning")
-        self.assertIn("legacy flow path params are disabled", payload["error"])
+        self.assertIn("legacy flow path params are no longer supported", payload["error"])
 
     @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
     @patch.object(glue_app, "make_base_client", return_value=None)
@@ -550,8 +540,8 @@ class AppRouteTests(unittest.TestCase):
                     json={
                         "actor": "local",
                         "ruleset_version": "v1",
+                        "job_context": make_job_context(local_job_root),
                         "params": {
-                            "job_root": local_job_root,
                             "rows": [{"id": 1, "amount": 10.0}],
                             "office_outputs_enabled": False,
                         },

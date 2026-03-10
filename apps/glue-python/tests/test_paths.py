@@ -6,6 +6,16 @@ from aiwf import paths
 from aiwf.flows.cleaning_flow_helpers import prepare_job_layout
 
 
+def make_job_context(job_root: str) -> dict[str, str]:
+    job_root = os.path.normpath(job_root)
+    return {
+        "job_root": job_root,
+        "stage_dir": os.path.join(job_root, "stage-x"),
+        "artifacts_dir": os.path.join(job_root, "artifacts-x"),
+        "evidence_dir": os.path.join(job_root, "evidence-x"),
+    }
+
+
 class PathResolutionTests(unittest.TestCase):
     def test_resolve_jobs_root_prefers_explicit_jobs_root(self):
         with patch.dict(os.environ, {"AIWF_JOBS_ROOT": r"D:\custom\jobs"}, clear=True):
@@ -26,79 +36,38 @@ class PathResolutionTests(unittest.TestCase):
             self.assertEqual(layout["input_uri"], expected_uri)
             self.assertEqual(layout["output_uri"], expected_uri)
 
-    def test_prepare_job_layout_prefers_job_context_over_params_job_root(self):
+    def test_prepare_job_layout_uses_explicit_job_context(self):
         with patch.dict(os.environ, {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False):
-            with self.assertNoLogs("glue.flow_context", level="WARNING"):
-                layout = prepare_job_layout(
-                    "job-ctx",
-                    {
-                        "job_root": r"D:\wrong\job",
-                        "job_context": {
-                            "job_root": r"D:\right\job",
-                            "stage_dir": r"D:\right\job\stage-x",
-                            "artifacts_dir": r"D:\right\job\artifacts-x",
-                            "evidence_dir": r"D:\right\job\evidence-x",
-                        },
-                    },
-                    ensure_dirs=lambda *args: None,
-                )
+            layout = prepare_job_layout(
+                "job-ctx",
+                {"job_context": make_job_context(r"D:\right\job")},
+                ensure_dirs=lambda *args: None,
+            )
         self.assertEqual(layout["job_root"], os.path.normpath(r"D:\right\job"))
         self.assertEqual(layout["stage_dir"], os.path.normpath(r"D:\right\job\stage-x"))
         self.assertEqual(layout["artifacts_dir"], os.path.normpath(r"D:\right\job\artifacts-x"))
         self.assertEqual(layout["evidence_dir"], os.path.normpath(r"D:\right\job\evidence-x"))
 
-    def test_prepare_job_layout_warns_when_legacy_params_job_root_is_used(self):
+    def test_prepare_job_layout_rejects_legacy_path_params(self):
         with patch.dict(os.environ, {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False):
-            with self.assertLogs("glue.flow_context", level="WARNING") as logs:
-                layout = prepare_job_layout(
+            with self.assertRaisesRegex(ValueError, "legacy flow path params are no longer supported"):
+                prepare_job_layout(
                     "job-legacy",
                     {"job_root": r"D:\legacy\job"},
                     ensure_dirs=lambda *args: None,
                 )
-        self.assertEqual(layout["job_root"], os.path.normpath(r"D:\legacy\job"))
-        self.assertTrue(any("params.job_root" in entry for entry in logs.output))
 
-    def test_prepare_job_layout_accepts_explicit_job_context_in_strict_mode(self):
-        with patch.dict(
-            os.environ,
-            {
-                "AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true",
-                "AIWF_STRICT_JOB_CONTEXT": "true",
-            },
-            clear=False,
-        ):
+    def test_prepare_job_layout_accepts_explicit_job_context(self):
+        with patch.dict(os.environ, {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False):
             layout = prepare_job_layout(
                 "job-strict",
-                {
-                    "job_context": {
-                        "job_root": r"D:\strict\job",
-                        "stage_dir": r"D:\strict\job\stage-x",
-                        "artifacts_dir": r"D:\strict\job\artifacts-x",
-                        "evidence_dir": r"D:\strict\job\evidence-x",
-                    },
-                },
+                {"job_context": make_job_context(r"D:\strict\job")},
                 ensure_dirs=lambda *args: None,
             )
         self.assertEqual(layout["job_root"], os.path.normpath(r"D:\strict\job"))
         self.assertEqual(layout["stage_dir"], os.path.normpath(r"D:\strict\job\stage-x"))
         self.assertEqual(layout["artifacts_dir"], os.path.normpath(r"D:\strict\job\artifacts-x"))
         self.assertEqual(layout["evidence_dir"], os.path.normpath(r"D:\strict\job\evidence-x"))
-
-    def test_prepare_job_layout_rejects_legacy_path_params_in_strict_mode(self):
-        with patch.dict(
-            os.environ,
-            {
-                "AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true",
-                "AIWF_STRICT_JOB_CONTEXT": "true",
-            },
-            clear=False,
-        ):
-            with self.assertRaisesRegex(ValueError, "legacy flow path params are disabled"):
-                prepare_job_layout(
-                    "job-strict-legacy",
-                    {"job_root": r"D:\legacy\job"},
-                    ensure_dirs=lambda *args: None,
-                )
 
     def test_resolve_job_root_rejects_traversal_job_id(self):
         with patch.dict(os.environ, {"AIWF_JOBS_ROOT": r"D:\custom\jobs"}, clear=True):

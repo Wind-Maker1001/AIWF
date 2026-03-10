@@ -15,6 +15,22 @@ from aiwf.flows.cleaning_artifacts import (
 from aiwf.flows.office_artifacts import register_office_artifact, unregister_office_artifact
 
 
+def make_job_context(job_root: str) -> dict[str, str]:
+    job_root = os.path.normpath(job_root)
+    return {
+        "job_root": job_root,
+        "stage_dir": os.path.join(job_root, "stage"),
+        "artifacts_dir": os.path.join(job_root, "artifacts"),
+        "evidence_dir": os.path.join(job_root, "evidence"),
+    }
+
+
+def with_job_context(job_root: str, **params):
+    out = dict(params)
+    out["job_context"] = make_job_context(job_root)
+    return out
+
+
 class CleaningFlowTests(unittest.TestCase):
     def test_office_theme_settings(self):
         t = cleaning._office_theme_settings({"office_theme": "debate"})
@@ -157,10 +173,7 @@ class CleaningFlowTests(unittest.TestCase):
                     out = cleaning.run_cleaning(
                         job_id="job-custom-office",
                         actor="test",
-                        params={
-                            "job_root": local_job_root,
-                            "rows": [{"id": 1, "amount": 10.0}],
-                        },
+                        params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 10.0}]),
                     )
             finally:
                 unregister_office_artifact("text_summary")
@@ -207,10 +220,7 @@ class CleaningFlowTests(unittest.TestCase):
                     out = cleaning.run_cleaning(
                         job_id="job-custom-core",
                         actor="test",
-                        params={
-                            "job_root": local_job_root,
-                            "rows": [{"id": 1, "amount": 10.0}],
-                        },
+                        params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 10.0}]),
                     )
             finally:
                 unregister_cleaning_artifact("meta_text")
@@ -248,11 +258,11 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-no-office",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "office_outputs_enabled": False,
-                        "rows": [{"id": 1, "amount": 10.0}],
-                    },
+                    params=with_job_context(
+                        local_job_root,
+                        office_outputs_enabled=False,
+                        rows=[{"id": 1, "amount": 10.0}],
+                    ),
                 )
 
             artifact_kinds = {a["kind"] for a in out["artifacts"]}
@@ -279,12 +289,12 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-core-select",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "office_outputs_enabled": False,
-                        "disabled_core_artifacts": ["csv", "json"],
-                        "rows": [{"id": 1, "amount": 10.0}],
-                    },
+                    params=with_job_context(
+                        local_job_root,
+                        office_outputs_enabled=False,
+                        disabled_core_artifacts=["csv", "json"],
+                        rows=[{"id": 1, "amount": 10.0}],
+                    ),
                 )
 
             artifact_kinds = [a["kind"] for a in out["artifacts"]]
@@ -306,12 +316,12 @@ class CleaningFlowTests(unittest.TestCase):
                     cleaning.run_cleaning(
                         job_id="job-disable-required",
                         actor="test",
-                        params={
-                            "job_root": local_job_root,
-                            "office_outputs_enabled": False,
-                            "disabled_core_artifacts": ["parquet"],
-                            "rows": [{"id": 1, "amount": 10.0}],
-                        },
+                        params=with_job_context(
+                            local_job_root,
+                            office_outputs_enabled=False,
+                            disabled_core_artifacts=["parquet"],
+                            rows=[{"id": 1, "amount": 10.0}],
+                        ),
                     )
             self.assertIn("required cleaning artifact disabled", str(ctx.exception))
 
@@ -344,14 +354,14 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-nested-artifacts",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "artifact_selection": {
+                    params=with_job_context(
+                        local_job_root,
+                        artifact_selection={
                             "office": {"enabled": False},
                             "core": {"enabled": False},
                         },
-                        "rows": [{"id": 1, "amount": 10.0}],
-                    },
+                        rows=[{"id": 1, "amount": 10.0}],
+                    ),
                 )
 
             artifact_kinds = [a["kind"] for a in out["artifacts"]]
@@ -655,7 +665,7 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-1",
                     actor="test",
-                    params={"job_root": local_job_root},
+                    params=with_job_context(local_job_root),
                 )
 
             self.assertTrue(out["ok"])
@@ -717,7 +727,7 @@ class CleaningFlowTests(unittest.TestCase):
                     cleaning.run_cleaning(
                         job_id="job-strict",
                         actor="test",
-                        params={"job_root": local_job_root, "local_parquet_strict": True},
+                        params=with_job_context(local_job_root, local_parquet_strict=True),
                     )
                 self.assertIn("strict mode enabled", str(ctx.exception))
 
@@ -737,11 +747,11 @@ class CleaningFlowTests(unittest.TestCase):
                     cleaning.run_cleaning(
                         job_id="job-gate",
                         actor="test",
-                        params={
-                            "job_root": local_job_root,
-                            "rows": [{"id": "bad", "amount": "1"}],
-                            "max_invalid_rows": 0,
-                        },
+                        params=with_job_context(
+                            local_job_root,
+                            rows=[{"id": "bad", "amount": "1"}],
+                            max_invalid_rows=0,
+                        ),
                     )
                 self.assertIn("quality gate failed", str(ctx.exception))
 
@@ -760,11 +770,11 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-generic",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "rows": [{"name": "A", "amount": 12}],
-                        "rules": {"platform_mode": "generic"},
-                    },
+                    params=with_job_context(
+                        local_job_root,
+                        rows=[{"name": "A", "amount": 12}],
+                        rules={"platform_mode": "generic"},
+                    ),
                 )
             self.assertTrue(out["ok"])
             self.assertFalse(out["accel"]["attempted"])
@@ -790,15 +800,15 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-pre",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "preprocess": {
+                    params=with_job_context(
+                        local_job_root,
+                        preprocess={
                             "enabled": True,
                             "input_path": in_csv,
                             "header_map": {"ID": "id", "Amt": "amount"},
                             "amount_fields": ["amount"],
                         },
-                    },
+                    ),
                 )
             self.assertTrue(out["ok"])
             self.assertIn("preprocess", out["profile"])
@@ -823,9 +833,9 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-pre-pipeline",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "preprocess": {
+                    params=with_job_context(
+                        local_job_root,
+                        preprocess={
                             "enabled": True,
                             "input_path": in_txt,
                             "pipeline": {
@@ -842,7 +852,7 @@ class CleaningFlowTests(unittest.TestCase):
                                 ],
                             },
                         },
-                    },
+                    ),
                 )
             self.assertTrue(out["ok"])
             self.assertIn("preprocess", out["profile"])

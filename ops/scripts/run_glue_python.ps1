@@ -46,10 +46,6 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 Import-DotEnv $EnvFile
-if (-not (Test-Path Env:AIWF_STRICT_JOB_CONTEXT) -or [string]::IsNullOrWhiteSpace($env:AIWF_STRICT_JOB_CONTEXT)) {
-  $env:AIWF_STRICT_JOB_CONTEXT = "1"
-  Info "AIWF_STRICT_JOB_CONTEXT not set; defaulting to strict job_context mode"
-}
 $validateScript = Join-Path $root "ops\scripts\validate_env.ps1"
 if (Test-Path $validateScript) {
   powershell -ExecutionPolicy Bypass -File $validateScript -EnvFile $EnvFile

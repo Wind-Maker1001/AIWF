@@ -51,9 +51,8 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_base_java.ps1
 ```
 
 Notes:
-- `run_glue_python.ps1` now defaults `AIWF_STRICT_JOB_CONTEXT=1` when the variable is not already set.
-- Prefer top-level `job_context` over legacy `params.job_root` / `params.stage_dir` / `params.artifacts_dir` / `params.evidence_dir`.
-- `ops\config\dev.env.example` documents the strict-mode default.
+- Glue flow requests should use top-level `job_context`.
+- Legacy path fields under `params` such as `params.job_root` / `params.stage_dir` / `params.artifacts_dir` / `params.evidence_dir` are no longer supported.
 
 4. Run smoke test:
 
@@ -88,7 +87,7 @@ This runs:
 - `accel-rust` tests
 - `glue-python` unit tests
 - smoke + invalid parquet fallback integration check
-- strict `job_context` transport validation through the normal startup path
+- explicit `job_context` transport validation through the normal startup path
 
 ## GitHub Actions
 

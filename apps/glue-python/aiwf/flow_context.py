@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any, Dict, Optional
 
 from aiwf.paths import resolve_job_root, resolve_path_within_root
-
-log = logging.getLogger("glue.flow_context")
 
 LEGACY_FLOW_PATH_PARAM_KEYS = frozenset({
     "job_root",
@@ -18,6 +15,7 @@ LEGACY_FLOW_PATH_PARAM_KEYS = frozenset({
 RESERVED_ATTACHED_PARAM_KEYS = frozenset({
     "job_context",
     "trace_id",
+    "job_root",
     "stage_dir",
     "artifacts_dir",
     "evidence_dir",
@@ -26,11 +24,6 @@ RESERVED_ATTACHED_PARAM_KEYS = frozenset({
 
 class LegacyFlowPathParamsError(ValueError):
     pass
-
-
-def _strict_job_context_enabled() -> bool:
-    value = str(os.getenv("AIWF_STRICT_JOB_CONTEXT") or "").strip().lower()
-    return value in {"1", "true", "yes", "on"}
 
 
 def normalize_job_context(
@@ -42,26 +35,19 @@ def normalize_job_context(
     params_obj = params if isinstance(params, dict) else {}
     context_obj = job_context if isinstance(job_context, dict) else {}
 
-    legacy_sources: list[str] = []
     legacy_param_keys = [key for key in LEGACY_FLOW_PATH_PARAM_KEYS if params_obj.get(key) is not None]
 
-    if legacy_param_keys and _strict_job_context_enabled():
+    if legacy_param_keys:
         raise LegacyFlowPathParamsError(
-            "legacy flow path params are disabled; provide top-level job_context instead of "
+            "legacy flow path params are no longer supported; provide top-level job_context instead of "
             + ",".join(f"params.{key}" for key in legacy_param_keys)
         )
 
-    job_root_override = context_obj.get("job_root") or params_obj.get("job_root")
-    if context_obj.get("job_root") is None and params_obj.get("job_root") is not None:
-        legacy_sources.append("params.job_root")
+    job_root_override = context_obj.get("job_root")
     job_root = resolve_job_root(job_id, override=str(job_root_override) if job_root_override else None)
 
     def _child_dir(key: str, default_leaf: str) -> str:
         raw = context_obj.get(key)
-        if raw is None:
-            raw = params_obj.get(key)
-            if raw is not None:
-                legacy_sources.append(f"params.{key}")
         if raw:
             return resolve_path_within_root(job_root, str(raw))
         return os.path.join(job_root, default_leaf)
@@ -72,12 +58,6 @@ def normalize_job_context(
         "artifacts_dir": _child_dir("artifacts_dir", "artifacts"),
         "evidence_dir": _child_dir("evidence_dir", "evidence"),
     }
-    if legacy_sources:
-        log.warning(
-            "legacy flow path fallback used job_id=%s sources=%s; prefer job_context.* over params.*",
-            job_id,
-            ",".join(legacy_sources),
-        )
     return normalized
 
 
@@ -93,7 +73,6 @@ def attach_job_context(
         if key not in RESERVED_ATTACHED_PARAM_KEYS
     }
     out["job_context"] = dict(job_context)
-    out["job_root"] = job_context["job_root"]
     if trace_id:
         out["trace_id"] = trace_id
     return out

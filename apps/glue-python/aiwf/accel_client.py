@@ -195,7 +195,7 @@ def run_cleaning_operator(
         ruleset_version=ruleset_version,
         input_uri=input_uri,
         output_uri=output_uri,
-        job_root=job_context.get("job_root") or params.get("job_root"),
+        job_root=job_context.get("job_root"),
         params=params,
         force_bad_parquet=bool(params.get("accel_force_bad_parquet", False)),
     )
