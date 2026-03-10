@@ -150,7 +150,7 @@ class JobServiceTest {
     }
 
     @Test
-    void runFlowBuildsExplicitJobContextAndLegacyJobRootFallback() {
+    void runFlowBuildsExplicitJobContextWithoutLegacyPathParams() {
         when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
         when(glue.runFlow(org.mockito.ArgumentMatchers.eq("job1"), org.mockito.ArgumentMatchers.eq("cleaning"), any()))
                 .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "job1", "flow", "cleaning"), "job1", "cleaning"));
@@ -158,7 +158,15 @@ class JobServiceTest {
         @SuppressWarnings("unchecked")
         org.mockito.ArgumentCaptor<GlueRunFlowReq> reqCap = org.mockito.ArgumentCaptor.forClass(GlueRunFlowReq.class);
 
-        GlueRunResult out = service.runFlow("job1", "cleaning", "ops", "v2", Map.of("sample", true));
+        GlueRunResult out = service.runFlow("job1", "cleaning", "ops", "v2", Map.of(
+                "sample", true,
+                "job_root", "D:\\legacy\\job1",
+                "stage_dir", "D:\\legacy\\job1\\stage",
+                "artifacts_dir", "D:\\legacy\\job1\\artifacts",
+                "evidence_dir", "D:\\legacy\\job1\\evidence",
+                "job_context", Map.of("job_root", "D:\\legacy\\nested"),
+                "trace_id", "legacy-trace"
+        ));
 
         assertThat(out.isOk()).isTrue();
         verify(glue).runFlow(org.mockito.ArgumentMatchers.eq("job1"), org.mockito.ArgumentMatchers.eq("cleaning"), reqCap.capture());
@@ -175,6 +183,13 @@ class JobServiceTest {
         assertThat(req.jobContext().artifactsDir()).endsWith("jobs\\job1\\artifacts");
         assertThat(req.jobContext().evidenceDir()).endsWith("jobs\\job1\\evidence");
         assertThat(req.params()).containsEntry("sample", true);
-        assertThat(req.params()).containsEntry("job_root", req.jobContext().jobRoot());
+        assertThat(req.params()).doesNotContainKeys(
+                "job_root",
+                "stage_dir",
+                "artifacts_dir",
+                "evidence_dir",
+                "job_context",
+                "trace_id"
+        );
     }
 }
