@@ -130,6 +130,113 @@ test('zoom controls update zoom label', async () => {
   await electronApp.close();
 });
 
+test('fit view button rescales large graphs', async () => {
+  const { electronApp, page } = await openWorkflow();
+  await page.waitForFunction(() => !!window.__aiwfDebug && typeof window.__aiwfDebug.setGraph === 'function');
+  await page.evaluate(() => {
+    const api = window.__aiwfDebug;
+    api.setGraph({
+      workflow_id: 'fit_view',
+      name: 'fit_view',
+      nodes: [
+        { id: 'n1', type: 'ingest_files', x: 0, y: 120 },
+        { id: 'n2', type: 'clean_md', x: 1680, y: 1200 },
+        { id: 'n3', type: 'compute_rust', x: 3120, y: 1680 },
+      ],
+      edges: [
+        { from: 'n1', to: 'n2' },
+        { from: 'n2', to: 'n3' },
+      ],
+    });
+  });
+  await page.click('#btnFitCanvas');
+  await expect(page.locator('#zoomText')).not.toHaveText('100%');
+  await electronApp.close();
+});
+
+test('touch drag updates node position', async () => {
+  const { electronApp, page } = await openWorkflow();
+  await page.waitForFunction(() => !!window.__aiwfDebug && typeof window.__aiwfDebug.setGraph === 'function');
+  const out = await page.evaluate(() => {
+    const api = window.__aiwfDebug;
+    api.setGraph({
+      workflow_id: 'touch_drag',
+      name: 'touch_drag',
+      nodes: [
+        { id: 'n1', type: 'ingest_files', x: 120, y: 160 },
+      ],
+      edges: [],
+    });
+    const header = document.querySelector('.node[data-id="n1"] .node-hd');
+    if (!header) return { ok: false, reason: 'missing_header' };
+    const rect = header.getBoundingClientRect();
+    const startX = rect.left + rect.width / 2;
+    const startY = rect.top + rect.height / 2;
+    header.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 11,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: startX,
+      clientY: startY,
+    }));
+    window.dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 11,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: startX + 180,
+      clientY: startY + 120,
+    }));
+    window.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 11,
+      pointerType: 'touch',
+      isPrimary: true,
+      clientX: startX + 180,
+      clientY: startY + 120,
+    }));
+    const node = api.graph().nodes.find((item) => item.id === 'n1');
+    return { ok: true, x: node?.x, y: node?.y };
+  });
+  expect(out.ok).toBeTruthy();
+  expect(out.x).toBeGreaterThan(120);
+  expect(out.y).toBeGreaterThan(160);
+  await electronApp.close();
+});
+
+test('minimap bitmap tracks css size and device pixel ratio', async () => {
+  const { electronApp, page } = await openWorkflow();
+  await page.waitForFunction(() => !!window.__aiwfDebug && typeof window.__aiwfDebug.setGraph === 'function');
+  const out = await page.evaluate(() => {
+    const api = window.__aiwfDebug;
+    api.setGraph({
+      workflow_id: 'minimap_dpi',
+      name: 'minimap_dpi',
+      nodes: [
+        { id: 'n1', type: 'ingest_files', x: 0, y: 120 },
+        { id: 'n2', type: 'clean_md', x: 1420, y: 920 },
+      ],
+      edges: [{ from: 'n1', to: 'n2' }],
+    });
+    const canvas = document.getElementById('minimap');
+    const rect = canvas.getBoundingClientRect();
+    return {
+      dpr: window.devicePixelRatio || 1,
+      cssW: Math.round(rect.width),
+      cssH: Math.round(rect.height),
+      pixelW: canvas.width,
+      pixelH: canvas.height,
+    };
+  });
+  expect(Math.abs(out.pixelW - Math.round(out.cssW * out.dpr))).toBeLessThanOrEqual(1);
+  expect(Math.abs(out.pixelH - Math.round(out.cssH * out.dpr))).toBeLessThanOrEqual(1);
+  await electronApp.close();
+});
+
 test('batch align requires multi-select', async () => {
   const { electronApp, page } = await openWorkflow();
   await page.click('#btnAlignLeft');
@@ -271,7 +378,7 @@ test('delete button removes node and connected edges', async () => {
   const edgeCountBefore = await page.locator('#edges path.edge-line').count();
   expect(edgeCountBefore).toBeGreaterThan(0);
 
-  await page.click('.node[data-id="n2"] .mini.del');
+  await page.click('.node[data-id="n2"] .mini-btn.del');
   await expect(page.locator('.node[data-id="n2"]')).toHaveCount(0);
   await expect(page.locator('.node')).toHaveCount(beforeNodeCount - 1);
   const edgeCountAfter = await page.locator('#edges path.edge-line').count();
@@ -316,6 +423,19 @@ test('save/load workflow via mock dialog path', async () => {
 
 test('marquee selection selects multiple nodes', async () => {
   const { electronApp, page } = await openWorkflow();
+  await page.waitForFunction(() => !!window.__aiwfDebug && typeof window.__aiwfDebug.setGraph === 'function');
+  await page.evaluate(() => {
+    window.__aiwfDebug.setGraph({
+      workflow_id: 'marquee',
+      name: 'marquee',
+      nodes: [
+        { id: 'n1', type: 'ingest_files', x: 40, y: 120 },
+        { id: 'n2', type: 'clean_md', x: 360, y: 120 },
+        { id: 'n3', type: 'compute_rust', x: 980, y: 520 },
+      ],
+      edges: [{ from: 'n1', to: 'n2' }],
+    });
+  });
   await page.locator('#canvasWrap').scrollIntoViewIfNeeded();
   const box1 = await page.locator('.node[data-id="n1"]').boundingBox();
   const box2 = await page.locator('.node[data-id="n2"]').boundingBox();

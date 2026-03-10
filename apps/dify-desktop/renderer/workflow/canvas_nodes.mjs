@@ -1,4 +1,10 @@
-﻿function renderNodesLayer(ctx, nodeW, nodeH, createEl) {
+function isPrimaryPointer(evt) {
+  const pointerType = String(evt?.pointerType || "");
+  if (pointerType === "mouse") return evt.button === 0;
+  return evt.isPrimary !== false;
+}
+
+function renderNodesLayer(ctx, nodeW, nodeH, createEl) {
   ctx.nodesLayer.innerHTML = "";
   ctx.inputPortByNodeId.clear();
   ctx.portByNodeId.clear();
@@ -29,7 +35,7 @@
     const hd = createEl("div", "node-hd");
     const ttl = createEl("strong", "", `${ctx.catalogName(node.type)} (${node.id})`);
     const actions = createEl("div", "node-actions");
-    const delBtn = createEl("button", "mini del", "删除");
+    const delBtn = createEl("button", "mini-btn del", "删除");
     actions.append(delBtn);
     hd.append(ttl, actions);
 
@@ -57,23 +63,26 @@
       ctx.selectedIds.delete(node.id);
       ctx.onChange();
     });
-    delBtn.addEventListener("mousedown", (evt) => {
-      // Prevent header drag handler from hijacking delete interaction.
+    delBtn.addEventListener("pointerdown", (evt) => {
       evt.stopPropagation();
     });
 
-    card.addEventListener("mousedown", (evt) => {
-      if (evt.button !== 0) return;
+    card.addEventListener("pointerdown", (evt) => {
+      if (!isPrimaryPointer(evt)) return;
       if (evt.ctrlKey || evt.metaKey || evt.shiftKey) ctx.toggleSelection(node.id);
       else if (!ctx.isSelected(node.id)) ctx.selectOne(node.id);
       ctx.requestRender(false);
     });
 
-    outPort.addEventListener("mousedown", (evt) => ctx.onLinkStart(evt, node.id));
-    hd.addEventListener("mousedown", (evt) => {
+    outPort.addEventListener("pointerdown", (evt) => {
+      if (!isPrimaryPointer(evt)) return;
+      ctx.onLinkStart(evt, node.id);
+    });
+
+    hd.addEventListener("pointerdown", (evt) => {
+      if (!isPrimaryPointer(evt)) return;
       if (evt.target && evt.target.closest && evt.target.closest(".node-actions")) return;
       if (evt.ctrlKey || evt.metaKey || evt.shiftKey) {
-        if (evt.button !== 0) return;
         evt.preventDefault();
         evt.stopPropagation();
         ctx.toggleSelection(node.id);

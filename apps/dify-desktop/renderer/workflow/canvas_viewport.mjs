@@ -1,4 +1,12 @@
-﻿function clientToSurface(ctx, clientX, clientY) {
+import { MINIMAP_CSS_W, MINIMAP_CSS_H } from './canvas_consts.mjs';
+
+function clampZoomValue(zoom, minZoom, maxZoom) {
+  const z = Number(zoom);
+  if (!Number.isFinite(z)) return Number(minZoom || 1);
+  return Math.max(Number(minZoom || 1), Math.min(Number(maxZoom || z), z));
+}
+
+function clientToSurface(ctx, clientX, clientY) {
   const rect = ctx.canvasWrap.getBoundingClientRect();
   return {
     x: clientX - rect.left + ctx.canvasWrap.scrollLeft,
@@ -18,6 +26,32 @@ function worldToDisplay(ctx, x, y) {
   return {
     x: (x + ctx.offsetX) * ctx.zoom,
     y: (y + ctx.offsetY) * ctx.zoom,
+  };
+}
+
+function placeWorldPointAtClient(ctx, worldX, worldY, clientX, clientY) {
+  const rect = ctx.canvasWrap.getBoundingClientRect();
+  const localX = Number(clientX || 0) - rect.left;
+  const localY = Number(clientY || 0) - rect.top;
+  const surfaceX = (Number(worldX || 0) + ctx.offsetX) * ctx.zoom;
+  const surfaceY = (Number(worldY || 0) + ctx.offsetY) * ctx.zoom;
+  const maxLeft = Math.max(0, (ctx.canvasSurface.scrollWidth || ctx.canvasSurface.clientWidth || 0) - ctx.canvasWrap.clientWidth);
+  const maxTop = Math.max(0, (ctx.canvasSurface.scrollHeight || ctx.canvasSurface.clientHeight || 0) - ctx.canvasWrap.clientHeight);
+  ctx.canvasWrap.scrollLeft = Math.max(0, Math.min(maxLeft, surfaceX - localX));
+  ctx.canvasWrap.scrollTop = Math.max(0, Math.min(maxTop, surfaceY - localY));
+}
+
+function fitWorldRectToViewport(bounds, viewportWidth, viewportHeight, padding, minZoom, maxZoom) {
+  const safePadding = Math.max(24, Number(padding || 0));
+  const width = Math.max(1, Number(bounds?.maxRight || 0) - Number(bounds?.minLeft || 0));
+  const height = Math.max(1, Number(bounds?.maxBottom || 0) - Number(bounds?.minTop || 0));
+  const availableWidth = Math.max(80, Number(viewportWidth || 0) - safePadding * 2);
+  const availableHeight = Math.max(80, Number(viewportHeight || 0) - safePadding * 2);
+  const scale = Math.min(availableWidth / width, availableHeight / height);
+  return {
+    zoom: clampZoomValue(scale, minZoom, maxZoom),
+    centerX: Number(bounds?.minLeft || 0) + width / 2,
+    centerY: Number(bounds?.minTop || 0) + height / 2,
   };
 }
 
@@ -70,9 +104,26 @@ function ensureViewport(ctx, extraPoint, expandPad, viewPad, nodeW, nodeH) {
   }
 }
 
+function ensureMinimapBitmap(ctx) {
+  const canvas = ctx.minimapCanvas;
+  if (!canvas) return null;
+  const cssW = Math.max(1, Number(canvas.clientWidth || MINIMAP_CSS_W));
+  const cssH = Math.max(1, Number(canvas.clientHeight || MINIMAP_CSS_H));
+  const dpr = Math.max(1, Math.min(3, Number(window.devicePixelRatio || 1)));
+  const targetW = Math.round(cssW * dpr);
+  const targetH = Math.round(cssH * dpr);
+  if (canvas.width !== targetW) canvas.width = targetW;
+  if (canvas.height !== targetH) canvas.height = targetH;
+  return { cssW, cssH, dpr };
+}
+
 export {
   clientToSurface,
   clientToWorld,
   worldToDisplay,
+  clampZoomValue,
+  placeWorldPointAtClient,
+  fitWorldRectToViewport,
   ensureViewport,
+  ensureMinimapBitmap,
 };

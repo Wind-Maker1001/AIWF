@@ -5,6 +5,7 @@ async function openMain() {
   const appDir = path.resolve(__dirname, "..");
   const electronApp = await electron.launch({ args: [appDir] });
   const page = await electronApp.firstWindow();
+  await page.waitForFunction(() => window.__aiwfHomeReady === true);
   return { electronApp, page };
 }
 
@@ -50,6 +51,18 @@ test("save/load config keeps cleaning template", async () => {
 
   expect(result.loadedTemplate).toBe("finance_report_v1");
   expect(result.savedTemplate).toBe("finance_report_v1");
+  await electronApp.close();
+});
+
+test("workflow tab switches inside same window and loads iframe", async () => {
+  const { electronApp, page } = await openMain();
+  await expect(page.locator("#tabWorkflow")).toBeVisible();
+  await page.click("#tabWorkflow");
+  await expect(page.locator("#workflowShellPane")).toBeVisible();
+  await expect(page.locator("#homeShellPane")).toBeHidden();
+  await expect(page.locator("#workflowEmbedFrame")).toHaveAttribute("src", /workflow\.html\?embedded=1/);
+  await page.click("#tabHome");
+  await expect(page.locator("#homeShellPane")).toBeVisible();
   await electronApp.close();
 });
 
