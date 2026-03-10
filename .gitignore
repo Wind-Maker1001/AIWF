@@ -47,6 +47,7 @@ apps/glue-python/.venv/
 
 # Logs
 ops/logs/
+apps/cargo_check.log
 
 # Local SQL Server instance files
 infra/sqlserver/data/
