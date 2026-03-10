@@ -131,14 +131,14 @@ Practical guidance:
 
 ## Current Largest Production Files
 At the moment, the largest non-test Rust files are roughly:
-- `apps/accel-rust/src/operators/transform/v2/runner.rs` ¡ª 388 lines
-- `apps/accel-rust/src/http/routes.rs` ¡ª 381 lines
-- `apps/accel-rust/src/operators/workflow/engine.rs` ¡ª 373 lines
-- `apps/accel-rust/src/transform_support/control.rs` ¡ª 369 lines
-- `apps/accel-rust/src/execution_ops/storage/parquet.rs` ¡ª 360 lines
-- `apps/accel-rust/src/operators/join.rs` ¡ª 355 lines
-- `apps/accel-rust/src/row_io/parquet.rs` ¡ª 353 lines
-- `apps/accel-rust/src/main.rs` ¡ª 347 lines
+- `apps/accel-rust/src/operators/transform/v2/runner.rs` â€” 388 lines
+- `apps/accel-rust/src/http/routes.rs` â€” 381 lines
+- `apps/accel-rust/src/operators/workflow/engine.rs` â€” 373 lines
+- `apps/accel-rust/src/transform_support/control.rs` â€” 369 lines
+- `apps/accel-rust/src/execution_ops/storage/parquet.rs` â€” 360 lines
+- `apps/accel-rust/src/operators/join.rs` â€” 355 lines
+- `apps/accel-rust/src/row_io/parquet.rs` â€” 353 lines
+- `apps/accel-rust/src/main.rs` â€” 347 lines
 
 All are still far below the 2000-line user constraint.
 
