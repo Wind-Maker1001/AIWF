@@ -29,10 +29,23 @@ import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class JobService {
+    private static final Set<String> RESERVED_GLUE_PARAM_KEYS = Set.of(
+            "job_id",
+            "flow",
+            "actor",
+            "ruleset_version",
+            "trace_id",
+            "job_context",
+            "job_root",
+            "stage_dir",
+            "artifacts_dir",
+            "evidence_dir"
+    );
 
     private final JobRepository jobs;
     private final JobStatusService jobStatus;
@@ -108,7 +121,7 @@ public class JobService {
                     effectiveRuleset,
                     newTraceId(),
                     jobContext,
-                    buildGlueParams(jobContext, params)
+                    buildGlueParams(params)
             ));
         } catch (RestClientException e) {
             jobs.audit(new AuditEvent(jobId, effectiveActor, "FLOW_RUN_FAIL", flow, e.getMessage()));
@@ -181,9 +194,17 @@ public class JobService {
         );
     }
 
-    private Map<String, Object> buildGlueParams(GlueJobContext jobContext, Map<String, Object> params) {
-        Map<String, Object> out = params == null ? new LinkedHashMap<>() : new LinkedHashMap<>(params);
-        out.putIfAbsent("job_root", jobContext.jobRoot());
+    private Map<String, Object> buildGlueParams(Map<String, Object> params) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (params == null || params.isEmpty()) {
+            return out;
+        }
+        // Keep the Glue transport contract explicit: context-owned fields stay top-level.
+        params.forEach((key, value) -> {
+            if (!RESERVED_GLUE_PARAM_KEYS.contains(key)) {
+                out.put(key, value);
+            }
+        });
         return out;
     }
 
