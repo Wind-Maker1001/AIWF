@@ -1,14 +1,23 @@
-﻿import {
+import {
   clientToSurface as vpClientToSurface,
   clientToWorld as vpClientToWorld,
   worldToDisplay as vpWorldToDisplay,
   ensureViewport as vpEnsureViewport,
+  ensureMinimapBitmap as vpEnsureMinimapBitmap,
+  clampZoomValue as vpClampZoomValue,
+  placeWorldPointAtClient as vpPlaceWorldPointAtClient,
+  fitWorldRectToViewport as vpFitWorldRectToViewport,
 } from './canvas_viewport.mjs';
 import {
   applyAlignment as selApplyAlignment,
   alignSelected as selAlignSelected,
 } from './canvas_selection.mjs';
-import { NODE_W, NODE_H } from './canvas_consts.mjs';
+import {
+  NODE_W,
+  NODE_H,
+  MIN_ZOOM,
+  MAX_ZOOM,
+} from './canvas_consts.mjs';
 import { renderEdgesLayer } from './canvas_edges.mjs';
 import {
   renderNodesLayer,
@@ -82,6 +91,9 @@ export class WorkflowCanvas {
     this.drag = null;
     this.marquee = null;
     this.linking = null;
+    this.touchPan = null;
+    this.touchPinch = null;
+    this.activePointers = new Map();
     this.lastClient = { x: 0, y: 0 };
     this.inputPortByNodeId = new Map();
     this.portByNodeId = new Map();
@@ -125,12 +137,30 @@ export class WorkflowCanvas {
     this.snapEnabled = !!enabled;
   }
 
-  setZoom(zoom) {
-    const z = Number(zoom);
-    if (!Number.isFinite(z)) return;
-    this.zoom = Math.max(0.5, Math.min(2, z));
+  setZoom(zoom, focusClient = null) {
+    const nextZoom = vpClampZoomValue(zoom, MIN_ZOOM, MAX_ZOOM);
+    const rect = focusClient && this.canvasWrap ? this.canvasWrap.getBoundingClientRect() : null;
+    const hasFocus = rect && Number.isFinite(focusClient?.clientX) && Number.isFinite(focusClient?.clientY);
+    const worldFocus = hasFocus
+      ? {
+        x: Number.isFinite(focusClient?.anchorWorld?.x) ? Number(focusClient.anchorWorld.x) : this.clientToWorld(focusClient.clientX, focusClient.clientY).x,
+        y: Number.isFinite(focusClient?.anchorWorld?.y) ? Number(focusClient.anchorWorld.y) : this.clientToWorld(focusClient.clientX, focusClient.clientY).y,
+      }
+      : null;
+    if (Math.abs(nextZoom - this.zoom) < 0.0001) {
+      if (worldFocus) {
+        vpPlaceWorldPointAtClient(this, worldFocus.x, worldFocus.y, focusClient.clientX, focusClient.clientY);
+        this.requestRender(true);
+      }
+      return;
+    }
+    this.zoom = nextZoom;
     this.invalidateAllRoutes();
-    this.render();
+    this.renderCore(false);
+    if (worldFocus && rect) {
+      vpPlaceWorldPointAtClient(this, worldFocus.x, worldFocus.y, focusClient.clientX, focusClient.clientY);
+    }
+    this.requestRender(true);
   }
 
   getZoom() {
@@ -252,6 +282,10 @@ export class WorkflowCanvas {
     vpEnsureViewport(this, extraPoint, EXPAND_PAD, VIEW_PAD, NODE_W, NODE_H);
   }
 
+  ensureMinimapBitmap() {
+    return vpEnsureMinimapBitmap(this);
+  }
+
   render() {
     this.renderCore(true);
   }
@@ -331,6 +365,38 @@ export class WorkflowCanvas {
       w: this.canvasWrap.clientWidth + m * 2,
       h: this.canvasWrap.clientHeight + m * 2,
     };
+  }
+
+  getGraphBounds() {
+    const nodes = Array.isArray(this.store?.state?.graph?.nodes) ? this.store.state.graph.nodes : [];
+    if (!nodes.length) return null;
+    let minLeft = Number.POSITIVE_INFINITY;
+    let minTop = Number.POSITIVE_INFINITY;
+    let maxRight = Number.NEGATIVE_INFINITY;
+    let maxBottom = Number.NEGATIVE_INFINITY;
+    nodes.forEach((node) => {
+      const x = Number(node?.x || 0);
+      const y = Number(node?.y || 0);
+      minLeft = Math.min(minLeft, x);
+      minTop = Math.min(minTop, y);
+      maxRight = Math.max(maxRight, x + NODE_W);
+      maxBottom = Math.max(maxBottom, y + NODE_H);
+    });
+    if (!Number.isFinite(minLeft) || !Number.isFinite(minTop) || !Number.isFinite(maxRight) || !Number.isFinite(maxBottom)) return null;
+    return { minLeft, minTop, maxRight, maxBottom };
+  }
+
+  fitToView(padding = 96) {
+    const bounds = this.getGraphBounds();
+    if (!bounds || this.canvasWrap.clientWidth <= 0 || this.canvasWrap.clientHeight <= 0) return false;
+    const fit = vpFitWorldRectToViewport(bounds, this.canvasWrap.clientWidth, this.canvasWrap.clientHeight, padding, MIN_ZOOM, MAX_ZOOM);
+    const rect = this.canvasWrap.getBoundingClientRect();
+    this.setZoom(fit.zoom, {
+      clientX: rect.left + this.canvasWrap.clientWidth / 2,
+      clientY: rect.top + this.canvasWrap.clientHeight / 2,
+      anchorWorld: { x: fit.centerX, y: fit.centerY },
+    });
+    return true;
   }
 
   updateNodePositionsFast(ids) {
