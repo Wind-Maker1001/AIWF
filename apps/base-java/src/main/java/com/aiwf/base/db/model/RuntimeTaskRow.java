@@ -4,7 +4,7 @@ public record RuntimeTaskRow(
         String taskId,
         String tenantId,
         String operator,
-        String status,
+        RuntimeTaskStatus status,
         long createdAtEpoch,
         long updatedAtEpoch,
         String resultJson,

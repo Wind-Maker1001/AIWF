@@ -3,6 +3,7 @@ package com.aiwf.base.service;
 import com.aiwf.base.db.RuntimeTaskRepository;
 import com.aiwf.base.db.model.RuntimeTaskCancelResult;
 import com.aiwf.base.db.model.RuntimeTaskRow;
+import com.aiwf.base.db.model.RuntimeTaskStatus;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.RuntimeTaskCancelResp;
 import com.aiwf.base.web.dto.RuntimeTaskGetResp;
@@ -32,7 +33,7 @@ public class RuntimeTaskService {
 
         String tenantId = defaultIfBlank(body.tenantId(), "default");
         String operator = defaultIfBlank(body.operator(), "transform_rows_v2");
-        String status = defaultIfBlank(body.status(), "queued");
+        RuntimeTaskStatus status = parseStatus(body.status(), RuntimeTaskStatus.QUEUED);
         long createdAt = body.createdAt() == null ? 0L : body.createdAt();
         long updatedAt = body.updatedAt() == null ? 0L : body.updatedAt();
         if (createdAt <= 0) {
@@ -54,7 +55,7 @@ public class RuntimeTaskService {
                     trimToNull(body.error()),
                     defaultIfBlank(body.source(), "accel-rust")
             );
-            return new RuntimeTaskUpsertResp(true, taskId, tenantId, status);
+            return new RuntimeTaskUpsertResp(true, taskId, tenantId, status.toDb());
         } catch (DataAccessException e) {
             throw ApiException.serviceUnavailable("runtime_task_store_unavailable", String.valueOf(e.getMostSpecificCause()));
         }
@@ -85,7 +86,7 @@ public class RuntimeTaskService {
         if (task == null) {
             throw ApiException.notFound("task_not_found", "task not found", Map.of("task_id", taskId));
         }
-        return new RuntimeTaskCancelResp(true, taskId, out.cancelled(), task.status());
+        return new RuntimeTaskCancelResp(true, taskId, out.cancelled(), task.status().toDb());
     }
 
     public RuntimeTaskListResp listTasksByTenant(String tenantId, int limit) {
@@ -119,12 +120,28 @@ public class RuntimeTaskService {
                 row.taskId(),
                 row.tenantId(),
                 row.operator(),
-                row.status(),
+                row.status().toDb(),
                 row.createdAtEpoch(),
                 row.updatedAtEpoch(),
                 row.resultJson(),
                 row.error(),
                 row.source()
         );
+    }
+
+    private RuntimeTaskStatus parseStatus(String value, RuntimeTaskStatus fallback) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            return fallback;
+        }
+        try {
+            return RuntimeTaskStatus.fromDb(trimmed);
+        } catch (IllegalArgumentException e) {
+            throw ApiException.badRequest(
+                    "runtime_task_status_invalid",
+                    "invalid runtime task status",
+                    Map.of("status", trimmed)
+            );
+        }
     }
 }

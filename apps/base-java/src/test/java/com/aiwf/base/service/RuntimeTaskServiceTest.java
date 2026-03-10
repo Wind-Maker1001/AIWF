@@ -3,6 +3,7 @@ package com.aiwf.base.service;
 import com.aiwf.base.db.RuntimeTaskRepository;
 import com.aiwf.base.db.model.RuntimeTaskCancelResult;
 import com.aiwf.base.db.model.RuntimeTaskRow;
+import com.aiwf.base.db.model.RuntimeTaskStatus;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.RuntimeTaskUpsertReq;
 import com.aiwf.base.web.dto.RuntimeTaskUpsertResp;
@@ -51,7 +52,7 @@ class RuntimeTaskServiceTest {
                 eq("t1"),
                 eq("default"),
                 eq("transform_rows_v2"),
-                eq("queued"),
+                eq(RuntimeTaskStatus.QUEUED),
                 createdCap.capture(),
                 updatedCap.capture(),
                 eq(null),
@@ -94,11 +95,20 @@ class RuntimeTaskServiceTest {
     @Test
     void getTaskReturnsResponse() {
         when(tasks.getTask("t1"))
-                .thenReturn(new RuntimeTaskRow("t1", "default", "transform_rows_v2", "done", 1L, 2L, null, null, "accel-rust"));
+                .thenReturn(new RuntimeTaskRow("t1", "default", "transform_rows_v2", RuntimeTaskStatus.DONE, 1L, 2L, null, null, "accel-rust"));
 
         var resp = service.getTask("t1");
 
         assertThat(resp.ok()).isTrue();
         assertThat(resp.task().taskId()).isEqualTo("t1");
+    }
+
+    @Test
+    void upsertTaskRejectsInvalidStatus() {
+        RuntimeTaskUpsertReq body = new RuntimeTaskUpsertReq("t1", null, "weird", null, null, null, null, null, null);
+
+        assertThatThrownBy(() -> service.upsertTask(body))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("invalid runtime task status");
     }
 }

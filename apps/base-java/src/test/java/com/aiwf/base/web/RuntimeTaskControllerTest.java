@@ -108,4 +108,17 @@ class RuntimeTaskControllerTest {
                 .andExpect(jsonPath("$.tenant_id").value("tenant-a"))
                 .andExpect(jsonPath("$.tasks[0].task_id").value("t1"));
     }
+
+    @Test
+    void upsertTaskReturnsInvalidStatusShape() throws Exception {
+        doThrow(ApiException.badRequest("runtime_task_status_invalid", "invalid runtime task status", java.util.Map.of("status", "weird")))
+                .when(tasks).upsertTask(org.mockito.ArgumentMatchers.any());
+
+        mockMvc.perform(post("/api/v1/runtime/tasks/upsert")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"task_id\":\"t9\",\"status\":\"weird\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("runtime_task_status_invalid"))
+                .andExpect(jsonPath("$.status").value("weird"));
+    }
 }
