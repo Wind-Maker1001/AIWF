@@ -1,0 +1,7 @@
+﻿use super::*;
+
+#[path = "main_tests_part1_a.rs"]
+mod a;
+
+#[path = "main_tests_part1_b.rs"]
+mod b;
