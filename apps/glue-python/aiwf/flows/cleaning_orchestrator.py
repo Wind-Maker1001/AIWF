@@ -147,14 +147,8 @@ def run_cleaning_flow(
                 materialize_office_outputs_fn=office_outputs_fn,
             )
 
-        artifacts = [
-            {"artifact_id": "csv_cleaned_001", "kind": "csv", "path": materialized["cleaned_csv"], "sha256": materialized["sha_csv"]},
-            {"artifact_id": "parquet_cleaned_001", "kind": "parquet", "path": materialized["cleaned_parquet"], "sha256": materialized["sha_parquet"]},
-            {"artifact_id": "xlsx_fin_001", "kind": "xlsx", "path": materialized["xlsx_path"], "sha256": materialized["sha_xlsx"]},
-            {"artifact_id": "docx_audit_001", "kind": "docx", "path": materialized["docx_path"], "sha256": materialized["sha_docx"]},
-            {"artifact_id": "pptx_deck_001", "kind": "pptx", "path": materialized["pptx_path"], "sha256": materialized["sha_pptx"]},
-            {"artifact_id": "profile_json_001", "kind": "json", "path": materialized["profile_json"], "sha256": materialized["sha_profile"]},
-        ]
+        artifacts = list(materialized.get("core_artifacts") or [])
+        artifacts.extend(list(materialized.get("office_artifacts") or []))
 
         for a in artifacts:
             base_artifact_upsert(

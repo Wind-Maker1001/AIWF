@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable, Dict, List, Optional
 
+from aiwf.flow_context import normalize_job_context
 from aiwf.flows.cleaning_artifacts import (
     CleaningArtifactContext,
     materialize_accel_cleaning_artifacts,
@@ -30,10 +31,15 @@ def prepare_job_layout(
     ensure_dirs: Callable[..., Any],
 ) -> Dict[str, str]:
     bus_root = resolve_bus_root()
-    job_root = resolve_job_root(job_id, override=params.get("job_root"))
-    stage_dir = os.path.join(job_root, "stage")
-    artifacts_dir = os.path.join(job_root, "artifacts")
-    evidence_dir = os.path.join(job_root, "evidence")
+    job_context = normalize_job_context(
+        job_id,
+        params=params,
+        job_context=params.get("job_context") if isinstance(params.get("job_context"), dict) else None,
+    )
+    job_root = job_context["job_root"]
+    stage_dir = job_context["stage_dir"]
+    artifacts_dir = job_context["artifacts_dir"]
+    evidence_dir = job_context["evidence_dir"]
     ensure_dirs(stage_dir, artifacts_dir, evidence_dir)
     job_root_uri = os.path.join(job_root, "")
     input_uri = params.get("input_uri") or job_root_uri

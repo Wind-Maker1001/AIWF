@@ -2,6 +2,8 @@
 import os
 from dotenv import load_dotenv
 
+from aiwf.paths import repo_root, resolve_aiwf_root, resolve_bus_root
+
 
 def _to_bool(v: str, default: bool = False) -> bool:
     if v is None:
@@ -19,8 +21,7 @@ class Settings:
 
 
 def _repo_root_from_here() -> str:
-    here = os.path.abspath(os.path.dirname(__file__))
-    return os.path.normpath(os.path.join(here, "..", "..", ".."))
+    return repo_root()
 
 
 def load_settings() -> Settings:
@@ -30,8 +31,8 @@ def load_settings() -> Settings:
     if os.path.exists(env_path):
         load_dotenv(env_path, override=True)
 
-    root = os.getenv("AIWF_ROOT", default_root)
-    bus = os.getenv("AIWF_BUS", os.path.join(root, "bus"))
+    root = resolve_aiwf_root()
+    bus = resolve_bus_root()
     lake = os.getenv("AIWF_LAKE", os.path.join(root, "lake"))
     base_url = os.getenv("AIWF_BASE_URL", "http://127.0.0.1:18080")
     api_key = os.getenv("AIWF_API_KEY")

@@ -12,8 +12,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from aiwf.capabilities import collect_capabilities
+from aiwf.flow_context import LegacyFlowPathParamsError, attach_job_context, normalize_job_context
 from aiwf.flows.registry import get_flow_runner, list_flows
-from aiwf.paths import resolve_job_root, resolve_jobs_root
+from aiwf.paths import resolve_jobs_root
 
 
 logging.basicConfig(
@@ -44,6 +45,8 @@ def _debug_errors_enabled() -> bool:
 class RunReq(BaseModel):
     actor: str = "glue"
     ruleset_version: str = "v1"
+    trace_id: Optional[str] = None
+    job_context: Optional[Dict[str, str]] = None
     params: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -98,8 +101,16 @@ def _run_flow_with_runner(job_id: str, req: RunReq, runner):
     """Compatibility wrapper for flow runners with mixed signatures."""
     base = make_base_client()
 
-    params_obj = dict(req.params or {})
-    params_obj.setdefault("job_root", resolve_job_root(job_id, override=os.path.join(settings.jobs_root, job_id)))
+    normalized_context = normalize_job_context(
+        job_id,
+        params=req.params,
+        job_context=req.job_context,
+    )
+    params_obj = attach_job_context(
+        req.params,
+        job_context=normalized_context,
+        trace_id=req.trace_id,
+    )
     params_json = json.dumps(params_obj, ensure_ascii=False)
     return _call_compatible(
         runner,
@@ -203,7 +214,13 @@ def run_flow(job_id: str, flow: str, req: RunReq):
             status_code=404,
             content={"ok": False, "error": f"unknown flow: {flow}", "available_flows": list_flows()},
         )
-    result = _run_flow_with_runner(job_id, req, runner)
+    try:
+        result = _run_flow_with_runner(job_id, req, runner)
+    except LegacyFlowPathParamsError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(exc), "job_id": job_id, "flow": flow},
+        )
 
     if isinstance(result, BaseModel):
         out = result.model_dump()

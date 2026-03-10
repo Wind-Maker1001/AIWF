@@ -4,8 +4,31 @@ import unittest
 from unittest.mock import patch, Mock
 
 os.environ.setdefault("NUMEXPR_MAX_THREADS", "8")
+os.environ.setdefault("AIWF_ALLOW_EXTERNAL_JOB_ROOT", "1")
 
 from aiwf.flows import cleaning
+from aiwf.flows.cleaning_artifacts import (
+    materialize_accel_cleaning_artifacts,
+    register_cleaning_artifact,
+    unregister_cleaning_artifact,
+)
+from aiwf.flows.office_artifacts import register_office_artifact, unregister_office_artifact
+
+
+def make_job_context(job_root: str) -> dict[str, str]:
+    job_root = os.path.normpath(job_root)
+    return {
+        "job_root": job_root,
+        "stage_dir": os.path.join(job_root, "stage"),
+        "artifacts_dir": os.path.join(job_root, "artifacts"),
+        "evidence_dir": os.path.join(job_root, "evidence"),
+    }
+
+
+def with_job_context(job_root: str, **params):
+    out = dict(params)
+    out["job_context"] = make_job_context(job_root)
+    return out
 
 
 class CleaningFlowTests(unittest.TestCase):
@@ -20,6 +43,34 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertIn("Debate", t_en["report_title"])
         self.assertEqual(cleaning._office_quality_mode({}), "high")
         self.assertEqual(cleaning._office_quality_mode({"office_quality_mode": "standard"}), "standard")
+
+    def test_build_profile_tracks_dynamic_columns_and_numeric_stats(self):
+        profile = cleaning._build_profile(
+            [
+                {"id": 1, "amount": "10.25", "score": "2", "name": "alice"},
+                {"id": 2, "amount": "1.75", "score": "3", "name": "bob"},
+            ],
+            {"input_rows": 2, "output_rows": 2, "invalid_rows": 0, "filtered_rows": 0, "duplicate_rows_removed": 0},
+            "unit.test",
+        )
+
+        self.assertEqual(profile["cols"], 4)
+        self.assertEqual(profile["sum_amount"], 12.0)
+        self.assertEqual(profile["avg_amount"], 6.0)
+        self.assertEqual(profile["numeric_stats"]["score"]["sum"], 5.0)
+        self.assertEqual(profile["numeric_stats"]["amount"]["max"], 10.25)
+
+    def test_build_profile_ignores_missing_amount_values(self):
+        profile = cleaning._build_profile(
+            [{"amount": 10}, {}],
+            {"input_rows": 2, "output_rows": 2, "invalid_rows": 0, "filtered_rows": 0, "duplicate_rows_removed": 0},
+            "unit.test",
+        )
+
+        self.assertEqual(profile["sum_amount"], 10.0)
+        self.assertEqual(profile["min_amount"], 10.0)
+        self.assertEqual(profile["max_amount"], 10.0)
+        self.assertEqual(profile["avg_amount"], 10.0)
 
     def test_office_writers_produce_rich_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -74,6 +125,248 @@ class CleaningFlowTests(unittest.TestCase):
             doc = Document(docx_path)
             self.assertEqual(doc.paragraphs[0].text, "Academic Data Processing Report")
 
+    def test_run_cleaning_includes_registered_custom_office_artifact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            def write_bin(path, *args, **kwargs):
+                with open(path, "wb") as f:
+                    f.write(b"BIN")
+                return True
+
+            def write_text_summary(context, output_path):
+                with open(output_path, "w", encoding="utf-8") as f:
+                    f.write(f"rows={context.office_profile.get('rows')}")
+
+            register_office_artifact(
+                "text_summary",
+                artifact_id="text_summary_001",
+                kind="txt",
+                filename="summary.txt",
+                path_key="summary_txt_path",
+                sha_key="sha_summary_txt",
+                writer=write_text_summary,
+            )
+            try:
+                with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                    "aiwf.flows.cleaning._base_artifact_upsert"
+                ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                    "aiwf.flows.cleaning._base_step_fail"
+                ), patch(
+                    "aiwf.flows.cleaning._try_accel_cleaning",
+                    return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+                ), patch(
+                    "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+                ), patch(
+                    "aiwf.flows.cleaning._write_profile_illustration_png", side_effect=write_bin
+                ), patch(
+                    "aiwf.flows.cleaning._write_fin_xlsx", side_effect=write_bin
+                ), patch(
+                    "aiwf.flows.cleaning._write_audit_docx", side_effect=write_bin
+                ), patch(
+                    "aiwf.flows.cleaning._write_deck_pptx", side_effect=write_bin
+                ):
+                    out = cleaning.run_cleaning(
+                        job_id="job-custom-office",
+                        actor="test",
+                        params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 10.0}]),
+                    )
+            finally:
+                unregister_office_artifact("text_summary")
+
+            txt_artifacts = [a for a in out["artifacts"] if a["kind"] == "txt"]
+            self.assertEqual(len(txt_artifacts), 1)
+            self.assertTrue(txt_artifacts[0]["path"].endswith("summary.txt"))
+
+    def test_run_cleaning_includes_registered_custom_core_artifact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            def custom_meta_path(context):
+                return os.path.join(context.evidence_dir, "meta.txt")
+
+            def write_custom_meta(context, output_path):
+                with open(output_path, "w", encoding="utf-8") as f:
+                    f.write(f"rows={len(context.rows)}")
+
+            register_cleaning_artifact(
+                "meta_text",
+                artifact_id="meta_text_001",
+                kind="txt",
+                path_key="meta_txt_path",
+                sha_key="sha_meta_txt",
+                local_path_resolver=custom_meta_path,
+                local_writer=write_custom_meta,
+            )
+            try:
+                with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                    "aiwf.flows.cleaning._base_artifact_upsert"
+                ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                    "aiwf.flows.cleaning._base_step_fail"
+                ), patch(
+                    "aiwf.flows.cleaning._try_accel_cleaning",
+                    return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+                ), patch(
+                    "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+                ):
+                    out = cleaning.run_cleaning(
+                        job_id="job-custom-core",
+                        actor="test",
+                        params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 10.0}]),
+                    )
+            finally:
+                unregister_cleaning_artifact("meta_text")
+
+            txt_artifacts = [a for a in out["artifacts"] if a["artifact_id"] == "meta_text_001"]
+            self.assertEqual(len(txt_artifacts), 1)
+            self.assertTrue(txt_artifacts[0]["path"].endswith("meta.txt"))
+
+    def test_run_cleaning_can_disable_office_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ), patch(
+                "aiwf.flows.cleaning._write_profile_illustration_png", side_effect=AssertionError("office disabled")
+            ), patch(
+                "aiwf.flows.cleaning._write_fin_xlsx", side_effect=AssertionError("office disabled")
+            ), patch(
+                "aiwf.flows.cleaning._write_audit_docx", side_effect=AssertionError("office disabled")
+            ), patch(
+                "aiwf.flows.cleaning._write_deck_pptx", side_effect=AssertionError("office disabled")
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-no-office",
+                    actor="test",
+                    params=with_job_context(
+                        local_job_root,
+                        office_outputs_enabled=False,
+                        rows=[{"id": 1, "amount": 10.0}],
+                    ),
+                )
+
+            artifact_kinds = {a["kind"] for a in out["artifacts"]}
+            self.assertFalse({"xlsx", "docx", "pptx"} & artifact_kinds)
+
+    def test_run_cleaning_can_disable_optional_core_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-core-select",
+                    actor="test",
+                    params=with_job_context(
+                        local_job_root,
+                        office_outputs_enabled=False,
+                        disabled_core_artifacts=["csv", "json"],
+                        rows=[{"id": 1, "amount": 10.0}],
+                    ),
+                )
+
+            artifact_kinds = [a["kind"] for a in out["artifacts"]]
+            self.assertEqual(artifact_kinds, ["parquet"])
+
+    def test_run_cleaning_rejects_disabling_required_parquet_artifact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    cleaning.run_cleaning(
+                        job_id="job-disable-required",
+                        actor="test",
+                        params=with_job_context(
+                            local_job_root,
+                            office_outputs_enabled=False,
+                            disabled_core_artifacts=["parquet"],
+                            rows=[{"id": 1, "amount": 10.0}],
+                        ),
+                    )
+            self.assertIn("required cleaning artifact disabled", str(ctx.exception))
+
+    def test_run_cleaning_supports_nested_artifact_selection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ), patch(
+                "aiwf.flows.cleaning._write_profile_illustration_png", side_effect=AssertionError("office disabled")
+            ), patch(
+                "aiwf.flows.cleaning._write_fin_xlsx", side_effect=AssertionError("office disabled")
+            ), patch(
+                "aiwf.flows.cleaning._write_audit_docx", side_effect=AssertionError("office disabled")
+            ), patch(
+                "aiwf.flows.cleaning._write_deck_pptx", side_effect=AssertionError("office disabled")
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-nested-artifacts",
+                    actor="test",
+                    params=with_job_context(
+                        local_job_root,
+                        artifact_selection={
+                            "office": {"enabled": False},
+                            "core": {"enabled": False},
+                        },
+                        rows=[{"id": 1, "amount": 10.0}],
+                    ),
+                )
+
+            artifact_kinds = [a["kind"] for a in out["artifacts"]]
+            self.assertEqual(artifact_kinds, ["parquet"])
+
     def test_validate_cleaning_rules_ok(self):
         res = cleaning.validate_cleaning_rules(
             {
@@ -109,6 +402,39 @@ class CleaningFlowTests(unittest.TestCase):
         res = cleaning.validate_cleaning_rules({"rules": {"unknown_x": 1}})
         self.assertTrue(res["ok"])
         self.assertTrue(any("unknown rule keys" in w for w in res["warnings"]))
+
+    def test_validate_cleaning_rules_supports_artifact_selection_object(self):
+        res = cleaning.validate_cleaning_rules(
+            {
+                "rules": {"max_invalid_rows": 1},
+                "artifact_selection": {
+                    "office": {"enabled": False},
+                    "core": {"exclude": ["csv"]},
+                },
+            }
+        )
+        self.assertTrue(res["ok"])
+
+        bad = cleaning.validate_cleaning_rules(
+            {
+                "artifact_selection": {
+                    "office": {"enabled": "no"},
+                    "core": {"exclude": "csv"},
+                }
+            }
+        )
+        self.assertFalse(bad["ok"])
+
+        bad_unknown = cleaning.validate_cleaning_rules(
+            {
+                "artifact_selection": {
+                    "office": {"include": ["missing_office"]},
+                    "core": {"exclude": ["missing_core"]},
+                }
+            }
+        )
+        self.assertFalse(bad_unknown["ok"])
+        self.assertTrue(any("unknown artifacts" in err for err in bad_unknown["errors"]))
 
     def test_quality_gates_fail_on_invalid_rows(self):
         quality = {"input_rows": 10, "output_rows": 8, "invalid_rows": 2, "filtered_rows": 0}
@@ -339,7 +665,7 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-1",
                     actor="test",
-                    params={"job_root": local_job_root},
+                    params=with_job_context(local_job_root),
                 )
 
             self.assertTrue(out["ok"])
@@ -349,6 +675,35 @@ class CleaningFlowTests(unittest.TestCase):
             parquet_artifact = [a for a in out["artifacts"] if a["kind"] == "parquet"][0]
             self.assertTrue(parquet_artifact["path"].startswith(local_job_root))
             self.assertNotEqual(parquet_artifact["path"], accel_parquet)
+
+    def test_materialize_accel_cleaning_artifacts_requires_required_output(self):
+        with self.assertRaises(RuntimeError):
+            materialize_accel_cleaning_artifacts(
+                {},
+                params_effective={},
+                sha256_file=lambda path: "sha",
+            )
+
+    def test_materialize_accel_cleaning_artifacts_skips_missing_optional_outputs(self):
+        out = materialize_accel_cleaning_artifacts(
+            {
+                "cleaned_parquet": {
+                    "path": r"D:\tmp\cleaned.parquet",
+                    "sha256": "parquet-sha",
+                }
+            },
+            params_effective={},
+            sha256_file=lambda path: "sha",
+        )
+
+        self.assertEqual(out["cleaned_parquet"], r"D:\tmp\cleaned.parquet")
+        self.assertEqual(out["sha_parquet"], "parquet-sha")
+        self.assertNotIn("cleaned_csv", out)
+        self.assertNotIn("profile_json", out)
+        self.assertEqual(
+            [artifact["artifact_id"] for artifact in out["core_artifacts"]],
+            ["parquet_cleaned_001"],
+        )
 
     def test_run_cleaning_fails_when_local_parquet_invalid_in_strict_mode(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -372,7 +727,7 @@ class CleaningFlowTests(unittest.TestCase):
                     cleaning.run_cleaning(
                         job_id="job-strict",
                         actor="test",
-                        params={"job_root": local_job_root, "local_parquet_strict": True},
+                        params=with_job_context(local_job_root, local_parquet_strict=True),
                     )
                 self.assertIn("strict mode enabled", str(ctx.exception))
 
@@ -392,11 +747,11 @@ class CleaningFlowTests(unittest.TestCase):
                     cleaning.run_cleaning(
                         job_id="job-gate",
                         actor="test",
-                        params={
-                            "job_root": local_job_root,
-                            "rows": [{"id": "bad", "amount": "1"}],
-                            "max_invalid_rows": 0,
-                        },
+                        params=with_job_context(
+                            local_job_root,
+                            rows=[{"id": "bad", "amount": "1"}],
+                            max_invalid_rows=0,
+                        ),
                     )
                 self.assertIn("quality gate failed", str(ctx.exception))
 
@@ -415,11 +770,11 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-generic",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "rows": [{"name": "A", "amount": 12}],
-                        "rules": {"platform_mode": "generic"},
-                    },
+                    params=with_job_context(
+                        local_job_root,
+                        rows=[{"name": "A", "amount": 12}],
+                        rules={"platform_mode": "generic"},
+                    ),
                 )
             self.assertTrue(out["ok"])
             self.assertFalse(out["accel"]["attempted"])
@@ -445,15 +800,15 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-pre",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "preprocess": {
+                    params=with_job_context(
+                        local_job_root,
+                        preprocess={
                             "enabled": True,
                             "input_path": in_csv,
                             "header_map": {"ID": "id", "Amt": "amount"},
                             "amount_fields": ["amount"],
                         },
-                    },
+                    ),
                 )
             self.assertTrue(out["ok"])
             self.assertIn("preprocess", out["profile"])
@@ -478,9 +833,9 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-pre-pipeline",
                     actor="test",
-                    params={
-                        "job_root": local_job_root,
-                        "preprocess": {
+                    params=with_job_context(
+                        local_job_root,
+                        preprocess={
                             "enabled": True,
                             "input_path": in_txt,
                             "pipeline": {
@@ -497,7 +852,7 @@ class CleaningFlowTests(unittest.TestCase):
                                 ],
                             },
                         },
-                    },
+                    ),
                 )
             self.assertTrue(out["ok"])
             self.assertIn("preprocess", out["profile"])
@@ -529,6 +884,14 @@ class CleaningFlowTests(unittest.TestCase):
             )
         self.assertEqual(out["rows"], [{"id": 1, "amount": 10.0}])
         self.assertFalse(out["quality"].get("rust_v2_used"))
+
+    def test_write_cleaned_csv_quotes_delimited_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = os.path.join(tmp, "cleaned.csv")
+            cleaning._write_cleaned_csv(csv_path, [{"id": 1, "note": "a,b"}])
+            with open(csv_path, "r", encoding="utf-8") as f:
+                text = f.read()
+            self.assertIn('"a,b"', text)
 
 
 if __name__ == "__main__":
