@@ -498,6 +498,35 @@ class AppRouteTests(unittest.TestCase):
             self.assertTrue(parquet_artifact["path"].startswith(local_job_root))
             self.assertFalse(parquet_artifact["path"].startswith(legacy_job_root))
 
+    @patch.dict(
+        "os.environ",
+        {
+            "AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true",
+            "AIWF_STRICT_JOB_CONTEXT": "true",
+        },
+        clear=False,
+    )
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_rejects_legacy_path_params_in_strict_mode(self, _make_base_client):
+        resp = self.client.post(
+            "/jobs/job-strict/run/cleaning",
+            json={
+                "actor": "local",
+                "ruleset_version": "v1",
+                "params": {
+                    "job_root": r"D:\legacy\job",
+                    "rows": [{"id": 1, "amount": 10.0}],
+                },
+            },
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job-strict")
+        self.assertEqual(payload["flow"], "cleaning")
+        self.assertIn("legacy flow path params are disabled", payload["error"])
+
     @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
     @patch.object(glue_app, "make_base_client", return_value=None)
     def test_run_flow_route_reports_cleaning_failures_via_step_fail(self, _make_base_client):

@@ -58,6 +58,48 @@ class PathResolutionTests(unittest.TestCase):
         self.assertEqual(layout["job_root"], os.path.normpath(r"D:\legacy\job"))
         self.assertTrue(any("params.job_root" in entry for entry in logs.output))
 
+    def test_prepare_job_layout_accepts_explicit_job_context_in_strict_mode(self):
+        with patch.dict(
+            os.environ,
+            {
+                "AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true",
+                "AIWF_STRICT_JOB_CONTEXT": "true",
+            },
+            clear=False,
+        ):
+            layout = prepare_job_layout(
+                "job-strict",
+                {
+                    "job_context": {
+                        "job_root": r"D:\strict\job",
+                        "stage_dir": r"D:\strict\job\stage-x",
+                        "artifacts_dir": r"D:\strict\job\artifacts-x",
+                        "evidence_dir": r"D:\strict\job\evidence-x",
+                    },
+                },
+                ensure_dirs=lambda *args: None,
+            )
+        self.assertEqual(layout["job_root"], os.path.normpath(r"D:\strict\job"))
+        self.assertEqual(layout["stage_dir"], os.path.normpath(r"D:\strict\job\stage-x"))
+        self.assertEqual(layout["artifacts_dir"], os.path.normpath(r"D:\strict\job\artifacts-x"))
+        self.assertEqual(layout["evidence_dir"], os.path.normpath(r"D:\strict\job\evidence-x"))
+
+    def test_prepare_job_layout_rejects_legacy_path_params_in_strict_mode(self):
+        with patch.dict(
+            os.environ,
+            {
+                "AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true",
+                "AIWF_STRICT_JOB_CONTEXT": "true",
+            },
+            clear=False,
+        ):
+            with self.assertRaisesRegex(ValueError, "legacy flow path params are disabled"):
+                prepare_job_layout(
+                    "job-strict-legacy",
+                    {"job_root": r"D:\legacy\job"},
+                    ensure_dirs=lambda *args: None,
+                )
+
     def test_resolve_job_root_rejects_traversal_job_id(self):
         with patch.dict(os.environ, {"AIWF_JOBS_ROOT": r"D:\custom\jobs"}, clear=True):
             with self.assertRaises(ValueError):

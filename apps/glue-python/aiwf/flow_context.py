@@ -8,6 +8,13 @@ from aiwf.paths import resolve_job_root, resolve_path_within_root
 
 log = logging.getLogger("glue.flow_context")
 
+LEGACY_FLOW_PATH_PARAM_KEYS = frozenset({
+    "job_root",
+    "stage_dir",
+    "artifacts_dir",
+    "evidence_dir",
+})
+
 RESERVED_ATTACHED_PARAM_KEYS = frozenset({
     "job_context",
     "trace_id",
@@ -15,6 +22,15 @@ RESERVED_ATTACHED_PARAM_KEYS = frozenset({
     "artifacts_dir",
     "evidence_dir",
 })
+
+
+class LegacyFlowPathParamsError(ValueError):
+    pass
+
+
+def _strict_job_context_enabled() -> bool:
+    value = str(os.getenv("AIWF_STRICT_JOB_CONTEXT") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 
 def normalize_job_context(
@@ -27,6 +43,13 @@ def normalize_job_context(
     context_obj = job_context if isinstance(job_context, dict) else {}
 
     legacy_sources: list[str] = []
+    legacy_param_keys = [key for key in LEGACY_FLOW_PATH_PARAM_KEYS if params_obj.get(key) is not None]
+
+    if legacy_param_keys and _strict_job_context_enabled():
+        raise LegacyFlowPathParamsError(
+            "legacy flow path params are disabled; provide top-level job_context instead of "
+            + ",".join(f"params.{key}" for key in legacy_param_keys)
+        )
 
     job_root_override = context_obj.get("job_root") or params_obj.get("job_root")
     if context_obj.get("job_root") is None and params_obj.get("job_root") is not None:

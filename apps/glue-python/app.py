@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from aiwf.capabilities import collect_capabilities
-from aiwf.flow_context import attach_job_context, normalize_job_context
+from aiwf.flow_context import LegacyFlowPathParamsError, attach_job_context, normalize_job_context
 from aiwf.flows.registry import get_flow_runner, list_flows
 from aiwf.paths import resolve_jobs_root
 
@@ -214,7 +214,13 @@ def run_flow(job_id: str, flow: str, req: RunReq):
             status_code=404,
             content={"ok": False, "error": f"unknown flow: {flow}", "available_flows": list_flows()},
         )
-    result = _run_flow_with_runner(job_id, req, runner)
+    try:
+        result = _run_flow_with_runner(job_id, req, runner)
+    except LegacyFlowPathParamsError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(exc), "job_id": job_id, "flow": flow},
+        )
 
     if isinstance(result, BaseModel):
         out = result.model_dump()
