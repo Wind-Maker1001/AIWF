@@ -39,6 +39,7 @@ timeout_s = int(sys.argv[5])
 
 submit_url = base + "/operators/transform_rows_v2/submit"
 task_url = base + "/tasks/{}"
+session = requests.Session()
 
 def pct(arr, p):
     if not arr:
@@ -66,7 +67,7 @@ for i in range(tasks):
       "quality_gates": {"min_output_rows": 1}
     }
     t0 = time.perf_counter()
-    r = requests.post(submit_url, json=payload, timeout=60)
+    r = session.post(submit_url, json=payload, timeout=60)
     t1 = time.perf_counter()
     if r.status_code >= 400:
         raise RuntimeError(f"submit failed {r.status_code}: {r.text[:300]}")
@@ -81,8 +82,9 @@ deadline = time.time() + timeout_s
 pending = {x["task_id"]: x for x in task_records}
 while pending and time.time() < deadline:
     done_ids = []
+    poll_t = time.time()
     for tid, rec in list(pending.items()):
-        rr = requests.get(task_url.format(tid), timeout=20)
+        rr = session.get(task_url.format(tid), timeout=20)
         if rr.status_code == 404:
             continue
         if rr.status_code >= 400:
@@ -91,7 +93,7 @@ while pending and time.time() < deadline:
         st = str(jj.get("status") or "")
         rec["status"] = st
         if st in ("done", "failed", "cancelled"):
-            rec["done_t"] = time.time()
+            rec["done_t"] = poll_t
             done_ids.append(tid)
     for tid in done_ids:
         pending.pop(tid, None)

@@ -1,16 +1,51 @@
 use super::*;
 
+fn write_sqlcmd_input_file(query: &str) -> Result<PathBuf, String> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("sqlcmd temp file clock error: {e}"))?
+        .as_nanos();
+    let path = env::temp_dir().join(format!(
+        "aiwf_sqlcmd_{}_{}.sql",
+        std::process::id(),
+        stamp
+    ));
+    let mut bytes = Vec::with_capacity(query.len() + 3);
+    bytes.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
+    bytes.extend_from_slice(query.as_bytes());
+    fs::write(&path, bytes).map_err(|e| format!("sqlcmd temp file write: {e}"))?;
+    Ok(path)
+}
+
+fn normalize_sqlcmd_output(raw: &[u8]) -> String {
+    String::from_utf8_lossy(raw)
+        .replace("\\\r\n", "\\")
+        .replace("\\\n", "\\")
+        .replace('\r', "")
+        .replace('\n', "")
+}
+
 pub fn run_sqlcmd_query(cfg: &TaskStoreConfig, query: &str) -> Result<String, String> {
+    let query_file = write_sqlcmd_input_file(query)?;
     let mut cmd = Command::new("sqlcmd");
     cmd.arg("-S")
         .arg(format!("{},{}", cfg.sql_host, cfg.sql_port))
         .arg("-d")
         .arg(cfg.sql_db.clone())
+        .arg("-b")
         .arg("-W")
         .arg("-h")
         .arg("-1")
-        .arg("-Q")
-        .arg(query);
+        .arg("-y")
+        .arg("0")
+        .arg("-Y")
+        .arg("0")
+        .arg("-w")
+        .arg("65535")
+        .arg("-i")
+        .arg(&query_file);
 
     if cfg.sql_use_windows_auth {
         cmd.arg("-E");
@@ -20,13 +55,25 @@ pub fn run_sqlcmd_query(cfg: &TaskStoreConfig, query: &str) -> Result<String, St
         cmd.arg("-U").arg(user).arg("-P").arg(pwd);
     }
     let out = cmd.output().map_err(|e| format!("run sqlcmd: {e}"))?;
+    let _ = fs::remove_file(&query_file);
     if !out.status.success() {
+        let stderr = normalize_sqlcmd_output(&out.stderr).trim().to_string();
+        let stdout = normalize_sqlcmd_output(&out.stdout).trim().to_string();
+        let detail = if !stderr.is_empty() && !stdout.is_empty() {
+            format!("{stderr} | stdout: {stdout}")
+        } else if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            format!("exit status {}", out.status)
+        };
         return Err(format!(
             "sqlcmd failed: {}",
-            String::from_utf8_lossy(&out.stderr)
+            detail
         ));
     }
-    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    Ok(normalize_sqlcmd_output(&out.stdout))
 }
 
 pub fn escape_tsql(s: &str) -> String {
