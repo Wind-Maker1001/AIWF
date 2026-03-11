@@ -1,7 +1,9 @@
 param(
   [string]$Root = "",
-  [string[]]$Docs = @("docs\release_notes_v1.1.6.md"),
-  [string]$RequirePattern = "release/(gate_v1.1.6|v1.1.6)/"
+  [string[]]$Docs = @(
+    "docs\release_notes_v1.1.6.md",
+    "docs\offline_delivery_minimal.md"
+  )
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,38 +16,91 @@ if (-not $Root) {
   $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 }
 
-$missing = @()
+$evidenceSpecs = @(
+  [pscustomobject]@{
+    name = "release_gate_summary.json"
+    docs = @("docs\release_notes_v1.1.6.md")
+    scripts = @("ops\scripts\release_gate_v1_1_6.ps1")
+  },
+  [pscustomobject]@{
+    name = "release_gate_summary.md"
+    docs = @("docs\release_notes_v1.1.6.md")
+    scripts = @("ops\scripts\release_gate_v1_1_6.ps1")
+  },
+  [pscustomobject]@{
+    name = "manifest.json"
+    docs = @("docs\offline_delivery_minimal.md")
+    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1")
+  },
+  [pscustomobject]@{
+    name = "RELEASE_NOTES.md"
+    docs = @("docs\offline_delivery_minimal.md")
+    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1")
+  },
+  [pscustomobject]@{
+    name = "SHA256SUMS.txt"
+    docs = @("docs\offline_delivery_minimal.md")
+    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1")
+  }
+)
+
+$docSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($doc in $Docs) { $null = $docSet.Add($doc) }
+foreach ($spec in $evidenceSpecs) {
+  foreach ($doc in $spec.docs) { $null = $docSet.Add($doc) }
+}
+
+$docCache = @{}
+foreach ($docRel in $docSet) {
+  $full = Join-Path $Root $docRel
+  if (-not (Test-Path $full)) {
+    throw "required release-evidence doc missing: $docRel"
+  }
+  $docCache[$docRel] = Get-Content -Raw -Encoding utf8 $full
+}
+
+$issues = @()
 $checked = 0
 
-foreach ($docRel in $Docs) {
-  $doc = Join-Path $Root $docRel
-  if (-not (Test-Path $doc)) {
-    Warn "doc not found, skip: $docRel"
-    continue
-  }
-  $raw = Get-Content -Raw -Encoding utf8 $doc
-  $matches = [regex]::Matches($raw, '`(release\/[^`]+)`')
-  foreach ($m in $matches) {
-    $rel = $m.Groups[1].Value.Trim()
-    if (-not $rel) { continue }
-    if ($rel.Contains("<")) { continue }
-    if ($RequirePattern -and ($rel -notmatch $RequirePattern)) { continue }
-    $checked += 1
-    $norm = $rel.Replace("/", "\")
-    $full = Join-Path $Root $norm
-    if (-not (Test-Path $full)) {
-      $missing += $rel
+foreach ($spec in $evidenceSpecs) {
+  $docMatched = $false
+  foreach ($docRel in $spec.docs) {
+    $raw = [string]$docCache[$docRel]
+    if ($raw -match [regex]::Escape($spec.name)) {
+      $docMatched = $true
+      $checked += 1
+      break
     }
+  }
+  if (-not $docMatched) {
+    $issues += "docs missing release evidence reference: $($spec.name)"
+  }
+
+  $scriptMatched = $false
+  foreach ($scriptRel in $spec.scripts) {
+    $script = Join-Path $Root $scriptRel
+    if (-not (Test-Path $script)) {
+      $issues += "release script missing: $scriptRel"
+      continue
+    }
+    $raw = Get-Content -Raw -Encoding utf8 $script
+    if ($raw -match [regex]::Escape($spec.name)) {
+      $scriptMatched = $true
+      $checked += 1
+      break
+    }
+  }
+  if (-not $scriptMatched) {
+    $issues += "release scripts do not emit expected evidence file: $($spec.name)"
   }
 }
 
-if ($missing.Count -gt 0) {
-  $uniq = $missing | Sort-Object -Unique
-  Write-Host "[FAIL] release evidence missing:" -ForegroundColor Red
-  foreach ($x in $uniq) {
-    Write-Host "  - $x" -ForegroundColor Red
+if ($issues.Count -gt 0) {
+  Write-Host "[FAIL] release evidence validation failed:" -ForegroundColor Red
+  $issues | Sort-Object -Unique | ForEach-Object {
+    Write-Host "  - $_" -ForegroundColor Red
   }
   exit 1
 }
 
-Ok "release evidence paths verified ($checked checked)"
+Ok "release evidence declarations verified ($checked checked)"

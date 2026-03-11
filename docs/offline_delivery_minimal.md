@@ -33,6 +33,8 @@ Bundle content:
 - optional `.blockmap`
 - `README.txt`
 - `SHA256SUMS.txt`
+- `manifest.json`
+- `RELEASE_NOTES.md`
 - docs (`quickstart_desktop_offline.md`, `dify_desktop_app.md`, this file)
 
 Generate a single zip for copy:
