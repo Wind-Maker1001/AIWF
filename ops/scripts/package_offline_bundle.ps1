@@ -92,7 +92,7 @@ $docList = @(
   "docs\quickstart_desktop_offline.md",
   "docs\dify_desktop_app.md",
   "docs\offline_delivery_minimal.md",
-  "docs\v1_1_goal_freeze.md",
+  "docs\finance_template_v1.md",
   "docs\regression_quality.md"
 )
 foreach ($d in $docList) {
@@ -144,7 +144,9 @@ $lines = @(
   "5. 若包含 tools/，应用会优先使用内置 OCR 依赖（tesseract/pdftoppm）。",
   "",
   "## 默认输出目录",
-  "文档\\AIWF-Offline\\<job_id>\\artifacts"
+  "- 若存在 E:\\Desktop_Real，则默认输出到 E:\\Desktop_Real\\AIWF\\<job_id>\\artifacts",
+  "- 否则默认输出到 桌面\\AIWF_Builds\\<job_id>\\artifacts",
+  "- 若用户在应用内修改 输出目录，则以用户配置为准"
 )
 $lines | Set-Content (Join-Path $bundleRoot "README.txt") -Encoding UTF8
 

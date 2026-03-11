@@ -66,4 +66,8 @@ On target machine:
 - OCR on images is enabled by default in Desktop GUI.
 - If bundle includes `tools/` (from `-IncludeBundledTools`), app will优先使用内置 `tesseract/pdftoppm`。
 - If runtime dependency is missing, app will auto-fallback and show warning.
-- Default output path: `文档\AIWF-Offline\<job_id>\artifacts`.
+- Default output root follows the desktop config:
+  - `E:\Desktop_Real\AIWF` when `E:\Desktop_Real` exists
+  - otherwise `Desktop\AIWF_Builds`
+- Task artifacts are written under `<output_root>\<job_id>\artifacts`.
+- If the user changes `输出目录` in the desktop app, that custom path becomes the new artifact root.
