@@ -30,6 +30,7 @@ pub(super) fn push_failed_workflow_step(
     trace: &mut Vec<WorkflowStepReplay>,
     id: &str,
     op: &str,
+    resolution: Value,
     started_at: String,
     duration_ms: u128,
     input_summary: Value,
@@ -38,6 +39,7 @@ pub(super) fn push_failed_workflow_step(
     trace.push(WorkflowStepReplay {
         id: id.to_string(),
         operator: op.to_string(),
+        resolution,
         status: "failed".to_string(),
         started_at,
         finished_at: utc_now_iso(),
@@ -51,6 +53,7 @@ pub(super) fn push_failed_workflow_step(
 pub(super) fn push_success_workflow_step(
     trace: &mut Vec<WorkflowStepReplay>,
     step_key: (&str, &str),
+    resolution: Value,
     started_at: String,
     finished_at: String,
     duration_ms: u128,
@@ -61,6 +64,7 @@ pub(super) fn push_success_workflow_step(
     trace.push(WorkflowStepReplay {
         id: id.to_string(),
         operator: op.to_string(),
+        resolution,
         status: "done".to_string(),
         started_at,
         finished_at,

@@ -120,6 +120,25 @@ pub(crate) async fn capabilities_v1_operator(
     }
 }
 
+pub(crate) async fn capabilities_operator() -> impl IntoResponse {
+    match run_capabilities_v1(CapabilitiesV1Req {
+        run_id: None,
+        include_ops: None,
+    }) {
+        Ok(v) => (StatusCode::OK, Json(v)).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrResp {
+                ok: false,
+                operator: "capabilities_v1".to_string(),
+                status: "failed".to_string(),
+                error: e,
+            }),
+        )
+            .into_response(),
+    }
+}
+
 pub(crate) async fn io_contract_v1_operator(Json(req): Json<IoContractV1Req>) -> impl IntoResponse {
     match run_io_contract_v1(req) {
         Ok(v) => (StatusCode::OK, Json(v)).into_response(),

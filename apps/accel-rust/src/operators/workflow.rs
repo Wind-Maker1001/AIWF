@@ -111,4 +111,5 @@ mod support;
 mod runner;
 #[cfg(test)]
 pub(crate) use runner::run_workflow;
+pub(crate) use engine::workflow_step_operator_names;
 pub(crate) use runner::run_workflow_with_state;

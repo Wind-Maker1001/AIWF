@@ -43,6 +43,7 @@ pub(crate) struct WorkflowRunResp {
 pub(crate) struct WorkflowStepReplay {
     pub id: String,
     pub operator: String,
+    pub resolution: Value,
     pub status: String,
     pub started_at: String,
     pub finished_at: String,

@@ -33,6 +33,7 @@ mod governance_ops;
 mod http;
 mod load_ops;
 mod misc_ops;
+mod operator_catalog;
 mod operators;
 mod platform_ops;
 mod plugin_runtime;

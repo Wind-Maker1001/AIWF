@@ -1,4 +1,7 @@
 use super::*;
+use crate::operator_catalog::{
+    capability_catalog_entries, metadata_domain_summaries, workflow_catalog_entries,
+};
 
 pub(crate) fn run_runtime_stats_v1(req: RuntimeStatsV1Req) -> Result<Value, String> {
     let op = req.op.trim().to_lowercase();
@@ -100,34 +103,8 @@ pub(crate) fn run_runtime_stats_v1(req: RuntimeStatsV1Req) -> Result<Value, Stri
 }
 
 pub(crate) fn run_capabilities_v1(req: CapabilitiesV1Req) -> Result<Value, String> {
-    let mut ops = vec![
-        json!({"operator":"transform_rows_v3","version":"v3","streaming":true,"cache":true,"checkpoint":true,"io_contract":true}),
-        json!({"operator":"load_rows_v3","version":"v3","streaming":true,"cache":false,"checkpoint":true,"io_contract":true}),
-        json!({"operator":"join_rows_v4","version":"v4","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"aggregate_rows_v4","version":"v4","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"quality_check_v4","version":"v4","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"stream_window_v2","version":"v2","streaming":true,"cache":false,"checkpoint":true,"io_contract":true}),
-        json!({"operator":"stream_state_v2","version":"v2","streaming":true,"cache":false,"checkpoint":true,"io_contract":true}),
-        json!({"operator":"columnar_eval_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"runtime_stats_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"explain_plan_v2","version":"v2","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"finance_ratio_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"anomaly_explain_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"plugin_operator_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"capabilities_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"io_contract_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"failure_policy_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"incremental_plan_v1","version":"v1","streaming":false,"cache":true,"checkpoint":true,"io_contract":true}),
-        json!({"operator":"tenant_isolation_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"operator_policy_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"optimizer_adaptive_v2","version":"v2","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"vector_index_v2_build","version":"v2","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"vector_index_v2_search","version":"v2","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"stream_reliability_v1","version":"v1","streaming":true,"cache":false,"checkpoint":true,"io_contract":true}),
-        json!({"operator":"lineage_provenance_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"contract_regression_v1","version":"v1","streaming":false,"cache":false,"checkpoint":false,"io_contract":true}),
-        json!({"operator":"perf_baseline_v1","version":"v1","streaming":false,"cache":true,"checkpoint":false,"io_contract":true}),
-    ];
+    let mut published = capability_catalog_entries();
+    let mut workflow = workflow_catalog_entries();
     if let Some(allow) = req.include_ops {
         let set: HashSet<String> = allow
             .into_iter()
@@ -135,15 +112,24 @@ pub(crate) fn run_capabilities_v1(req: CapabilitiesV1Req) -> Result<Value, Strin
             .filter(|x| !x.is_empty())
             .collect();
         if !set.is_empty() {
-            ops.retain(|x| {
-                x.get("operator")
-                    .and_then(|v| v.as_str())
-                    .map(|s| set.contains(&s.to_lowercase()))
-                    .unwrap_or(false)
-            });
+            published.retain(|entry| set.contains(&entry.operator.to_lowercase()));
+            workflow.retain(|entry| set.contains(&entry.operator.to_lowercase()));
         }
     }
+    let mut ops = published
+        .iter()
+        .map(|entry| entry.to_capabilities_item())
+        .collect::<Vec<_>>();
     ops.sort_by(|a, b| {
+        let av = a.get("operator").and_then(|v| v.as_str()).unwrap_or("");
+        let bv = b.get("operator").and_then(|v| v.as_str()).unwrap_or("");
+        av.cmp(bv)
+    });
+    let mut workflow_ops = workflow
+        .iter()
+        .map(|entry| entry.to_capabilities_item())
+        .collect::<Vec<_>>();
+    workflow_ops.sort_by(|a, b| {
         let av = a.get("operator").and_then(|v| v.as_str()).unwrap_or("");
         let bv = b.get("operator").and_then(|v| v.as_str()).unwrap_or("");
         av.cmp(bv)
@@ -154,6 +140,130 @@ pub(crate) fn run_capabilities_v1(req: CapabilitiesV1Req) -> Result<Value, Strin
         "status": "done",
         "run_id": req.run_id,
         "schema_version": "aiwf.capabilities.v1",
+        "domains": metadata_domain_summaries(&published),
+        "workflow_domains": metadata_domain_summaries(&workflow),
+        "workflow_items": workflow_ops,
         "items": ops
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn capabilities_v1_preserves_published_operator_set_and_ordering() {
+        let out = run_capabilities_v1(CapabilitiesV1Req {
+            run_id: Some("caps-1".to_string()),
+            include_ops: None,
+        })
+        .expect("capabilities_v1 response");
+        let items = out
+            .get("items")
+            .and_then(|v| v.as_array())
+            .expect("capability items");
+        let operators = items
+            .iter()
+            .filter_map(|item| item.get("operator").and_then(|v| v.as_str()))
+            .collect::<Vec<_>>();
+        let expected = BTreeSet::from([
+            "aggregate_rows_v4",
+            "anomaly_explain_v1",
+            "capabilities_v1",
+            "columnar_eval_v1",
+            "contract_regression_v1",
+            "explain_plan_v2",
+            "failure_policy_v1",
+            "finance_ratio_v1",
+            "incremental_plan_v1",
+            "io_contract_v1",
+            "join_rows_v4",
+            "lineage_provenance_v1",
+            "load_rows_v3",
+            "operator_policy_v1",
+            "optimizer_adaptive_v2",
+            "perf_baseline_v1",
+            "plugin_operator_v1",
+            "quality_check_v4",
+            "runtime_stats_v1",
+            "stream_reliability_v1",
+            "stream_state_v2",
+            "stream_window_v2",
+            "tenant_isolation_v1",
+            "transform_rows_v3",
+            "vector_index_v2_build",
+            "vector_index_v2_search",
+        ]);
+        assert_eq!(
+            operators.iter().copied().collect::<BTreeSet<_>>(),
+            expected,
+            "capability operator set changed"
+        );
+        assert!(
+            operators.windows(2).all(|window| window[0] < window[1]),
+            "capability items must stay operator-sorted"
+        );
+        let transform = items
+            .iter()
+            .find(|item| item.get("operator").and_then(|v| v.as_str()) == Some("transform_rows_v3"))
+            .expect("transform_rows_v3 metadata");
+        assert_eq!(
+            transform.get("domain").and_then(|v| v.as_str()),
+            Some("transform")
+        );
+        assert_eq!(
+            transform.get("catalog").and_then(|v| v.as_str()),
+            Some("operators.transform")
+        );
+        assert_eq!(
+            transform.get("checkpoint").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        let workflow_items = out
+            .get("workflow_items")
+            .and_then(|v| v.as_array())
+            .expect("workflow_items");
+        assert!(
+            workflow_items.iter().any(|item| item.get("operator").and_then(|v| v.as_str()) == Some("transform_rows_v2")),
+            "workflow catalog should expose full workflow step set"
+        );
+        let workflow_domains = out
+            .get("workflow_domains")
+            .and_then(|v| v.as_array())
+            .expect("workflow_domains");
+        assert!(workflow_domains.iter().any(|item| item.get("name").and_then(|v| v.as_str()) == Some("transform")));
+    }
+
+    #[test]
+    fn capabilities_v1_filters_case_insensitively_and_keeps_catalog_metadata() {
+        let out = run_capabilities_v1(CapabilitiesV1Req {
+            run_id: None,
+            include_ops: Some(vec!["CAPABILITIES_V1".to_string(), "missing".to_string()]),
+        })
+        .expect("filtered capabilities");
+        let items = out
+            .get("items")
+            .and_then(|v| v.as_array())
+            .expect("capability items");
+        assert_eq!(items.len(), 1);
+        let item = &items[0];
+        assert_eq!(
+            item.get("operator").and_then(|v| v.as_str()),
+            Some("capabilities_v1")
+        );
+        assert_eq!(
+            item.get("domain").and_then(|v| v.as_str()),
+            Some("governance")
+        );
+        assert_eq!(
+            item.get("catalog").and_then(|v| v.as_str()),
+            Some("governance.contracts")
+        );
+        let workflow_items = out
+            .get("workflow_items")
+            .and_then(|v| v.as_array())
+            .expect("workflow_items");
+        assert_eq!(workflow_items.len(), 1);
+    }
 }
