@@ -1,4 +1,4 @@
-﻿function registerRustOpsDomainChiplets(registry, deps, helpers) {
+function registerRustOpsDomainChiplets(registry, deps, helpers) {
   const { runIsolatedTask } = deps;
   const {
     rustBase,
@@ -468,8 +468,8 @@
         const source = String(r?.[sourceField] || "").trim();
         if (!byClaim.has(claim)) byClaim.set(claim, { support: 0, oppose: 0, neutral: 0, sources: new Set() });
         const it = byClaim.get(claim);
-        if (/(support|璧炴垚|鏀寔|yes|true|pro)/i.test(stance)) it.support += 1;
-        else if (/(oppose|鍙嶅|璐ㄧ枒|no|false|con)/i.test(stance)) it.oppose += 1;
+        if (/(support|赞成|支持|yes|true|pro)/i.test(stance)) it.support += 1;
+        else if (/(oppose|反对|质疑|no|false|con)/i.test(stance)) it.oppose += 1;
         else it.neutral += 1;
         if (source) it.sources.add(source);
       });

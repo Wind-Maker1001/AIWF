@@ -32,7 +32,7 @@ That means the remaining content in `app.js` is mostly orchestration glue, cross
 
 ## Refactor Rule
 
-Do not try to “fully decompose” `app.js` in one pass.
+Do not try to "fully decompose" `app.js` in one pass.
 
 The historical desktop handoff conclusion still applies:
 

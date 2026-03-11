@@ -136,15 +136,15 @@ const TEMPLATE_STORAGE_KEY = "aiwf.workflow.templates.v1";
 const BUILTIN_TEMPLATES = [
   {
     id: "debate_evidence_v1",
-    name: "辩论证据流水线 v1",
+    name: "??????? v1",
     params_schema: {
-      title: { type: "string", required: true, min_length: 1, group: "基础", description: "本次任务标题，用于流程名与熟肉标题。" },
+      title: { type: "string", required: true, min_length: 1, group: "??", description: "??????????????????" },
     },
     graph: {
       workflow_id: "debate_evidence_v1",
       template_key: "debate_evidence",
       template_version: 1,
-      name: "辩论证据流水线 {{title}}",
+      name: "??????? {{title}}",
       nodes: [
         { id: "n1", type: "ingest_files", x: 40, y: 120, config: {} },
         { id: "n2", type: "clean_md", x: 320, y: 120, config: { export_canonical_bundle: true, canonical_title: "{{title}}" } },
@@ -164,23 +164,23 @@ const BUILTIN_TEMPLATES = [
   },
   {
     id: "debate_evidence_v2",
-    name: "辩论证据流水线 v2",
+    name: "??????? v2",
     params_schema: {
-      title: { type: "string", required: true, min_length: 1, group: "基础", description: "本次任务标题，用于流程名与熟肉标题。" },
+      title: { type: "string", required: true, min_length: 1, group: "??", description: "??????????????????" },
       language: {
         type: "string",
         required: true,
         enum: ["zh-CN", "en-US"],
         default: "zh-CN",
-        group: "AI参数",
-        description: "AI整理输出的语言偏好。",
+        group: "AI ??",
+        description: "AI ??????????",
       },
     },
     graph: {
       workflow_id: "debate_evidence_v2",
       template_key: "debate_evidence",
       template_version: 2,
-      name: "辩论证据流水线 {{title}}",
+      name: "??????? {{title}}",
       nodes: [
         { id: "n1", type: "ingest_files", x: 40, y: 120, config: {} },
         { id: "n2", type: "clean_md", x: 320, y: 120, config: { export_canonical_bundle: true, canonical_title: "{{title}}" } },
@@ -200,16 +200,16 @@ const BUILTIN_TEMPLATES = [
   },
   {
     id: "finance_report_v1",
-    name: "财报清洗流水线 v1",
+    name: "??????? v1",
     params_schema: {
-      title: { type: "string", required: true, min_length: 1, group: "基础", description: "财报任务名称。" },
-      threshold: { type: "number", required: true, min: 0, max: 1, default: 0.8, group: "风控阈值", description: "异常解释阈值(0~1)。" },
+      title: { type: "string", required: true, min_length: 1, group: "??", description: "???????" },
+      threshold: { type: "number", required: true, min: 0, max: 1, default: 0.8, group: "????", description: "??????(0~1)?" },
     },
     graph: {
       workflow_id: "finance_report_v1",
       template_key: "finance_report",
       template_version: 1,
-      name: "财报清洗流水线 {{title}}",
+      name: "??????? {{title}}",
       nodes: [
         { id: "n1", type: "ingest_files", x: 40, y: 100, config: {} },
         { id: "n2", type: "clean_md", x: 300, y: 100, config: { export_canonical_bundle: true, canonical_title: "{{title}}" } },
@@ -227,18 +227,18 @@ const BUILTIN_TEMPLATES = [
   },
   {
     id: "finance_report_v2",
-    name: "财报清洗流水线 v2",
+    name: "??????? v2",
     params_schema: {
-      title: { type: "string", required: true, min_length: 1, group: "基础", description: "财报任务名称。" },
+      title: { type: "string", required: true, min_length: 1, group: "??", description: "???????" },
       threshold: {
         type: "number",
         required: true,
         default: 0.8,
-        group: "风控阈值",
-        description: "阈值会随评分字段联动校验。",
+        group: "????",
+        description: "?????????????",
         conditional: [
-          { when: { field: "score_field", in: ["anomaly_score", "risk_score"] }, min: 0, max: 1, description: "anomaly/risk 模式下阈值范围是 0~1" },
-          { when: { field: "score_field", equals: "quality_score" }, min: 0, max: 100, description: "quality 模式下阈值范围是 0~100" },
+          { when: { field: "score_field", in: ["anomaly_score", "risk_score"] }, min: 0, max: 1, description: "anomaly/risk ???????? 0~1" },
+          { when: { field: "score_field", equals: "quality_score" }, min: 0, max: 100, description: "quality ???????? 0~100" },
         ],
       },
       score_field: {
@@ -246,15 +246,15 @@ const BUILTIN_TEMPLATES = [
         required: true,
         enum: ["anomaly_score", "risk_score", "quality_score"],
         default: "anomaly_score",
-        group: "风控阈值",
-        description: "异常评分字段名。",
+        group: "????",
+        description: "????????",
       },
     },
     graph: {
       workflow_id: "finance_report_v2",
       template_key: "finance_report",
       template_version: 2,
-      name: "财报清洗流水线 {{title}}",
+      name: "??????? {{title}}",
       nodes: [
         { id: "n1", type: "ingest_files", x: 40, y: 100, config: {} },
         { id: "n2", type: "clean_md", x: 300, y: 100, config: { export_canonical_bundle: true, canonical_title: "{{title}}" } },
