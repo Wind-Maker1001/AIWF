@@ -22,6 +22,7 @@ Use this page as the canonical documentation entrypoint for the current codebase
 
 - Regression quality gate: [regression_quality.md](regression_quality.md)
 - Rust new-ops gate: [perf_gate_new_ops.md](perf_gate_new_ops.md)
+- Glue-python regression checklist: [glue_python_regression_checklist.md](glue_python_regression_checklist.md)
 - Observability assets: [../ops/observability/README.md](../ops/observability/README.md)
 
 ## Reference

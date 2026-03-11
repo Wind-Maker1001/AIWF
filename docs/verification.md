@@ -55,6 +55,10 @@ cd .\apps\glue-python
 python -m unittest discover -s tests -v
 ```
 
+See also:
+
+- [glue_python_regression_checklist.md](glue_python_regression_checklist.md)
+
 Java:
 
 ```powershell
