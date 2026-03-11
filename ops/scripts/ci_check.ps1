@@ -332,6 +332,9 @@ if (-not $SkipRustTests) {
   finally {
     Pop-Location
   }
+  if ($LASTEXITCODE -ne 0) {
+    throw "accel-rust tests failed"
+  }
   Ok "accel-rust tests passed"
 } else {
   Warn "skip accel-rust tests"
@@ -351,6 +354,9 @@ if (-not $SkipJavaTests) {
   }
   finally {
     Pop-Location
+  }
+  if ($LASTEXITCODE -ne 0) {
+    throw "base-java tests failed"
   }
   Ok "base-java tests passed"
 } else {
@@ -372,6 +378,9 @@ if (-not $SkipPythonTests) {
   }
   finally {
     Pop-Location
+  }
+  if ($LASTEXITCODE -ne 0) {
+    throw "glue-python tests failed"
   }
   Ok "glue-python tests passed"
 } else {

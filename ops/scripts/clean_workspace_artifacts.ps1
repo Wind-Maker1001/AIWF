@@ -22,6 +22,7 @@ $ErrorActionPreference = "Stop"
 
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Act($m){ if($DryRun){ Write-Host "[DRY ] $m" -ForegroundColor Yellow } else { Write-Host "[ACT ] $m" -ForegroundColor DarkCyan } }
+function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $desktopDist = Join-Path $root "apps\dify-desktop\dist"
@@ -139,8 +140,23 @@ if ($RemoveBusJobs -and (Test-Path $busJobsDir)) {
 if ($RemoveTmp -and (Test-Path $tmpDir)) {
   Act "remove $tmpDir"
   if (-not $DryRun) {
-    Remove-Item $tmpDir -Recurse -Force
-    Ok "tmp cleaned"
+    $tmpBlocked = $false
+    Get-ChildItem $tmpDir -Force -ErrorAction SilentlyContinue | ForEach-Object {
+      $tmpItem = $_
+      try {
+        Remove-Item $tmpItem.FullName -Recurse -Force -ErrorAction Stop
+      }
+      catch {
+        $tmpBlocked = $true
+        Warn "skip tmp item still in use: $($tmpItem.FullName)"
+      }
+    }
+    if (-not $tmpBlocked) {
+      Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+      Ok "tmp cleaned"
+    } else {
+      Warn "tmp cleanup left locked items in place"
+    }
   }
 }
 

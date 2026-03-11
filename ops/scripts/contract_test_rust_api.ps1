@@ -7,6 +7,16 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
+function Get-JsonFieldValue {
+  param(
+    $Object,
+    [string]$Name
+  )
+  if ($null -eq $Object) { return $null }
+  $prop = $Object.PSObject.Properties[$Name]
+  if ($null -eq $prop) { return $null }
+  return $prop.Value
+}
 function Invoke-JsonAllowHttpError {
   param(
     [string]$Method = "GET",
@@ -66,7 +76,8 @@ for($i=0; $i -lt 20; $i++) {
     break
   }
   $err = $qr.body
-  $isNotFound = ($qr.status_code -eq 404) -or (("$($err.error)") -eq "task_not_found")
+  $errCode = Get-JsonFieldValue -Object $err -Name "error"
+  $isNotFound = ($qr.status_code -eq 404) -or ($errCode -eq "task_not_found")
   if (-not $isNotFound) {
     throw "tasks query failed: status=$($qr.status_code) body=$($err | ConvertTo-Json -Depth 6 -Compress)"
   }

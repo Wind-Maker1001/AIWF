@@ -47,9 +47,9 @@ function Invoke-SqlScalar {
     [string]$Query
   )
   if ($UseTrustedAuth) {
-    $lines = & $SqlCmdPath -S $Server -E -d $DbName -h -1 -W -Q $Query 2>&1
+    $lines = & $SqlCmdPath -S $Server -E -d $DbName -b -h -1 -W -Q $Query 2>&1
   } else {
-    $lines = & $SqlCmdPath -S $Server -U $User -P $Password -d $DbName -h -1 -W -Q $Query 2>&1
+    $lines = & $SqlCmdPath -S $Server -U $User -P $Password -d $DbName -b -h -1 -W -Q $Query 2>&1
   }
   if ($LASTEXITCODE -ne 0) {
     $msg = ($lines | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ -ne "" } | Select-Object -Last 1)
@@ -119,6 +119,14 @@ $artsExists = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $
 
 if ($jobsExists -lt 1 -or $stepsExists -lt 1 -or $artsExists -lt 1) {
   throw "SQL schema gate failed: required tables dbo.jobs/dbo.steps/dbo.artifacts are missing"
+}
+
+if ($taskStoreIsSql) {
+  $workflowTasksExists = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $sqlDb -User $sqlUser -Password $sqlPassword -UseTrustedAuth $useTrustedAuth -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM sys.objects WHERE object_id = OBJECT_ID(N'dbo.workflow_tasks') AND type IN (N'U');"
+  $workflowTenantIdExists = Invoke-SqlScalar -SqlCmdPath $sqlCmdPath -Server $server -DbName $sqlDb -User $sqlUser -Password $sqlPassword -UseTrustedAuth $useTrustedAuth -Query "SET NOCOUNT ON; SELECT COUNT(1) FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.workflow_tasks') AND name = N'tenant_id';"
+  if ($workflowTasksExists -lt 1 -or $workflowTenantIdExists -lt 1) {
+    throw "SQL schema gate failed: remote task store requires dbo.workflow_tasks with tenant_id column"
+  }
 }
 
 Ok "SQL connectivity gate passed"

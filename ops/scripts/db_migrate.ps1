@@ -38,11 +38,11 @@ $server = "$SqlHost,$SqlPort"
 $initDir = Join-Path $Root "infra\sqlserver\init"
 
 $files = @(
-  Join-Path $initDir "001_init.sql",
-  Join-Path $initDir "002_control_plane_extend.sql",
-  Join-Path $initDir "004_fix_steps_audit.sql",
-  Join-Path $initDir "005_workflow_tasks.sql",
-  Join-Path $initDir "006_workflow_tasks_tenant.sql"
+  (Join-Path $initDir "001_init.sql"),
+  (Join-Path $initDir "002_control_plane_extend.sql"),
+  (Join-Path $initDir "004_fix_steps_audit.sql"),
+  (Join-Path $initDir "005_workflow_tasks.sql"),
+  (Join-Path $initDir "006_workflow_tasks_tenant.sql")
 )
 
 Info "Migrating SQL Server $server / DB $DbName"
