@@ -369,13 +369,67 @@
                             </Grid.RowDefinitions>
 
                             <Border x:Name="CanvasEditorPane" Grid.Column="0" Grid.Row="0" BorderBrush="#33C62828" BorderThickness="1" CornerRadius="12" Background="{StaticResource PanelAcrylicBrush}" Padding="10">
-                                <Grid RowSpacing="10">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="0" />
-                                    </Grid.RowDefinitions>
+                                <Grid x:Name="CanvasEditorHostGrid" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border x:Name="NodeLibraryPane"
+                                            Grid.Column="0"
+                                            Width="0"
+                                            MinWidth="0"
+                                            Visibility="Collapsed"
+                                            Opacity="0"
+                                            BorderBrush="#33222222"
+                                            BorderThickness="1"
+                                            Background="#F6FFFFFF"
+                                            CornerRadius="12"
+                                            Padding="8,10,10,10"
+                                            Margin="0,0,6,0">
+                                        <Grid RowSpacing="10">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <Grid Grid.Row="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Text="添加节点" Style="{StaticResource CanvasSectionTitleStyle}" />
+                                                    <TextBlock Text="选择一个动作放到当前画布" Style="{StaticResource CanvasSectionSubtitleStyle}" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1"
+                                                        x:Name="NodeLibraryCloseButton"
+                                                        Click="OnNodeLibraryCloseClick"
+                                                        Content="关闭"
+                                                        Style="{StaticResource CanvasSecondaryButtonStyle}"
+                                                        MinHeight="32"
+                                                        Padding="12,0" />
+                                            </Grid>
+
+                                            <TextBox Grid.Row="1"
+                                                     x:Name="NodeLibrarySearchTextBox"
+                                                     PlaceholderText="搜索节点"
+                                                     Style="{StaticResource TouchTextBoxStyle}"
+                                                     TextChanged="OnNodeLibrarySearchTextChanged" />
+
+                                            <ScrollViewer Grid.Row="2"
+                                                          HorizontalScrollMode="Disabled"
+                                                          HorizontalScrollBarVisibility="Hidden"
+                                                          VerticalScrollMode="Auto"
+                                                          VerticalScrollBarVisibility="Auto">
+                                                <StackPanel x:Name="NodeLibraryItemsPanel" Spacing="6" />
+                                            </ScrollViewer>
+                                        </Grid>
+                                    </Border>
+
                                     <Grid x:Name="CanvasViewport"
-                                          Grid.Row="0"
+                                          Grid.Column="1"
                                           MinHeight="320"
                                           Background="#10FFFFFF"
                                           ManipulationMode="TranslateX,TranslateY,Scale,TranslateInertia,ScaleInertia"
@@ -415,11 +469,14 @@
                                   Grid.Row="0"
                                   Background="{x:Null}">
                                 <Border x:Name="CanvasSplitGrip"
-                                        Width="12"
+                                        Width="18"
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Stretch"
-                                        Background="#01000000"
+                                        Background="#00000000"
+                                        CornerRadius="9"
                                         RenderTransformOrigin="0.5,0.5"
+                                        PointerEntered="OnCanvasSplitHandlePointerEntered"
+                                        PointerExited="OnCanvasSplitHandlePointerExited"
                                         PointerPressed="OnCanvasSplitHandlePointerPressed"
                                         PointerMoved="OnCanvasSplitHandlePointerMoved"
                                         PointerReleased="OnCanvasSplitHandlePointerReleased"
@@ -427,7 +484,14 @@
                                     <Border.RenderTransform>
                                         <CompositeTransform x:Name="CanvasSplitGripTransform" />
                                     </Border.RenderTransform>
-                                    <Border Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#55C62828" CornerRadius="3" IsHitTestVisible="False" />
+                                    <Grid IsHitTestVisible="False">
+                                        <Border x:Name="CanvasSplitTrack" Width="2" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#556B7280" CornerRadius="3" />
+                                        <StackPanel x:Name="CanvasSplitDots" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                                            <Ellipse Width="3" Height="3" Fill="#99FFFFFF" />
+                                            <Ellipse Width="3" Height="3" Fill="#99FFFFFF" />
+                                            <Ellipse Width="3" Height="3" Fill="#99FFFFFF" />
+                                        </StackPanel>
+                                    </Grid>
                                 </Border>
                             </Grid>
 
@@ -438,11 +502,14 @@
                                   Background="{x:Null}"
                                   Visibility="Collapsed">
                                 <Border x:Name="CanvasStackSplitGrip"
-                                        Height="12"
+                                        Height="18"
                                         HorizontalAlignment="Stretch"
                                         VerticalAlignment="Center"
-                                        Background="#01000000"
+                                        Background="#00000000"
+                                        CornerRadius="9"
                                         RenderTransformOrigin="0.5,0.5"
+                                        PointerEntered="OnCanvasStackSplitHandlePointerEntered"
+                                        PointerExited="OnCanvasStackSplitHandlePointerExited"
                                         PointerPressed="OnCanvasStackSplitHandlePointerPressed"
                                         PointerMoved="OnCanvasStackSplitHandlePointerMoved"
                                         PointerReleased="OnCanvasStackSplitHandlePointerReleased"
@@ -450,7 +517,14 @@
                                     <Border.RenderTransform>
                                         <CompositeTransform x:Name="CanvasStackSplitGripTransform" />
                                     </Border.RenderTransform>
-                                    <Border Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#55C62828" CornerRadius="3" IsHitTestVisible="False" />
+                                    <Grid IsHitTestVisible="False">
+                                        <Border x:Name="CanvasStackSplitTrack" Height="2" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#556B7280" CornerRadius="3" />
+                                        <StackPanel x:Name="CanvasStackSplitDots" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                                            <Ellipse Width="3" Height="3" Fill="#99FFFFFF" />
+                                            <Ellipse Width="3" Height="3" Fill="#99FFFFFF" />
+                                            <Ellipse Width="3" Height="3" Fill="#99FFFFFF" />
+                                        </StackPanel>
+                                    </Grid>
                                 </Border>
                             </Grid>
 

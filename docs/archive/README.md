@@ -10,6 +10,7 @@ These files are kept for historical context, handoff continuity, or earlier plan
 - `dify_desktop_handoff_20260310.md`
 - `dify_standalone_frontend_legacy_20260216.md`
 - `glue_python_context_compaction_handoff_20260310.md`
+- `HANDOFF_WINUI_DRAWER_REFACTOR_20260310.md`
 - `native_migration_handoff_20260226.md`
 - `optimization_snapshot_20260216.md`
 - `project_audit_20260218.md`

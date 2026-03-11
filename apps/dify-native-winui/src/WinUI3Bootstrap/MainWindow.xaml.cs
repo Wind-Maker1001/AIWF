@@ -95,11 +95,7 @@ public sealed partial class MainWindow : Window
     private readonly MenuFlyout _canvasBlankFlyout = new();
     private readonly MenuFlyout _canvasNodeFlyout = new();
     private readonly MenuFlyout _canvasConnectionFlyout = new();
-    private readonly Flyout _addNodeFlyout = new();
-    private Border? _addNodeFlyoutRoot;
-    private StackPanel? _addNodeFlyoutStack;
-    private ScrollViewer? _addNodeFlyoutScroller;
-    private readonly List<Grid> _addNodeFlyoutGroupGrids = new();
+    private bool _isNodeLibraryOpen;
     private Border? _contextNode;
     private ConnectionEdge? _contextConnection;
     private Point _contextCanvasPoint;
@@ -125,6 +121,8 @@ public sealed partial class MainWindow : Window
 
     private const double CanvasMinScale = 0.6;
     private const double CanvasMaxScale = 2.4;
+    private const double NodeLibraryMinWidth = 220;
+    private const double NodeLibraryMaxWidth = 300;
     private const double CanvasGridSize = 20;
     private const double CanvasExtendChunk = 2400;
     private const double CanvasExtendThreshold = 800;
@@ -249,9 +247,11 @@ public sealed partial class MainWindow : Window
         SyncViewModelFromInputs();
         InitializeWindowMinimumTrackingSize();
         InitializeCanvasContextMenus();
-        InitializeAddNodeFlyout();
+        InitializeNodeLibraryDrawer();
         InitializeKeyboardAccelerators();
         InitializeCanvasKeyStateTracking();
+        Canvas.SetZIndex(CanvasSplitHandle, 20);
+        Canvas.SetZIndex(CanvasStackSplitHandle, 20);
         var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         if (dispatcherQueue is not null)
         {

@@ -1,6 +1,9 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using System;
+using System.Runtime.InteropServices;
 
 namespace AIWF.Native;
 
@@ -20,6 +23,7 @@ public sealed partial class MainWindow
         _resizeStartRightWidth = CanvasRightColumn.ActualWidth;
         CanvasSplitGrip.CapturePointer(e.Pointer);
         BeginSplitResizeInteraction();
+        ApplyVerticalSplitHandleVisual(hovered: true, dragging: true);
         e.Handled = true;
     }
 
@@ -66,6 +70,7 @@ public sealed partial class MainWindow
         ApplyPendingSplitResize();
         CanvasSplitGripTransform.TranslateX = 0;
         EndSplitResizeInteraction();
+        ApplyVerticalSplitHandleVisual(hovered: false, dragging: false);
         e.Handled = true;
     }
 
@@ -83,6 +88,7 @@ public sealed partial class MainWindow
         _resizeStartBottomHeight = CanvasLayoutRow2.ActualHeight;
         CanvasStackSplitGrip.CapturePointer(e.Pointer);
         BeginSplitResizeInteraction();
+        ApplyHorizontalSplitHandleVisual(hovered: true, dragging: true);
         e.Handled = true;
     }
 
@@ -129,7 +135,52 @@ public sealed partial class MainWindow
         ApplyPendingSplitResize();
         CanvasStackSplitGripTransform.TranslateY = 0;
         EndSplitResizeInteraction();
+        ApplyHorizontalSplitHandleVisual(hovered: false, dragging: false);
         e.Handled = true;
+    }
+
+    private void OnCanvasSplitHandlePointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (_isCanvasStacked)
+        {
+            return;
+        }
+
+        ApplyVerticalSplitHandleVisual(hovered: true, dragging: _isResizingCanvasPanels);
+        SetNativeCursor(CursorSizeWE);
+    }
+
+    private void OnCanvasSplitHandlePointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (_isResizingCanvasPanels)
+        {
+            return;
+        }
+
+        SetNativeCursor(CursorArrow);
+        ApplyVerticalSplitHandleVisual(hovered: false, dragging: false);
+    }
+
+    private void OnCanvasStackSplitHandlePointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isCanvasStacked)
+        {
+            return;
+        }
+
+        ApplyHorizontalSplitHandleVisual(hovered: true, dragging: _isResizingCanvasRows);
+        SetNativeCursor(CursorSizeNS);
+    }
+
+    private void OnCanvasStackSplitHandlePointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (_isResizingCanvasRows)
+        {
+            return;
+        }
+
+        SetNativeCursor(CursorArrow);
+        ApplyHorizontalSplitHandleVisual(hovered: false, dragging: false);
     }
 
     private void BeginSplitResizeInteraction()
@@ -143,6 +194,63 @@ public sealed partial class MainWindow
     {
         CanvasGridLayer.Visibility = Visibility.Visible;
     }
+
+    private void ApplyVerticalSplitHandleVisual(bool hovered, bool dragging)
+    {
+        CanvasSplitGrip.Background = new SolidColorBrush(
+            dragging
+                ? Windows.UI.Color.FromArgb(0x22, 0xD7, 0x26, 0x2E)
+                : hovered
+                    ? Windows.UI.Color.FromArgb(0x14, 0x21, 0x24, 0x2B)
+                    : Windows.UI.Color.FromArgb(0x00, 0x00, 0x00, 0x00));
+        CanvasSplitTrack.Width = dragging ? 3.5 : hovered ? 3 : 2;
+        CanvasSplitTrack.Background = new SolidColorBrush(
+            dragging
+                ? Windows.UI.Color.FromArgb(0xCC, 0xB5, 0x1C, 0x23)
+                : hovered
+                    ? Windows.UI.Color.FromArgb(0xAA, 0x52, 0x5A, 0x66)
+                    : Windows.UI.Color.FromArgb(0x55, 0x6B, 0x72, 0x80));
+        CanvasSplitDots.Opacity = dragging ? 1 : hovered ? 0.95 : 0.5;
+        CanvasSplitDots.Spacing = dragging ? 5 : hovered ? 4.5 : 4;
+    }
+
+    private void ApplyHorizontalSplitHandleVisual(bool hovered, bool dragging)
+    {
+        CanvasStackSplitGrip.Background = new SolidColorBrush(
+            dragging
+                ? Windows.UI.Color.FromArgb(0x22, 0xD7, 0x26, 0x2E)
+                : hovered
+                    ? Windows.UI.Color.FromArgb(0x14, 0x21, 0x24, 0x2B)
+                    : Windows.UI.Color.FromArgb(0x00, 0x00, 0x00, 0x00));
+        CanvasStackSplitTrack.Height = dragging ? 3.5 : hovered ? 3 : 2;
+        CanvasStackSplitTrack.Background = new SolidColorBrush(
+            dragging
+                ? Windows.UI.Color.FromArgb(0xCC, 0xB5, 0x1C, 0x23)
+                : hovered
+                    ? Windows.UI.Color.FromArgb(0xAA, 0x52, 0x5A, 0x66)
+                    : Windows.UI.Color.FromArgb(0x55, 0x6B, 0x72, 0x80));
+        CanvasStackSplitDots.Opacity = dragging ? 1 : hovered ? 0.95 : 0.5;
+        CanvasStackSplitDots.Spacing = dragging ? 5 : hovered ? 4.5 : 4;
+    }
+
+    private const int CursorArrow = 32512;
+    private const int CursorSizeWE = 32644;
+    private const int CursorSizeNS = 32645;
+
+    private static void SetNativeCursor(int cursorId)
+    {
+        var cursor = LoadCursor(IntPtr.Zero, cursorId);
+        if (cursor != IntPtr.Zero)
+        {
+            SetCursor(cursor);
+        }
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr LoadCursor(IntPtr hInstance, int lpCursorName);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetCursor(IntPtr hCursor);
 
     private void ApplyPendingSplitResize()
     {
