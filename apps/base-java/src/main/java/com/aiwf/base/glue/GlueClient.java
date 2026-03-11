@@ -67,6 +67,17 @@ public class GlueClient implements GlueGateway {
         return GlueHealthResult.fromMap(response);
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> capabilities() {
+        return executeWithRetry(
+                "GET",
+                "/capabilities",
+                glueHealthMaxAttempts,
+                () -> client.get().uri("/capabilities").retrieve().body(Map.class)
+        );
+    }
+
     private <T> T executeWithRetry(String method, String path, int maxAttempts, Supplier<T> action) {
         int attempts = sanitizePositive(maxAttempts, 1);
         RestClientException lastError = null;

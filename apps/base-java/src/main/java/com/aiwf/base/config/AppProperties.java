@@ -18,6 +18,8 @@ public class AppProperties {
     private String lake;
     @NotBlank
     private String glueUrl;
+    @NotBlank
+    private String accelUrl;
     private String apiKey;
     @Min(1)
     private int glueConnectTimeoutMs = 3000;
@@ -29,6 +31,10 @@ public class AppProperties {
     private int glueHealthMaxAttempts = 3;
     @PositiveOrZero
     private long glueRetryDelayMs = 250L;
+    @Min(1)
+    private int accelConnectTimeoutMs = 3000;
+    @Min(1)
+    private int accelReadTimeoutMs = 30000;
 
     public String getRoot() { return root; }
     public void setRoot(String root) { this.root = root; }
@@ -41,6 +47,9 @@ public class AppProperties {
 
     public String getGlueUrl() { return glueUrl; }
     public void setGlueUrl(String glueUrl) { this.glueUrl = glueUrl; }
+
+    public String getAccelUrl() { return accelUrl; }
+    public void setAccelUrl(String accelUrl) { this.accelUrl = accelUrl; }
 
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
@@ -59,4 +68,10 @@ public class AppProperties {
 
     public long getGlueRetryDelayMs() { return glueRetryDelayMs; }
     public void setGlueRetryDelayMs(long glueRetryDelayMs) { this.glueRetryDelayMs = glueRetryDelayMs; }
+
+    public int getAccelConnectTimeoutMs() { return accelConnectTimeoutMs; }
+    public void setAccelConnectTimeoutMs(int accelConnectTimeoutMs) { this.accelConnectTimeoutMs = accelConnectTimeoutMs; }
+
+    public int getAccelReadTimeoutMs() { return accelReadTimeoutMs; }
+    public void setAccelReadTimeoutMs(int accelReadTimeoutMs) { this.accelReadTimeoutMs = accelReadTimeoutMs; }
 }

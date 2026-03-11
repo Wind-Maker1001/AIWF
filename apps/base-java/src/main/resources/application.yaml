@@ -16,12 +16,15 @@ aiwf:
   bus: ${AIWF_BUS:.\bus}
   lake: ${AIWF_LAKE:.\lake}
   glueUrl: ${AIWF_GLUE_URL:http://127.0.0.1:18081}
+  accelUrl: ${AIWF_ACCEL_URL:http://127.0.0.1:18082}
   apiKey: ${AIWF_API_KEY:} # optional; when configured requests must carry X-API-Key
   glueConnectTimeoutMs: ${AIWF_GLUE_CONNECT_TIMEOUT_MS:3000}
   glueReadTimeoutMs: ${AIWF_GLUE_READ_TIMEOUT_MS:30000}
   glueRunMaxAttempts: ${AIWF_GLUE_RUN_MAX_ATTEMPTS:1}
   glueHealthMaxAttempts: ${AIWF_GLUE_HEALTH_MAX_ATTEMPTS:3}
   glueRetryDelayMs: ${AIWF_GLUE_RETRY_DELAY_MS:250}
+  accelConnectTimeoutMs: ${AIWF_ACCEL_CONNECT_TIMEOUT_MS:3000}
+  accelReadTimeoutMs: ${AIWF_ACCEL_READ_TIMEOUT_MS:30000}
 
 spring:
   datasource:

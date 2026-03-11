@@ -24,8 +24,11 @@ class AppPropertiesTest {
                         "aiwf.bus=.\\bus",
                         "aiwf.lake=.\\lake",
                         "aiwf.glue-url=http://127.0.0.1:18081",
+                        "aiwf.accel-url=http://127.0.0.1:18082",
                         "aiwf.glue-connect-timeout-ms=1500",
                         "aiwf.glue-read-timeout-ms=2500",
+                        "aiwf.accel-connect-timeout-ms=1600",
+                        "aiwf.accel-read-timeout-ms=2600",
                         "aiwf.glue-run-max-attempts=2",
                         "aiwf.glue-health-max-attempts=4",
                         "aiwf.glue-retry-delay-ms=10"
@@ -37,8 +40,11 @@ class AppPropertiesTest {
                     assertThat(props.getBus()).isEqualTo(".\\bus");
                     assertThat(props.getLake()).isEqualTo(".\\lake");
                     assertThat(props.getGlueUrl()).isEqualTo("http://127.0.0.1:18081");
+                    assertThat(props.getAccelUrl()).isEqualTo("http://127.0.0.1:18082");
                     assertThat(props.getGlueConnectTimeoutMs()).isEqualTo(1500);
                     assertThat(props.getGlueReadTimeoutMs()).isEqualTo(2500);
+                    assertThat(props.getAccelConnectTimeoutMs()).isEqualTo(1600);
+                    assertThat(props.getAccelReadTimeoutMs()).isEqualTo(2600);
                     assertThat(props.getGlueRunMaxAttempts()).isEqualTo(2);
                     assertThat(props.getGlueHealthMaxAttempts()).isEqualTo(4);
                     assertThat(props.getGlueRetryDelayMs()).isEqualTo(10L);
@@ -52,6 +58,7 @@ class AppPropertiesTest {
                         "aiwf.bus=.\\bus",
                         "aiwf.lake=.\\lake",
                         "aiwf.glue-url=http://127.0.0.1:18081",
+                        "aiwf.accel-url=http://127.0.0.1:18082",
                         "aiwf.glue-connect-timeout-ms=0"
                 )
                 .run(context -> {
@@ -66,6 +73,7 @@ class AppPropertiesTest {
                         "aiwf.root=.",
                         "aiwf.bus=.\\bus",
                         "aiwf.lake=.\\lake",
+                        "aiwf.accel-url=http://127.0.0.1:18082",
                         "aiwf.glue-url= "
                 )
                 .run(context -> {
