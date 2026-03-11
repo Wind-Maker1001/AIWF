@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from aiwf.flows.artifact_selection import normalize_artifact_selection
+from aiwf.registry_domains import normalize_registry_domain, summarize_registry_domains
 from aiwf.registry_events import record_registry_event
 from aiwf.registry_policy import default_conflict_policy, normalize_conflict_policy
+from aiwf.runtime_state import get_runtime_state
 from aiwf.registry_utils import infer_caller_module
 
 
@@ -38,10 +40,9 @@ class OfficeArtifactRegistration:
     path_key: str
     sha_key: str
     writer: OfficeArtifactWriter
+    domain: Optional[str]
+    domain_metadata: Mapping[str, Any]
     source_module: str
-
-
-_OFFICE_ARTIFACTS: Dict[str, OfficeArtifactRegistration] = {}
 
 
 def _normalize_name(name: str) -> str:
@@ -51,7 +52,21 @@ def _normalize_name(name: str) -> str:
     return normalized
 
 
-def register_office_artifact(
+def _ensure_builtin_office_artifacts() -> None:
+    state = get_runtime_state()
+    if state.builtins_office_artifacts_registered or state.office_artifact_bootstrap_in_progress:
+        return
+    state.office_artifact_bootstrap_in_progress = True
+    try:
+        from aiwf.flows.domains.cleaning_office_artifacts import register_builtin_office_artifacts
+
+        register_builtin_office_artifacts(_register_office_artifact)
+        state.builtins_office_artifacts_registered = True
+    finally:
+        state.office_artifact_bootstrap_in_progress = False
+
+
+def _register_office_artifact(
     name: str,
     *,
     artifact_id: str,
@@ -60,14 +75,21 @@ def register_office_artifact(
     path_key: str,
     sha_key: str,
     writer: OfficeArtifactWriter,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
     on_conflict: Optional[str] = None,
 ) -> OfficeArtifactRegistration:
+    state = get_runtime_state()
     normalized = _normalize_name(name)
     if not callable(writer):
         raise TypeError("office artifact writer must be callable")
+    normalized_domain, normalized_domain_metadata = normalize_registry_domain(
+        domain,
+        domain_metadata,
+    )
     source = str(source_module or infer_caller_module())
-    existing = _OFFICE_ARTIFACTS.get(normalized)
+    existing = state.office_artifacts.get(normalized)
     if existing is not None:
         policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
         if policy == "error":
@@ -112,29 +134,66 @@ def register_office_artifact(
         path_key=str(path_key),
         sha_key=str(sha_key),
         writer=writer,
+        domain=normalized_domain,
+        domain_metadata=normalized_domain_metadata,
         source_module=source,
     )
-    _OFFICE_ARTIFACTS[normalized] = registration
+    state.office_artifacts[normalized] = registration
     return registration
 
 
+def register_office_artifact(
+    name: str,
+    *,
+    artifact_id: str,
+    kind: str,
+    filename: str,
+    path_key: str,
+    sha_key: str,
+    writer: OfficeArtifactWriter,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> OfficeArtifactRegistration:
+    _ensure_builtin_office_artifacts()
+    effective_source = source_module or infer_caller_module()
+    return _register_office_artifact(
+        name,
+        artifact_id=artifact_id,
+        kind=kind,
+        filename=filename,
+        path_key=path_key,
+        sha_key=sha_key,
+        writer=writer,
+        domain=domain,
+        domain_metadata=domain_metadata,
+        source_module=effective_source,
+        on_conflict=on_conflict,
+    )
+
+
 def unregister_office_artifact(name: str) -> Optional[OfficeArtifactRegistration]:
-    return _OFFICE_ARTIFACTS.pop(_normalize_name(name), None)
+    _ensure_builtin_office_artifacts()
+    return get_runtime_state().office_artifacts.pop(_normalize_name(name), None)
 
 
 def get_office_artifact(name: str) -> OfficeArtifactRegistration:
+    _ensure_builtin_office_artifacts()
     normalized = _normalize_name(name)
-    registration = _OFFICE_ARTIFACTS.get(normalized)
+    registration = get_runtime_state().office_artifacts.get(normalized)
     if registration is None:
         raise KeyError(f"unknown office artifact: {normalized}")
     return registration
 
 
 def list_office_artifacts() -> List[str]:
-    return sorted(_OFFICE_ARTIFACTS.keys())
+    _ensure_builtin_office_artifacts()
+    return sorted(get_runtime_state().office_artifacts.keys())
 
 
 def list_office_artifact_details() -> List[Dict[str, Any]]:
+    _ensure_builtin_office_artifacts()
     return [
         {
             "name": registration.name,
@@ -143,14 +202,26 @@ def list_office_artifact_details() -> List[Dict[str, Any]]:
             "filename": registration.filename,
             "path_key": registration.path_key,
             "sha_key": registration.sha_key,
+            "domain": registration.domain,
+            "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
         }
         for registration in get_office_artifact_registrations()
     ]
 
 
+def list_office_artifact_domains() -> List[Dict[str, Any]]:
+    _ensure_builtin_office_artifacts()
+    return summarize_registry_domains(
+        sorted(get_office_artifact_registrations(), key=lambda item: item.name),
+        item_name_attr="name",
+        list_key="artifacts",
+    )
+
+
 def get_office_artifact_registrations() -> List[OfficeArtifactRegistration]:
-    return list(_OFFICE_ARTIFACTS.values())
+    _ensure_builtin_office_artifacts()
+    return list(get_runtime_state().office_artifacts.values())
 
 
 def _artifact_tokens(values: Any) -> set[str]:
@@ -170,6 +241,7 @@ def _registration_tokens(registration: OfficeArtifactRegistration) -> set[str]:
 
 
 def list_office_artifact_tokens() -> List[str]:
+    _ensure_builtin_office_artifacts()
     tokens = set()
     for registration in get_office_artifact_registrations():
         tokens.update(_registration_tokens(registration))
@@ -177,6 +249,7 @@ def list_office_artifact_tokens() -> List[str]:
 
 
 def select_office_artifact_registrations(params_effective: Dict[str, Any]) -> List[OfficeArtifactRegistration]:
+    _ensure_builtin_office_artifacts()
     selection = normalize_artifact_selection(params_effective)["office"]
     if not bool(selection.get("enabled", True)):
         return []
@@ -222,32 +295,3 @@ def _write_pptx_artifact(context: OfficeArtifactContext, output_path: str) -> No
         context.illustration_path,
         context.params_effective,
     )
-
-
-register_office_artifact(
-    "xlsx_fin",
-    artifact_id="xlsx_fin_001",
-    kind="xlsx",
-    filename="fin.xlsx",
-    path_key="xlsx_path",
-    sha_key="sha_xlsx",
-    writer=_write_xlsx_artifact,
-)
-register_office_artifact(
-    "docx_audit",
-    artifact_id="docx_audit_001",
-    kind="docx",
-    filename="audit.docx",
-    path_key="docx_path",
-    sha_key="sha_docx",
-    writer=_write_docx_artifact,
-)
-register_office_artifact(
-    "pptx_deck",
-    artifact_id="pptx_deck_001",
-    kind="pptx",
-    filename="deck.pptx",
-    path_key="pptx_path",
-    sha_key="sha_pptx",
-    writer=_write_pptx_artifact,
-)

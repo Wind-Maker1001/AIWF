@@ -4,10 +4,12 @@ import os
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from aiwf.registry_domains import normalize_registry_domain, summarize_registry_domains
 from aiwf.registry_events import record_registry_event
 from aiwf.registry_policy import default_conflict_policy, normalize_conflict_policy
+from aiwf.runtime_state import get_runtime_state
 from aiwf.registry_utils import infer_caller_module
 
 
@@ -19,11 +21,9 @@ class InputReaderRegistration:
     input_format: str
     extensions: Tuple[str, ...]
     loader: InputReaderFn
+    domain: Optional[str]
+    domain_metadata: Mapping[str, Any]
     source_module: str
-
-
-_INPUT_READERS_BY_FORMAT: Dict[str, InputReaderRegistration] = {}
-_INPUT_READERS_BY_EXTENSION: Dict[str, InputReaderRegistration] = {}
 
 
 def _ext(path: str) -> str:
@@ -52,9 +52,10 @@ def _extension_conflicts(
     normalized_format: str,
     normalized_extensions: Tuple[str, ...],
 ) -> Dict[str, Tuple[InputReaderRegistration, set[str]]]:
+    state = get_runtime_state()
     conflicts: Dict[str, Tuple[InputReaderRegistration, set[str]]] = {}
     for ext in normalized_extensions:
-        current = _INPUT_READERS_BY_EXTENSION.get(ext)
+        current = state.input_readers_by_extension.get(ext)
         if current is None or current.input_format == normalized_format:
             continue
         registration, captured = conflicts.get(current.input_format, (current, set()))
@@ -63,14 +64,31 @@ def _extension_conflicts(
     return conflicts
 
 
-def register_input_reader(
+def _ensure_builtin_input_readers() -> None:
+    state = get_runtime_state()
+    if state.builtins_inputs_registered or state.input_bootstrap_in_progress:
+        return
+    state.input_bootstrap_in_progress = True
+    try:
+        from aiwf.domains.ingest import register_builtin_input_domains
+
+        register_builtin_input_domains(_register_input_reader)
+        state.builtins_inputs_registered = True
+    finally:
+        state.input_bootstrap_in_progress = False
+
+
+def _register_input_reader(
     input_format: str,
     extensions: Iterable[str],
     loader: InputReaderFn,
     *,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
     on_conflict: Optional[str] = None,
 ) -> InputReaderRegistration:
+    state = get_runtime_state()
     normalized_format = _normalize_input_format(input_format)
     normalized_extensions = tuple(
         sorted({ext for ext in (_normalize_extension(value) for value in extensions) if ext})
@@ -79,9 +97,13 @@ def register_input_reader(
         raise ValueError("register_input_reader requires at least one extension")
     if not callable(loader):
         raise TypeError("input reader loader must be callable")
+    normalized_domain, normalized_domain_metadata = normalize_registry_domain(
+        domain,
+        domain_metadata,
+    )
     source = str(source_module or infer_caller_module())
     policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
-    existing = _INPUT_READERS_BY_FORMAT.get(normalized_format)
+    existing = state.input_readers_by_format.get(normalized_format)
     if existing is not None:
         if policy == "error":
             record_registry_event(
@@ -168,12 +190,12 @@ def register_input_reader(
                 ext for ext in conflicting_registration.extensions if ext not in captured_extensions
             )
             if remaining_extensions:
-                _INPUT_READERS_BY_FORMAT[conflicting_registration.input_format] = replace(
+                state.input_readers_by_format[conflicting_registration.input_format] = replace(
                     conflicting_registration,
                     extensions=remaining_extensions,
                 )
             else:
-                _INPUT_READERS_BY_FORMAT.pop(conflicting_registration.input_format, None)
+                state.input_readers_by_format.pop(conflicting_registration.input_format, None)
             for ext in sorted(captured_extensions):
                 record_registry_event(
                     registry="input_reader_extension",
@@ -187,52 +209,95 @@ def register_input_reader(
                         f"to {normalized_format}"
                     ),
                 )
-                _INPUT_READERS_BY_EXTENSION.pop(ext, None)
+                state.input_readers_by_extension.pop(ext, None)
 
     registration = InputReaderRegistration(
         input_format=normalized_format,
         extensions=normalized_extensions,
         loader=loader,
+        domain=normalized_domain,
+        domain_metadata=normalized_domain_metadata,
         source_module=source,
     )
-    _INPUT_READERS_BY_FORMAT[normalized_format] = registration
+    state.input_readers_by_format[normalized_format] = registration
     for ext in normalized_extensions:
-        _INPUT_READERS_BY_EXTENSION[ext] = registration
+        state.input_readers_by_extension[ext] = registration
     return registration
 
 
+def register_input_reader(
+    input_format: str,
+    extensions: Iterable[str],
+    loader: InputReaderFn,
+    *,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> InputReaderRegistration:
+    _ensure_builtin_input_readers()
+    effective_source = source_module or infer_caller_module()
+    return _register_input_reader(
+        input_format,
+        extensions,
+        loader,
+        domain=domain,
+        domain_metadata=domain_metadata,
+        source_module=effective_source,
+        on_conflict=on_conflict,
+    )
+
+
 def unregister_input_reader(input_format: str) -> Optional[InputReaderRegistration]:
+    _ensure_builtin_input_readers()
+    state = get_runtime_state()
     normalized_format = _normalize_input_format(input_format)
-    registration = _INPUT_READERS_BY_FORMAT.pop(normalized_format, None)
+    registration = state.input_readers_by_format.pop(normalized_format, None)
     if registration is None:
         return None
-    for ext, current in list(_INPUT_READERS_BY_EXTENSION.items()):
+    for ext, current in list(state.input_readers_by_extension.items()):
         if current.input_format == normalized_format:
-            del _INPUT_READERS_BY_EXTENSION[ext]
+            del state.input_readers_by_extension[ext]
     return registration
 
 
 def get_input_reader(path: str) -> InputReaderRegistration:
+    _ensure_builtin_input_readers()
     ext = _ext(path)
-    registration = _INPUT_READERS_BY_EXTENSION.get(ext)
+    registration = get_runtime_state().input_readers_by_extension.get(ext)
     if registration is None:
         raise RuntimeError(f"unsupported input file type: {path}")
     return registration
 
 
 def list_input_formats() -> List[str]:
-    return sorted(_INPUT_READERS_BY_FORMAT.keys())
+    _ensure_builtin_input_readers()
+    return sorted(get_runtime_state().input_readers_by_format.keys())
 
 
 def list_input_reader_details() -> List[Dict[str, Any]]:
+    _ensure_builtin_input_readers()
+    state = get_runtime_state()
     return [
         {
             "input_format": registration.input_format,
             "extensions": list(registration.extensions),
+            "domain": registration.domain,
+            "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
         }
-        for registration in sorted(_INPUT_READERS_BY_FORMAT.values(), key=lambda item: item.input_format)
+        for registration in sorted(state.input_readers_by_format.values(), key=lambda item: item.input_format)
     ]
+
+
+def list_input_reader_domains() -> List[Dict[str, Any]]:
+    _ensure_builtin_input_readers()
+    state = get_runtime_state()
+    return summarize_registry_domains(
+        sorted(state.input_readers_by_format.values(), key=lambda item: item.input_format),
+        item_name_attr="input_format",
+        list_key="input_formats",
+    )
 
 
 def _resolve_tesseract_cmd() -> Optional[str]:
@@ -490,6 +555,7 @@ def load_rows_from_file(
     ocr_preprocess: Optional[str] = None,
     xlsx_all_sheets: bool = False,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    _ensure_builtin_input_readers()
     registration = get_input_reader(path)
     return registration.loader(
         path,
@@ -516,6 +582,7 @@ def load_rows_from_files(
     max_retries: int = 0,
     on_file_error: str = "skip",
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    _ensure_builtin_input_readers()
     all_rows: List[Dict[str, Any]] = []
     formats: List[str] = []
     skipped_files: List[Dict[str, Any]] = []
@@ -554,10 +621,3 @@ def load_rows_from_files(
         "skipped_files": skipped_files,
         "failed_files": failed_files,
     }
-
-
-register_input_reader("txt", [".txt"], _load_txt_input)
-register_input_reader("docx", [".docx"], _load_docx_input)
-register_input_reader("pdf", [".pdf"], _load_pdf_input)
-register_input_reader("image", [".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"], _load_image_input)
-register_input_reader("xlsx", [".xlsx", ".xlsm"], _load_xlsx_input)

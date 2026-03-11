@@ -8,11 +8,18 @@ os.environ.setdefault("AIWF_ALLOW_EXTERNAL_JOB_ROOT", "1")
 
 from aiwf.flows import cleaning
 from aiwf.flows.cleaning_artifacts import (
+    list_cleaning_artifact_details,
+    list_cleaning_artifact_domains,
     materialize_accel_cleaning_artifacts,
     register_cleaning_artifact,
     unregister_cleaning_artifact,
 )
-from aiwf.flows.office_artifacts import register_office_artifact, unregister_office_artifact
+from aiwf.flows.office_artifacts import (
+    list_office_artifact_details,
+    list_office_artifact_domains,
+    register_office_artifact,
+    unregister_office_artifact,
+)
 
 
 def make_job_context(job_root: str) -> dict[str, str]:
@@ -150,6 +157,8 @@ class CleaningFlowTests(unittest.TestCase):
                 path_key="summary_txt_path",
                 sha_key="sha_summary_txt",
                 writer=write_text_summary,
+                domain="custom-office",
+                domain_metadata={"label": "Custom Office", "backend": "extension", "builtin": False},
             )
             try:
                 with patch("aiwf.flows.cleaning._base_step_start"), patch(
@@ -175,12 +184,16 @@ class CleaningFlowTests(unittest.TestCase):
                         actor="test",
                         params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 10.0}]),
                     )
+                    details = {item["name"]: item for item in list_office_artifact_details()}
+                    domains = list_office_artifact_domains()
             finally:
                 unregister_office_artifact("text_summary")
 
             txt_artifacts = [a for a in out["artifacts"] if a["kind"] == "txt"]
             self.assertEqual(len(txt_artifacts), 1)
             self.assertTrue(txt_artifacts[0]["path"].endswith("summary.txt"))
+            self.assertEqual(details["text_summary"]["domain"], "custom-office")
+            self.assertTrue(any(item["name"] == "custom-office" for item in domains))
 
     def test_run_cleaning_includes_registered_custom_core_artifact(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -205,6 +218,8 @@ class CleaningFlowTests(unittest.TestCase):
                 sha_key="sha_meta_txt",
                 local_path_resolver=custom_meta_path,
                 local_writer=write_custom_meta,
+                domain="custom-core",
+                domain_metadata={"label": "Custom Core", "backend": "extension", "builtin": False},
             )
             try:
                 with patch("aiwf.flows.cleaning._base_step_start"), patch(
@@ -222,12 +237,16 @@ class CleaningFlowTests(unittest.TestCase):
                         actor="test",
                         params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 10.0}]),
                     )
+                    details = {item["name"]: item for item in list_cleaning_artifact_details()}
+                    domains = list_cleaning_artifact_domains()
             finally:
                 unregister_cleaning_artifact("meta_text")
 
             txt_artifacts = [a for a in out["artifacts"] if a["artifact_id"] == "meta_text_001"]
             self.assertEqual(len(txt_artifacts), 1)
             self.assertTrue(txt_artifacts[0]["path"].endswith("meta.txt"))
+            self.assertEqual(details["meta_text"]["domain"], "custom-core")
+            self.assertTrue(any(item["name"] == "custom-core" for item in domains))
 
     def test_run_cleaning_can_disable_office_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:

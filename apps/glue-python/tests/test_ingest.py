@@ -114,14 +114,24 @@ class IngestTests(unittest.TestCase):
                     {"input_format": "custom"},
                 )
 
-            ingest.register_input_reader("custom", [".custom"], load_custom)
+            ingest.register_input_reader(
+                "custom",
+                [".custom"],
+                load_custom,
+                domain="custom-ingest",
+                domain_metadata={"label": "Custom Ingest", "backend": "extension", "builtin": False},
+            )
             try:
                 rows, meta = ingest.load_rows_from_file(p)
+                details = {item["input_format"]: item for item in ingest.list_input_reader_details()}
+                domains = ingest.list_input_reader_domains()
             finally:
                 ingest.unregister_input_reader("custom")
 
             self.assertEqual(meta["input_format"], "custom")
             self.assertEqual(rows[0]["source_type"], "custom")
+            self.assertEqual(details["custom"]["domain"], "custom-ingest")
+            self.assertTrue(any(item["name"] == "custom-ingest" for item in domains))
 
     def test_register_input_reader_rejects_conflicting_extension_when_requested(self):
         def load_markdown(path, options):

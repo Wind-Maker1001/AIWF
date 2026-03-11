@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from importlib import import_module
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple
+from types import MappingProxyType
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple
 
 from aiwf.registry_events import record_registry_event
 from aiwf.registry_policy import default_conflict_policy, normalize_conflict_policy
+from aiwf.runtime_state import get_runtime_state
 from aiwf.registry_utils import infer_caller_module
 
 
@@ -19,11 +21,9 @@ class FlowRegistration:
     runner: Optional[FlowRunner]
     module_path: Optional[str]
     attr_name: Optional[str]
+    domain: Optional[str]
+    domain_metadata: Mapping[str, Any]
     source_module: str
-
-
-_FLOWS: Dict[str, FlowRegistration] = {}
-_FLOW_ALIASES: Dict[str, str] = {}
 
 
 def _normalize_flow_name(name: str) -> str:
@@ -33,29 +33,74 @@ def _normalize_flow_name(name: str) -> str:
     return normalized
 
 
+def _normalize_flow_domain_name(name: str) -> str:
+    normalized = str(name or "").strip().lower()
+    if not normalized:
+        raise ValueError("flow domain name must be non-empty")
+    return normalized
+
+
+def _normalize_flow_domain(
+    domain: Optional[str],
+    domain_metadata: Optional[Mapping[str, Any]],
+) -> tuple[Optional[str], Mapping[str, Any]]:
+    metadata = dict(domain_metadata or {})
+    normalized_domain = _normalize_flow_domain_name(domain) if domain is not None else None
+    metadata_name = metadata.get("name")
+    if metadata_name is not None:
+        normalized_metadata_name = _normalize_flow_domain_name(metadata_name)
+        if normalized_domain is not None and normalized_metadata_name != normalized_domain:
+            raise ValueError("flow domain and domain metadata name must match")
+        normalized_domain = normalized_metadata_name
+    if normalized_domain is None:
+        if metadata:
+            raise ValueError("flow domain metadata requires a domain name")
+        return None, MappingProxyType({})
+    metadata["name"] = normalized_domain
+    return normalized_domain, MappingProxyType(metadata)
+
+
 def _alias_conflicts(normalized: str, alias_names: Tuple[str, ...]) -> Dict[str, FlowRegistration]:
+    state = get_runtime_state()
     conflicts: Dict[str, FlowRegistration] = {}
     for alias in alias_names:
-        canonical = _FLOW_ALIASES.get(alias)
+        canonical = state.flow_aliases.get(alias)
         if canonical is None or canonical == normalized:
             continue
-        registration = _FLOWS.get(canonical)
+        registration = state.flows.get(canonical)
         if registration is None:
             continue
         conflicts[alias] = registration
     return conflicts
 
 
-def register_flow(
+def _ensure_builtin_flow_domains() -> None:
+    state = get_runtime_state()
+    if state.builtins_flows_registered or state.flow_bootstrap_in_progress:
+        return
+    state.flow_bootstrap_in_progress = True
+    try:
+        from aiwf.flows.domains import register_builtin_flow_domains
+
+        register_builtin_flow_domains(_register_flow)
+        state.builtins_flows_registered = True
+    finally:
+        state.flow_bootstrap_in_progress = False
+
+
+def _register_flow(
     name: str,
     *,
     runner: Optional[FlowRunner] = None,
     module_path: Optional[str] = None,
     attr_name: Optional[str] = None,
     aliases: Iterable[str] = (),
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
     on_conflict: Optional[str] = None,
 ) -> FlowRegistration:
+    state = get_runtime_state()
     normalized = _normalize_flow_name(name)
     alias_names = tuple(
         alias
@@ -66,9 +111,13 @@ def register_flow(
         raise ValueError("register_flow requires either runner or module_path")
     if runner is not None and not callable(runner):
         raise TypeError("flow runner must be callable")
+    normalized_domain, normalized_domain_metadata = _normalize_flow_domain(
+        domain,
+        domain_metadata,
+    )
     source = str(source_module or infer_caller_module())
     policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
-    existing = _FLOWS.get(normalized)
+    existing = state.flows.get(normalized)
     if existing is not None:
         if policy == "error":
             record_registry_event(
@@ -156,7 +205,7 @@ def register_flow(
         action = "replace_with_warning" if policy == "warn" else "replace"
         for alias, registration in alias_conflicts.items():
             updated_aliases = tuple(value for value in registration.aliases if value != alias)
-            _FLOWS[registration.name] = replace(registration, aliases=updated_aliases)
+            state.flows[registration.name] = replace(registration, aliases=updated_aliases)
             record_registry_event(
                 registry="flow_alias",
                 name=alias,
@@ -166,7 +215,7 @@ def register_flow(
                 new_source_module=source,
                 detail=f"alias {alias} moved from {registration.name} to {normalized}",
             )
-            _FLOW_ALIASES.pop(alias, None)
+            state.flow_aliases.pop(alias, None)
 
     registration = FlowRegistration(
         name=normalized,
@@ -174,33 +223,66 @@ def register_flow(
         runner=runner,
         module_path=module_path,
         attr_name=attr_name,
+        domain=normalized_domain,
+        domain_metadata=normalized_domain_metadata,
         source_module=source,
     )
-    _FLOWS[normalized] = registration
-    _FLOW_ALIASES[normalized] = normalized
+    state.flows[normalized] = registration
+    state.flow_aliases[normalized] = normalized
     for alias in alias_names:
-        _FLOW_ALIASES[alias] = normalized
+        state.flow_aliases[alias] = normalized
     return registration
 
 
+def register_flow(
+    name: str,
+    *,
+    runner: Optional[FlowRunner] = None,
+    module_path: Optional[str] = None,
+    attr_name: Optional[str] = None,
+    aliases: Iterable[str] = (),
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> FlowRegistration:
+    _ensure_builtin_flow_domains()
+    effective_source = source_module or infer_caller_module()
+    return _register_flow(
+        name,
+        runner=runner,
+        module_path=module_path,
+        attr_name=attr_name,
+        aliases=aliases,
+        domain=domain,
+        domain_metadata=domain_metadata,
+        source_module=effective_source,
+        on_conflict=on_conflict,
+    )
+
+
 def unregister_flow(name: str) -> Optional[FlowRegistration]:
+    _ensure_builtin_flow_domains()
+    state = get_runtime_state()
     normalized = _normalize_flow_name(name)
-    canonical = _FLOW_ALIASES.get(normalized, normalized)
-    registration = _FLOWS.pop(canonical, None)
+    canonical = state.flow_aliases.get(normalized, normalized)
+    registration = state.flows.pop(canonical, None)
     if registration is None:
         return None
-    for alias, target in list(_FLOW_ALIASES.items()):
+    for alias, target in list(state.flow_aliases.items()):
         if target == canonical:
-            del _FLOW_ALIASES[alias]
+            del state.flow_aliases[alias]
     return registration
 
 
 def get_flow_registration(name: str) -> FlowRegistration:
+    _ensure_builtin_flow_domains()
+    state = get_runtime_state()
     normalized = _normalize_flow_name(name)
-    canonical = _FLOW_ALIASES.get(normalized)
-    if canonical is None or canonical not in _FLOWS:
+    canonical = state.flow_aliases.get(normalized)
+    if canonical is None or canonical not in state.flows:
         raise KeyError(f"unknown flow: {normalized}")
-    return _FLOWS[canonical]
+    return state.flows[canonical]
 
 
 def get_flow_runner(name: str) -> FlowRunner:
@@ -222,24 +304,42 @@ def get_flow_runner(name: str) -> FlowRunner:
 
 
 def list_flows() -> list[str]:
-    return sorted(_FLOWS.keys())
+    _ensure_builtin_flow_domains()
+    return sorted(get_runtime_state().flows.keys())
 
 
 def list_flow_details() -> list[dict[str, Any]]:
+    _ensure_builtin_flow_domains()
+    state = get_runtime_state()
     return [
         {
             "name": registration.name,
             "aliases": list(registration.aliases),
             "module_path": registration.module_path,
             "attr_name": registration.attr_name,
+            "domain": registration.domain,
+            "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
         }
-        for registration in sorted(_FLOWS.values(), key=lambda item: item.name)
+        for registration in sorted(state.flows.values(), key=lambda item: item.name)
     ]
 
 
-register_flow(
-    "cleaning",
-    module_path="aiwf.flows.cleaning",
-    attr_name="run_cleaning",
-)
+def list_flow_domains() -> list[dict[str, Any]]:
+    _ensure_builtin_flow_domains()
+    state = get_runtime_state()
+    domains: Dict[str, Dict[str, Any]] = {}
+    for registration in sorted(state.flows.values(), key=lambda item: item.name):
+        if registration.domain is None:
+            continue
+        entry = domains.get(registration.domain)
+        if entry is None:
+            entry = dict(registration.domain_metadata)
+            entry["name"] = registration.domain
+            entry["flow_names"] = []
+            domains[registration.domain] = entry
+        else:
+            for key, value in registration.domain_metadata.items():
+                entry.setdefault(key, value)
+        entry["flow_names"].append(registration.name)
+    return [domains[name] for name in sorted(domains.keys())]

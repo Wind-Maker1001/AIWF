@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from aiwf.flows.artifact_selection import normalize_artifact_selection
+from aiwf.registry_domains import normalize_registry_domain, summarize_registry_domains
 from aiwf.registry_events import record_registry_event
 from aiwf.registry_policy import default_conflict_policy, normalize_conflict_policy
+from aiwf.runtime_state import get_runtime_state
 from aiwf.registry_utils import infer_caller_module
 
 
@@ -38,10 +40,9 @@ class CleaningArtifactRegistration:
     local_path_resolver: Optional[LocalArtifactPathResolver]
     local_writer: Optional[LocalArtifactWriter]
     required: bool
+    domain: Optional[str]
+    domain_metadata: Mapping[str, Any]
     source_module: str
-
-
-_CLEANING_ARTIFACTS: Dict[str, CleaningArtifactRegistration] = {}
 
 
 def _normalize_name(name: str) -> str:
@@ -51,7 +52,21 @@ def _normalize_name(name: str) -> str:
     return normalized
 
 
-def register_cleaning_artifact(
+def _ensure_builtin_cleaning_artifacts() -> None:
+    state = get_runtime_state()
+    if state.builtins_cleaning_artifacts_registered or state.cleaning_artifact_bootstrap_in_progress:
+        return
+    state.cleaning_artifact_bootstrap_in_progress = True
+    try:
+        from aiwf.flows.domains.cleaning_core_artifacts import register_builtin_cleaning_artifacts
+
+        register_builtin_cleaning_artifacts(_register_cleaning_artifact)
+        state.builtins_cleaning_artifacts_registered = True
+    finally:
+        state.cleaning_artifact_bootstrap_in_progress = False
+
+
+def _register_cleaning_artifact(
     name: str,
     *,
     artifact_id: str,
@@ -62,16 +77,23 @@ def register_cleaning_artifact(
     local_path_resolver: Optional[LocalArtifactPathResolver] = None,
     local_writer: Optional[LocalArtifactWriter] = None,
     required: bool = False,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
     on_conflict: Optional[str] = None,
 ) -> CleaningArtifactRegistration:
+    state = get_runtime_state()
     normalized = _normalize_name(name)
     if local_writer is not None and not callable(local_writer):
         raise TypeError("cleaning artifact local_writer must be callable")
     if local_path_resolver is not None and not callable(local_path_resolver):
         raise TypeError("cleaning artifact local_path_resolver must be callable")
+    normalized_domain, normalized_domain_metadata = normalize_registry_domain(
+        domain,
+        domain_metadata,
+    )
     source = str(source_module or infer_caller_module())
-    existing = _CLEANING_ARTIFACTS.get(normalized)
+    existing = state.cleaning_artifacts.get(normalized)
     if existing is not None:
         policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
         if policy == "error":
@@ -118,21 +140,61 @@ def register_cleaning_artifact(
         local_path_resolver=local_path_resolver,
         local_writer=local_writer,
         required=bool(required),
+        domain=normalized_domain,
+        domain_metadata=normalized_domain_metadata,
         source_module=source,
     )
-    _CLEANING_ARTIFACTS[normalized] = registration
+    state.cleaning_artifacts[normalized] = registration
     return registration
 
 
+def register_cleaning_artifact(
+    name: str,
+    *,
+    artifact_id: str,
+    kind: str,
+    path_key: str,
+    sha_key: str,
+    accel_output_key: Optional[str] = None,
+    local_path_resolver: Optional[LocalArtifactPathResolver] = None,
+    local_writer: Optional[LocalArtifactWriter] = None,
+    required: bool = False,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> CleaningArtifactRegistration:
+    _ensure_builtin_cleaning_artifacts()
+    effective_source = source_module or infer_caller_module()
+    return _register_cleaning_artifact(
+        name,
+        artifact_id=artifact_id,
+        kind=kind,
+        path_key=path_key,
+        sha_key=sha_key,
+        accel_output_key=accel_output_key,
+        local_path_resolver=local_path_resolver,
+        local_writer=local_writer,
+        required=required,
+        domain=domain,
+        domain_metadata=domain_metadata,
+        source_module=effective_source,
+        on_conflict=on_conflict,
+    )
+
+
 def unregister_cleaning_artifact(name: str) -> Optional[CleaningArtifactRegistration]:
-    return _CLEANING_ARTIFACTS.pop(_normalize_name(name), None)
+    _ensure_builtin_cleaning_artifacts()
+    return get_runtime_state().cleaning_artifacts.pop(_normalize_name(name), None)
 
 
 def list_cleaning_artifacts() -> List[str]:
-    return sorted(_CLEANING_ARTIFACTS.keys())
+    _ensure_builtin_cleaning_artifacts()
+    return sorted(get_runtime_state().cleaning_artifacts.keys())
 
 
 def list_cleaning_artifact_details() -> List[Dict[str, Any]]:
+    _ensure_builtin_cleaning_artifacts()
     return [
         {
             "name": registration.name,
@@ -141,22 +203,35 @@ def list_cleaning_artifact_details() -> List[Dict[str, Any]]:
             "path_key": registration.path_key,
             "sha_key": registration.sha_key,
             "required": registration.required,
+            "domain": registration.domain,
+            "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
         }
         for registration in get_cleaning_artifact_registrations()
     ]
 
 
+def list_cleaning_artifact_domains() -> List[Dict[str, Any]]:
+    _ensure_builtin_cleaning_artifacts()
+    return summarize_registry_domains(
+        sorted(get_cleaning_artifact_registrations(), key=lambda item: item.name),
+        item_name_attr="name",
+        list_key="artifacts",
+    )
+
+
 def get_cleaning_artifact(name: str) -> CleaningArtifactRegistration:
+    _ensure_builtin_cleaning_artifacts()
     normalized = _normalize_name(name)
-    registration = _CLEANING_ARTIFACTS.get(normalized)
+    registration = get_runtime_state().cleaning_artifacts.get(normalized)
     if registration is None:
         raise KeyError(f"unknown cleaning artifact: {normalized}")
     return registration
 
 
 def get_cleaning_artifact_registrations() -> List[CleaningArtifactRegistration]:
-    return list(_CLEANING_ARTIFACTS.values())
+    _ensure_builtin_cleaning_artifacts()
+    return list(get_runtime_state().cleaning_artifacts.values())
 
 
 def _artifact_tokens(values: Any) -> set[str]:
@@ -178,6 +253,7 @@ def _registration_tokens(registration: CleaningArtifactRegistration) -> set[str]
 
 
 def list_cleaning_artifact_tokens() -> List[str]:
+    _ensure_builtin_cleaning_artifacts()
     tokens = set()
     for registration in get_cleaning_artifact_registrations():
         tokens.update(_registration_tokens(registration))
@@ -185,6 +261,7 @@ def list_cleaning_artifact_tokens() -> List[str]:
 
 
 def select_cleaning_artifact_registrations(params_effective: Dict[str, Any]) -> List[CleaningArtifactRegistration]:
+    _ensure_builtin_cleaning_artifacts()
     selection = normalize_artifact_selection(params_effective)["core"]
     core_enabled = bool(selection.get("enabled", True))
     enabled_tokens = _artifact_tokens(selection.get("include"))
@@ -285,36 +362,3 @@ def materialize_accel_cleaning_artifacts(
             }
         )
     return out
-
-
-register_cleaning_artifact(
-    "csv_cleaned",
-    artifact_id="csv_cleaned_001",
-    kind="csv",
-    path_key="cleaned_csv",
-    sha_key="sha_csv",
-    accel_output_key="cleaned_csv",
-    local_path_resolver=_csv_local_path,
-    local_writer=_write_csv_artifact,
-)
-register_cleaning_artifact(
-    "parquet_cleaned",
-    artifact_id="parquet_cleaned_001",
-    kind="parquet",
-    path_key="cleaned_parquet",
-    sha_key="sha_parquet",
-    accel_output_key="cleaned_parquet",
-    local_path_resolver=_parquet_local_path,
-    local_writer=_write_parquet_artifact,
-    required=True,
-)
-register_cleaning_artifact(
-    "profile_json",
-    artifact_id="profile_json_001",
-    kind="json",
-    path_key="profile_json",
-    sha_key="sha_profile",
-    accel_output_key="profile_json",
-    local_path_resolver=_profile_local_path,
-    local_writer=_write_profile_artifact,
-)

@@ -154,8 +154,18 @@ class PreprocessTests(unittest.TestCase):
                 return True
             return str(row.get(field) or "").startswith(str(cfg.get("value") or ""))
 
-        preprocess.register_field_transform("prefix", prefix_transform)
-        preprocess.register_row_filter("starts_with", starts_with_filter)
+        preprocess.register_field_transform(
+            "prefix",
+            prefix_transform,
+            domain="custom-preprocess",
+            domain_metadata={"label": "Custom Preprocess", "backend": "extension", "builtin": False},
+        )
+        preprocess.register_row_filter(
+            "starts_with",
+            starts_with_filter,
+            domain="custom-preprocess",
+            domain_metadata={"label": "Custom Preprocess", "backend": "extension", "builtin": False},
+        )
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 src = os.path.join(tmp, "raw.jsonl")
@@ -185,12 +195,16 @@ class PreprocessTests(unittest.TestCase):
                     },
                 )
                 rows = preprocess._read_jsonl(dst)
+                field_details = {item["op"]: item for item in preprocess.list_field_transform_details()}
+                row_domains = preprocess.list_row_filter_domains()
         finally:
             preprocess.unregister_field_transform("prefix")
             preprocess.unregister_row_filter("starts_with")
 
         self.assertEqual(res["summary"]["output_rows"], 1)
         self.assertEqual(rows[0]["speaker"], "team-alice")
+        self.assertEqual(field_details["prefix"]["domain"], "custom-preprocess")
+        self.assertTrue(any(item["name"] == "custom-preprocess" for item in row_domains))
 
     def test_preprocess_with_input_files_txt_and_docx(self):
         with tempfile.TemporaryDirectory() as tmp:

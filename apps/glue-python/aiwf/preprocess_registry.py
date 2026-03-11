@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
+from aiwf.registry_domains import normalize_registry_domain, summarize_registry_domains
 from aiwf.registry_events import record_registry_event
 from aiwf.registry_policy import default_conflict_policy, normalize_conflict_policy
+from aiwf.runtime_state import get_runtime_state
 from aiwf.registry_utils import infer_caller_module
 
 
@@ -19,6 +21,8 @@ PipelineStageExecutorFn = Callable[["PipelineStageContext"], Dict[str, Any]]
 class FieldTransformRegistration:
     op: str
     handler: PreprocessTransformFn
+    domain: Optional[str]
+    domain_metadata: Mapping[str, Any]
     source_module: str
 
 
@@ -27,6 +31,8 @@ class RowFilterRegistration:
     op: str
     handler: PreprocessFilterFn
     requires_field: bool
+    domain: Optional[str]
+    domain_metadata: Mapping[str, Any]
     source_module: str
 
 
@@ -46,12 +52,9 @@ class PipelineStageRegistration:
     validator: PipelineStageValidatorFn
     prepare_config: PipelineStagePrepareFn
     executor: Optional[PipelineStageExecutorFn]
+    domain: Optional[str]
+    domain_metadata: Mapping[str, Any]
     source_module: str
-
-
-_FIELD_TRANSFORMS: Dict[str, FieldTransformRegistration] = {}
-_ROW_FILTERS: Dict[str, RowFilterRegistration] = {}
-_PIPELINE_STAGES: Dict[str, PipelineStageRegistration] = {}
 
 
 def _normalize_preprocess_op(op: str) -> str:
@@ -61,18 +64,63 @@ def _normalize_preprocess_op(op: str) -> str:
     return normalized
 
 
-def register_field_transform(
+def _ensure_builtin_preprocess_registry() -> None:
+    state = get_runtime_state()
+    if state.builtins_preprocess_registered or state.preprocess_bootstrap_in_progress:
+        return
+    state.preprocess_bootstrap_in_progress = True
+    try:
+        from aiwf.preprocess_ops import register_builtin_preprocess_ops
+        from aiwf.preprocess_stages import (
+            default_pipeline_stage_prepare_config,
+            register_builtin_pipeline_stages,
+        )
+        from aiwf.preprocess_validation import validate_preprocess_spec_impl
+
+        register_builtin_preprocess_ops(_register_field_transform, _register_row_filter)
+        def _builtin_stage_validator(spec: Dict[str, Any]) -> Dict[str, Any]:
+            return validate_preprocess_spec_impl(
+                spec,
+                field_transform_ops=sorted(state.field_transforms.keys()),
+                row_filter_specs={
+                    item.op: item.requires_field
+                    for item in state.row_filters.values()
+                },
+            )
+
+        def _builtin_stage_registrar(name: str, **kwargs: Any) -> PipelineStageRegistration:
+            return _register_pipeline_stage(
+                name,
+                default_validator=_builtin_stage_validator,
+                default_prepare_config=default_pipeline_stage_prepare_config,
+                **kwargs,
+            )
+
+        register_builtin_pipeline_stages(_builtin_stage_registrar)
+        state.builtins_preprocess_registered = True
+    finally:
+        state.preprocess_bootstrap_in_progress = False
+
+
+def _register_field_transform(
     op: str,
     handler: PreprocessTransformFn,
     *,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
     on_conflict: Optional[str] = None,
 ) -> FieldTransformRegistration:
+    state = get_runtime_state()
     normalized = _normalize_preprocess_op(op)
     if not callable(handler):
         raise TypeError("field transform handler must be callable")
+    normalized_domain, normalized_domain_metadata = normalize_registry_domain(
+        domain,
+        domain_metadata,
+    )
     source = str(source_module or infer_caller_module())
-    existing = _FIELD_TRANSFORMS.get(normalized)
+    existing = state.field_transforms.get(normalized)
     if existing is not None:
         policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
         if policy == "error":
@@ -112,52 +160,99 @@ def register_field_transform(
     registration = FieldTransformRegistration(
         op=normalized,
         handler=handler,
+        domain=normalized_domain,
+        domain_metadata=normalized_domain_metadata,
         source_module=source,
     )
-    _FIELD_TRANSFORMS[normalized] = registration
+    state.field_transforms[normalized] = registration
     return registration
 
 
+def register_field_transform(
+    op: str,
+    handler: PreprocessTransformFn,
+    *,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> FieldTransformRegistration:
+    _ensure_builtin_preprocess_registry()
+    effective_source = source_module or infer_caller_module()
+    return _register_field_transform(
+        op,
+        handler,
+        domain=domain,
+        domain_metadata=domain_metadata,
+        source_module=effective_source,
+        on_conflict=on_conflict,
+    )
+
+
 def unregister_field_transform(op: str) -> Optional[FieldTransformRegistration]:
+    _ensure_builtin_preprocess_registry()
     normalized = _normalize_preprocess_op(op)
-    return _FIELD_TRANSFORMS.pop(normalized, None)
+    return get_runtime_state().field_transforms.pop(normalized, None)
 
 
 def get_field_transform(op: str) -> FieldTransformRegistration:
+    _ensure_builtin_preprocess_registry()
     normalized = _normalize_preprocess_op(op)
-    registration = _FIELD_TRANSFORMS.get(normalized)
+    registration = get_runtime_state().field_transforms.get(normalized)
     if registration is None:
         raise KeyError(f"unknown field transform: {normalized}")
     return registration
 
 
 def list_field_transforms() -> List[str]:
-    return sorted(_FIELD_TRANSFORMS.keys())
+    _ensure_builtin_preprocess_registry()
+    return sorted(get_runtime_state().field_transforms.keys())
 
 
 def list_field_transform_details() -> List[Dict[str, Any]]:
+    _ensure_builtin_preprocess_registry()
+    state = get_runtime_state()
     return [
         {
             "op": registration.op,
+            "domain": registration.domain,
+            "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
         }
-        for registration in sorted(_FIELD_TRANSFORMS.values(), key=lambda item: item.op)
+        for registration in sorted(state.field_transforms.values(), key=lambda item: item.op)
     ]
 
 
-def register_row_filter(
+def list_field_transform_domains() -> List[Dict[str, Any]]:
+    _ensure_builtin_preprocess_registry()
+    state = get_runtime_state()
+    return summarize_registry_domains(
+        sorted(state.field_transforms.values(), key=lambda item: item.op),
+        item_name_attr="op",
+        list_key="field_transforms",
+    )
+
+
+def _register_row_filter(
     op: str,
     handler: PreprocessFilterFn,
     *,
     requires_field: bool = True,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
     on_conflict: Optional[str] = None,
 ) -> RowFilterRegistration:
+    state = get_runtime_state()
     normalized = _normalize_preprocess_op(op)
     if not callable(handler):
         raise TypeError("row filter handler must be callable")
+    normalized_domain, normalized_domain_metadata = normalize_registry_domain(
+        domain,
+        domain_metadata,
+    )
     source = str(source_module or infer_caller_module())
-    existing = _ROW_FILTERS.get(normalized)
+    existing = state.row_filters.get(normalized)
     if existing is not None:
         policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
         if policy == "error":
@@ -198,54 +293,103 @@ def register_row_filter(
         op=normalized,
         handler=handler,
         requires_field=requires_field,
+        domain=normalized_domain,
+        domain_metadata=normalized_domain_metadata,
         source_module=source,
     )
-    _ROW_FILTERS[normalized] = registration
+    state.row_filters[normalized] = registration
     return registration
 
 
+def register_row_filter(
+    op: str,
+    handler: PreprocessFilterFn,
+    *,
+    requires_field: bool = True,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+) -> RowFilterRegistration:
+    _ensure_builtin_preprocess_registry()
+    effective_source = source_module or infer_caller_module()
+    return _register_row_filter(
+        op,
+        handler,
+        requires_field=requires_field,
+        domain=domain,
+        domain_metadata=domain_metadata,
+        source_module=effective_source,
+        on_conflict=on_conflict,
+    )
+
+
 def unregister_row_filter(op: str) -> Optional[RowFilterRegistration]:
+    _ensure_builtin_preprocess_registry()
     normalized = _normalize_preprocess_op(op)
-    return _ROW_FILTERS.pop(normalized, None)
+    return get_runtime_state().row_filters.pop(normalized, None)
 
 
 def get_row_filter(op: str) -> RowFilterRegistration:
+    _ensure_builtin_preprocess_registry()
     normalized = _normalize_preprocess_op(op)
-    registration = _ROW_FILTERS.get(normalized)
+    registration = get_runtime_state().row_filters.get(normalized)
     if registration is None:
         raise KeyError(f"unknown row filter: {normalized}")
     return registration
 
 
 def list_row_filters() -> List[str]:
-    return sorted(_ROW_FILTERS.keys())
+    _ensure_builtin_preprocess_registry()
+    return sorted(get_runtime_state().row_filters.keys())
 
 
 def list_row_filter_details() -> List[Dict[str, Any]]:
+    _ensure_builtin_preprocess_registry()
+    state = get_runtime_state()
     return [
         {
             "op": registration.op,
             "requires_field": registration.requires_field,
+            "domain": registration.domain,
+            "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
         }
-        for registration in sorted(_ROW_FILTERS.values(), key=lambda item: item.op)
+        for registration in sorted(state.row_filters.values(), key=lambda item: item.op)
     ]
 
 
-def register_pipeline_stage(
+def list_row_filter_domains() -> List[Dict[str, Any]]:
+    _ensure_builtin_preprocess_registry()
+    state = get_runtime_state()
+    return summarize_registry_domains(
+        sorted(state.row_filters.values(), key=lambda item: item.op),
+        item_name_attr="op",
+        list_key="row_filters",
+    )
+
+
+def _register_pipeline_stage(
     name: str,
     *,
     validator: Optional[PipelineStageValidatorFn] = None,
     prepare_config: Optional[PipelineStagePrepareFn] = None,
     executor: Optional[PipelineStageExecutorFn] = None,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
     on_conflict: Optional[str] = None,
     default_validator: Optional[PipelineStageValidatorFn] = None,
     default_prepare_config: Optional[PipelineStagePrepareFn] = None,
 ) -> PipelineStageRegistration:
+    state = get_runtime_state()
     normalized = _normalize_preprocess_op(name)
+    normalized_domain, normalized_domain_metadata = normalize_registry_domain(
+        domain,
+        domain_metadata,
+    )
     source = str(source_module or infer_caller_module())
-    existing = _PIPELINE_STAGES.get(normalized)
+    existing = state.pipeline_stages.get(normalized)
     if existing is not None:
         policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
         if policy == "error":
@@ -295,35 +439,83 @@ def register_pipeline_stage(
         validator=effective_validator,
         prepare_config=effective_prepare,
         executor=executor,
+        domain=normalized_domain,
+        domain_metadata=normalized_domain_metadata,
         source_module=source,
     )
-    _PIPELINE_STAGES[normalized] = registration
+    state.pipeline_stages[normalized] = registration
     return registration
 
 
+def register_pipeline_stage(
+    name: str,
+    *,
+    validator: Optional[PipelineStageValidatorFn] = None,
+    prepare_config: Optional[PipelineStagePrepareFn] = None,
+    executor: Optional[PipelineStageExecutorFn] = None,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Mapping[str, Any]] = None,
+    source_module: Optional[str] = None,
+    on_conflict: Optional[str] = None,
+    default_validator: Optional[PipelineStageValidatorFn] = None,
+    default_prepare_config: Optional[PipelineStagePrepareFn] = None,
+) -> PipelineStageRegistration:
+    _ensure_builtin_preprocess_registry()
+    effective_source = source_module or infer_caller_module()
+    return _register_pipeline_stage(
+        name,
+        validator=validator,
+        prepare_config=prepare_config,
+        executor=executor,
+        domain=domain,
+        domain_metadata=domain_metadata,
+        source_module=effective_source,
+        on_conflict=on_conflict,
+        default_validator=default_validator,
+        default_prepare_config=default_prepare_config,
+    )
+
+
 def unregister_pipeline_stage(name: str) -> Optional[PipelineStageRegistration]:
+    _ensure_builtin_preprocess_registry()
     normalized = _normalize_preprocess_op(name)
-    return _PIPELINE_STAGES.pop(normalized, None)
+    return get_runtime_state().pipeline_stages.pop(normalized, None)
 
 
 def get_pipeline_stage(name: str) -> PipelineStageRegistration:
+    _ensure_builtin_preprocess_registry()
     normalized = _normalize_preprocess_op(name)
-    registration = _PIPELINE_STAGES.get(normalized)
+    registration = get_runtime_state().pipeline_stages.get(normalized)
     if registration is None:
         raise KeyError(f"unknown pipeline stage: {normalized}")
     return registration
 
 
 def list_pipeline_stages() -> List[str]:
-    return sorted(_PIPELINE_STAGES.keys())
+    _ensure_builtin_preprocess_registry()
+    return sorted(get_runtime_state().pipeline_stages.keys())
 
 
 def list_pipeline_stage_details() -> List[Dict[str, Any]]:
+    _ensure_builtin_preprocess_registry()
+    state = get_runtime_state()
     return [
         {
             "name": registration.name,
             "has_custom_executor": registration.executor is not None,
+            "domain": registration.domain,
+            "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
         }
-        for registration in sorted(_PIPELINE_STAGES.values(), key=lambda item: item.name)
+        for registration in sorted(state.pipeline_stages.values(), key=lambda item: item.name)
     ]
+
+
+def list_pipeline_stage_domains() -> List[Dict[str, Any]]:
+    _ensure_builtin_preprocess_registry()
+    state = get_runtime_state()
+    return summarize_registry_domains(
+        sorted(state.pipeline_stages.values(), key=lambda item: item.name),
+        item_name_attr="name",
+        list_key="pipeline_stages",
+    )

@@ -5,11 +5,7 @@ import os
 import sys
 from typing import Any, Dict, List
 
-
-_LOADED_MODULES: List[str] = []
-_FAILED_MODULES: Dict[str, str] = {}
-_LOAD_ATTEMPTED = False
-_LOADING = False
+from aiwf.runtime_state import get_runtime_state
 
 
 def configured_extension_modules() -> List[str]:
@@ -24,52 +20,54 @@ def configured_extension_modules() -> List[str]:
 
 
 def load_extension_modules(*, force: bool = False) -> Dict[str, Any]:
-    global _LOAD_ATTEMPTED, _LOADING
+    state = get_runtime_state()
 
-    if _LOADING:
+    if state.loading:
         return extension_status()
-    if _LOAD_ATTEMPTED and not force:
+    if state.load_attempted and not force:
         return extension_status()
 
-    _LOAD_ATTEMPTED = True
-    _LOADING = True
+    state.load_attempted = True
+    state.loading = True
     if force:
-        _LOADED_MODULES.clear()
-        _FAILED_MODULES.clear()
+        state.loaded_modules.clear()
+        state.failed_modules.clear()
         importlib.invalidate_caches()
 
     try:
         for module_name in configured_extension_modules():
-            if module_name in _LOADED_MODULES:
+            if module_name in state.loaded_modules and not force:
                 continue
             try:
                 existing_module = sys.modules.get(module_name)
-                if force and existing_module is not None:
+                if existing_module is not None:
                     importlib.reload(existing_module)
                 else:
                     importlib.import_module(module_name)
-                _LOADED_MODULES.append(module_name)
-                _FAILED_MODULES.pop(module_name, None)
+                if module_name not in state.loaded_modules:
+                    state.loaded_modules.append(module_name)
+                state.failed_modules.pop(module_name, None)
             except Exception as exc:
-                _FAILED_MODULES[module_name] = str(exc)
+                state.failed_modules[module_name] = str(exc)
     finally:
-        _LOADING = False
+        state.loading = False
 
     return extension_status()
 
 
 def extension_status() -> Dict[str, Any]:
+    state = get_runtime_state()
     return {
         "configured": configured_extension_modules(),
-        "loaded": list(_LOADED_MODULES),
-        "failed": dict(_FAILED_MODULES),
-        "load_attempted": _LOAD_ATTEMPTED,
+        "loaded": list(state.loaded_modules),
+        "failed": dict(state.failed_modules),
+        "load_attempted": state.load_attempted,
     }
 
 
 def reset_extension_state_for_tests() -> None:
-    global _LOAD_ATTEMPTED, _LOADING
-    _LOADED_MODULES.clear()
-    _FAILED_MODULES.clear()
-    _LOAD_ATTEMPTED = False
-    _LOADING = False
+    state = get_runtime_state()
+    state.loaded_modules.clear()
+    state.failed_modules.clear()
+    state.load_attempted = False
+    state.loading = False

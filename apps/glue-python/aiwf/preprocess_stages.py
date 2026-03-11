@@ -40,7 +40,13 @@ def prepare_audit_stage_config(context: Any) -> Dict[str, Any]:
 
 
 def register_builtin_pipeline_stages(register_pipeline_stage: Callable[..., Any]) -> None:
-    register_pipeline_stage("extract", prepare_config=prepare_extract_stage_config)
-    register_pipeline_stage("clean", prepare_config=prepare_clean_stage_config)
-    register_pipeline_stage("structure", prepare_config=prepare_structure_stage_config)
-    register_pipeline_stage("audit", prepare_config=prepare_audit_stage_config)
+    domain = {
+        "name": "preprocess",
+        "label": "Preprocess",
+        "backend": "python",
+        "builtin": True,
+    }
+    register_pipeline_stage("extract", prepare_config=prepare_extract_stage_config, domain="preprocess", domain_metadata=domain)
+    register_pipeline_stage("clean", prepare_config=prepare_clean_stage_config, domain="preprocess", domain_metadata=domain)
+    register_pipeline_stage("structure", prepare_config=prepare_structure_stage_config, domain="preprocess", domain_metadata=domain)
+    register_pipeline_stage("audit", prepare_config=prepare_audit_stage_config, domain="preprocess", domain_metadata=domain)

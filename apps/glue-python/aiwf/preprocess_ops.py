@@ -255,28 +255,34 @@ def register_builtin_preprocess_ops(
     register_field_transform: Callable[..., Any],
     register_row_filter: Callable[..., Any],
 ) -> None:
-    register_field_transform("trim", _transform_trim)
-    register_field_transform("lower", _transform_lower)
-    register_field_transform("upper", _transform_upper)
-    register_field_transform("collapse_whitespace", _transform_collapse_whitespace)
-    register_field_transform("remove_urls", _transform_remove_urls)
-    register_field_transform("remove_emails", _transform_remove_emails)
-    register_field_transform("regex_replace", _transform_regex_replace)
-    register_field_transform("parse_number", _transform_parse_number)
-    register_field_transform("round_number", _transform_round_number)
-    register_field_transform("parse_date", _transform_parse_date)
-    register_field_transform("extract_regex", _transform_extract_regex)
+    domain = {
+        "name": "preprocess",
+        "label": "Preprocess",
+        "backend": "python",
+        "builtin": True,
+    }
+    register_field_transform("trim", _transform_trim, domain="preprocess", domain_metadata=domain)
+    register_field_transform("lower", _transform_lower, domain="preprocess", domain_metadata=domain)
+    register_field_transform("upper", _transform_upper, domain="preprocess", domain_metadata=domain)
+    register_field_transform("collapse_whitespace", _transform_collapse_whitespace, domain="preprocess", domain_metadata=domain)
+    register_field_transform("remove_urls", _transform_remove_urls, domain="preprocess", domain_metadata=domain)
+    register_field_transform("remove_emails", _transform_remove_emails, domain="preprocess", domain_metadata=domain)
+    register_field_transform("regex_replace", _transform_regex_replace, domain="preprocess", domain_metadata=domain)
+    register_field_transform("parse_number", _transform_parse_number, domain="preprocess", domain_metadata=domain)
+    register_field_transform("round_number", _transform_round_number, domain="preprocess", domain_metadata=domain)
+    register_field_transform("parse_date", _transform_parse_date, domain="preprocess", domain_metadata=domain)
+    register_field_transform("extract_regex", _transform_extract_regex, domain="preprocess", domain_metadata=domain)
 
-    register_row_filter("exists", _filter_exists, requires_field=False)
-    register_row_filter("not_exists", _filter_not_exists, requires_field=False)
-    register_row_filter("eq", _filter_eq)
-    register_row_filter("ne", _filter_ne)
-    register_row_filter("gt", _filter_gt)
-    register_row_filter("gte", _filter_gte)
-    register_row_filter("lt", _filter_lt)
-    register_row_filter("lte", _filter_lte)
-    register_row_filter("in", _filter_in)
-    register_row_filter("not_in", _filter_not_in)
-    register_row_filter("contains", _filter_contains)
-    register_row_filter("regex", _filter_regex)
-    register_row_filter("not_regex", _filter_not_regex)
+    register_row_filter("exists", _filter_exists, requires_field=False, domain="preprocess", domain_metadata=domain)
+    register_row_filter("not_exists", _filter_not_exists, requires_field=False, domain="preprocess", domain_metadata=domain)
+    register_row_filter("eq", _filter_eq, domain="preprocess", domain_metadata=domain)
+    register_row_filter("ne", _filter_ne, domain="preprocess", domain_metadata=domain)
+    register_row_filter("gt", _filter_gt, domain="preprocess", domain_metadata=domain)
+    register_row_filter("gte", _filter_gte, domain="preprocess", domain_metadata=domain)
+    register_row_filter("lt", _filter_lt, domain="preprocess", domain_metadata=domain)
+    register_row_filter("lte", _filter_lte, domain="preprocess", domain_metadata=domain)
+    register_row_filter("in", _filter_in, domain="preprocess", domain_metadata=domain)
+    register_row_filter("not_in", _filter_not_in, domain="preprocess", domain_metadata=domain)
+    register_row_filter("contains", _filter_contains, domain="preprocess", domain_metadata=domain)
+    register_row_filter("regex", _filter_regex, domain="preprocess", domain_metadata=domain)
+    register_row_filter("not_regex", _filter_not_regex, domain="preprocess", domain_metadata=domain)

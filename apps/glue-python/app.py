@@ -11,9 +11,8 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from aiwf.capabilities import collect_capabilities
+from aiwf.runtime_catalog import get_runtime_catalog
 from aiwf.flow_context import LegacyFlowPathParamsError, attach_job_context, normalize_job_context
-from aiwf.flows.registry import get_flow_runner, list_flows
 from aiwf.paths import resolve_jobs_root
 
 
@@ -32,6 +31,7 @@ class Settings(BaseModel):
 
 
 settings = Settings()
+runtime_catalog = get_runtime_catalog()
 
 
 def _debug_errors_enabled() -> bool:
@@ -163,7 +163,7 @@ def _run_flow_with_runner(job_id: str, req: RunReq, runner):
 
 
 def run_registered_flow(job_id: str, flow: str, req: RunReq):
-    runner = get_flow_runner(flow)
+    runner = runtime_catalog.get_flow_runner(flow)
     return _run_flow_with_runner(job_id, req, runner)
 
 
@@ -181,7 +181,7 @@ def health():
 
 @app.get("/capabilities")
 def capabilities():
-    return {"ok": True, "capabilities": collect_capabilities()}
+    return {"ok": True, "capabilities": runtime_catalog.capabilities()}
 
 
 @app.exception_handler(Exception)
@@ -211,11 +211,11 @@ def run_flow(job_id: str, flow: str, req: RunReq):
     flow = (flow or "").strip().lower()
 
     try:
-        runner = get_flow_runner(flow)
+        runner = runtime_catalog.get_flow_runner(flow)
     except KeyError:
         return JSONResponse(
             status_code=404,
-            content={"ok": False, "error": f"unknown flow: {flow}", "available_flows": list_flows()},
+            content={"ok": False, "error": f"unknown flow: {flow}", "available_flows": runtime_catalog.list_flows()},
         )
     try:
         result = _run_flow_with_runner(job_id, req, runner)

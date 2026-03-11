@@ -63,15 +63,27 @@ class AppRouteTests(unittest.TestCase):
         caps = payload["capabilities"]
         self.assertIn("cleaning", caps["flows"])
         self.assertIn("txt", caps["input_formats"])
+        self.assertEqual(caps["input_domains"][0]["name"], "ingest")
         self.assertIn("trim", caps["preprocess"]["field_transforms"])
+        self.assertEqual(caps["preprocess"]["field_transform_domains"][0]["name"], "preprocess")
+        self.assertEqual(caps["preprocess"]["row_filter_domains"][0]["name"], "preprocess")
         self.assertIn("extract", caps["preprocess"]["pipeline_stages"])
+        self.assertEqual(caps["preprocess"]["pipeline_stage_domains"][0]["name"], "preprocess")
         self.assertIn("parquet_cleaned", caps["artifacts"]["core"])
+        self.assertEqual(caps["artifacts"]["core_domains"][0]["name"], "cleaning-core")
         self.assertIn("xlsx_fin", caps["artifacts"]["office"])
+        self.assertEqual(caps["artifacts"]["office_domains"][0]["name"], "cleaning-office")
         self.assertIn("parquet", caps["artifacts"]["selection_tokens"]["core"])
         self.assertIn("xlsx", caps["artifacts"]["selection_tokens"]["office"])
         self.assertEqual(caps["registry"]["default_conflict_policy"], "replace")
         cleaning_flow = next(item for item in caps["flow_details"] if item["name"] == "cleaning")
+        self.assertEqual(cleaning_flow["domain"], "cleaning")
+        self.assertEqual(cleaning_flow["domain_metadata"]["backend"], "python")
+        self.assertTrue(cleaning_flow["domain_metadata"]["builtin"])
         self.assertTrue(cleaning_flow["source_module"].startswith("aiwf."))
+        cleaning_domain = next(item for item in caps["flow_domains"] if item["name"] == "cleaning")
+        self.assertEqual(cleaning_domain["flow_names"], ["cleaning"])
+        self.assertEqual(cleaning_domain["label"], "Cleaning")
         txt_reader = next(item for item in caps["input_format_details"] if item["input_format"] == "txt")
         self.assertTrue(txt_reader["source_module"].startswith("aiwf."))
 
@@ -182,14 +194,15 @@ class AppRouteTests(unittest.TestCase):
             context = params.get("job_context") if isinstance(params.get("job_context"), dict) else {}
             return {"ok": True, "custom": True, "job_root": context.get("job_root")}
 
-        register_flow("custom", runner=run_custom_flow, aliases=("custom-alias",))
-        try:
-            resp = self.client.post(
-                "/jobs/job-custom/run/custom-alias",
-                json={"actor": "local", "ruleset_version": "v1", "params": {}},
-            )
-        finally:
-            unregister_flow("custom")
+        with glue_app.runtime_catalog.activate():
+            register_flow("custom", runner=run_custom_flow, aliases=("custom-alias",))
+            try:
+                resp = self.client.post(
+                    "/jobs/job-custom/run/custom-alias",
+                    json={"actor": "local", "ruleset_version": "v1", "params": {}},
+                )
+            finally:
+                unregister_flow("custom")
 
         self.assertEqual(resp.status_code, 200)
         payload = resp.json()
@@ -208,21 +221,58 @@ class AppRouteTests(unittest.TestCase):
                 )
 
             sys.path.insert(0, tmp)
-            unregister_flow("ext_flow")
             try:
-                with patch.dict("os.environ", {"AIWF_EXT_MODULES": module_name}, clear=False):
-                    extensions.reset_extension_state_for_tests()
-                    status = extensions.load_extension_modules(force=True)
+                with glue_app.runtime_catalog.activate():
+                    unregister_flow("ext_flow")
+                    with patch.dict("os.environ", {"AIWF_EXT_MODULES": module_name}, clear=False):
+                        extensions.reset_extension_state_for_tests()
+                        status = extensions.load_extension_modules(force=True)
+                        caps = self.client.get("/capabilities").json()["capabilities"]
             finally:
                 if tmp in sys.path:
                     sys.path.remove(tmp)
 
             self.assertIn(module_name, status["loaded"])
-            caps = self.client.get("/capabilities").json()["capabilities"]
             self.assertIn("ext_flow", caps["flows"])
             ext_flow = next(item for item in caps["flow_details"] if item["name"] == "ext_flow")
             self.assertEqual(ext_flow["source_module"], module_name)
-            unregister_flow("ext_flow")
+            with glue_app.runtime_catalog.activate():
+                unregister_flow("ext_flow")
+
+    def test_run_flow_auto_loads_configured_extension_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            module_name = "aiwf_test_ext_autoload_module"
+            module_path = os.path.join(tmp, f"{module_name}.py")
+            with open(module_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "from aiwf.flows.registry import register_flow\n"
+                    "register_flow(\n"
+                    "    'ext_auto_flow',\n"
+                    "    runner=lambda **kwargs: {'ok': True, 'autoloaded': True},\n"
+                    "    domain='extension-auto',\n"
+                    "    domain_metadata={'label': 'Extension Auto', 'backend': 'extension', 'builtin': False},\n"
+                    ")\n"
+                )
+
+            sys.path.insert(0, tmp)
+            try:
+                with glue_app.runtime_catalog.activate():
+                    unregister_flow("ext_auto_flow")
+                    with patch.dict("os.environ", {"AIWF_EXT_MODULES": module_name}, clear=False):
+                        extensions.reset_extension_state_for_tests()
+                        resp = self.client.post(
+                            "/jobs/job-auto/run/ext_auto_flow",
+                            json={"actor": "local", "ruleset_version": "v1", "params": {}},
+                        )
+            finally:
+                if tmp in sys.path:
+                    sys.path.remove(tmp)
+
+            self.assertEqual(resp.status_code, 200)
+            payload = resp.json()
+            self.assertTrue(payload["autoloaded"])
+            with glue_app.runtime_catalog.activate():
+                unregister_flow("ext_auto_flow")
 
     def test_extension_loader_force_reload_reexecutes_module_registration(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -235,20 +285,22 @@ class AppRouteTests(unittest.TestCase):
                 )
 
             sys.path.insert(0, tmp)
-            unregister_flow("ext_reload_flow")
             try:
-                with patch.dict("os.environ", {"AIWF_EXT_MODULES": module_name}, clear=False):
-                    extensions.reset_extension_state_for_tests()
-                    extensions.load_extension_modules(force=True)
+                with glue_app.runtime_catalog.activate():
                     unregister_flow("ext_reload_flow")
-                    status = extensions.load_extension_modules(force=True)
+                    with patch.dict("os.environ", {"AIWF_EXT_MODULES": module_name}, clear=False):
+                        extensions.reset_extension_state_for_tests()
+                        extensions.load_extension_modules(force=True)
+                        unregister_flow("ext_reload_flow")
+                        status = extensions.load_extension_modules(force=True)
             finally:
                 if tmp in sys.path:
                     sys.path.remove(tmp)
 
             self.assertIn(module_name, status["loaded"])
-            self.assertTrue(get_flow_runner("ext_reload_flow")()["reloaded"])
-            unregister_flow("ext_reload_flow")
+            with glue_app.runtime_catalog.activate():
+                self.assertTrue(get_flow_runner("ext_reload_flow")()["reloaded"])
+                unregister_flow("ext_reload_flow")
 
     def test_register_flow_keep_policy_preserves_existing_runner(self):
         def first_runner(**kwargs):
@@ -257,43 +309,47 @@ class AppRouteTests(unittest.TestCase):
         def second_runner(**kwargs):
             return {"ok": True, "runner": "second"}
 
-        register_flow("keep_flow", runner=first_runner)
-        try:
-            kept = register_flow("keep_flow", runner=second_runner, on_conflict="keep")
-            self.assertEqual(kept.source_module, __name__)
-            runner = get_flow_runner("keep_flow")
-            self.assertIs(runner, first_runner)
-        finally:
-            unregister_flow("keep_flow")
+        with glue_app.runtime_catalog.activate():
+            register_flow("keep_flow", runner=first_runner)
+            try:
+                kept = register_flow("keep_flow", runner=second_runner, on_conflict="keep")
+                self.assertEqual(kept.source_module, __name__)
+                runner = get_flow_runner("keep_flow")
+                self.assertIs(runner, first_runner)
+            finally:
+                unregister_flow("keep_flow")
 
     def test_register_flow_error_policy_raises(self):
-        register_flow("error_flow", runner=lambda **kwargs: {"ok": True})
-        try:
-            with self.assertRaises(RuntimeError):
-                register_flow("error_flow", runner=lambda **kwargs: {"ok": True}, on_conflict="error")
-        finally:
-            unregister_flow("error_flow")
+        with glue_app.runtime_catalog.activate():
+            register_flow("error_flow", runner=lambda **kwargs: {"ok": True})
+            try:
+                with self.assertRaises(RuntimeError):
+                    register_flow("error_flow", runner=lambda **kwargs: {"ok": True}, on_conflict="error")
+            finally:
+                unregister_flow("error_flow")
 
     def test_capabilities_reports_registry_conflict_events(self):
-        register_flow("warn_flow", runner=lambda **kwargs: {"ok": True})
-        try:
-            register_flow("warn_flow", runner=lambda **kwargs: {"ok": True}, on_conflict="warn")
-            caps = self.client.get("/capabilities").json()["capabilities"]
-            events = caps["registry"]["events"]
-            match = [e for e in events if e["registry"] == "flow" and e["name"] == "warn_flow"]
-            self.assertTrue(match)
-            self.assertEqual(match[-1]["policy"], "warn")
-        finally:
-            unregister_flow("warn_flow")
+        with glue_app.runtime_catalog.activate():
+            register_flow("warn_flow", runner=lambda **kwargs: {"ok": True})
+            try:
+                register_flow("warn_flow", runner=lambda **kwargs: {"ok": True}, on_conflict="warn")
+                caps = self.client.get("/capabilities").json()["capabilities"]
+                events = caps["registry"]["events"]
+                match = [e for e in events if e["registry"] == "flow" and e["name"] == "warn_flow"]
+                self.assertTrue(match)
+                self.assertEqual(match[-1]["policy"], "warn")
+            finally:
+                unregister_flow("warn_flow")
 
     def test_register_flow_rejects_alias_that_matches_existing_flow_name(self):
-        register_flow("alias-root", runner=lambda **kwargs: {"ok": True})
-        try:
-            with self.assertRaises(RuntimeError):
-                register_flow("alias-child", runner=lambda **kwargs: {"ok": True}, aliases=("alias-root",))
-        finally:
-            unregister_flow("alias-root")
-            unregister_flow("alias-child")
+        with glue_app.runtime_catalog.activate():
+            register_flow("alias-root", runner=lambda **kwargs: {"ok": True})
+            try:
+                with self.assertRaises(RuntimeError):
+                    register_flow("alias-child", runner=lambda **kwargs: {"ok": True}, aliases=("alias-root",))
+            finally:
+                unregister_flow("alias-root")
+                unregister_flow("alias-child")
 
     def test_register_flow_reassigns_shared_alias_without_hiding_original_flow(self):
         def flow_a(**kwargs):
@@ -302,15 +358,44 @@ class AppRouteTests(unittest.TestCase):
         def flow_b(**kwargs):
             return {"runner": "b"}
 
-        register_flow("flow-a", runner=flow_a, aliases=("shared-alias",))
-        try:
-            register_flow("flow-b", runner=flow_b, aliases=("shared-alias",), on_conflict="warn")
-            self.assertEqual(get_flow_runner("shared-alias")()["runner"], "b")
-            self.assertEqual(get_flow_runner("flow-a")()["runner"], "a")
-            self.assertEqual(get_flow_registration("flow-a").aliases, ())
-        finally:
-            unregister_flow("flow-a")
-            unregister_flow("flow-b")
+        with glue_app.runtime_catalog.activate():
+            register_flow("flow-a", runner=flow_a, aliases=("shared-alias",))
+            try:
+                register_flow("flow-b", runner=flow_b, aliases=("shared-alias",), on_conflict="warn")
+                self.assertEqual(get_flow_runner("shared-alias")()["runner"], "b")
+                self.assertEqual(get_flow_runner("flow-a")()["runner"], "a")
+                self.assertEqual(get_flow_registration("flow-a").aliases, ())
+            finally:
+                unregister_flow("flow-a")
+                unregister_flow("flow-b")
+
+    def test_register_flow_domain_metadata_is_visible_on_aliases_and_capabilities(self):
+        with glue_app.runtime_catalog.activate():
+            register_flow(
+                "domain-flow",
+                runner=lambda **kwargs: {"ok": True},
+                aliases=("domain-flow-alias",),
+                domain="custom-domain",
+                domain_metadata={
+                    "label": "Custom Domain",
+                    "backend": "extension",
+                    "builtin": False,
+                },
+            )
+            try:
+                registration = get_flow_registration("domain-flow-alias")
+                self.assertEqual(registration.domain, "custom-domain")
+                self.assertEqual(dict(registration.domain_metadata)["label"], "Custom Domain")
+
+                caps = self.client.get("/capabilities").json()["capabilities"]
+                flow_detail = next(item for item in caps["flow_details"] if item["name"] == "domain-flow")
+                self.assertEqual(flow_detail["domain"], "custom-domain")
+                self.assertEqual(flow_detail["domain_metadata"]["backend"], "extension")
+                flow_domain = next(item for item in caps["flow_domains"] if item["name"] == "custom-domain")
+                self.assertEqual(flow_domain["flow_names"], ["domain-flow"])
+                self.assertFalse(flow_domain["builtin"])
+            finally:
+                unregister_flow("domain-flow")
 
     @patch.object(glue_app, "make_base_client", return_value=None)
     @patch("aiwf.flows.cleaning.run_cleaning", return_value={"ok": True})

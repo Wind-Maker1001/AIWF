@@ -33,12 +33,10 @@ from aiwf.preprocess_ops import (
     _normalize_amount,
     _normalize_date,
     _normalize_header,
-    register_builtin_preprocess_ops as _register_builtin_preprocess_ops_impl,
 )
 from aiwf.preprocess_runtime import preprocess_rows_impl
 from aiwf.preprocess_stages import (
     default_pipeline_stage_prepare_config as _default_pipeline_stage_prepare_config_impl,
-    register_builtin_pipeline_stages as _register_builtin_pipeline_stages_impl,
 )
 from aiwf.preprocess_validation import (
     validate_preprocess_pipeline_impl,
@@ -59,10 +57,13 @@ from aiwf.preprocess_registry import (
     get_pipeline_stage,
     get_row_filter,
     list_field_transform_details,
+    list_field_transform_domains,
     list_field_transforms,
     list_pipeline_stage_details,
+    list_pipeline_stage_domains,
     list_pipeline_stages,
     list_row_filter_details,
+    list_row_filter_domains,
     list_row_filters,
     register_field_transform,
     register_pipeline_stage as _register_pipeline_stage_impl,
@@ -79,6 +80,8 @@ def register_pipeline_stage(
     validator: Optional[PipelineStageValidatorFn] = None,
     prepare_config: Optional[PipelineStagePrepareFn] = None,
     executor: Optional[PipelineStageExecutorFn] = None,
+    domain: Optional[str] = None,
+    domain_metadata: Optional[Dict[str, Any]] = None,
     source_module: Optional[str] = None,
     on_conflict: Optional[str] = None,
 ) -> PipelineStageRegistration:
@@ -87,15 +90,13 @@ def register_pipeline_stage(
         validator=validator,
         prepare_config=prepare_config,
         executor=executor,
+        domain=domain,
+        domain_metadata=domain_metadata,
         source_module=source_module,
         on_conflict=on_conflict,
         default_validator=validate_preprocess_spec,
         default_prepare_config=_default_pipeline_stage_prepare_config,
     )
-
-
-_register_builtin_preprocess_ops_impl(register_field_transform, register_row_filter)
-
 
 def _filter_match(row: Dict[str, Any], f: Dict[str, Any]) -> bool:
     op = str(f.get("op") or "eq").strip().lower()
@@ -133,10 +134,6 @@ def validate_preprocess_pipeline(pipeline: Dict[str, Any]) -> Dict[str, Any]:
 
 def _default_pipeline_stage_prepare_config(context: PipelineStageContext) -> Dict[str, Any]:
     return _default_pipeline_stage_prepare_config_impl(context)
-
-
-_register_builtin_pipeline_stages_impl(register_pipeline_stage)
-
 
 def run_preprocess_pipeline(
     *,

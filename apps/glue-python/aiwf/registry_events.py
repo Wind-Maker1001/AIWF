@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+from aiwf.runtime_state import get_runtime_state
 
-_REGISTRY_EVENTS: List[Dict[str, Any]] = []
 _MAX_EVENTS = 200
 
 
@@ -18,6 +18,7 @@ def record_registry_event(
     new_source_module: str,
     detail: str | None = None,
 ) -> Dict[str, Any]:
+    state = get_runtime_state()
     event = {
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "registry": str(registry),
@@ -28,17 +29,18 @@ def record_registry_event(
         "new_source_module": str(new_source_module),
         "detail": (str(detail) if detail else None),
     }
-    _REGISTRY_EVENTS.append(event)
-    if len(_REGISTRY_EVENTS) > _MAX_EVENTS:
-        del _REGISTRY_EVENTS[:-_MAX_EVENTS]
+    state.registry_events.append(event)
+    if len(state.registry_events) > _MAX_EVENTS:
+        del state.registry_events[:-_MAX_EVENTS]
     return event
 
 
 def list_registry_events(limit: int | None = None) -> List[Dict[str, Any]]:
+    state = get_runtime_state()
     if limit is None or limit <= 0:
-        return list(_REGISTRY_EVENTS)
-    return list(_REGISTRY_EVENTS[-limit:])
+        return list(state.registry_events)
+    return list(state.registry_events[-limit:])
 
 
 def clear_registry_events() -> None:
-    _REGISTRY_EVENTS.clear()
+    get_runtime_state().registry_events.clear()
