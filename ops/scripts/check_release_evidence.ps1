@@ -1,6 +1,6 @@
 param(
   [string]$Root = "",
-  [string[]]$Docs = @("docs\codex_handoff.md", "docs\release_notes_v1.1.6.md"),
+  [string[]]$Docs = @("docs\release_notes_v1.1.6.md"),
   [string]$RequirePattern = "release/(gate_v1.1.6|v1.1.6)/"
 )
 

@@ -17,10 +17,14 @@ These files are kept for historical context, handoff continuity, or earlier plan
 
 ## Still Kept In `docs/`
 
-Some historical files remain in the top-level `docs/` directory because current scripts still reference them directly:
+Some historical files still remain in the top-level `docs/` directory:
 
-- `codex_handoff.md`
 - `release_notes_v1.1.6.md`
+- `codex_handoff.md`
 - `v1_1_goal_freeze.md`
 
-If those script dependencies are removed later, they can also be moved under `archive/`.
+Current scripts directly reference only:
+
+- `release_notes_v1.1.6.md`
+
+The other two can be moved under `archive/` later if we decide to fully flatten historical docs.
