@@ -89,6 +89,12 @@ This runs:
 - smoke + invalid parquet fallback integration check
 - explicit `job_context` transport validation through the normal startup path
 
+Run the RustSec audit using the local advisory DB cache (falls back to the current local checkout if fetch is unavailable):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_cargo_audit.ps1
+```
+
 ## GitHub Actions
 
 - `Quick CI` runs on push / pull request for fast feedback.

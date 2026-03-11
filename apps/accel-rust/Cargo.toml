@@ -26,7 +26,7 @@ arrow-ord = "53"
 arrow-select = "53"
 chrono = { version = "0.4", features = ["serde"] }
 statrs = "0.17"
-wasmtime = "28"
+wasmtime = "41"
 base64 = "0.22"
 url = "2"
 
