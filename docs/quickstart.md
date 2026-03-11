@@ -30,6 +30,7 @@ Use this page as the canonical documentation entrypoint for the current codebase
 - Dify adapter v1: [dify_adapter_v1.md](dify_adapter_v1.md)
 - Dify workflow HTTP node template: [dify_workflow_http_node_template.md](dify_workflow_http_node_template.md)
 - Rust extension operators v1: [rust_extension_ops_v1.md](rust_extension_ops_v1.md)
+- Desktop workflow refactor plan: [desktop_workflow_app_refactor_plan.md](desktop_workflow_app_refactor_plan.md)
 
 ## History and Status
 
