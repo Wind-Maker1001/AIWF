@@ -1,185 +1,102 @@
-﻿# AIWF Quickstart (Desktop Offline)
+# AIWF Desktop Offline Quickstart
 
-## Goal
+Use this path when you want the Electron desktop app and offline engine without starting the backend service chain locally.
 
-Use desktop app only. No local SQL/Java/Rust/Python service required.
+## What This Mode Does
 
-## 1. Install / Run
+- default mode is `offline_local`
+- no local SQL Server / Java / Python / Rust service is required
+- the desktop app still supports `base_api` mode and offline fallback when you need it later
 
-Build desktop exe (on build machine):
+## Run or Package
+
+Development run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1
+```
+
+That script installs dependencies, runs `npm run smoke`, and then launches the app.
+
+Windows packaging:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -BuildWin -BuildInstaller
 ```
 
-Output:
-- `apps/dify-desktop/dist/AIWF Dify Desktop <version>.exe` (portable single exe)
-- `apps/dify-desktop/dist/AIWF Dify Desktop Setup <version>.exe` (installer, recommended)
+Artifacts are written under `apps/dify-desktop/dist`.
 
-## 2. Desktop Usage
+## Default Desktop Behavior
 
-1. Start app (default mode is `离线本地模式`).
-2. Drag raw files into task queue (or fill input paths manually).
-3. Click `模板预检` (recommended), then click `开始生成`.
+- mode: `offline_local`
+- fallback policy: `smart`
+- output root:
+  - `E:\Desktop_Real\AIWF` if `E:\Desktop_Real` exists
+  - otherwise `Desktop\AIWF_Builds`
+- built-in home screen and embedded `Workflow Studio`
 
-Sample pool (for acceptance):
-- In GUI, use `样本池（验收专用）` drop area.
-- Drag files into this box; files are copied to `输出目录\sample_pool`.
-- You can keep adding samples over time; acceptance is no longer hardcoded.
+## Inputs and Outputs
 
-Recommended settings:
-- `office_theme=assignment` for coursework deliverables.
-- `office_theme=debate_plus` for debate materials.
-- `office_quality_mode=high` for best layout quality.
-- Finance statements: set `cleaning_template=finance_report_v1`.
+Supported offline inputs:
 
-Supported raw inputs in offline mode:
 - `csv`
 - `xlsx`
 - `txt`
 - `docx`
 - `pdf`
-- `png/jpg/jpeg/bmp/webp`
+- images: `png/jpg/jpeg/bmp/webp/tif/tiff`
 
-Output artifacts:
+Possible artifacts:
+
 - `fin.xlsx`
 - `audit.docx`
 - `deck.pptx`
+- markdown artifacts such as `evidence.md`, `ai_corpus.md`, and quality reports
 
-Default output root:
-- `E:\Desktop_Real\AIWF\<job_id>\artifacts` (if `E:\Desktop_Real` exists)
-- else `桌面\AIWF_Builds\<job_id>\artifacts`
+The current UI enables `仅输出 Markdown` by default. Uncheck it if you want the Office trio.
 
-### 2.1 Finance Template Quickstart (`finance_report_v1`)
+## Common Usage
 
-Use this when your raw files are balance sheet / income statement / cashflow data.
+1. Launch the desktop app.
+2. Keep `离线本地模式（推荐）`.
+3. Drag files into the queue or fill the manual path fields.
+4. Optional: run `模板预检`.
+5. Choose a template if needed:
+   - `default`
+   - `debate_evidence_v1`
+   - `finance_report_v1`
+6. Click `开始生成`.
 
-1. In GUI, set `数据模板` to `财报模板 v1（资产/利润/现金流）`.
-2. Keep `office_quality_mode=high`.
-3. Drag `xlsx/csv/txt` with table headers into queue.
-4. (Recommended) click `模板预检` and check:
-   - missing required fields
-   - amount convert rate
-   - quality gate prediction
-5. Click `开始生成`.
+Current Fluent variants in the UI:
 
-Template behavior summary:
-- Rename: `Amt -> amount`, `ID -> id`
-- Cast: `id:int`, `amount:float`, `currency:string`
-- Required: `id`, `amount`
-- Filter: `0 <= amount <= 100000000`
-- Dedup: keep last by `id`
+- `Fluent Light`
+- `Fluent Strong`
+- `Fluent Vibrant`
 
-If you see failures:
-- `required field missing`: check `id/amount` or source headers.
-- `cast failed`: remove non-numeric symbols from amount.
-- `empty output`: verify amount range and source quality.
+## OCR and Fallback Notes
 
-Details:
-- `docs/finance_template_v1.md`
+- image OCR uses local Tesseract when available
+- scanned PDF OCR uses `pdftoppm + tesseract` when available
+- if Office dependencies or quality gates block the Office path, the app falls back to markdown outputs instead of failing hard
 
-Template management:
-- In GUI `模板管理`, you can:
-  - view template rules
-  - disable/enable a template for current user
-  - import/export template JSON (user-level)
+## Optional Backend Mode
 
-## 3. Optional Backend Mode
+The desktop app can also call your local AIWF backend in `base_api` mode and fall back to offline mode when configured.
 
-If you want to call your AIWF/Dify backend instead of local offline engine:
+See:
 
-1. Switch mode to `连接你的 AIWF 后端`
-2. Fill `baseUrl` and optional `API Key`
-3. Click `检查连通性` then `开始生成`
+- [dify_desktop_app.md](dify_desktop_app.md)
+- [dify_local_integration.md](dify_local_integration.md)
 
-Related docs:
-- `docs/dify_local_integration.md`
+## Offline Bundle
 
-## 4. Cleanup Local Build Artifacts
-
-```powershell
-# preview only
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\clean_workspace_artifacts.ps1 -DryRun -RemoveLogs
-
-# execute cleanup
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\clean_workspace_artifacts.ps1 -RemoveLogs
-```
-
-Optional cleanup for Rust build cache / nested repo metadata:
-
-```powershell
-# preview
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\clean_workspace_artifacts.ps1 -DryRun -RemoveAccelTarget
-
-# execute
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\clean_workspace_artifacts.ps1 -RemoveAccelTarget
-
-# dangerous: remove nested git metadata under apps/accel-rust/.git
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\clean_workspace_artifacts.ps1 -RemoveAccelNestedGit -ForceDangerous
-```
-
-## 5. Build Offline Delivery Bundle
+To package a minimal offline delivery bundle:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\package_offline_bundle.ps1 -Version "<version>" -PackageType installer
 ```
 
-Bundle output:
-- `release\offline_bundle_<version>_installer\AIWF_Offline_Bundle`
+See:
 
-## 6. v1.1.4 发布基线（一键）
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_baseline_v1_1_4.ps1
-```
-
-产出：
-- `release\v1.1.4\baseline_summary.json`
-- `release\v1.1.4\clean_windows_checklist.md`
-
-说明：
-- 会串行执行发布打包和两套验收（通用样例、财务模板样例）。
-- 若仅做本地快速验证可加 `-SkipPackage -SkipHeavyGates`。
-
-## 7. v1.1.5 稳定封板（3轮）
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_stability_v1_1_5.ps1
-```
-
-产出：
-- `release\stability_v1.1.5\stability_summary.json`
-- `release\stability_v1.1.5\stability_summary.md`
-
-## 8. 真实样本验收 / 成品质量门禁 / 一键发布
-
-在 `apps/dify-desktop` 下执行：
-
-```powershell
-npm run test:office-gate
-npm run acceptance:real
-npm run release:oneclick
-```
-
-说明：
-- `test:office-gate`:
-  校验 `xlsx/docx/pptx` 成品结构（图表数量、sheet、标题/表格、幻灯片和可视化元素）。
-- `acceptance:real`:
-  用真实样本生成验收包，默认输出到 `E:\Desktop_Real\AIWF\reports`。
-- `release:oneclick`:
-  执行 `python/openpyxl` 依赖检查 + 发布门禁 + 验收 + 安装包构建。
-
-可选环境变量：
-- `AIWF_ACCEPTANCE_INPUT_DIR`：真实样本目录
-- `AIWF_ACCEPTANCE_OUTPUT_ROOT`：验收输出目录
-- `AIWF_ACCEPTANCE_LIMIT`：样本数量上限（默认 6）
-- `AIWF_ACCEPTANCE_LOCK=1`：启用“固定样本清单”（默认开启）
-- `AIWF_ACCEPTANCE_MANIFEST`：固定样本清单文件路径（默认 `输出目录\reports\acceptance_manifest.json`）
-- `AIWF_ONECLICK_WITH_ACCEPTANCE=0`：一键发布时跳过验收
-- `AIWF_ONECLICK_BUILD_SCRIPT`：覆盖构建脚本（默认 `build:win:installer:release:gated`）
-
-门禁阈值（可调）：
-- `AIWF_GATE_XLSX_MIN_CHARTS`
-- `AIWF_GATE_DOCX_MAX_BAD_CHAR_RATIO`
-- `AIWF_GATE_DOCX_MAX_QMARK_RATIO`
-- `AIWF_GATE_DOCX_MIN_CJK_RATIO`
+- [offline_delivery_minimal.md](offline_delivery_minimal.md)
+- [finance_template_v1.md](finance_template_v1.md)

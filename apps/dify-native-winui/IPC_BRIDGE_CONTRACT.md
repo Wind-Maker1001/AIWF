@@ -1,51 +1,49 @@
-# Native IPC Bridge Contract (Draft v0)
+# Native IPC Bridge Contract
 
-## Goals
+This file tracks the currently implemented WinUI bridge behavior, not the older draft proposal.
 
-- Keep existing AIWF runtime/business logic reusable
-- Let WinUI UI call runtime with a stable local contract
-- Make later replacement of Electron main process incremental
+## Current Runtime Topology
 
-## Transport (phase 1)
+- WinUI uses a bridge URL that defaults to `http://127.0.0.1:18081`
+- health and flow execution go through the glue-python side of the local stack
+- when the bridge URL points at port `18081`, the WinUI coordinator derives the paired base API URL on port `18080` to create or verify jobs
 
-- Local HTTP on loopback (`http://127.0.0.1:<port>`)
-- JSON request/response
-- Optional local named-pipe transport in phase 2
+## Proven Endpoints
 
-## Endpoints (minimum set)
+Current implemented endpoints used by the WinUI runtime code:
 
 1. `GET /health`
-2. `POST /run-cleaning`
-3. `POST /precheck-cleaning`
-4. `POST /preview-debate-style`
-5. `GET /config`
-6. `POST /config`
-7. `POST /open-path`
-8. `GET /sample-pool`
-9. `POST /sample-pool/clear`
+2. `POST /jobs/{job_id}/run/{flow}`
 
-## Request envelope
+Related control-plane endpoint used before execution:
 
-```json
-{
-  "trace_id": "string",
-  "payload": {}
-}
-```
+1. `POST http://127.0.0.1:18080/api/v1/jobs/create?owner=native`
+2. `GET http://127.0.0.1:18080/api/v1/jobs/{jobId}`
 
-## Response envelope
+## Current Request Shape
+
+`POST /jobs/{job_id}/run/{flow}` sends the same JSON body shape used by `glue-python`:
 
 ```json
 {
-  "ok": true,
-  "error": "",
-  "data": {}
+  "actor": "native",
+  "ruleset_version": "v1",
+  "params": {
+    "office_theme": "assignment",
+    "office_lang": "zh",
+    "report_title": "Example",
+    "input_csv_path": "D:\\data\\input.csv"
+  }
 }
 ```
 
-## Error codes (starter)
+## Current Response Expectations
 
-- `invalid_request`
-- `runtime_unavailable`
-- `offline_fallback_applied`
-- `internal_error`
+- health responses are read as plain JSON and shown in the WinUI result panel
+- run responses are parsed from the `/jobs/{job_id}/run/{flow}` body
+- successful runs may update the effective `job_id` in the UI when the coordinator auto-created a job first
+
+## Notes
+
+- the older draft endpoints such as `/run-cleaning`, `/precheck-cleaning`, and `/preview-debate-style` are no longer the active contract
+- if a future local IPC layer replaces HTTP, this file should be updated from code, not from the old draft

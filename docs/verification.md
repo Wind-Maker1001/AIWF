@@ -1,184 +1,166 @@
 # AIWF Verification Guide
 
-This document lists the current verification commands for local development.
+This document maps local verification entrypoints to the actual CI scripts in the repository.
 
-## 1. Unit/Module Checks
+## Local CI Entry Points
+
+Fast local profile:
 
 ```powershell
-# accel-rust
-cd D:\AIWF\apps\accel-rust
-cargo check
-cargo test -q
-
-# glue-python
-cd D:\AIWF\apps\glue-python
-python -m unittest discover -s tests -v
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick
 ```
 
-## 2. Standard End-to-End Smoke
+The quick profile still runs:
+
+- docs link checks
+- release evidence checks
+- OpenAPI / SDK sync checks
+- secret scan
+- encoding checks
+- Rust / Java / Python tests
+- rust transform benchmark self-test
+- desktop unit, UI, and packaged-startup checks unless you explicitly skip them
+
+Full local profile:
 
 ```powershell
-cd D:\AIWF
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1
-```
-
-Expected high-level signals:
-- `run_ok : True`
-- `artifacts : 6`
-- `[ OK ] smoke test finished`
-
-Contract note:
-- callers should send top-level `job_context`
-- legacy path fields under `params` are no longer supported
-
-## 3. Invalid Parquet Fallback Integration Test
-
-Purpose:
-- Force accel-rust to return an invalid parquet payload.
-- Verify glue-python rejects that parquet and falls back safely.
-
-Direct run:
-
-```powershell
-cd D:\AIWF
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\test_invalid_parquet_fallback.ps1
-```
-
-Or from smoke script:
-
-```powershell
-cd D:\AIWF
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1 -WithInvalidParquetFallbackTest
-```
-
-Expected high-level signals:
-- `accel_attempted : True`
-- `accel_used_fallback : True`
-- `[ OK ] invalid parquet fallback test passed`
-
-Operational note:
-- if a chained `smoke_test.ps1 -WithInvalidParquetFallbackTest` run ever shows a transient base-health failure in the fallback sub-step, rerun `test_invalid_parquet_fallback.ps1` directly before treating it as a regression
-
-## 4. Notes
-
-- The fallback integration script starts temporary accel/glue processes and stops them automatically.
-- It uses a dedicated temporary cargo `--target-dir` to avoid binary lock conflicts with long-running local accel processes.
-
-## 5. One-Command Local CI Check
-
-```powershell
-cd D:\AIWF
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
 ```
 
-Optional skips:
+The full profile adds:
+
+- smoke
+- invalid parquet fallback integration
+- contract tests
+- chaos checks
+- routing and async benchmark gates
+- rust transform and new-ops benchmark gates
+- native WinUI smoke outside CI
+
+If your local machine does not have SQL ready yet, add `-SkipSqlConnectivityGate`.
+
+## Component-Level Checks
+
+Rust:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipRustTests
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipPythonTests
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -SkipSmoke
+cd .\apps\accel-rust
+cargo test -q
 ```
 
-## 6. GitHub Actions Workflows
-
-- `.github/workflows/ci.yml`
-  - Trigger: push / pull_request
-  - Runner: `windows-latest` (GitHub-hosted)
-  - Runs: `ci_check.ps1 -SkipSmoke` (unit/module checks only)
-  - Current scope: Windows-only; `ubuntu` / `macOS` checks are paused
-
-- `.github/workflows/full-integration-self-hosted.yml`
-  - Trigger: manual (`workflow_dispatch`)
-  - Runner: `self-hosted` + `windows`
-  - Default: runs `ci_check.ps1 -SkipSmoke` (does not require SQL Server)
-  - Optional: set input `run_full_integration=true` to run full `ci_check.ps1` including smoke + invalid parquet fallback integration test
-  - Full integration mode should be used only on an environment where SQL Server and required local runtime prerequisites are available.
-
-## 7. Rust Transform Engine Benchmark (row vs columnar)
+Python:
 
 ```powershell
-cd D:\AIWF
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\bench_rust_transform.ps1 -Rows 50000 -Runs 3 -Warmup 1 -UpdateProfile
+cd .\apps\glue-python
+python -m unittest discover -s tests -v
 ```
 
-Outputs:
-- `ops\logs\bench\rust_transform\<timestamp>\benchmark.json`
-- `ops\logs\bench\rust_transform\<timestamp>\benchmark_report.md`
-- latest shortcuts:
-  - `ops\logs\bench\rust_transform\latest.json`
-  - `ops\logs\bench\rust_transform\latest.md`
-  - `ops\logs\bench\rust_transform\history.jsonl`
-- learned profile:
-  - `apps\accel-rust\conf\transform_engine_profile.json`
-  - safety floors by default: `medium_rows>=20000`, `large_rows>=120000`
-  - includes auto routing decision quality:
-    - `auto_decision_hit_rate`
-    - `auto_decision_hit_samples`
-
-Optional benchmark gate:
+Java:
 
 ```powershell
-cd D:\AIWF
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_rust_transform_bench_gate.ps1 -Rows 80000 -Runs 3 -Warmup 1 -MinSpeedup 1.02 -MinArrowSpeedup 1.00 -UpdateProfileOnPass
+cd .\apps\base-java
+mvn -q test
 ```
 
-Gate behavior (current):
-- `large` payload (`Rows >= large_rows_threshold` from profile): enforce strict speed gate
-  - `columnar_v1 speedup >= MinSpeedup`
-  - `columnar_arrow_v1 speedup >= MinArrowSpeedup`
-- `non-large` payload: keep benchmark correctness/runability checks, skip strict speed assertions.
-
-Rationale:
-- medium-size data has high jitter across CPU scheduling / background load; hard speed assertions at this tier caused flaky false negatives.
-- strict speed assertions are preserved for the large tier where columnar strategy is expected to dominate consistently.
-
-Useful gate override:
-- force arrow speed gate at any scale: `-EnforceArrowAlways`
-
-## 8. Rust Operator Quick Checks
+Desktop:
 
 ```powershell
-cd D:\AIWF
-
-# join_rows_v1
-Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/join_rows_v1" -Method Post -ContentType "application/json" -Body (@{
-  run_id = "verify_join_v1"
-  left_rows = @(@{id=1;k="a";lv=10}, @{id=2;k="b";lv=20})
-  right_rows = @(@{rid=9;k="a";rv=99}, @{rid=8;k="c";rv=88})
-  left_on = "k"
-  right_on = "k"
-  join_type = "full"
-} | ConvertTo-Json -Depth 10)
-
-# aggregate_rows_v1
-Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/aggregate_rows_v1" -Method Post -ContentType "application/json" -Body (@{
-  run_id = "verify_agg_v1"
-  rows = @(@{g="x";amount=10}, @{g="x";amount=20}, @{g="x";amount=30})
-  group_by = @("g")
-  aggregates = @(
-    @{op="stddev";field="amount";as="std"},
-    @{op="percentile_p50";field="amount";as="p50"}
-  )
-} | ConvertTo-Json -Depth 10)
-
-# schema_infer_v1
-Invoke-RestMethod -Uri "http://127.0.0.1:18082/operators/schema_infer_v1" -Method Post -ContentType "application/json" -Body (@{
-  run_id="verify_schema_v1";rows=@(@{id="1";amount="12.3";active="true"})
-} | ConvertTo-Json -Depth 10)
+cd .\apps\dify-desktop
+npm run smoke
+npm run test:unit
+npm run test:workflow-ui
 ```
 
-Note:
-- `load_rows_v2` for `pdf/docx/xlsx/image` currently returns metadata probe rows in Rust core.
-- full rich extraction for those formats remains in glue-python ingest pipeline.
-
-Release packaging now enforces this gate by default:
+Packaged desktop startup checks:
 
 ```powershell
-cd D:\AIWF
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -Version 1.1.4 -RustBenchUpdateProfileOnPass
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_desktop_packaged_startup.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_desktop_lite_packaged_startup.ps1
 ```
 
-Optional release overrides:
-- `-SkipRustTransformBenchGate`
-- `-RustBenchRows/-RustBenchRuns/-RustBenchWarmup`
-- `-RustBenchMinSpeedup/-RustBenchMinArrowSpeedup`
+## Backend Smoke and Fallback
+
+Restart the full local backend:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\restart_services.ps1
+```
+
+Smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1
+```
+
+Fallback validation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\test_invalid_parquet_fallback.ps1
+```
+
+## Dependency and Security Checks
+
+Runtime dependency precheck:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_runtime_deps.ps1
+```
+
+Developer tool precheck:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_dev_tools.ps1
+```
+
+RustSec audit:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_cargo_audit.ps1
+```
+
+## Performance Gates
+
+Rust transform gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_rust_transform_bench_gate.ps1
+```
+
+Rust new-ops gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_rust_new_ops_bench_gate.ps1
+```
+
+Routing benchmark gate:
+
+```powershell
+cd .\apps\dify-desktop
+npm run bench:routing
+```
+
+## GitHub Workflows
+
+GitHub-hosted quick workflow:
+
+- file: `.github/workflows/ci.yml`
+- actual command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick -SkipToolChecks -SkipSqlConnectivityGate -SkipDesktopUiTests -SkipDesktopPackageTests
+```
+
+Self-hosted full workflow:
+
+- file: `.github/workflows/full-integration-self-hosted.yml`
+- default behavior: runs `ci_check.ps1` on a Windows self-hosted runner
+- `run_full_integration=false` skips smoke in that workflow
+- scheduled runs execute from the default branch only
+
+## CI Helper Scripts
+
+- `ops/scripts/dispatch_full_integration_self_hosted.ps1`
+- `ops/scripts/get_ci_status.ps1`
+- `ops/scripts/verify_branch_ci.ps1`
+
+Use those scripts when you want to validate branch CI from a local PowerShell session.

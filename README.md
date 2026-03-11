@@ -1,136 +1,83 @@
-# AIWF (AI Workflow Framework)
+# AIWF
 
-AIWF 是一个本地优先（local-first）的工作流平台，面向“生肉数据 -> 清洗预处理 -> 结构化输出 -> Office 成品”的全流程。
-AIWF is a local-first workflow platform for the full pipeline from raw inputs to cleaned data, structured outputs, and Office deliverables.
-
-核心服务 / Core services:
-- `base-java`: control plane APIs and orchestration entrypoints
-- `glue-python`: flow runner (`cleaning` flow implemented)
-- `accel-rust`: operator service used by `cleaning` flow
+AIWF is a local-first workflow platform for turning raw files and tabular inputs into cleaned datasets, structured outputs, and Office deliverables.
 
 ## Repository Layout
 
-- `apps/base-java`: Spring Boot service
-- `apps/glue-python`: FastAPI service
-- `apps/accel-rust`: Rust operator service
-- `infra/sqlserver/init`: SQL initialization/migration scripts
-- `ops/config/dev.env`: local environment configuration
-- `ops/scripts`: run, migration, smoke, and verification scripts
-- `docs`: quickstart and verification docs
+- `apps/base-java`: control plane and orchestration APIs
+- `apps/glue-python`: flow runtime and preprocessing service
+- `apps/accel-rust`: operator runtime and HTTP operator endpoints
+- `apps/dify-desktop`: Electron desktop app with offline engine and Workflow Studio
+- `apps/dify-native-winui`: native WinUI bootstrap shell
+- `ops/scripts`: startup, packaging, CI, smoke, and release scripts
+- `docs`: active guides, reference docs, and historical snapshots
 
-## Prerequisites
+## Start Here
 
-- Windows + PowerShell
-- JDK 21
-- Maven 3.9+
-- Python 3.11+
-- Rust toolchain (`cargo`)
-- SQL Server reachable from local environment
-- `sqlcmd` in PATH
+- Documentation index: [docs/quickstart.md](docs/quickstart.md)
+- Backend quickstart: [docs/quickstart_backend.md](docs/quickstart_backend.md)
+- Desktop offline quickstart: [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
+- Verification guide: [docs/verification.md](docs/verification.md)
+- Cleaning rules: [docs/cleaning_rules.md](docs/cleaning_rules.md)
 
-## Recommended Startup Flow
+## Common Commands
 
-1. Run database migration (canonical entrypoint):
+Backend bootstrap:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\db_migrate.ps1 -SqlPassword "<YOUR_SA_PASSWORD>"
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\restart_services.ps1
 ```
 
-2. Optional: create/update app DB user:
+Desktop run or package:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\db_migrate.ps1 -SqlPassword "<YOUR_SA_PASSWORD>" -AppUser "aiwf_app" -AppPassword "<APP_PASSWORD>"
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -BuildWin -BuildInstaller
 ```
 
-3. Start services in separate terminals:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_accel_rust.ps1
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_glue_python.ps1
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_base_java.ps1
-```
-
-Notes:
-- Glue flow requests should use top-level `job_context`.
-- Legacy path fields under `params` such as `params.job_root` / `params.stage_dir` / `params.artifacts_dir` / `params.evidence_dir` are no longer supported.
-
-4. Run smoke test:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1
-```
-
-5. Optional: include invalid-parquet fallback integration check:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\smoke_test.ps1 -WithInvalidParquetFallbackTest
-```
-
-## Local Verification
+Local verification:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick
-```
-
-Quick profile keeps the fast gates:
-- docs, secret, encoding, and sync checks
-- Rust / Java / Python / desktop unit tests
-- desktop packaged startup checks
-
-Run the full profile when you need acceptance, smoke, contract, chaos, and benchmark gates:
-
-```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
 ```
 
-This runs:
-- `accel-rust` tests
-- `glue-python` unit tests
-- smoke + invalid parquet fallback integration check
-- explicit `job_context` transport validation through the normal startup path
+If your local machine does not have SQL connectivity ready yet, add `-SkipSqlConnectivityGate` for a reduced local check.
 
-Run the RustSec audit using the local advisory DB cache (falls back to the current local checkout if fetch is unavailable):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_cargo_audit.ps1
-```
-
-## GitHub Actions
-
-- `Quick CI` runs on push / pull request for fast feedback.
-- `Quick CI` is currently Windows-only; `ubuntu` / `macOS` checks are paused.
-- `Full Integration (Self-Hosted)` is intended for the Windows self-hosted runner and also runs nightly at `18:00 UTC`.
-- Manual full runs accept `ci_profile=Full` and `run_full_integration=true`.
-- Self-hosted full runs now write the local transcript path into the job summary instead of uploading an artifact. The transcript itself stays on the runner workspace under `ops/logs/ci`.
-- GitHub scheduled workflows run from the default branch (`master`). Before this branch is merged, use the manual dispatch helper to validate current-branch full CI.
-
-Manual dispatch from local PowerShell:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\dispatch_full_integration_self_hosted.ps1 -Wait
-```
-
-Query the latest branch and nightly CI status:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\get_ci_status.ps1
-```
-
-Verify the current branch end-to-end (wait for `Quick CI`, then ensure `Full Integration (Self-Hosted)` is green for the same head):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\verify_branch_ci.ps1
-```
-
-## Key Endpoints
+## Key HTTP Endpoints
 
 - `base-java`: `GET /actuator/health`
+- `base-java`: `GET /api/v1/backend/capabilities`
+- `base-java`: `POST /api/v1/tools/create_job`
+- `base-java`: `POST /api/v1/jobs/{jobId}/run/{flow}`
+- `base-java`: `POST /api/v1/integrations/dify/run_cleaning`
 - `glue-python`: `GET /health`
+- `glue-python`: `GET /capabilities`
 - `accel-rust`: `GET /health`
-- run flow: `POST /api/v1/jobs/{jobId}/run/cleaning`
+- `accel-rust`: `GET /capabilities`
+
+## Documentation Scope
+
+Active onboarding and operations docs:
+
+- [docs/quickstart.md](docs/quickstart.md)
+- [docs/quickstart_backend.md](docs/quickstart_backend.md)
+- [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
+- [docs/verification.md](docs/verification.md)
+- [docs/dify_desktop_app.md](docs/dify_desktop_app.md)
+- [docs/dify_local_integration.md](docs/dify_local_integration.md)
+
+Historical context docs still exist in the repository, but they are not the primary entrypoint:
+
+- `docs/archive/`
+- `docs/*handoff*.md`
+- `docs/*snapshot*.md`
+- `docs/release_notes_v1.*.md`
 
 ## Notes
 
-- Canonical DB migration entrypoint: `ops/scripts/db_migrate.ps1`.
-- `ops/scripts/aiwf_one_shot_setup.ps1` still exists, but DB setup is delegated to `db_migrate.ps1`.
-- See `docs/quickstart.md`, `docs/verification.md`, and `docs/cleaning_rules.md` for operations and data-rule details.
+- The canonical backend flow is `create_job -> run flow -> query steps/artifacts`.
+- `job_context` is the canonical flow path contract transported from `base-java` to `glue-python`.
+- Legacy path fields under `params` are not supported.
+- GitHub-hosted `Quick CI` and self-hosted `Full Integration (Self-Hosted)` are separate workflows; see [docs/verification.md](docs/verification.md) for the exact commands they run.
