@@ -4,181 +4,174 @@ This note captures the current refactor plan for:
 
 - `apps/dify-desktop/renderer/workflow/app.js`
 
-It is based on archaeology of earlier desktop handoff notes plus the current mainline file layout.
+It reflects the current mainline structure after the recent small-step controller extractions.
 
 ## Why This Exists
 
-`workflow/app.js` is still the largest orchestration file in the desktop renderer.
+`workflow/app.js` used to be the largest orchestration file in the desktop renderer.
 
 Current file size:
 
-- `apps/dify-desktop/renderer/workflow/app.js`: about 2200+ lines
+- `apps/dify-desktop/renderer/workflow/app.js`: about 1000+ lines
 
-The file already delegates a lot of leaf concerns to extracted modules:
+That is down substantially from the earlier 2200+ line state. The file is now mostly a shell that wires together extracted controllers plus a small amount of top-level state.
+
+## Current Extracted Modules
+
+The following concerns are already out of `app.js`:
 
 - `diagnostics-ui.js`
+- `diagnostics-panel-ui.js`
 - `preflight-ui.js`
+- `preflight-actions-ui.js`
+- `preflight-controller-ui.js`
+- `preflight-rust-helpers.js`
 - `panels-ui.js`
 - `template-ui.js`
 - `config-ui.js`
 - `app-form-ui.js`
+- `app-publish-ui.js`
+- `flow-io-ui.js`
+- `palette-ui.js`
+- `connectivity-ui.js`
+- `canvas-view-ui.js`
+- `graph-shell-ui.js`
+- `run-payload-ui.js`
+- `run-controller-ui.js`
+- `status-ui.js`
 - `support-ui.js`
+- `quality-gate-ui.js`
+- `sandbox-ui.js`
+- `audit-ui.js`
+- `version-cache-ui.js`
+- `run-queue-ui.js`
+- `review-queue-ui.js`
+- `quality-rule-set-ui.js`
+- `debug-api-ui.js`
 - `canvas.js`
 - `store.js`
 - `graph.js`
 - `elements.js`
 
-That means the remaining content in `app.js` is mostly orchestration glue, cross-panel coordination, and top-level workflow actions.
-
 ## Refactor Rule
 
-Do not try to "fully decompose" `app.js` in one pass.
+Do not try to fully decompose `app.js` into zero local logic.
 
-The historical desktop handoff conclusion still applies:
+The remaining shell is acceptable if it keeps:
 
-- keep state-coupled orchestration in `workflow/app.js` until dependency seams are explicit
-- extract only code that is:
-  - stateless
-  - presenter-like
-  - pure transformation
-  - IPC wrapper logic with narrow inputs/outputs
+- initialization order explicit
+- state ownership obvious
+- top-level orchestration easy to audit
+
+Extract only code that is:
+
+- stateless
+- presenter-like
+- pure transformation
+- IPC wrapper logic with narrow inputs/outputs
+- shell-adjacent helpers that reduce top-level noise without obscuring control flow
 
 ## Current Hotspots
 
-The current `app.js` still owns these large concern groups:
+The current `app.js` mainly still owns these groups:
 
-### 1. Workflow run orchestration
-
-Key functions:
-
-- `runPayload`
-- `runWorkflow`
-- `enqueueWorkflowRun`
-- `refreshRunHistory`
-- `refreshQueue`
-- `pauseQueue`
-- `resumeQueue`
-
-Why hot:
-
-- these functions coordinate store state, preflight results, UI status, queue actions, and runtime calls
-- changes here are easy to make but hard to reason about globally
-
-Recommendation:
-
-- keep the top-level run orchestration in `app.js`
-- only extract helper builders and response normalizers
-
-### 2. Preflight and quality-gate flow
+### 1. Shell Status and Final Wiring
 
 Key functions:
 
-- `runWorkflowPreflight`
-- `exportPreflightReport`
-- `runTemplateAcceptance`
-- `exportTemplateAcceptanceReport`
-- `refreshQualityGateReports`
-- `exportQualityGateReports`
+- `setStatus`
+- `renderAll`
 
 Why hot:
 
-- this logic mixes graph validation, Rust operator probing, acceptance reporting, and UI status
+- these are the final top-level shell entry points used by many extracted modules
+- careless cleanup here can create startup-order or TDZ regressions
 
 Recommendation:
 
-- extract pure report-shaping helpers first
-- keep “when to run what” decisions in `app.js`
+- keep them in `app.js`
+- only extract if there is a very clear shell abstraction with no initialization risk
 
-### 3. Published app / schema form orchestration
+### 2. Remaining Top-Level State
 
-Key functions:
+Key state:
 
-- `publishApp`
-- `refreshApps`
-- app-schema sync helpers
-- run-params sync helpers
+- `cfgViewMode`
+- `selectedEdge`
+- `lastCompareResult`
+- `lastPreflightReport`
+- `lastAutoFixSummary`
+- `lastTemplateAcceptanceReport`
+- the `renderMigrationReport` bridge
 
 Why hot:
 
-- this area mixes form serialization, JSON normalization, schema rendering, and publish IPC
+- this is the last shared state tying together multiple extracted modules
+- moving it blindly would make ownership less clear, not more clear
 
 Recommendation:
 
-- next extraction target is a narrow “workflow app publish controller” module
-- do not move shared store or status responsibilities yet
+- prefer small cleanup passes
+- do not force these into a store or coordinator unless a real need appears
 
-### 4. Audit / sandbox / cache / timeline admin surfaces
+### 3. Initialization Order
 
-Key functions:
+Key risk:
 
-- `refreshTimeline`
-- `refreshFailureSummary`
-- `refreshSandboxAlerts`
-- `exportSandboxAudit`
-- `loadSandboxRules`
-- `saveSandboxRules`
-- `refreshSandboxRuleVersions`
-- `refreshSandboxAutoFixLog`
-- `refreshAudit`
-
-Why hot:
-
-- these are operational dashboards layered on top of the same app shell
-- they are good candidates for extraction because they are panel-oriented
+- `app.js` now creates many modules that depend on each other through injected callbacks
+- the main remaining complexity is startup order, not business logic size
 
 Recommendation:
 
-- extract one panel family at a time:
-  - sandbox
-  - audit
-  - quality gate
-- each extracted module should own:
-  - data fetch
-  - row formatting
-  - export formatting
-- keep global status updates in `app.js`
+- when cleaning further, prioritize deterministic initialization order
+- validate every cleanup with `test:unit` and `test:workflow-ui`
 
-## Best Next Extractions
+## What Was Extracted in This Phase
 
-Recommended order:
+This phase completed these controller/helper moves out of `app.js`:
 
-1. `workflow quality/report helpers`
-   - pure helpers only
+- published app / schema orchestration
+- audit / timeline / failure summary controller
+- version / cache controller
+- run history / queue controller
+- diagnostics panel controller
+- review queue controller
+- quality rule set controller
+- compare baseline / lineage helpers
+- template pack management
+- flow import / export / save-load controller
+- palette / node creation controller
+- connectivity / offline-boundary controller
+- canvas view controller
+- graph shell controller
+- payload builders
+- run controller
+- debug API shell
+- quality-gate prefs handling
+- preflight Rust helpers
+- preflight controller
+- preflight export / acceptance actions
+
+## Best Next Steps
+
+Recommended order from here:
+
+1. `app.js shell cleanup`
+   - initialization order only
    - lowest risk
-2. `published app / schema publish controller`
-   - medium risk
-   - clear UI boundary
-3. `sandbox panel controller`
-   - medium risk
-   - panel-local behavior
-4. `audit + timeline panel controller`
-   - medium risk
-5. `queue/run orchestration`
-   - highest risk
-   - delay until seams are much clearer
+2. `stop extracting`
+   - preferred default
+   - the remaining shell is already small and understandable
+3. `only extract again if a new concrete hotspot appears`
+   - for example a new panel family or repeated orchestration logic
 
 ## What Not To Extract Yet
 
-Avoid extracting these until there is a stronger integration boundary:
+Avoid extracting these unless a stronger boundary becomes necessary:
 
-- the top-level `setStatus` / user feedback orchestration
-- the main workflow run path
-- queue and run history coordination
-- logic that simultaneously touches:
-  - store
-  - canvas
-  - preflight
-  - panel rendering
-  - IPC state
-
-## Extra Risk Notes
-
-- `app.js` still contains some historical mojibake in built-in template labels and descriptions
-- if you touch template metadata during refactor, treat text cleanup as a separate change from structural extraction
-- keep each extraction small enough that:
-  - `npm run test:unit`
-  - `npm run test:workflow-ui`
-  still give fast feedback
+- the top-level shell status orchestration
+- the last shell state variables that coordinate extracted modules
+- initialization-order glue whose main job is to make startup explicit
 
 ## Validation After Each Extraction
 
@@ -190,7 +183,7 @@ npm run test:unit
 npm run test:workflow-ui
 ```
 
-If the extraction touches run orchestration, also run:
+If a change touches runtime orchestration more deeply, also consider:
 
 ```powershell
 npm run smoke
@@ -201,6 +194,13 @@ npm run smoke
 A refactor step is good if:
 
 - user-visible behavior does not change
-- the moved code has a narrow ownership boundary
-- `app.js` gets smaller without becoming a thin file that still secretly coordinates everything through globals
-- tests remain green without adding brittle integration coupling
+- moved code has a narrow ownership boundary
+- `app.js` gets simpler without hiding orchestration behind unclear indirection
+- tests remain green without brittle new coupling
+
+At the current stage, success no longer means “make `app.js` smaller at any cost”.
+Success now means:
+
+- keep `app.js` readable
+- keep startup order stable
+- stop before decomposition starts hurting clarity

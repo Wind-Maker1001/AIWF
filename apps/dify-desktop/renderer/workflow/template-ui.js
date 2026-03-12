@@ -317,6 +317,53 @@ function createWorkflowTemplateUi(els, deps = {}) {
     setStatus(`模板已保存: ${name}`, true);
   }
 
+  async function installTemplatePack() {
+    const out = await window.aiwfDesktop.loadWorkflow();
+    if (!out?.ok || !out?.path) {
+      if (!out?.canceled) setStatus(`读取模板包失败: ${out?.error || "unknown"}`, false);
+      return;
+    }
+    const ret = await window.aiwfDesktop.installTemplatePack({ path: out.path });
+    if (!ret?.ok) {
+      setStatus(`安装模板包失败: ${ret?.error || "unknown"}`, false);
+      return;
+    }
+    await refreshTemplateMarketplace();
+    renderTemplateSelect();
+    setStatus(`模板包已安装: ${ret?.item?.name || ret?.item?.id || ""}`, true);
+  }
+
+  async function removeTemplatePackByCurrentTemplate() {
+    const id = String(els.templateSelect?.value || "").trim();
+    const tpl = allTemplates().find((x) => String(x?.id || "") === id);
+    const packId = String(tpl?.__pack_id || "").trim();
+    if (!packId) {
+      setStatus("当前模板不是模板包来源，无法移除", false);
+      return;
+    }
+    const out = await window.aiwfDesktop.removeTemplatePack({ id: packId });
+    if (!out?.ok) {
+      setStatus(`移除模板包失败: ${out?.error || "unknown"}`, false);
+      return;
+    }
+    await refreshTemplateMarketplace();
+    renderTemplateSelect();
+    setStatus(`模板包已移除: ${packId}`, true);
+  }
+
+  async function exportTemplatePackByCurrentTemplate() {
+    const id = String(els.templateSelect?.value || "").trim();
+    const tpl = allTemplates().find((x) => String(x?.id || "") === id);
+    const packId = String(tpl?.__pack_id || "").trim();
+    if (!packId) {
+      setStatus("当前模板不是模板包来源，无法导出", false);
+      return;
+    }
+    const out = await window.aiwfDesktop.exportTemplatePack({ id: packId });
+    if (out?.ok) setStatus(`模板包已导出: ${out.path}`, true);
+    else if (!out?.canceled) setStatus(`导出模板包失败: ${out?.error || "unknown"}`, false);
+  }
+
   function parseTemplateParams() {
     const fromForm = collectTemplateParamsFromForm();
     if (fromForm) return fromForm;
@@ -343,6 +390,9 @@ function createWorkflowTemplateUi(els, deps = {}) {
     applyTemplateDependencyState,
     applySelectedTemplate,
     saveCurrentAsTemplate,
+    installTemplatePack,
+    removeTemplatePackByCurrentTemplate,
+    exportTemplatePackByCurrentTemplate,
     parseTemplateParams,
   };
 }
