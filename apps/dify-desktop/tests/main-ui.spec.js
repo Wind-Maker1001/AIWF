@@ -123,6 +123,10 @@ test("cancel build action updates status", async () => {
   const { electronApp, page } = await openMain();
   await expect(page.locator("#btnBuildCancel")).toBeVisible();
 
+  await page.evaluate(() => {
+    window.aiwfDesktop.cancelLocalBuildScript = async () => ({ ok: true, canceled: true, run_id: "mock-run" });
+    setBuildButtonsDisabled(true);
+  });
   await page.click("#btnBuildCancel");
   await expect(page.locator("#status")).toContainText("取消打包");
   await electronApp.close();

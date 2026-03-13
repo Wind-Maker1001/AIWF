@@ -7,7 +7,31 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
     resolveSandboxLimits,
   } = helpers;
 
+  function isTruthy(v) {
+    const s = String(v || "").trim().toLowerCase();
+    return s === "1" || s === "true" || s === "yes" || s === "on";
+  }
+
+  function isLocalEndpoint(raw) {
+    const s = String(raw || "").trim();
+    if (!s) return true;
+    try {
+      const u = new URL(s);
+      const host = String(u.hostname || "").toLowerCase();
+      return host === "127.0.0.1" || host === "localhost" || host === "::1";
+    } catch {
+      return false;
+    }
+  }
+
+  function canUseNetworkEgress() {
+    return isTruthy(process.env.AIWF_ALLOW_EGRESS) || isTruthy(process.env.AIWF_ALLOW_CLOUD_LLM);
+  }
+
   async function callRustOperator(base, operatorPath, body, required, timeoutMs, operatorName) {
+    if (!isLocalEndpoint(base) && !canUseNetworkEgress()) {
+      throw new Error("rust_egress_blocked");
+    }
     const resp = await fetch(`${base}${operatorPath}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

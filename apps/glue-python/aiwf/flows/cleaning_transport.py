@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 
 def headers_from_params_impl(params: Dict[str, Any], *, env_api_key: Optional[str]) -> Dict[str, str]:
-    api_key = params.get("api_key") or env_api_key
+    api_key = env_api_key
     if api_key:
         return {"X-API-Key": str(api_key)}
     return {}

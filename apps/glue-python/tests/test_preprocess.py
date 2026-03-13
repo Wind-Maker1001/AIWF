@@ -384,6 +384,46 @@ class PreprocessTests(unittest.TestCase):
                     },
                 )
 
+    def test_preprocess_rejects_absolute_quality_report_path_escape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "raw.jsonl")
+            dst = os.path.join(tmp, "cooked.jsonl")
+            outside = os.path.join(tempfile.gettempdir(), "aiwf_quality_escape.json")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"text": "hello", "source_file": "a.txt"}) + "\n")
+
+            with self.assertRaises(ValueError):
+                preprocess.preprocess_file(
+                    src,
+                    dst,
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "generate_quality_report": True,
+                        "quality_report_path": outside,
+                    },
+                )
+
+    def test_preprocess_rejects_absolute_canonical_bundle_path_escape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "raw.jsonl")
+            dst = os.path.join(tmp, "cooked.jsonl")
+            outside = os.path.join(tempfile.gettempdir(), "aiwf_bundle_escape")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"text": "hello", "source_file": "a.txt"}) + "\n")
+
+            with self.assertRaises(ValueError):
+                preprocess.preprocess_file(
+                    src,
+                    dst,
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "export_canonical_bundle": True,
+                        "canonical_bundle_dir": outside,
+                    },
+                )
+
     def test_preprocess_chunk_and_conflict_detection(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = os.path.join(tmp, "raw.jsonl")

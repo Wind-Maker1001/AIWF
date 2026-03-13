@@ -663,6 +663,16 @@ const {
   setStatus,
   refreshRunHistory: () => refreshRunHistory(),
   refreshReviewQueue: () => refreshReviewQueue(),
+  showReviewQueue: async () => {
+    await refreshReviewQueue();
+    try { els.btnReviewsRefresh?.scrollIntoView?.({ block: "center" }); } catch {}
+  },
+  showQualityGate: async (runId) => {
+    if (els.qualityGateRunIdFilter) els.qualityGateRunIdFilter.value = String(runId || "");
+    if (els.qualityGateStatusFilter) els.qualityGateStatusFilter.value = "blocked";
+    await refreshQualityGateReports();
+    try { els.btnQualityGateRefresh?.scrollIntoView?.({ block: "center" }); } catch {}
+  },
   refreshReviewHistory,
   refreshQueue: () => refreshQueue(),
   refreshDiagnostics,

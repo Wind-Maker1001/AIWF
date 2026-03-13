@@ -130,23 +130,16 @@ pub(crate) fn round_half_up(v: f64, digits: i32) -> f64 {
 }
 
 pub(crate) fn load_and_clean_rows(params_opt: Option<&Value>) -> Result<Vec<CleanRow>, String> {
-    let default_rows = vec![
-        CleanRow {
-            id: 1,
-            amount: 100.0,
-        },
-        CleanRow {
-            id: 2,
-            amount: 200.0,
-        },
-    ];
     let Some(params) = params_opt else {
-        return Ok(default_rows);
+        return Err("no input rows provided; params.rows is required".to_string());
     };
 
     let rows_val = params.get("rows");
     let Some(rows_arr) = rows_val.and_then(|v| v.as_array()) else {
-        return Ok(default_rows);
+        return Err("params.rows is required".to_string());
+    };
+    if rows_arr.is_empty() {
+        return Err("params.rows is empty".to_string());
     };
 
     let id_field = rule_value(params, "id_field")

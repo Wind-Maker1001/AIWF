@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 from aiwf.accel_transport import (
     DEFAULT_ACCEL_BASE_URL,
     get_json as _get_json_impl,
+    json_or_ok as _json_or_ok_impl,
     operator_url as _operator_url,
     post_json as _post_json_impl,
 )
@@ -18,6 +19,10 @@ def post_json(path: str, payload: Dict[str, Any], base_url: str = "http://127.0.
 
 def get_json(path: str, base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
     return _get_json_impl(path, base_url=base_url or DEFAULT_ACCEL_BASE_URL, timeout=timeout)
+
+
+def _json_or_ok(response: Any, context: str) -> Dict[str, Any]:
+    return _json_or_ok_impl(response, context)
 
 
 def transform_rows_v2(

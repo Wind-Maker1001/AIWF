@@ -17,11 +17,11 @@ public sealed class RunResultPresentationMapperTests
         });
 
         Assert.Equal("job-123", result.JobIdText);
-        Assert.Equal("True", result.OkMetricText);
+        Assert.Equal("Success", result.OkMetricText);
         Assert.Equal("cleaning", result.ModeText);
         Assert.Equal("912", result.DurationText);
         Assert.Equal("912 ms", result.DurationMetricText);
-        Assert.False(string.IsNullOrWhiteSpace(result.SummaryText));
+        Assert.Equal("Run succeeded.", result.SummaryText);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class RunResultPresentationMapperTests
         Assert.Equal("-", result.ModeText);
         Assert.Equal("-", result.DurationText);
         Assert.Equal("-", result.DurationMetricText);
-        Assert.False(string.IsNullOrWhiteSpace(result.SummaryText));
+        Assert.Equal("Run status unknown.", result.SummaryText);
     }
 
     [Fact]

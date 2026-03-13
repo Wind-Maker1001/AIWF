@@ -75,6 +75,17 @@ public sealed class RunRuntimeTests
         Assert.Single(data.Artifacts);
     }
 
+    [Theory]
+    [InlineData("C:/tmp/report.xlsx", true)]
+    [InlineData("C:/tmp/report.docx", true)]
+    [InlineData("C:/tmp/report.exe", false)]
+    [InlineData("C:/tmp/report.ps1", false)]
+    [InlineData("C:/tmp/report", false)]
+    public void CanOpenArtifactPath_AllowsOnlySafeArtifactExtensions(string path, bool expected)
+    {
+        Assert.Equal(expected, RunResultParser.CanOpenArtifactPath(path));
+    }
+
     [Fact]
     public void Validate_AllowsBlankJobId()
     {
@@ -94,8 +105,8 @@ public sealed class RunRuntimeTests
     {
         var state = ResultPanelController.CreateParseFailureState();
 
-        Assert.Equal("0 项", state.ArtifactsCountText);
-        Assert.Equal("运行完成，但返回结果无法解析。", state.RunResultText);
+        Assert.Equal("0 items", state.ArtifactsCountText);
+        Assert.Equal("Run completed, but the response could not be parsed.", state.RunResultText);
         Assert.Equal("-", state.OkMetricText);
     }
 
@@ -130,7 +141,7 @@ public sealed class RunRuntimeTests
             payload: new JsonObject());
 
         Assert.Equal("auto-123", result.EffectiveJobId);
-        Assert.Equal("预检创建作业：auto-123", result.RetryInfo);
+        Assert.Equal("Preflight created job: auto-123", result.RetryInfo);
         Assert.False(result.RetriedAfterServerError);
         Assert.Contains(requests, uri => uri.AbsoluteUri == "http://127.0.0.1:18080/api/v1/jobs/create?owner=native");
         Assert.Contains(requests, uri => uri.AbsoluteUri == "http://127.0.0.1:18081/jobs/auto-123/run/cleaning");
@@ -161,8 +172,49 @@ public sealed class RunRuntimeTests
             flow: "cleaning",
             payload: new JsonObject()));
 
-        Assert.Contains("无法自动创建作业", ex.Message);
+        Assert.Contains("Unable to auto-create a job", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(requests, uri => uri.AbsoluteUri.Contains("/jobs//run/"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DoesNotAutoRetryAfterServerError()
+    {
+        var requests = new List<Uri>();
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            requests.Add(request.RequestUri!);
+
+            if (request.RequestUri!.AbsoluteUri == "http://127.0.0.1:18080/api/v1/jobs/job-500")
+            {
+                return Json(HttpStatusCode.OK, """{"job_id":"job-500"}""");
+            }
+
+            if (request.RequestUri!.AbsoluteUri == "http://127.0.0.1:18081/jobs/job-500/run/cleaning")
+            {
+                return Json(HttpStatusCode.InternalServerError, """{"ok":false,"error":"boom"}""");
+            }
+
+            return Json(HttpStatusCode.NotFound, """{"ok":false}""");
+        }));
+        var coordinator = new RunFlowCoordinator(http, new WorkflowRunnerAdapter(http));
+
+        var result = await coordinator.ExecuteAsync(
+            "http://127.0.0.1:18081",
+            apiKey: "",
+            owner: "native",
+            jobId: "job-500",
+            flow: "cleaning",
+            payload: new JsonObject());
+
+        Assert.Equal(HttpStatusCode.InternalServerError, result.StatusCode);
+        Assert.False(result.IsSuccessStatusCode);
+        Assert.Equal("job-500", result.EffectiveJobId);
+        Assert.Equal("Not retried", result.RetryInfo);
+        Assert.False(result.RetriedAfterServerError);
+        Assert.Equal(2, requests.Count);
+        Assert.Contains(requests, uri => uri.AbsoluteUri == "http://127.0.0.1:18080/api/v1/jobs/job-500");
+        Assert.Contains(requests, uri => uri.AbsoluteUri == "http://127.0.0.1:18081/jobs/job-500/run/cleaning");
+        Assert.DoesNotContain(requests, uri => uri.AbsoluteUri == "http://127.0.0.1:18080/api/v1/jobs/create?owner=native");
     }
 
     private static HttpResponseMessage Json(HttpStatusCode statusCode, string json)

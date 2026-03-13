@@ -26,13 +26,15 @@ pub(super) fn base_api_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) -> R
         return Err("base_api task store requires AIWF_BASE_URL".to_string());
     };
     let url = format!("{}/api/v1/runtime/tasks/upsert", base.trim_end_matches('/'));
+    let created_at = task_time_epoch(&task.created_at).unwrap_or(0);
+    let updated_at = task_time_epoch(&task.updated_at).unwrap_or(created_at);
     let payload = json!({
         "task_id": task.task_id,
         "tenant_id": task.tenant_id,
         "operator": task.operator,
         "status": task.status,
-        "created_at": task.created_at.parse::<u64>().unwrap_or(0),
-        "updated_at": task.updated_at.parse::<u64>().unwrap_or(0),
+        "created_at": created_at,
+        "updated_at": updated_at,
         "result": task.result.clone(),
         "error": task.error.clone(),
         "idempotency_key": task.idempotency_key,

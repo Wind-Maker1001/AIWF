@@ -143,6 +143,11 @@ try {
 
   $params = @{
     accel_force_bad_parquet = $true
+    rows = @(
+      @{ id = 1; amount = 100.25 },
+      @{ id = 2; amount = 230.50 },
+      @{ id = 3; amount = 45.75 }
+    )
   }
   if ($StartTempAccel) {
     $params["accel_url"] = $tempAccelUrl

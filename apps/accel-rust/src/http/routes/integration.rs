@@ -2,7 +2,7 @@ use accel_rust::app_state::AppState;
 use axum::{Router, routing::post};
 
 pub(super) fn integration_routes() -> Router<AppState> {
-    Router::new()
+    super::operator_guarded(Router::new()
         .route(
             "/operators/plugin_exec_v1",
             post(crate::http::plugin_exec_v1_operator),
@@ -38,5 +38,5 @@ pub(super) fn integration_routes() -> Router<AppState> {
         .route(
             "/operators/udf_wasm_v2/apply",
             post(crate::http::udf_wasm_v2_operator),
-        )
+        ))
 }

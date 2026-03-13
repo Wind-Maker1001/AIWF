@@ -1,9 +1,9 @@
 use accel_rust::app_state::{ServiceMetrics, TransformRowsResp};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct TransformRowsReq {
     pub run_id: Option<String>,
     pub tenant_id: Option<String>,
@@ -20,7 +20,7 @@ pub(crate) struct TransformRowsReq {
     pub idempotency_key: Option<String>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(crate) struct TransformRowsV3Req {
     pub run_id: Option<String>,
     pub tenant_id: Option<String>,

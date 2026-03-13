@@ -11,7 +11,7 @@ public static class ResultPanelController
     {
         return ResultPanelState.Empty with
         {
-            RunResultText = "运行完成，但返回结果无法解析。",
+            RunResultText = "Run completed, but the response could not be parsed.",
             OkMetricText = "-",
             ModeMetricText = "-",
             DurationMetricText = "-"
@@ -22,9 +22,9 @@ public static class ResultPanelController
     {
         var view = RunResultPresentationMapper.Map(data);
         return new ResultPanelState(
-            $"{data.Artifacts.Count} 项",
+            $"{data.Artifacts.Count} items",
             view.JobIdText,
-            "未重试",
+            "Not retried",
             view.SummaryText,
             view.ModeText,
             view.DurationText,
@@ -37,7 +37,7 @@ public static class ResultPanelController
     {
         return state with
         {
-            RetryInfoText = string.IsNullOrWhiteSpace(retryInfo) ? "未重试" : retryInfo
+            RetryInfoText = string.IsNullOrWhiteSpace(retryInfo) ? "Not retried" : retryInfo
         };
     }
 }

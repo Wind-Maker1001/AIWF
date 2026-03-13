@@ -40,6 +40,7 @@ class OfficeArtifactRegistration:
     path_key: str
     sha_key: str
     writer: OfficeArtifactWriter
+    accel_output_key: Optional[str]
     domain: Optional[str]
     domain_metadata: Mapping[str, Any]
     source_module: str
@@ -75,6 +76,7 @@ def _register_office_artifact(
     path_key: str,
     sha_key: str,
     writer: OfficeArtifactWriter,
+    accel_output_key: Optional[str] = None,
     domain: Optional[str] = None,
     domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
@@ -134,6 +136,7 @@ def _register_office_artifact(
         path_key=str(path_key),
         sha_key=str(sha_key),
         writer=writer,
+        accel_output_key=str(accel_output_key) if accel_output_key else None,
         domain=normalized_domain,
         domain_metadata=normalized_domain_metadata,
         source_module=source,
@@ -151,6 +154,7 @@ def register_office_artifact(
     path_key: str,
     sha_key: str,
     writer: OfficeArtifactWriter,
+    accel_output_key: Optional[str] = None,
     domain: Optional[str] = None,
     domain_metadata: Optional[Mapping[str, Any]] = None,
     source_module: Optional[str] = None,
@@ -166,6 +170,7 @@ def register_office_artifact(
         path_key=path_key,
         sha_key=sha_key,
         writer=writer,
+        accel_output_key=accel_output_key,
         domain=domain,
         domain_metadata=domain_metadata,
         source_module=effective_source,
@@ -202,6 +207,7 @@ def list_office_artifact_details() -> List[Dict[str, Any]]:
             "filename": registration.filename,
             "path_key": registration.path_key,
             "sha_key": registration.sha_key,
+            "accel_output_key": registration.accel_output_key,
             "domain": registration.domain,
             "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
@@ -231,13 +237,16 @@ def _artifact_tokens(values: Any) -> set[str]:
 
 
 def _registration_tokens(registration: OfficeArtifactRegistration) -> set[str]:
-    return {
+    tokens = {
         registration.name,
         registration.kind.lower(),
         registration.artifact_id.lower(),
         registration.filename.lower(),
         registration.path_key.lower(),
     }
+    if registration.accel_output_key:
+        tokens.add(registration.accel_output_key.lower())
+    return tokens
 
 
 def list_office_artifact_tokens() -> List[str]:
@@ -295,3 +304,50 @@ def _write_pptx_artifact(context: OfficeArtifactContext, output_path: str) -> No
         context.illustration_path,
         context.params_effective,
     )
+
+
+def collect_accel_office_artifact_issues(
+    accel_outputs: Dict[str, Any],
+    *,
+    params_effective: Dict[str, Any],
+) -> List[str]:
+    issues: List[str] = []
+    for registration in select_office_artifact_registrations(params_effective):
+        if not registration.accel_output_key:
+            issues.append(f"selected office artifact is not backed by accel output: {registration.name}")
+            continue
+        obj = accel_outputs.get(registration.accel_output_key) or {}
+        path = str(obj.get("path", "")) if isinstance(obj, dict) else ""
+        if not path:
+            issues.append(f"missing accel office output: {registration.accel_output_key}")
+    return issues
+
+
+def materialize_accel_office_artifacts(
+    accel_outputs: Dict[str, Any],
+    *,
+    params_effective: Dict[str, Any],
+    sha256_file: Callable[[str], str],
+) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"office_artifacts": []}
+    for registration in select_office_artifact_registrations(params_effective):
+        if not registration.accel_output_key:
+            raise RuntimeError(f"selected office artifact is not backed by accel output: {registration.name}")
+        obj = accel_outputs.get(registration.accel_output_key) or {}
+        path = str(obj.get("path", "")) if isinstance(obj, dict) else ""
+        if not path:
+            raise RuntimeError(f"missing accel office output: {registration.accel_output_key}")
+        sha = ""
+        if isinstance(obj, dict):
+            sha = str(obj.get("sha256") or (sha256_file(path) if path else ""))
+        out[registration.path_key] = path
+        out[registration.sha_key] = sha
+        out["office_artifacts"].append(
+            {
+                "artifact_id": registration.artifact_id,
+                "kind": registration.kind,
+                "path": path,
+                "sha256": sha,
+            }
+        )
+    return out

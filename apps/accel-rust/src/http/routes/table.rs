@@ -2,7 +2,7 @@ use accel_rust::app_state::AppState;
 use axum::{Router, routing::post};
 
 pub(super) fn table_routes() -> Router<AppState> {
-    Router::new()
+    super::operator_guarded(Router::new()
         .route("/operators/join_rows_v1", post(crate::http::join_rows_v1_operator))
         .route("/operators/join_rows_v2", post(crate::http::join_rows_v2_operator))
         .route("/operators/join_rows_v3", post(crate::http::join_rows_v3_operator))
@@ -42,5 +42,5 @@ pub(super) fn table_routes() -> Router<AppState> {
         .route(
             "/operators/window_rows_v1",
             post(crate::http::window_rows_v1_operator),
-        )
+        ))
 }

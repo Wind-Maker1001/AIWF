@@ -11,6 +11,8 @@ public record RuntimeTaskResp(
         @JsonProperty("updated_at_epoch") long updatedAtEpoch,
         @JsonProperty("result_json") String resultJson,
         String error,
-        String source
+        String source,
+        @JsonProperty("idempotency_key") String idempotencyKey,
+        Integer attempts
 ) {
 }

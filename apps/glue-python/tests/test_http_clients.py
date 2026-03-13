@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from aiwf import accel_client
 from aiwf.base_client import BaseClient
+from aiwf.flows.cleaning_transport import headers_from_params_impl
 from aiwf import rust_client
 
 
@@ -116,6 +117,36 @@ class HttpClientTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "invalid JSON"):
                 rust_client.get_json("/health")
 
+    def test_rust_client_get_task_returns_structured_success(self):
+        class Resp:
+            status_code = 200
+            content = b'{"ok":true,"status":"done"}'
+            text = '{"ok":true,"status":"done"}'
+
+            def json(self):
+                return {"ok": True, "status": "done"}
+
+        with patch("requests.get", return_value=Resp()):
+            result = rust_client.get_task("task-1")
+
+        self.assertEqual(result["ok"], True)
+        self.assertEqual(result["status"], "done")
+
+    def test_rust_client_cancel_task_returns_structured_success(self):
+        class Resp:
+            status_code = 200
+            content = b'{"ok":true,"cancelled":true}'
+            text = '{"ok":true,"cancelled":true}'
+
+            def json(self):
+                return {"ok": True, "cancelled": True}
+
+        with patch("requests.post", return_value=Resp()):
+            result = rust_client.cancel_task("task-1")
+
+        self.assertEqual(result["ok"], True)
+        self.assertEqual(result["cancelled"], True)
+
     def test_accel_client_run_cleaning_operator_returns_structured_success(self):
         class Resp:
             status_code = 200
@@ -180,6 +211,10 @@ class HttpClientTests(unittest.TestCase):
 
         self.assertFalse(result["ok"])
         self.assertIn("invalid response shape", result["error"])
+
+    def test_callback_headers_ignore_user_supplied_api_key(self):
+        headers = headers_from_params_impl({"api_key": "user-key"}, env_api_key="service-key")
+        self.assertEqual(headers, {"X-API-Key": "service-key"})
 
 
 if __name__ == "__main__":

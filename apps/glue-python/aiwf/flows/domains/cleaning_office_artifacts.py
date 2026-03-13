@@ -20,6 +20,7 @@ def register_builtin_office_artifacts(register_office_artifact) -> None:
         path_key="xlsx_path",
         sha_key="sha_xlsx",
         writer=registry._write_xlsx_artifact,
+        accel_output_key="xlsx_fin",
         domain="cleaning-office",
         domain_metadata=ARTIFACT_DOMAIN,
     )
@@ -31,6 +32,7 @@ def register_builtin_office_artifacts(register_office_artifact) -> None:
         path_key="docx_path",
         sha_key="sha_docx",
         writer=registry._write_docx_artifact,
+        accel_output_key="audit_docx",
         domain="cleaning-office",
         domain_metadata=ARTIFACT_DOMAIN,
     )
@@ -42,6 +44,7 @@ def register_builtin_office_artifacts(register_office_artifact) -> None:
         path_key="pptx_path",
         sha_key="sha_pptx",
         writer=registry._write_pptx_artifact,
+        accel_output_key="deck_pptx",
         domain="cleaning-office",
         domain_metadata=ARTIFACT_DOMAIN,
     )

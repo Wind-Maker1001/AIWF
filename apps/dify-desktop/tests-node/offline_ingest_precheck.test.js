@@ -79,3 +79,12 @@ test("precheckRows honors configurable amount convert rate threshold", () => {
   assert.equal(out.amount_convert_rate, 0.5);
   assert.equal(out.amount_convert_rate_required, 0.4);
 });
+
+test("readInputRows rejects missing input files by default", async () => {
+  const ingest = createOfflineIngest({ normalizeCell, normalizeAmount });
+
+  await assert.rejects(
+    () => ingest.readInputRows({}, [], {}),
+    /未提供输入文件|输入文件/i,
+  );
+});

@@ -10,24 +10,24 @@ public sealed partial class MainWindow
     private async void OnHealthClick(object sender, RoutedEventArgs e)
     {
         SyncViewModelFromInputs();
-        await SetBusyAsync(true, "正在检查桥接服务健康状态...", InlineStatusTone.Busy);
+        await SetBusyAsync(true, "Checking bridge service health...", InlineStatusTone.Busy);
         try
         {
             var baseUrl = GetBridgeBaseUrlOrThrow();
             var response = await _runnerAdapter.CheckHealthAsync(baseUrl, ApiKeyTextBox.Text.Trim());
             RawResponseTextBox.Text = PrettyJson(response.Body);
             RunReferenceTextBlock.Text = response.IsSuccessStatusCode
-                ? "连接正常，可直接运行。"
-                : "连接异常，请检查服务是否启动。";
+                ? "Bridge is reachable."
+                : "Bridge is unavailable. Check service startup.";
             SetInlineStatus(
                 response.IsSuccessStatusCode
-                    ? "桥接服务健康检查通过。"
-                    : $"桥接服务健康检查失败：{(int)response.StatusCode}",
+                    ? "Bridge health check passed."
+                    : $"Bridge health check failed: {(int)response.StatusCode}",
                 response.IsSuccessStatusCode ? InlineStatusTone.Success : InlineStatusTone.Error);
         }
         catch (Exception ex)
         {
-            SetInlineStatus($"健康检查异常：{ex.Message}", InlineStatusTone.Error);
+            SetInlineStatus($"Health check error: {ex.Message}", InlineStatusTone.Error);
         }
         finally
         {
@@ -42,7 +42,7 @@ public sealed partial class MainWindow
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
             SetInputError(BridgeUrlTextBox, true);
-            throw new InvalidOperationException("桥接地址不能为空。");
+            throw new InvalidOperationException("Bridge URL is required.");
         }
 
         return baseUrl;
@@ -85,36 +85,44 @@ public sealed partial class MainWindow
             JobIdTextBox.Text = exec.EffectiveJobId;
         }
 
-        if (exec.RetryInfo.StartsWith("预检创建作业：", StringComparison.Ordinal))
+        if (exec.RetryInfo.StartsWith("Preflight created job:", StringComparison.Ordinal))
         {
-            RunReferenceTextBlock.Text = "已自动准备可用任务。";
+            RunReferenceTextBlock.Text = "A new job was prepared automatically.";
         }
 
         if (exec.RetriedAfterServerError)
         {
-            SetInlineStatus("检测到服务端 500，已自动创建新作业并重试一次...", InlineStatusTone.Busy);
-            RunReferenceTextBlock.Text = "已自动重试一次。";
+            SetInlineStatus("Detected a server 500 and retried once with a new job.", InlineStatusTone.Busy);
+            RunReferenceTextBlock.Text = "Retried once automatically.";
         }
 
         RawResponseTextBox.Text = PrettyJson(exec.Body);
 
         if (!exec.IsSuccessStatusCode)
         {
-            RunReferenceTextBlock.Text = "运行失败，请稍后重试。";
-            SetInlineStatus($"运行失败：{(int)exec.StatusCode}", InlineStatusTone.Error);
+            RunReferenceTextBlock.Text = "Run failed. Please try again.";
+            SetInlineStatus($"Run failed: {(int)exec.StatusCode}", InlineStatusTone.Error);
             return false;
         }
 
         if (!TryBindRunResult(exec.Body, exec.RetryInfo))
         {
-            RunReferenceTextBlock.Text = "运行完成，但结果格式无法识别。";
-            SetInlineStatus("运行完成，但结果解析失败，请检查原始 JSON。", InlineStatusTone.Error);
+            RunReferenceTextBlock.Text = "Run completed, but the response format is unknown.";
+            SetInlineStatus("Run completed, but the response could not be parsed.", InlineStatusTone.Error);
             SetActiveSection(NavSection.Results);
             return false;
         }
 
-        RunReferenceTextBlock.Text = "运行成功，结果已更新。";
-        SetInlineStatus("流程运行请求已完成。", InlineStatusTone.Success);
+        if (!_lastBoundRunBusinessSuccess)
+        {
+            RunReferenceTextBlock.Text = "Run completed, but the business result is failure.";
+            SetInlineStatus("The workflow returned a failure result. Check the detailed response.", InlineStatusTone.Error);
+            SetActiveSection(NavSection.Results);
+            return false;
+        }
+
+        RunReferenceTextBlock.Text = "Run succeeded. Results updated.";
+        SetInlineStatus("Workflow request completed.", InlineStatusTone.Success);
         SetActiveSection(NavSection.Results);
         return true;
     }
@@ -128,18 +136,18 @@ public sealed partial class MainWindow
             return;
         }
 
-        await SetBusyAsync(true, "正在提交流程运行请求...", InlineStatusTone.Busy);
+        await SetBusyAsync(true, "Submitting workflow run request...", InlineStatusTone.Busy);
         try
         {
-            RunReferenceTextBlock.Text = "正在准备运行...";
+            RunReferenceTextBlock.Text = "Preparing run...";
             var input = CollectRunRequestInput();
             var exec = await ExecuteRunRequestAsync(input);
             TryApplyRunExecutionResult(exec);
         }
         catch (Exception ex)
         {
-            RunReferenceTextBlock.Text = "运行异常，请检查服务状态。";
-            SetInlineStatus($"运行请求异常：{ex.Message}", InlineStatusTone.Error);
+            RunReferenceTextBlock.Text = "Run request failed. Check service status.";
+            SetInlineStatus($"Run request error: {ex.Message}", InlineStatusTone.Error);
         }
         finally
         {

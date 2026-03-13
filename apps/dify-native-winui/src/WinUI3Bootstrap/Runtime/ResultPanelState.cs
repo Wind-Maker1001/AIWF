@@ -12,9 +12,9 @@ public sealed record ResultPanelState(
     string DurationMetricText)
 {
     public static ResultPanelState Empty { get; } = new(
-        "0 项",
+        "0 items",
         "-",
-        "未重试",
+        "Not retried",
         "-",
         "-",
         "-",

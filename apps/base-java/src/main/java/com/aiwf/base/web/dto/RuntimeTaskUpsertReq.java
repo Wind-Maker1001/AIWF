@@ -13,6 +13,8 @@ public record RuntimeTaskUpsertReq(
         @JsonProperty("result") Object result,
         @JsonProperty("error") String error,
         @JsonProperty("source") String source,
-        @JsonProperty("tenant_id") String tenantId
+        @JsonProperty("tenant_id") String tenantId,
+        @JsonProperty("idempotency_key") String idempotencyKey,
+        @JsonProperty("attempts") Integer attempts
 ) {
 }

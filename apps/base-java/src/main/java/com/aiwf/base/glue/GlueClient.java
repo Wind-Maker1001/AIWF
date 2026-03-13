@@ -41,10 +41,11 @@ public class GlueClient implements GlueGateway {
     @SuppressWarnings("unchecked")
     public GlueRunResult runFlow(String jobId, String flow, GlueRunFlowReq request) {
         String path = "/jobs/%s/run/%s".formatted(jobId, flow);
+        // Flow dispatch is not idempotent. Retrying a POST here can execute the same job twice.
         Map<String, Object> response = executeWithRetry(
                 "POST",
                 path,
-                glueRunMaxAttempts,
+                1,
                 () -> client.post()
                         .uri("/jobs/{jobId}/run/{flow}", jobId, flow)
                         .contentType(MediaType.APPLICATION_JSON)

@@ -9,8 +9,10 @@ function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 
 Info "chaos check: submit task and verify service remains available"
+$chaosRunId = "chaos-check-" + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 $payload = @{
-  run_id = "chaos-check"
+  run_id = $chaosRunId
+  idempotency_key = "$chaosRunId-submit"
   rows = @(
     @{ id = "1"; amount = "1" },
     @{ id = "2"; amount = "2" }

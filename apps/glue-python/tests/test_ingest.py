@@ -30,6 +30,17 @@ class IngestTests(unittest.TestCase):
             text = ingest._ocr_extract_text(DummyT(), object(), "eng+chi_sim", "--psm 6", ["adaptive", "gray", "none"])
             self.assertEqual(text, "abc123中文")
 
+    def test_ocr_extract_text_raises_when_all_modes_fail(self):
+        class DummyT:
+            @staticmethod
+            def image_to_string(img, lang=None, config=None):
+                raise RuntimeError(f"ocr failed for {img}")
+
+        with patch("aiwf.ingest._preprocess_image_for_ocr") as pre:
+            pre.side_effect = lambda image, mode: mode
+            with self.assertRaisesRegex(RuntimeError, "OCR failed for all preprocess modes"):
+                ingest._ocr_extract_text(DummyT(), object(), "eng+chi_sim", "--psm 6", ["adaptive", "gray"])
+
     def test_resolve_tesseract_cmd_prefers_env(self):
         with patch.dict(os.environ, {"TESSERACT_CMD": r"C:\custom\tesseract.exe"}, clear=False):
             with patch("aiwf.ingest.os.path.exists") as exists:

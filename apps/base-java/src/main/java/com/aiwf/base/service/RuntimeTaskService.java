@@ -15,6 +15,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 public class RuntimeTaskService {
@@ -34,8 +35,10 @@ public class RuntimeTaskService {
         String tenantId = defaultIfBlank(body.tenantId(), "default");
         String operator = defaultIfBlank(body.operator(), "transform_rows_v2");
         RuntimeTaskStatus status = parseStatus(body.status(), RuntimeTaskStatus.QUEUED);
+        String idempotencyKey = trimToNull(body.idempotencyKey());
         long createdAt = body.createdAt() == null ? 0L : body.createdAt();
         long updatedAt = body.updatedAt() == null ? 0L : body.updatedAt();
+        int attempts = body.attempts() == null ? 0 : Math.max(0, body.attempts());
         if (createdAt <= 0) {
             createdAt = updatedAt > 0 ? updatedAt : (System.currentTimeMillis() / 1000L);
         }
@@ -44,6 +47,47 @@ public class RuntimeTaskService {
         }
 
         try {
+            RuntimeTaskRow existing = tasks.getTask(taskId);
+            if (existing == null && idempotencyKey != null) {
+                existing = tasks.getTaskByTenantOperatorAndIdempotencyKey(tenantId, operator, idempotencyKey);
+                if (existing != null) {
+                    return new RuntimeTaskUpsertResp(true, existing.taskId(), existing.tenantId(), existing.status().toDb());
+                }
+            }
+            if (existing != null) {
+                if (!Objects.equals(existing.tenantId(), tenantId)) {
+                    throw ApiException.conflict(
+                            "runtime_task_tenant_conflict",
+                            "runtime task tenant cannot change",
+                            Map.of("task_id", taskId, "tenant_id", existing.tenantId())
+                    );
+                }
+                if (!Objects.equals(existing.operator(), operator)) {
+                    throw ApiException.conflict(
+                            "runtime_task_operator_conflict",
+                            "runtime task operator cannot change",
+                            Map.of("task_id", taskId, "operator", existing.operator())
+                    );
+                }
+                if (existing.idempotencyKey() != null && idempotencyKey != null && !Objects.equals(existing.idempotencyKey(), idempotencyKey)) {
+                    throw ApiException.conflict(
+                            "runtime_task_idempotency_conflict",
+                            "runtime task idempotency key cannot change",
+                            Map.of("task_id", taskId, "idempotency_key", existing.idempotencyKey())
+                    );
+                }
+                if (updatedAt < existing.updatedAtEpoch()) {
+                    return new RuntimeTaskUpsertResp(true, existing.taskId(), existing.tenantId(), existing.status().toDb());
+                }
+                if (!existing.status().canTransitionTo(status)) {
+                    return new RuntimeTaskUpsertResp(true, existing.taskId(), existing.tenantId(), existing.status().toDb());
+                }
+                createdAt = existing.createdAtEpoch();
+                if (idempotencyKey == null) {
+                    idempotencyKey = existing.idempotencyKey();
+                }
+                attempts = Math.max(existing.attempts(), attempts);
+            }
             tasks.upsertTask(
                     taskId,
                     tenantId,
@@ -53,7 +97,9 @@ public class RuntimeTaskService {
                     updatedAt,
                     JsonUtil.toJsonOrNull(body.result()),
                     trimToNull(body.error()),
-                    defaultIfBlank(body.source(), "accel-rust")
+                    defaultIfBlank(body.source(), "accel-rust"),
+                    idempotencyKey,
+                    attempts
             );
             return new RuntimeTaskUpsertResp(true, taskId, tenantId, status.toDb());
         } catch (DataAccessException e) {
@@ -125,7 +171,9 @@ public class RuntimeTaskService {
                 row.updatedAtEpoch(),
                 row.resultJson(),
                 row.error(),
-                row.source()
+                row.source(),
+                row.idempotencyKey(),
+                row.attempts()
         );
     }
 

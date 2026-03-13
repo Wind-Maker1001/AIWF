@@ -28,6 +28,7 @@ import json
 import sys
 import time
 import statistics
+import uuid
 from random import randint
 import requests
 
@@ -56,8 +57,10 @@ submit_lat_ms = []
 task_records = []
 for i in range(tasks):
     rows = [{"id": str(j), "amount": str(randint(1, 9999)), "g": f"g{j%17}"} for j in range(rows_per_task)]
+    run_id = f"bench_async_{i}_{uuid.uuid4().hex[:12]}"
     payload = {
-      "run_id": f"bench_async_{i}",
+      "run_id": run_id,
+      "idempotency_key": f"{run_id}_submit",
       "rows": rows,
       "rules": {
         "casts": {"id":"int","amount":"float"},

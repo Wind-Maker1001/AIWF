@@ -369,16 +369,22 @@ def _ocr_text_score(text: str) -> int:
 def _ocr_extract_text(pytesseract: Any, image: Any, lang: str, config: str, modes: List[str]) -> str:
     best = ""
     best_score = -1
+    successful_modes = 0
+    last_err: Optional[Exception] = None
     for mode in modes:
         try:
             processed = _preprocess_image_for_ocr(image, mode)
             text = pytesseract.image_to_string(processed, lang=lang, config=config)
-        except Exception:
+        except Exception as exc:
+            last_err = exc
             continue
+        successful_modes += 1
         score = _ocr_text_score(text)
         if score > best_score:
             best = text
             best_score = score
+    if successful_modes == 0 and last_err is not None:
+        raise RuntimeError(f"OCR failed for all preprocess modes: {last_err}") from last_err
     return best
 
 

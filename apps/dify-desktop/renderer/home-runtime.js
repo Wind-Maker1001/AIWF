@@ -43,17 +43,17 @@ async function inspectQueueEncoding(quiet=false){
     const reps = Array.isArray(r?.reports)?r.reports:[];
     const textReps = reps.filter(x=>x.kind==="text");
     if(textReps.length===0){
-      encodingHintEl.textContent = "编码检测：当前无 txt/csv 文件";
+      encodingHintEl.textContent = "编码检测：当前没有 txt/csv 文本文件";
       latestEncodingSummary = { uncertainCount: 0, gbCount: 0, utfCount: 0 };
       return latestEncodingSummary;
     }
     const uncertain = textReps.filter(x=>x.encoding==="uncertain");
     const gb = textReps.filter(x=>x.encoding==="gb18030");
     const utf8 = textReps.filter(x=>x.encoding.startsWith("utf-8") || x.encoding.startsWith("utf-16"));
-    encodingHintEl.textContent = `编码检测：UTF系 ${utf8.length} 个，GB18030 ${gb.length} 个，不确定 ${uncertain.length} 个`;
+    encodingHintEl.textContent = `编码检测：UTF 系 ${utf8.length} 个，GB18030 ${gb.length} 个，不确定 ${uncertain.length} 个`;
     latestEncodingSummary = { uncertainCount: uncertain.length, gbCount: gb.length, utfCount: utf8.length };
     if(!quiet && uncertain.length>0){
-      setStatus("检测到编码不确定文件，建议先另存为 UTF-8 再生成。", false);
+      setStatus("检测到编码不确定的文件，建议先另存为 UTF-8 再生成。", false);
     }
     return latestEncodingSummary;
   }catch(e){
@@ -81,10 +81,10 @@ async function inspectFonts(quiet=false){
         : "字体检查：通过";
       return;
     }
-    const details = `缺少核心字体: ${missReq.join("、")}` + (missOpt.length?`；可选缺失: ${missOpt.join("、")}`:"");
+    const details = `缺少核心字体：${missReq.join("、")}` + (missOpt.length ? `；可选缺失：${missOpt.join("、")}` : "");
     fontHintEl.textContent = `字体检查：${details}`;
     if(!quiet){
-      setStatus("检测到核心中文字体缺失，可能导致 DOCX/PPTX 乱码或排版异常。", false);
+      setStatus("检测到核心中文字体缺失，可能导致 DOCX / PPTX 乱码或排版异常。", false);
     }
   }catch(e){
     fontHintEl.textContent = "字体检查：失败";
@@ -99,16 +99,16 @@ async function inspectRuntime(quiet=false){
     const langs = Array.isArray(r?.tesseract_langs?.langs) ? r.tesseract_langs.langs : [];
     const hasChi = langs.includes("chi_sim") || langs.includes("chi_tra");
     if(t.ok){
-      const pdfState = p.ok ? "PDF扫描件OCR可用" : "PDF扫描件OCR未启用(缺pdftoppm)";
-      const langState = hasChi ? "中文OCR语言包已安装" : "缺中文OCR语言包";
-      ocrHintEl.textContent = `OCR 运行时：可用（${t.path || t.source || "tesseract"}）| ${pdfState} | ${langState}`;
+      const pdfState = p.ok ? "扫描 PDF OCR 可用" : "扫描 PDF OCR 未启用（缺少 pdftoppm）";
+      const langState = hasChi ? "中文 OCR 语言包已安装" : "缺少中文 OCR 语言包";
+      ocrHintEl.textContent = `OCR 运行时：可用（${t.path || t.source || "tesseract"}） | ${pdfState} | ${langState}`;
       if(!quiet && !hasChi){
-        setStatus("检测到 Tesseract 但缺少 chi_sim 语言包，中文图片/PDF OCR 质量会下降。", false);
+        setStatus("检测到 Tesseract，但缺少 chi_sim 语言包，中文图片 / PDF OCR 质量会下降。", false);
       }
     }else{
       ocrHintEl.textContent = "OCR 运行时：未安装 Tesseract（图片将降级为文件信息）";
       if(!quiet){
-        setStatus("未检测到 Tesseract，图片 OCR 会降级。可继续处理文本类文件。", false);
+        setStatus("未检测到 Tesseract，图片 OCR 会降级，但仍可继续处理文本类文件。", false);
       }
     }
   }catch(e){
@@ -145,7 +145,7 @@ async function refreshTaskStoreStatus(quiet=true){
       taskStoreHintEl.textContent = `远程任务存储：已启用且健康（失败计数 ${r.probeFailures||0}，最近探测 ${ts}）`;
     }else{
       taskStoreHintEl.textContent = `远程任务存储：已启用但异常（失败计数 ${r.probeFailures||0}，最近探测 ${ts}）`;
-      if(!quiet) setStatus("远程任务存储异常：任务共享落库可能不可用。", false);
+      if(!quiet) setStatus("远程任务存储异常，共享任务落库可能不可用。", false);
     }
   }catch(e){
     taskStoreHintEl.textContent = `远程任务存储：检测失败（${String(e)}）`;
@@ -427,5 +427,3 @@ function renderMetrics(p){
   $("mCnt").textContent=String(c);
   renderArtifacts(p?.artifacts||[]);
 }
-
-

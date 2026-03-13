@@ -75,8 +75,10 @@ pub(super) fn odbc_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) -> Resul
     let tenant_id = task.tenant_id.clone();
     let operator = task.operator.clone();
     let status = task.status.clone();
-    let created = task.created_at.parse::<u64>().unwrap_or(0).to_string();
-    let updated = task.updated_at.parse::<u64>().unwrap_or(0).to_string();
+    let created = task_time_epoch(&task.created_at).unwrap_or(0).to_string();
+    let updated = task_time_epoch(&task.updated_at)
+        .unwrap_or_else(|| task_time_epoch(&task.created_at).unwrap_or(0))
+        .to_string();
     let result_json = task
         .result
         .as_ref()
@@ -84,6 +86,8 @@ pub(super) fn odbc_upsert_task(task: &TaskState, cfg: &TaskStoreConfig) -> Resul
         .unwrap_or_default();
     let error = task.error.clone().unwrap_or_default();
     let source = "accel-rust".to_string();
+    let idempotency_key = task.idempotency_key.clone();
+    let attempts = task.attempts.to_string();
     let q = "SET NOCOUNT ON;\
 DECLARE @task_id NVARCHAR(128)=?;\
 DECLARE @tenant_id NVARCHAR(128)=?;\
@@ -94,18 +98,21 @@ DECLARE @updated_at_epoch BIGINT=CAST(? AS BIGINT);\
 DECLARE @result_json NVARCHAR(MAX)=?;\
 DECLARE @error NVARCHAR(MAX)=?;\
 DECLARE @source NVARCHAR(64)=?;\
+DECLARE @idempotency_key NVARCHAR(256)=?;\
+DECLARE @attempts INT=CAST(? AS INT);\
 IF EXISTS (SELECT 1 FROM dbo.workflow_tasks WHERE task_id=@task_id)\
 BEGIN\
   UPDATE dbo.workflow_tasks\
   SET tenant_id=@tenant_id,operator=@operator,status=@status,\
-      created_at_epoch=@created_at_epoch,updated_at_epoch=@updated_at_epoch,\
-      result_json=@result_json,error=@error,source=@source\
+      updated_at_epoch=@updated_at_epoch,\
+      result_json=@result_json,error=@error,source=@source,\
+      idempotency_key=@idempotency_key,attempts=@attempts\
   WHERE task_id=@task_id;\
 END\
 ELSE\
 BEGIN\
-  INSERT INTO dbo.workflow_tasks (task_id,tenant_id,operator,status,created_at_epoch,updated_at_epoch,result_json,error,source)\
-  VALUES (@task_id,@tenant_id,@operator,@status,@created_at_epoch,@updated_at_epoch,@result_json,@error,@source);\
+  INSERT INTO dbo.workflow_tasks (task_id,tenant_id,operator,status,created_at_epoch,updated_at_epoch,result_json,error,source,idempotency_key,attempts)\
+  VALUES (@task_id,@tenant_id,@operator,@status,@created_at_epoch,@updated_at_epoch,@result_json,@error,@source,@idempotency_key,@attempts);\
 END";
     let params = vec![
         task_id,
@@ -117,6 +124,8 @@ END";
         result_json,
         error,
         source,
+        idempotency_key,
+        attempts,
     ];
     run_odbc_exec(cfg, q, &params)
 }
@@ -124,7 +133,7 @@ END";
 pub(super) fn odbc_get_task(task_id: &str, cfg: &TaskStoreConfig) -> Result<Option<TaskState>, String> {
     let q = "SET NOCOUNT ON;\
 DECLARE @task_id NVARCHAR(128)=?;\
-SELECT TOP 1 task_id,tenant_id,operator,status,created_at_epoch,updated_at_epoch,result_json,error\
+SELECT TOP 1 task_id,tenant_id,operator,status,created_at_epoch,updated_at_epoch,result_json,error,idempotency_key,attempts\
 FROM dbo.workflow_tasks WHERE task_id=@task_id FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;";
     let out = match run_odbc_query_first_text(cfg, q, &[task_id.to_string()])? {
         Some(value) => value,

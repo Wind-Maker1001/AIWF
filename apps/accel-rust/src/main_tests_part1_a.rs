@@ -69,6 +69,25 @@ fn load_and_clean_rows_applies_min_max_filters() {
 }
 
 #[test]
+fn load_and_clean_rows_rejects_missing_rows() {
+    let params = json!({
+        "min_amount": 10,
+        "max_amount": 100
+    });
+    let err = load_and_clean_rows(Some(&params)).expect_err("missing rows should fail");
+    assert!(err.contains("params.rows is required"));
+}
+
+#[test]
+fn load_and_clean_rows_rejects_empty_rows() {
+    let params = json!({
+        "rows": []
+    });
+    let err = load_and_clean_rows(Some(&params)).expect_err("empty rows should fail");
+    assert!(err.contains("params.rows is empty"));
+}
+
+#[test]
 fn transform_rows_v2_works_for_basic_rules() {
     let req = TransformRowsReq {
         run_id: Some("r1".to_string()),

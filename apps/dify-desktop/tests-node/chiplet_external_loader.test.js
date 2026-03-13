@@ -152,3 +152,47 @@ test("loadExternalChiplets validates plugin signature when secret is set", () =>
     else process.env.AIWF_CHIPLET_SIGNING_SECRET = prev;
   }
 });
+
+test("loadExternalChiplets blocks plugin before executing module side effects when allowlist rejects it", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "aiwf-chiplet-"));
+  const pluginsDir = path.join(root, "plugins");
+  const pluginA = path.join(pluginsDir, "pluginA");
+  const sideEffectFile = path.join(root, "side-effect.txt");
+  fs.mkdirSync(pluginA, { recursive: true });
+  fs.writeFileSync(path.join(pluginA, "manifest.json"), JSON.stringify({
+    name: "pluginA",
+    version: "1.0.0",
+    api_version: "v1",
+    entry: "index.js",
+    enabled: true,
+  }), "utf8");
+  fs.writeFileSync(
+    path.join(pluginA, "index.js"),
+    [
+      "const fs = require('node:fs');",
+      `fs.writeFileSync(${JSON.stringify(sideEffectFile)}, 'executed', 'utf8');`,
+      "module.exports = {",
+      "  register(registry) {",
+      "    registry.register('ext_blocked_v1', { id: 'chiplet.ext_blocked_v1', async run(){ return { ok: true }; } });",
+      "  },",
+      "};",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const registry = new WorkflowChipletRegistry();
+  const out = loadExternalChiplets({
+    fs,
+    path,
+    registry,
+    config: {
+      chiplet_plugin_dirs: [pluginsDir],
+      chiplet_plugin_allowlist: ["pluginB"],
+    },
+  });
+  assert.equal(out.failed_plugins, 1);
+  assert.match(String(out.items[0]?.error || ""), /plugin_not_in_allowlist/i);
+  assert.equal(registry.has("ext_blocked_v1"), false);
+  assert.equal(fs.existsSync(sideEffectFile), false);
+});

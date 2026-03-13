@@ -194,7 +194,7 @@ async function ensureReleaseGatePassedBeforePack() {
   });
   const missing = required.filter((s) => !latestByScript[s] || !latestByScript[s].ok);
   if (missing.length > 0) {
-    setStatus(`打包前检查未通过，缺少通过项: ${missing.join(", ")}`, false);
+    setStatus(`打包前检查未通过，缺少通过项 ${missing.join(", ")}`, false);
     appendGateLog(`>>> 打包前硬提示阻断: ${missing.join(", ")}`);
     setBuildButtonsDisabled(true);
     return false;
@@ -261,11 +261,9 @@ async function exportReleaseReport(format) {
       setStatus(`导出发布报告失败: ${out?.error || "unknown"}`, false);
       return;
     }
-    appendGateLog(`>>> 发布报告已导出: ${out.path}`);
-    setStatus(`发布报告已导出（未自动打开）: ${out.path}`, true);
+    appendGateLog(`>>> 发布报告已导出 ${out.path}`);
+    setStatus(`发布报告已导出（未自动打开）：${out.path}`, true);
   } catch (e) {
     setStatus(`导出发布报告失败: ${e}`, false);
   }
 }
-
-

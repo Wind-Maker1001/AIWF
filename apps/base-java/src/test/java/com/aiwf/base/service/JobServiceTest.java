@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.file.Files;
@@ -27,6 +28,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -191,5 +193,61 @@ class JobServiceTest {
                 "job_context",
                 "trace_id"
         );
+    }
+
+    @Test
+    void runFlowMarksJobFailedWhenDispatchFails() {
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
+        when(glue.runFlow(org.mockito.ArgumentMatchers.eq("job1"), org.mockito.ArgumentMatchers.eq("cleaning"), any()))
+                .thenThrow(new ResourceAccessException("glue down"));
+
+        GlueRunResult out = service.runFlow("job1", "cleaning", "ops", "v1", Map.of("sample", true));
+
+        assertThat(out.isOk()).isFalse();
+        verify(jobs).audit(new AuditEvent("job1", "ops", "FLOW_RUN_FAIL", "cleaning", "glue down"));
+        verify(jobStatus).onStepFail("job1");
+    }
+
+    @Test
+    void createJobFailsWhenDirectoriesCannotBePrepared() throws Exception {
+        when(jobs.createJob("owner")).thenReturn("job1");
+        Path busRootFile = Files.createTempFile("aiwf-jobservice-bus-file", ".tmp");
+        ReflectionTestUtils.setField(service, "jobsBusRoot", busRootFile.toString());
+
+        assertThatThrownBy(() -> service.createJob("owner"))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("failed to prepare job directories");
+
+        verify(jobs).audit(argThat(event ->
+                event != null
+                        && "job1".equals(event.jobId())
+                        && "owner".equals(event.actor())
+                        && "JOB_DIRS_FAIL".equals(event.action())
+                        && event.stepId() == null
+                        && String.valueOf(event.detailJson()).contains("failed to prepare job directories")
+        ));
+        verify(jobStatus).onStepFail("job1");
+        verify(glue, never()).runFlow(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), any());
+    }
+
+    @Test
+    void runFlowReturnsFailureWhenDirectoriesCannotBePrepared() throws Exception {
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
+        Path busRootFile = Files.createTempFile("aiwf-jobservice-bus-file", ".tmp");
+        ReflectionTestUtils.setField(service, "jobsBusRoot", busRootFile.toString());
+
+        GlueRunResult out = service.runFlow("job1", "cleaning", "ops", "v1", Map.of("sample", true));
+
+        assertThat(out.isOk()).isFalse();
+        assertThat(out.getError()).isEqualTo("failed to prepare job directories");
+        verify(jobs).audit(argThat(event ->
+                event != null
+                        && "job1".equals(event.jobId())
+                        && "ops".equals(event.actor())
+                        && "JOB_DIRS_FAIL".equals(event.action())
+                        && event.stepId() == null
+        ));
+        verify(jobStatus).onStepFail("job1");
+        verify(glue, never()).runFlow(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), any());
     }
 }

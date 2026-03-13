@@ -50,8 +50,10 @@ $h = Invoke-RestMethod -Uri "$AccelUrl/health" -TimeoutSec 10
 if (-not $h.ok) { throw "health contract failed: ok missing/false" }
 
 Info "contract test: transform_rows_v2"
+$contractRunId = "contract-" + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 $body = @{
-  run_id = "contract-1"
+  run_id = $contractRunId
+  idempotency_key = "$contractRunId-submit"
   rows = @(
     @{ id = "1"; amount = "10" },
     @{ id = "2"; amount = "20" }

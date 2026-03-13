@@ -86,7 +86,7 @@ function registerIpcHandlers(ctx) {
     items.forEach((it) => {
       const s = String(it?.script || "");
       if (!required.includes(s)) return;
-      latestBy[s] = latestBy[s] || it;
+      latestBy[s] = it;
     });
     const missing = required.filter((s) => !latestBy[s] || !latestBy[s].ok);
     return { ok: missing.length === 0, missing, latestBy };
@@ -754,7 +754,6 @@ function registerIpcHandlers(ctx) {
 module.exports = {
   registerIpcHandlers,
 };
-
 
 
 

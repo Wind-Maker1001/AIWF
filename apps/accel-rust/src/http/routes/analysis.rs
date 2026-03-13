@@ -2,7 +2,7 @@ use accel_rust::app_state::AppState;
 use axum::{Router, routing::post};
 
 pub(super) fn analysis_routes() -> Router<AppState> {
-    Router::new()
+    super::operator_guarded(Router::new()
         .route("/operators/time_series_v1", post(crate::http::time_series_v1_operator))
         .route("/operators/stats_v1", post(crate::http::stats_v1_operator))
         .route(
@@ -92,5 +92,5 @@ pub(super) fn analysis_routes() -> Router<AppState> {
         .route(
             "/operators/optimizer_v1",
             post(crate::http::optimizer_v1_operator),
-        )
+        ))
 }

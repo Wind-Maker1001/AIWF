@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Callable, Dict, List, Tuple
+
+from aiwf.paths import resolve_path_within_root
 
 
 def preprocess_file_impl(
@@ -18,9 +21,16 @@ def preprocess_file_impl(
     rows, meta = read_rows(input_path, spec)
     out_rows, summary = preprocess_rows(rows, spec)
     out_fmt = write_rows(output_path, out_rows, spec)
+    output_dir = resolve_path_within_root(
+        os.path.dirname(output_path) or ".",
+        ".",
+    )
     quality_report_path = None
     if bool(spec.get("generate_quality_report", False)):
-        quality_report_path = str(spec.get("quality_report_path") or f"{output_path}.quality.json")
+        quality_report_path = resolve_path_within_root(
+            output_dir,
+            str(spec.get("quality_report_path") or f"{os.path.basename(output_path)}.quality.json"),
+        )
         report = build_quality_report(out_rows, summary, spec)
         write_json(quality_report_path, report)
     canonical_bundle = None

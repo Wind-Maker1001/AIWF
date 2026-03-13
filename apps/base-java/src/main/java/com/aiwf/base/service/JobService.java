@@ -36,6 +36,7 @@ import java.util.UUID;
 
 @Service
 public class JobService {
+    private static final String JOB_DIRS_FAIL_ACTION = "JOB_DIRS_FAIL";
     private static final Set<String> RESERVED_GLUE_PARAM_KEYS = Set.of(
             "job_id",
             "flow",
@@ -71,7 +72,16 @@ public class JobService {
 
     public JobCreateResp createJob(String owner) {
         String jobId = jobs.createJob(owner);
-        ensureJobDirs(jobId);
+        try {
+            ensureJobDirs(jobId);
+        } catch (RuntimeException e) {
+            recordJobDirFailure(jobId, defaultIfBlank(owner, "base"), e);
+            throw ApiException.internalServerError(
+                    "job_dirs_failed",
+                    "failed to prepare job directories",
+                    Map.of("job_id", jobId)
+            );
+        }
         return new JobCreateResp(jobId, owner, JobStatus.RUNNING.toDb(), Paths.get(jobsRoot(), jobId).toString(), null);
     }
 
@@ -108,10 +118,14 @@ public class JobService {
             throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
         }
 
-        ensureJobDirs(jobId);
-
-        String effectiveActor = actor == null ? "glue" : actor;
+        String effectiveActor = defaultIfBlank(actor, "glue");
         String effectiveRuleset = (rulesetVersion == null || rulesetVersion.isBlank()) ? "v1" : rulesetVersion;
+        try {
+            ensureJobDirs(jobId);
+        } catch (RuntimeException e) {
+            recordJobDirFailure(jobId, effectiveActor, e);
+            return GlueRunResult.failed(jobId, flow, "failed to prepare job directories");
+        }
 
         try {
             GlueJobContext jobContext = buildJobContext(jobId);
@@ -126,6 +140,7 @@ public class JobService {
             ));
         } catch (RestClientException e) {
             jobs.audit(new AuditEvent(jobId, effectiveActor, "FLOW_RUN_FAIL", flow, e.getMessage()));
+            jobStatus.onStepFail(jobId);
             return GlueRunResult.failed(jobId, flow, e.getMessage());
         }
     }
@@ -170,15 +185,20 @@ public class JobService {
     }
 
     private void ensureJobDirs(String jobId) {
+        Path jobRoot = Paths.get(jobsRoot(), jobId);
         try {
-            Path jobRoot = Paths.get(jobsRoot(), jobId);
             Files.createDirectories(jobRoot);
             Files.createDirectories(jobRoot.resolve("stage"));
             Files.createDirectories(jobRoot.resolve("artifacts"));
             Files.createDirectories(jobRoot.resolve("evidence"));
         } catch (Exception e) {
-            jobs.audit(new AuditEvent(jobId, "base", "JOB_DIRS_WARN", null, e.getMessage()));
+            throw new IllegalStateException("failed to prepare job directories for " + jobId, e);
         }
+    }
+
+    private void recordJobDirFailure(String jobId, String actor, Exception error) {
+        jobs.audit(new AuditEvent(jobId, actor, JOB_DIRS_FAIL_ACTION, null, defaultIfBlank(error.getMessage(), error.getClass().getSimpleName())));
+        jobStatus.onStepFail(jobId);
     }
 
     private String jobsRoot() {

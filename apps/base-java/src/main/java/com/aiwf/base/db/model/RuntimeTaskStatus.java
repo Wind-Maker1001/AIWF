@@ -6,6 +6,7 @@ public enum RuntimeTaskStatus {
     QUEUED,
     RUNNING,
     DONE,
+    FAILED,
     CANCELLED;
 
     public String toDb() {
@@ -13,11 +14,30 @@ public enum RuntimeTaskStatus {
     }
 
     public boolean isTerminal() {
-        return this == DONE || this == CANCELLED;
+        return this == DONE || this == FAILED || this == CANCELLED;
     }
 
     public boolean canCancel() {
         return this == QUEUED || this == RUNNING;
+    }
+
+    public boolean canTransitionTo(RuntimeTaskStatus next) {
+        if (next == null) {
+            return false;
+        }
+        if (this == next) {
+            return true;
+        }
+        if (isTerminal()) {
+            return false;
+        }
+        if (this == QUEUED) {
+            return next == RUNNING || next.isTerminal();
+        }
+        if (this == RUNNING) {
+            return next.isTerminal();
+        }
+        return false;
     }
 
     public static RuntimeTaskStatus fromDb(String value) {

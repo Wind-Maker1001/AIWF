@@ -5,6 +5,8 @@ import io
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from aiwf.paths import resolve_path_within_root
+
 
 def local_parquet_strict_enabled_impl(
     params: Dict[str, Any],
@@ -89,25 +91,33 @@ def load_raw_rows_impl(
     parse_rows_from_csv_text: Callable[[str], List[Dict[str, Any]]],
     read_text_file_with_fallback: Callable[[str, Optional[List[str]]], str],
 ) -> Tuple[List[Dict[str, Any]], str]:
-    if isinstance(params.get("rows"), list) and params["rows"]:
-        return list(params["rows"]), "params.rows"
+    if isinstance(params.get("rows"), list):
+        if params["rows"]:
+            return list(params["rows"]), "params.rows"
+        raise RuntimeError("params.rows is empty")
 
-    csv_text = params.get("csv_text")
-    if isinstance(csv_text, str) and csv_text.strip():
+    if "csv_text" in params:
+        csv_text = params.get("csv_text")
+        if not isinstance(csv_text, str) or not csv_text.strip():
+            raise RuntimeError("params.csv_text is empty")
         rows = parse_rows_from_csv_text(csv_text)
         if rows:
             return rows, "params.csv_text"
+        raise RuntimeError("params.csv_text does not contain any data rows")
 
     source_path = resolve_csv_source_path(params, job_root)
-    if source_path and os.path.isfile(source_path):
+    if source_path:
+        if not os.path.isfile(source_path):
+            raise FileNotFoundError(f"input csv file not found: {source_path}")
         csv_text_file = read_text_file_with_fallback(source_path, None)
         with io.StringIO(csv_text_file) as file:
             reader = csv.DictReader(file)
             rows = [dict(row) for row in reader]
         if rows:
             return rows, source_path
+        raise RuntimeError(f"input csv file has no data rows: {source_path}")
 
-    return [{"id": 1, "amount": 100.0}, {"id": 2, "amount": 200.0}], "default.sample"
+    raise RuntimeError("no input rows provided; expected params.rows, params.csv_text, or input_csv_path")
 
 
 def maybe_preprocess_input_impl(
@@ -129,10 +139,9 @@ def maybe_preprocess_input_impl(
         return params, None
 
     input_path = resolve_path(job_root, str(input_csv), True)
-    output_path = resolve_path(
+    output_path = resolve_path_within_root(
         job_root,
         str(preprocess_cfg.get("output_path") or os.path.join(stage_dir, "preprocessed_input.csv")),
-        True,
     )
 
     pipeline_cfg = preprocess_cfg.get("pipeline") if isinstance(preprocess_cfg.get("pipeline"), dict) else None

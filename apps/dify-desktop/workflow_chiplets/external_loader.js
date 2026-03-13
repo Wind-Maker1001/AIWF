@@ -136,6 +136,12 @@ function loadExternalChiplets({ fs, path, registry, config = {} }) {
   const roots = collectPluginRoots(fs, path, pluginDirs);
   const items = roots.map((pluginRoot) => {
     try {
+      const manifestPath = path.join(pluginRoot, "manifest.json");
+      const manifest = fs.existsSync(manifestPath) ? safeReadJson(fs, manifestPath) : null;
+      const pluginName = String(manifest?.name || "").trim();
+      if (allowlist.length > 0 && pluginName && !allowlist.includes(pluginName)) {
+        return { ok: false, plugin: pluginRoot, error: `plugin_not_in_allowlist:${pluginName}` };
+      }
       const res = loadOnePlugin({
         fs,
         path,
@@ -144,10 +150,6 @@ function loadExternalChiplets({ fs, path, registry, config = {} }) {
         capabilityAllowlist,
         signingSecret,
       });
-      const pluginName = String(res?.manifest?.name || "").trim();
-      if (allowlist.length > 0 && pluginName && !allowlist.includes(pluginName)) {
-        return { ok: false, plugin: pluginRoot, error: `plugin_not_in_allowlist:${pluginName}` };
-      }
       return res;
     } catch (e) {
       return { ok: false, plugin: pluginRoot, error: String(e) };

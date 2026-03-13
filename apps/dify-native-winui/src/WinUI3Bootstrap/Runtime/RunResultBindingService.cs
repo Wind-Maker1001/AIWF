@@ -14,6 +14,11 @@ public sealed record RunResultBindingState(
 
 public static class RunResultBindingService
 {
+    public static bool IsBusinessSuccess(RunResultBindingState state)
+    {
+        return state.BadgeOk == true;
+    }
+
     public static RunResultBindingState CreateInitialState()
     {
         return new RunResultBindingState(
@@ -24,12 +29,12 @@ public static class RunResultBindingService
             ArtifactDisplayItems: [],
             Artifacts: [],
             SyncArtifactsToCanvas: false,
-            InputNodeSubtitle: "源数据准备",
-            CleanNodeSubtitle: "规则处理",
-            OutputNodeSubtitle: "等待运行结果");
+            InputNodeSubtitle: "Source ready",
+            CleanNodeSubtitle: "Processing rules",
+            OutputNodeSubtitle: "Waiting for run result");
     }
 
-    public static RunResultBindingState CreateParseFailureState(string retryInfo = "未重试")
+    public static RunResultBindingState CreateParseFailureState(string retryInfo = "Not retried")
     {
         return new RunResultBindingState(
             ResultPanelController.WithRetryInfo(ResultPanelController.CreateParseFailureState(), retryInfo),
@@ -39,9 +44,9 @@ public static class RunResultBindingService
             ArtifactDisplayItems: [],
             Artifacts: [],
             SyncArtifactsToCanvas: false,
-            InputNodeSubtitle: "源数据准备",
-            CleanNodeSubtitle: "结果解析失败",
-            OutputNodeSubtitle: "无法识别返回结构");
+            InputNodeSubtitle: "Source ready",
+            CleanNodeSubtitle: "Parse failed",
+            OutputNodeSubtitle: "Response format not recognized");
     }
 
     public static bool TryCreateFromJson(string json, string retryInfo, out RunResultBindingState state)
@@ -56,13 +61,27 @@ public static class RunResultBindingService
         return true;
     }
 
-    public static RunResultBindingState CreateFromParsedResult(RunResultViewData parsed, string retryInfo = "未重试")
+    public static RunResultBindingState CreateFromParsedResult(RunResultViewData parsed, string retryInfo = "Not retried")
     {
         var panelState = ResultPanelController.WithRetryInfo(ResultPanelController.CreateFromResult(parsed), retryInfo);
         var artifactDisplayItems = parsed.Artifacts
             .Select(ArtifactPresentationMapper.FormatListDisplay)
             .ToArray();
         var artifactsCount = parsed.Artifacts.Count;
+
+        var cleanNodeSubtitle = parsed.Ok switch
+        {
+            true => "Processing complete",
+            false => "Processing failed",
+            _ => "Result pending confirmation",
+        };
+
+        var outputNodeSubtitle = parsed.Ok switch
+        {
+            true => artifactsCount > 0 ? $"Generated {artifactsCount} artifacts" : "No usable artifacts",
+            false => "Run failed, no usable artifacts generated",
+            _ => "Missing ok status, inspect the raw response",
+        };
 
         return new RunResultBindingState(
             panelState,
@@ -71,9 +90,9 @@ public static class RunResultBindingService
             MetricDurationMs: parsed.DurationMs,
             ArtifactDisplayItems: artifactDisplayItems,
             Artifacts: parsed.Artifacts,
-            SyncArtifactsToCanvas: true,
-            InputNodeSubtitle: "源数据准备",
-            CleanNodeSubtitle: "处理完成",
-            OutputNodeSubtitle: artifactsCount > 0 ? $"已生成 {artifactsCount} 个产物" : "无可用产物");
+            SyncArtifactsToCanvas: parsed.Ok == true,
+            InputNodeSubtitle: "Source ready",
+            CleanNodeSubtitle: cleanNodeSubtitle,
+            OutputNodeSubtitle: outputNodeSubtitle);
     }
 }

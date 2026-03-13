@@ -946,6 +946,13 @@
     return Number.isFinite(n) ? Math.max(1, Math.min(8, Math.floor(n))) : 2;
   }
 
+  function queueTerminalStatus(out) {
+    if (out?.ok) return "done";
+    const status = String(out?.status || "").trim().toLowerCase();
+    if (status) return status;
+    return "failed";
+  }
+
   function listQueueItems(limit = 200) {
     const items = loadWorkflowQueue();
     return items
@@ -1006,7 +1013,7 @@
           const latest = loadWorkflowQueue();
           const idx = latest.findIndex((x) => String(x.task_id || "") === itemId);
           if (idx >= 0) {
-            latest[idx].status = out?.ok ? "done" : "failed";
+            latest[idx].status = queueTerminalStatus(out);
             latest[idx].finished_at = nowIso();
             latest[idx].result = out;
             latest[idx].run_id = String(out?.run_id || "");
@@ -2116,8 +2123,9 @@
       const items = loadWorkflowQueue();
       const idx = items.findIndex((x) => String(x.task_id || "") === id);
       if (idx < 0) return { ok: false, error: "task not found" };
-      const st = String(items[idx].status || "");
+      const st = String(items[idx].status || "").trim().toLowerCase();
       if (st === "running") return { ok: false, error: "task is running; cancel unsupported" };
+      if (st !== "queued") return { ok: false, error: `task status is not cancellable: ${st || "unknown"}` };
       items[idx].status = "canceled";
       items[idx].finished_at = nowIso();
       saveWorkflowQueue(items);
@@ -2611,4 +2619,3 @@
 module.exports = {
   registerWorkflowIpc,
 };
-

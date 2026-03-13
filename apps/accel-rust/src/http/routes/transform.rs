@@ -5,7 +5,7 @@ use axum::{
 };
 
 pub(super) fn transform_routes() -> Router<AppState> {
-    Router::new()
+    super::operator_guarded(Router::new()
         .route("/operators/cleaning", post(crate::http::cleaning_operator))
         .route(
             "/operators/compute_metrics",
@@ -50,5 +50,5 @@ pub(super) fn transform_routes() -> Router<AppState> {
         .route(
             "/operators/aggregate_pushdown_v1",
             post(crate::http::aggregate_pushdown_v1_operator),
-        )
+        ))
 }

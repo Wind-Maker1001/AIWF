@@ -35,7 +35,7 @@ function renderPrecheck(res){
     const invalidSamples = Array.isArray(p.amount_invalid_samples) ? p.amount_invalid_samples : [];
     if (rate < requiredRate) {
       const lines = invalidSamples.length > 0
-        ? invalidSamples.map((s, i) => `${i + 1}. 行${s.row_no || "-"} | ${s.raw_value || ""} | ${s.source_file || ""}`)
+        ? invalidSamples.map((s, i) => `${i + 1}. 行 ${s.row_no || "-"} | ${s.raw_value || ""} | ${s.source_file || ""}`)
         : ["无可用样本"];
       addIssueBtn(
         "金额列异常",
@@ -44,7 +44,7 @@ function renderPrecheck(res){
       invalidSamples.slice(0, 5).forEach((s, i) => {
         const b = document.createElement("button");
         b.className = "secondary";
-        b.textContent = `打开样本${i + 1}`;
+        b.textContent = `打开样本 ${i + 1}`;
         b.onclick = async () => {
           const fp = String(s?.source_file || "");
           if(!fp){ setStatus("样本缺少文件路径", false); return; }
@@ -154,7 +154,7 @@ function applyDebatePreset() {
   $("officeLang").value = "zh";
   if (!$("reportTitle").value.trim()) $("reportTitle").value = "辩论资料库";
   if (!$("debateBattlefieldRules").value.trim()) {
-    $("debateBattlefieldRules").value = "谣言=内容差\n成瘾=能力减损\n社交=社交与表达";
+    $("debateBattlefieldRules").value = "谣言=内容失真\n成瘾=能力减损\n社交=社交与表达";
   }
   if (!$("debateSourcePriority").value.trim()) {
     $("debateSourcePriority").value = "source_org,publisher,source,author,source_type";
@@ -238,29 +238,29 @@ $("btnDifyWizard").onclick=async()=>{
     setStatus("向导执行中：先检查连通性...");
     const h = await window.aiwfDesktop.health(cfgFromUi());
     if(!h?.ok){
-      setStatus("后端连通失败。可继续使用离线模式，或检查 Base URL/API Key。", false);
+      setStatus("后端连通失败。可继续使用离线模式，或检查 Base URL / API Key。", false);
       show(h || {});
       return;
     }
-    setStatus("连通通过，正在做一键联调回放...");
+    setStatus("连通通过，正在做一键联调回收...");
     const payload = payloadFromUi();
     const out = await window.aiwfDesktop.runCleaning(payload,cfgFromUi());
     show(out); renderMetrics(out);
     if(out?.ok){
-      setStatus("Dify连接向导完成：联调通过。", true);
+      setStatus("Dify 连接向导完成：联调通过。", true);
     }else{
-      setStatus("Dify连接向导完成：请求已发出但结果失败。", false);
+      setStatus("Dify 连接向导完成：请求已发出但结果失败。", false);
     }
   }catch(e){
-    setStatus("Dify连接向导失败: "+e,false);
+    setStatus("Dify 连接向导失败: "+e,false);
   }
 };
 $("btnWorkflow").onclick=async()=>{
   try{
     switchShellTab("workflow", { focusWorkflow: true });
-    setStatus("???? Workflow Studio ???", true);
+    setStatus("已切换到 Workflow Studio", true);
   }catch(e){
-    setStatus("?? Workflow Studio ??: "+e, false);
+    setStatus("打开 Workflow Studio 失败: "+e, false);
   }
 };
 $("btnRouteDiag").onclick=async()=>{ await refreshRouteDiagnostics(); };
@@ -310,11 +310,11 @@ if (btnOpenNoiseEl) {
     try {
       const noise = (latestArtifacts || []).find((x) => String(x?.artifact_id || "") === "md_filtered_noise_001");
       const p = String(noise?.path || "");
-      if (!p) { setStatus("当前任务没有噪声清单", false); return; }
+      if (!p) { setStatus("当前任务没有问号噪声清单", false); return; }
       await window.aiwfDesktop.openPath(p);
-      setStatus("已打开噪声清单", true);
+      setStatus("已打开问号噪声清单", true);
     } catch (e) {
-      setStatus("打开噪声清单失败: " + e, false);
+      setStatus("打开问号噪声清单失败: " + e, false);
     }
   };
 }
@@ -323,7 +323,7 @@ async function runMain(){
   try{
     const enc = await inspectQueueEncoding(false);
     if($("strictEncodingMode").checked && (enc?.uncertainCount||0) > 0){
-      setStatus("严格编码模式已开启：存在不确定编码文件，已阻止运行。请先转成 UTF-8。", false);
+      setStatus("严格编码模式已开启：存在不确定编码文件，已阻止运行。请先转换为 UTF-8。", false);
       return;
     }
     const payload = payloadFromUi();
@@ -341,7 +341,7 @@ async function runMain(){
     const j=await window.aiwfDesktop.runCleaning(payload,cfgFromUi());
     show(j);renderMetrics(j);
     if(j?.fallback_applied){
-      setStatus(`生成完成（已自动切换离线模式）: ${j.fallback_message || "后端不可用或失败"}`, true);
+      setStatus(`生成完成（已自动切换离线模式）：${j.fallback_message || "后端不可用或失败"}`, true);
     }else{
       setStatus(j.ok?"生成完成":"生成失败",!!j.ok);
     }
@@ -355,7 +355,7 @@ $("btnPrecheck").onclick=async()=>{
   try{
     const enc = await inspectQueueEncoding(false);
     if($("strictEncodingMode").checked && (enc?.uncertainCount||0) > 0){
-      setStatus("严格编码模式已开启：存在不确定编码文件，已阻止预检。请先转成 UTF-8。", false);
+      setStatus("严格编码模式已开启：存在不确定编码文件，已阻止预检。请先转换为 UTF-8。", false);
       return;
     }
     const payload = payloadFromUi();

@@ -28,7 +28,9 @@ public class RuntimeTaskRepository {
             long updatedAtEpoch,
             String resultJson,
             String error,
-            String source
+            String source,
+            String idempotencyKey,
+            int attempts
     ) {
         int updated = jdbc.update(
                 """
@@ -39,7 +41,9 @@ public class RuntimeTaskRepository {
                     updated_at_epoch = ?,
                     result_json = ?,
                     error = ?,
-                    source = ?
+                    source = ?,
+                    idempotency_key = ?,
+                    attempts = ?
                 WHERE task_id = ?
                 """,
                 tenantId,
@@ -49,6 +53,8 @@ public class RuntimeTaskRepository {
                 resultJson,
                 error,
                 source,
+                idempotencyKey,
+                attempts,
                 taskId
         );
 
@@ -57,8 +63,8 @@ public class RuntimeTaskRepository {
                 () -> jdbc.update(
                         """
                         INSERT INTO dbo.workflow_tasks
-                            (task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            (task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source, idempotency_key, attempts)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         taskId,
                         tenantId,
@@ -68,7 +74,9 @@ public class RuntimeTaskRepository {
                         updatedAtEpoch,
                         resultJson,
                         error,
-                        source
+                        source,
+                        idempotencyKey,
+                        attempts
                 ),
                 () -> jdbc.update(
                         """
@@ -79,7 +87,9 @@ public class RuntimeTaskRepository {
                             updated_at_epoch = ?,
                             result_json = ?,
                             error = ?,
-                            source = ?
+                            source = ?,
+                            idempotency_key = ?,
+                            attempts = ?
                         WHERE task_id = ?
                         """,
                         tenantId,
@@ -89,6 +99,8 @@ public class RuntimeTaskRepository {
                         resultJson,
                         error,
                         source,
+                        idempotencyKey,
+                        attempts,
                         taskId
                 )
         );
@@ -98,7 +110,7 @@ public class RuntimeTaskRepository {
         try {
             return jdbc.queryForObject(
                 """
-                SELECT task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source
+                SELECT task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source, idempotency_key, attempts
                 FROM dbo.workflow_tasks
                 WHERE task_id = ?
                 """,
@@ -111,9 +123,41 @@ public class RuntimeTaskRepository {
                         rs.getLong("updated_at_epoch"),
                         rs.getString("result_json"),
                         rs.getString("error"),
-                        rs.getString("source")
+                        rs.getString("source"),
+                        rs.getString("idempotency_key"),
+                        rs.getInt("attempts")
                 ),
                 taskId
+            );
+        } catch (EmptyResultDataAccessException e) {
+            return null;
+        }
+    }
+
+    public RuntimeTaskRow getTaskByTenantOperatorAndIdempotencyKey(String tenantId, String operator, String idempotencyKey) {
+        try {
+            return jdbc.queryForObject(
+                """
+                SELECT task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source, idempotency_key, attempts
+                FROM dbo.workflow_tasks
+                WHERE tenant_id = ? AND operator = ? AND idempotency_key = ?
+                """,
+                (rs, rowNum) -> new RuntimeTaskRow(
+                        rs.getString("task_id"),
+                        rs.getString("tenant_id"),
+                        rs.getString("operator"),
+                        RuntimeTaskStatus.fromDb(rs.getString("status")),
+                        rs.getLong("created_at_epoch"),
+                        rs.getLong("updated_at_epoch"),
+                        rs.getString("result_json"),
+                        rs.getString("error"),
+                        rs.getString("source"),
+                        rs.getString("idempotency_key"),
+                        rs.getInt("attempts")
+                ),
+                tenantId,
+                operator,
+                idempotencyKey
             );
         } catch (EmptyResultDataAccessException e) {
             return null;
@@ -141,7 +185,7 @@ public class RuntimeTaskRepository {
         int n = Math.max(1, Math.min(500, limit));
         return jdbc.query(
                 """
-                SELECT TOP (?) task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source
+                SELECT TOP (?) task_id, tenant_id, operator, status, created_at_epoch, updated_at_epoch, result_json, error, source, idempotency_key, attempts
                 FROM dbo.workflow_tasks
                 WHERE tenant_id = ?
                 ORDER BY updated_at_epoch DESC
@@ -155,7 +199,9 @@ public class RuntimeTaskRepository {
                         rs.getLong("updated_at_epoch"),
                         rs.getString("result_json"),
                         rs.getString("error"),
-                        rs.getString("source")
+                        rs.getString("source"),
+                        rs.getString("idempotency_key"),
+                        rs.getInt("attempts")
                 ),
                 n,
                 tenantId

@@ -13,8 +13,8 @@ function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
 
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $EnvFile) {
-  $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
   $EnvFile = Join-Path $root "ops\config\dev.env"
 }
 
@@ -120,7 +120,17 @@ $job = Invoke-WithRetry -Label "create job" -Action {
 $jobId = $job.job_id
 Info "created job_id=$jobId"
 
-$runBody = @{ actor = "local"; ruleset_version = "v1"; params = @{} } | ConvertTo-Json -Depth 5
+$sampleInput = Join-Path $root "examples\finance_raw_demo\finance_sheet.csv"
+if (-not (Test-Path $sampleInput)) {
+  throw "smoke sample input not found: $sampleInput"
+}
+$runBody = @{
+  actor = "local"
+  ruleset_version = "v1"
+  params = @{
+    input_csv_path = $sampleInput
+  }
+} | ConvertTo-Json -Depth 5
 $run = Invoke-WithRetry -Label "run cleaning flow" -Action {
   Invoke-RestMethod "$base/api/v1/jobs/$jobId/run/cleaning" -Method Post -ContentType "application/json" -Body $runBody
 }

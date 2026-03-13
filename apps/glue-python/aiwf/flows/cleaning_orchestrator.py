@@ -112,15 +112,10 @@ def run_cleaning_flow(
 
         if accel_result["use_accel_outputs"]:
             materialized = materialize_accel_outputs(
-                job_id=job_id,
-                artifacts_dir=layout["artifacts_dir"],
                 params_effective=params_effective,
-                local_rows=local_cache["local_rows"],
-                local_quality=local_cache["local_quality"],
                 accel_outputs=accel_result["accel_outputs"],
                 accel_profile=accel_result["accel_profile"],
                 sha256_file=sha256_file,
-                materialize_office_outputs_fn=office_outputs_fn,
             )
         else:
             materialized = materialize_local_outputs(

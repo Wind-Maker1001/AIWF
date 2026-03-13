@@ -7,6 +7,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -17,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GlueClientTest {
 
@@ -120,25 +122,15 @@ class GlueClientTest {
     }
 
     @Test
-    void runFlowRetriesWhenEnabled() throws Exception {
+    void runFlowDoesNotRetryWhenEnabled() throws Exception {
         AtomicInteger attempts = new AtomicInteger();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/jobs/job-2/run/cleaning", exchange -> {
-            int current = attempts.incrementAndGet();
-            if (current == 1) {
-                writeJson(exchange, 502, """
-                        {
-                          "ok": false,
-                          "error": "temporary_gateway"
-                        }
-                        """);
-                return;
-            }
-            writeJson(exchange, 200, """
+            attempts.incrementAndGet();
+            writeJson(exchange, 502, """
                     {
-                      "ok": true,
-                      "job_id": "job-2",
-                      "flow": "cleaning"
+                      "ok": false,
+                      "error": "temporary_gateway"
                     }
                     """);
         });
@@ -149,7 +141,7 @@ class GlueClientTest {
         props.setGlueRetryDelayMs(1);
         GlueClient glueClient = new GlueClient(props, RestClient.builder());
 
-        GlueRunResult result = glueClient.runFlow("job-2", "cleaning", new GlueRunFlowReq(
+        assertThatThrownBy(() -> glueClient.runFlow("job-2", "cleaning", new GlueRunFlowReq(
                 "job-2",
                 "cleaning",
                 "ops",
@@ -157,11 +149,9 @@ class GlueClientTest {
                 "trace-2",
                 new GlueJobContext("D:\\AIWF\\bus\\jobs\\job-2", "D:\\AIWF\\bus\\jobs\\job-2\\stage", "D:\\AIWF\\bus\\jobs\\job-2\\artifacts", "D:\\AIWF\\bus\\jobs\\job-2\\evidence"),
                 Map.of()
-        ));
-
-        assertThat(result.isOk()).isTrue();
-        assertThat(result.getJobId()).isEqualTo("job-2");
-        assertThat(attempts.get()).isEqualTo(2);
+        )))
+                .isInstanceOf(RestClientException.class);
+        assertThat(attempts.get()).isEqualTo(1);
     }
 
     private AppProperties appProperties(String baseUrl) {

@@ -6,14 +6,18 @@ namespace AIWF.Native;
 
 public sealed partial class MainWindow
 {
+    private bool _lastBoundRunBusinessSuccess = true;
+
     private bool TryBindRunResult(string json, string retryInfo = "未重试")
     {
         if (!RunResultBindingService.TryCreateFromJson(json, retryInfo, out var state))
         {
+            _lastBoundRunBusinessSuccess = false;
             ApplyRunResultBindingState(state);
             return false;
         }
 
+        _lastBoundRunBusinessSuccess = RunResultBindingService.IsBusinessSuccess(state);
         ApplyRunResultBindingState(state);
         return true;
     }
@@ -38,6 +42,8 @@ public sealed partial class MainWindow
             if (state.SyncArtifactsToCanvas)
             {
                 UpdateCanvasArtifactNodes(state.Artifacts);
+                MarkCanvasSnapshotRestoreSatisfied();
+                RequestCanvasAutosave();
             }
 
             SetCanvasNodeSubtitle(_inputNode, state.InputNodeSubtitle);

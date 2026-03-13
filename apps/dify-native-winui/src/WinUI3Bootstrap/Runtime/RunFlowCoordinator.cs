@@ -34,18 +34,18 @@ public sealed class RunFlowCoordinator
         JsonObject payload,
         CancellationToken cancellationToken = default)
     {
-        var retryInfo = "未重试";
+        var retryInfo = "Not retried";
         var effectiveJobId = (jobId ?? string.Empty).Trim();
         var ensured = await EnsureJobIdAsync(bridgeBaseUrl, apiKey, owner, effectiveJobId, cancellationToken);
         if (!string.IsNullOrWhiteSpace(ensured) && !string.Equals(ensured, effectiveJobId, StringComparison.Ordinal))
         {
             effectiveJobId = ensured;
-            retryInfo = $"预检创建作业：{ensured}";
+            retryInfo = $"Preflight created job: {ensured}";
         }
 
         if (string.IsNullOrWhiteSpace(effectiveJobId))
         {
-            throw new InvalidOperationException("无法自动创建作业，请确认桥接服务与作业服务可用。");
+            throw new InvalidOperationException("Unable to auto-create a job. Verify the bridge and job services are available.");
         }
 
         var runResult = await _runner.RunFlowAsync(
@@ -55,25 +55,6 @@ public sealed class RunFlowCoordinator
             flow,
             payload,
             cancellationToken);
-        var retriedAfter500 = false;
-
-        if (!runResult.IsSuccessStatusCode && runResult.StatusCode == HttpStatusCode.InternalServerError)
-        {
-            var forcedJobId = await TryCreateJobAsync(bridgeBaseUrl, apiKey, owner, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(forcedJobId))
-            {
-                effectiveJobId = forcedJobId;
-                runResult = await _runner.RunFlowAsync(
-                    bridgeBaseUrl,
-                    apiKey,
-                    forcedJobId,
-                    flow,
-                    payload,
-                    cancellationToken);
-                retryInfo = $"已重试（新作业）：{forcedJobId}";
-                retriedAfter500 = true;
-            }
-        }
 
         return new RunFlowExecutionResult(
             runResult.StatusCode,
@@ -81,7 +62,7 @@ public sealed class RunFlowCoordinator
             runResult.Body,
             effectiveJobId,
             retryInfo,
-            retriedAfter500);
+            false);
     }
 
     private async Task<string?> TryCreateJobAsync(string bridgeBaseUrl, string apiKey, string owner, CancellationToken cancellationToken)

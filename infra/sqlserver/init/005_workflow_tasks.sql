@@ -5,13 +5,16 @@ IF OBJECT_ID('dbo.workflow_tasks', 'U') IS NULL
 BEGIN
   CREATE TABLE dbo.workflow_tasks (
     task_id           NVARCHAR(64)   NOT NULL PRIMARY KEY,
+    tenant_id         NVARCHAR(64)   NOT NULL DEFAULT N'default',
     operator          NVARCHAR(64)   NOT NULL,
     status            NVARCHAR(32)   NOT NULL,
     created_at_epoch  BIGINT         NOT NULL,
     updated_at_epoch  BIGINT         NOT NULL,
     result_json       NVARCHAR(MAX)  NULL,
     error             NVARCHAR(MAX)  NULL,
-    source            NVARCHAR(32)   NOT NULL DEFAULT N'accel-rust'
+    source            NVARCHAR(32)   NOT NULL DEFAULT N'accel-rust',
+    idempotency_key   NVARCHAR(128)  NULL,
+    attempts          INT            NOT NULL DEFAULT 0
   );
 END
 GO

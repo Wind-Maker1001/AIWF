@@ -9,6 +9,8 @@ public record RuntimeTaskRow(
         long updatedAtEpoch,
         String resultJson,
         String error,
-        String source
+        String source,
+        String idempotencyKey,
+        int attempts
 ) {
 }

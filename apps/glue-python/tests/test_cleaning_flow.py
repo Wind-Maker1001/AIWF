@@ -589,6 +589,24 @@ class CleaningFlowTests(unittest.TestCase):
             self.assertEqual(rows[0]["id"], "10")
             self.assertEqual(rows[1]["amount"], "91.2")
 
+    def test_load_rows_rejects_empty_explicit_rows(self):
+        with self.assertRaisesRegex(RuntimeError, "params.rows is empty"):
+            cleaning._load_raw_rows({"rows": []}, None)
+
+    def test_load_rows_rejects_missing_input_csv_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_path = os.path.join(tmp, "missing.csv")
+            with self.assertRaisesRegex(FileNotFoundError, "input csv file not found"):
+                cleaning._load_raw_rows({"input_csv_path": missing_path}, tmp)
+
+    def test_load_rows_rejects_header_only_input_csv_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = os.path.join(tmp, "empty.csv")
+            with open(csv_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write("id,amount\n")
+            with self.assertRaisesRegex(RuntimeError, "has no data rows"):
+                cleaning._load_raw_rows({"input_csv_path": csv_path}, tmp)
+
     def test_clean_rows_large_input_quality_counts(self):
         raw_rows = [{"id": i, "amount": i} for i in range(1, 2001)]
         raw_rows.append({"id": "bad", "amount": "1"})
@@ -684,7 +702,7 @@ class CleaningFlowTests(unittest.TestCase):
                 out = cleaning.run_cleaning(
                     job_id="job-1",
                     actor="test",
-                    params=with_job_context(local_job_root),
+                    params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 100.0}]),
                 )
 
             self.assertTrue(out["ok"])
@@ -694,6 +712,79 @@ class CleaningFlowTests(unittest.TestCase):
             parquet_artifact = [a for a in out["artifacts"] if a["kind"] == "parquet"][0]
             self.assertTrue(parquet_artifact["path"].startswith(local_job_root))
             self.assertNotEqual(parquet_artifact["path"], accel_parquet)
+
+    def test_run_cleaning_uses_accel_office_outputs_when_accel_succeeds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+            accel_stage = os.path.join(tmp, "accel_stage")
+            accel_artifacts = os.path.join(tmp, "accel_artifacts")
+            accel_evidence = os.path.join(tmp, "accel_evidence")
+            os.makedirs(accel_stage, exist_ok=True)
+            os.makedirs(accel_artifacts, exist_ok=True)
+            os.makedirs(accel_evidence, exist_ok=True)
+
+            cleaned_csv = os.path.join(accel_stage, "cleaned.csv")
+            cleaned_parquet = os.path.join(accel_stage, "cleaned.parquet")
+            profile_json = os.path.join(accel_evidence, "profile.json")
+            xlsx_path = os.path.join(accel_artifacts, "fin.xlsx")
+            docx_path = os.path.join(accel_artifacts, "audit.docx")
+            pptx_path = os.path.join(accel_artifacts, "deck.pptx")
+
+            with open(cleaned_csv, "w", encoding="utf-8") as f:
+                f.write("id,amount\n10,88.1\n")
+            with open(cleaned_parquet, "wb") as f:
+                f.write(b"PAR1dataPAR1")
+            with open(profile_json, "w", encoding="utf-8") as f:
+                f.write("{}")
+            with open(xlsx_path, "wb") as f:
+                f.write(b"XLSX")
+            with open(docx_path, "wb") as f:
+                f.write(b"DOCX")
+            with open(pptx_path, "wb") as f:
+                f.write(b"PPTX")
+
+            accel_outputs = {
+                "cleaned_csv": {"path": cleaned_csv, "sha256": ""},
+                "cleaned_parquet": {"path": cleaned_parquet, "sha256": ""},
+                "profile_json": {"path": profile_json, "sha256": ""},
+                "xlsx_fin": {"path": xlsx_path, "sha256": ""},
+                "audit_docx": {"path": docx_path, "sha256": ""},
+                "deck_pptx": {"path": pptx_path, "sha256": ""},
+            }
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={
+                    "attempted": True,
+                    "ok": True,
+                    "response": {
+                        "outputs": accel_outputs,
+                        "profile": {"rows": 1, "cols": 2},
+                    },
+                },
+            ), patch(
+                "aiwf.flows.cleaning._write_fin_xlsx", side_effect=AssertionError("local office writer should not run")
+            ), patch(
+                "aiwf.flows.cleaning._write_audit_docx", side_effect=AssertionError("local office writer should not run")
+            ), patch(
+                "aiwf.flows.cleaning._write_deck_pptx", side_effect=AssertionError("local office writer should not run")
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-accel-office",
+                    actor="test",
+                    params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 100.0}]),
+                )
+
+            artifacts_by_kind = {artifact["kind"]: artifact["path"] for artifact in out["artifacts"]}
+            self.assertEqual(artifacts_by_kind["parquet"], cleaned_parquet)
+            self.assertEqual(artifacts_by_kind["xlsx"], xlsx_path)
+            self.assertEqual(artifacts_by_kind["docx"], docx_path)
+            self.assertEqual(artifacts_by_kind["pptx"], pptx_path)
+            self.assertFalse(out["accel"]["used_fallback"])
 
     def test_materialize_accel_cleaning_artifacts_requires_required_output(self):
         with self.assertRaises(RuntimeError):
@@ -746,7 +837,7 @@ class CleaningFlowTests(unittest.TestCase):
                     cleaning.run_cleaning(
                         job_id="job-strict",
                         actor="test",
-                        params=with_job_context(local_job_root, local_parquet_strict=True),
+                        params=with_job_context(local_job_root, local_parquet_strict=True, rows=[{"id": 1, "amount": 100.0}]),
                     )
                 self.assertIn("strict mode enabled", str(ctx.exception))
 

@@ -47,4 +47,4 @@
 - `apps/dify-desktop/main_runtime_fonts.js`
 - `apps/dify-desktop/renderer/index.html`
 - `ops/scripts/check_runtime_deps.ps1`
-- `docs/codex_handoff.md`
+- `docs/archive/codex_handoff_20260227.md`

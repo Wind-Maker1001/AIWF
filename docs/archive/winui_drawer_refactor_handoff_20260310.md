@@ -1,4 +1,4 @@
-# WinUI 3 Handoff — Drawer / Canvas / Inspector Refinement
+# WinUI 3 Handoff: Drawer / Canvas / Inspector Refinement
 
 ## Branch / Base
 
@@ -10,7 +10,7 @@
 
 This branch continued from the already-merged WinUI stabilization work and focused on:
 
-- replacing the old “添加节点” centered popup / modal feel with a left drawer node library
+- replacing the old "Add Node" centered popup / modal feel with a left drawer node library
 - making the canvas page feel more like a real editor
 - tightening Fluent / Win11 desktop interaction quality
 - reducing prototype / web-backend feeling without rewriting the app skeleton
@@ -21,12 +21,12 @@ This branch continued from the already-merged WinUI stabilization work and focus
 
 Old behavior:
 
-- “添加节点” used unstable popup / flyout / modal-like patterns during experimentation
+- "Add Node" used unstable popup / flyout / modal-like patterns during experimentation
 - visually felt disconnected from the editor workflow
 
 Current behavior in that branch:
 
-- “添加节点” toggles a left drawer inside the canvas editor area
+- "Add Node" toggles a left drawer inside the canvas editor area
 - drawer contains:
   - title
   - short description
@@ -124,9 +124,9 @@ Key files:
 
 That branch continued the visual cleanup started earlier:
 
-- less “hero banner / backend dashboard” feeling
-- more restrained Win11-ish Fluent tool feel
-- grouped command bar instead of flat button row
+- less "hero banner / backend dashboard" feeling
+- more restrained Win11-like Fluent tool feel
+- grouped command bar instead of a flat button row
 - reduced accidental emphasis and repeated section headers
 
 Key files:
@@ -190,7 +190,7 @@ Stable:
 These were not blockers, but were still candidates for future polishing:
 
 - canvas node cards could still be refined to feel more like a mature flow editor
-- the workspace page still had some “form card” character
+- the workspace page still had some "form card" character
 - results page could be visually unified one more pass
 - canvas could still benefit from subtle editor texture / background nuance
 

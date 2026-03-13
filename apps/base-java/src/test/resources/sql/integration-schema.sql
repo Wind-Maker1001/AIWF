@@ -12,6 +12,18 @@ BEGIN
     )
 END;
 
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'ux_workflow_tasks_tenant_idempotency'
+      AND object_id = OBJECT_ID(N'dbo.workflow_tasks')
+)
+BEGIN
+    CREATE UNIQUE INDEX ux_workflow_tasks_tenant_idempotency
+        ON dbo.workflow_tasks (tenant_id, operator, idempotency_key)
+        WHERE idempotency_key IS NOT NULL
+END;
+
 IF OBJECT_ID('dbo.steps', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.steps (
@@ -72,7 +84,9 @@ BEGIN
         updated_at_epoch BIGINT NOT NULL,
         result_json NVARCHAR(MAX) NULL,
         error NVARCHAR(MAX) NULL,
-        source NVARCHAR(32) NOT NULL DEFAULT N'accel-rust'
+        source NVARCHAR(32) NOT NULL DEFAULT N'accel-rust',
+        idempotency_key NVARCHAR(128) NULL,
+        attempts INT NOT NULL DEFAULT 0
     )
 END;
 

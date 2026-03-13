@@ -25,6 +25,8 @@ class RuntimeTaskIntegrationTest extends IntegrationTestSupport {
                                   "status": "running",
                                   "created_at": 1710000000,
                                   "updated_at": 1710000001,
+                                  "idempotency_key": "idem-rt-1",
+                                  "attempts": 3,
                                   "result": {
                                     "rows": 12
                                   }
@@ -37,7 +39,9 @@ class RuntimeTaskIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(get("/api/v1/runtime/tasks/rt-1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.task.task_id").value("rt-1"))
-                .andExpect(jsonPath("$.task.tenant_id").value("tenant-a"));
+                .andExpect(jsonPath("$.task.tenant_id").value("tenant-a"))
+                .andExpect(jsonPath("$.task.idempotency_key").value("idem-rt-1"))
+                .andExpect(jsonPath("$.task.attempts").value(3));
 
         mockMvc.perform(get("/api/v1/runtime/tasks").param("tenant_id", "tenant-a"))
                 .andExpect(status().isOk())
@@ -49,11 +53,13 @@ class RuntimeTaskIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.status").value("cancelled"));
 
         Map<String, Object> row = jdbc.queryForMap(
-                "SELECT task_id, tenant_id, status FROM dbo.workflow_tasks WHERE task_id = ?",
+                "SELECT task_id, tenant_id, status, idempotency_key, attempts FROM dbo.workflow_tasks WHERE task_id = ?",
                 "rt-1"
         );
         assertThat(row).containsEntry("task_id", "rt-1");
         assertThat(row).containsEntry("tenant_id", "tenant-a");
         assertThat(row).containsEntry("status", "cancelled");
+        assertThat(row).containsEntry("idempotency_key", "idem-rt-1");
+        assertThat(row).containsEntry("attempts", 3);
     }
 }

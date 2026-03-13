@@ -2,7 +2,7 @@ use accel_rust::app_state::AppState;
 use axum::{Router, routing::post};
 
 pub(super) fn governance_routes() -> Router<AppState> {
-    Router::new()
+    super::operator_guarded(Router::new()
         .route(
             "/operators/runtime_stats_v1",
             post(crate::http::runtime_stats_v1_operator),
@@ -62,5 +62,5 @@ pub(super) fn governance_routes() -> Router<AppState> {
         .route(
             "/operators/perf_baseline_v1",
             post(crate::http::perf_baseline_v1_operator),
-        )
+        ))
 }

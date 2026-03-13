@@ -471,7 +471,27 @@ async function runOfflinePrecheck(payload) {
   const params = resolveCleaningTemplateParams(payload?.params || {});
   const warnings = [];
   const runtime = {};
-  const rawRows = await readInputRows(params, warnings, runtime);
+  let rawRows = [];
+  try {
+    rawRows = await readInputRows(params, warnings, runtime);
+  } catch (e) {
+    const error = String(e && e.message ? e.message : e);
+    return {
+      ok: false,
+      mode: "offline_local",
+      template: String(params.cleaning_template || "default").trim().toLowerCase() || "default",
+      warnings,
+      precheck: {
+        ok: false,
+        input_rows: 0,
+        headers: [],
+        quality_gate_ok: false,
+        quality_gate_error: error,
+        issues: [error],
+        suggestions: ["请先添加输入文件，再执行模板预检。"],
+      },
+    };
+  }
   const precheck = OFFLINE_INGEST.precheckRows(rawRows, params);
   return {
     ok: true,
@@ -486,7 +506,18 @@ async function runOfflineDebatePreview(payload) {
   const params = resolveCleaningTemplateParams(payload?.params || {});
   const warnings = [];
   const runtime = {};
-  const rawRows = await readInputRows(params, warnings, runtime);
+  let rawRows = [];
+  try {
+    rawRows = await readInputRows(params, warnings, runtime);
+  } catch (e) {
+    return {
+      ok: false,
+      mode: "offline_local",
+      template: String(params.cleaning_template || "default").trim().toLowerCase() || "default",
+      warnings,
+      error: String(e && e.message ? e.message : e),
+    };
+  }
   const cleaned = cleanRows(rawRows, params);
   const rows = Array.isArray(cleaned?.rows) ? cleaned.rows : [];
   const preview = typeof OFFLINE_OUTPUTS.buildDebatePreview === "function"
@@ -714,7 +745,6 @@ async function runOfflineCleaning(payload) {
 }
 
 module.exports = { runOfflineCleaning, runOfflinePrecheck, runOfflineDebatePreview, listCleaningTemplates };
-
 
 
 

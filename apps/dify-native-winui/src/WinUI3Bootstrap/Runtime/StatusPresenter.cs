@@ -29,17 +29,24 @@ public static class StatusPresenter
     public static string InferTone(string text)
     {
         var value = text ?? string.Empty;
-        if (value.Contains("失败") || value.Contains("异常") || value.Contains("请填写"))
+        if (value.Contains("failed", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("error", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("invalid", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("required", StringComparison.OrdinalIgnoreCase))
         {
             return ToneError;
         }
 
-        if (value.Contains("完成") || value.Contains("通过"))
+        if (value.Contains("completed", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("passed", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("success", StringComparison.OrdinalIgnoreCase))
         {
             return ToneSuccess;
         }
 
-        if (value.Contains("正在"))
+        if (value.Contains("checking", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("submitting", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("preparing", StringComparison.OrdinalIgnoreCase))
         {
             return ToneBusy;
         }

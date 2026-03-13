@@ -13,9 +13,9 @@ public static class RunResultPresentationMapper
     public static RunResultPresentation Map(RunResultViewData data)
     {
         return new RunResultPresentation(
-            data.Ok == true ? "执行成功。" : data.Ok == false ? "执行失败。" : "状态未知。",
+            data.Ok == true ? "Run succeeded." : data.Ok == false ? "Run failed." : "Run status unknown.",
             data.JobId,
-            data.Ok?.ToString() ?? "-",
+            data.Ok == true ? "Success" : data.Ok == false ? "Failed" : "-",
             data.RunMode,
             data.DurationMs?.ToString() ?? "-",
             data.DurationMs is null ? "-" : $"{data.DurationMs} ms");

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text.Json.Nodes;
 
 namespace AIWF.Native.Runtime;
@@ -16,6 +17,27 @@ public sealed class RunResultViewData
 
 public static class RunResultParser
 {
+    private static readonly HashSet<string> OpenableArtifactExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".xlsx",
+        ".docx",
+        ".pptx",
+        ".csv",
+        ".json",
+        ".jsonl",
+        ".txt",
+        ".md",
+        ".pdf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".bmp",
+        ".webp",
+        ".tif",
+        ".tiff",
+        ".parquet"
+    };
+
     public static bool TryParse(string json, out RunResultViewData data)
     {
         data = new RunResultViewData();
@@ -57,6 +79,22 @@ public static class RunResultParser
             Artifacts = artifacts
         };
         return true;
+    }
+
+    public static bool CanOpenArtifactPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var ext = Path.GetExtension(path.Trim());
+        if (string.IsNullOrWhiteSpace(ext))
+        {
+            return false;
+        }
+
+        return OpenableArtifactExtensions.Contains(ext);
     }
 
     private static IReadOnlyList<RunArtifactItem> ReadArtifacts(JsonArray? artifactsArray)

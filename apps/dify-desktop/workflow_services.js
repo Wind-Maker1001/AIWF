@@ -102,6 +102,9 @@ async function computeViaRust(corpusText, options = {}) {
   const base = String(options.rust_endpoint || "http://127.0.0.1:18082").replace(/\/$/, "");
   const strict = options.rust_required !== false;
   if (!isLocalEndpoint(base) && !canUseNetworkEgress()) {
+    if (strict) {
+      throw new Error("rust_egress_blocked");
+    }
     return { metrics: summarizeCorpus(corpusText), mode: "js_fallback_egress_blocked", started: false };
   }
   const tryCall = async () => {

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using AIWF.Native.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -353,6 +354,12 @@ public sealed partial class MainWindow
 
         if (string.IsNullOrWhiteSpace(tag.ArtifactPath) || !File.Exists(tag.ArtifactPath))
         {
+            return;
+        }
+
+        if (!RunResultParser.CanOpenArtifactPath(tag.ArtifactPath))
+        {
+            SetInlineStatus("已阻止打开非交付产物类型的文件路径。", InlineStatusTone.Error);
             return;
         }
 

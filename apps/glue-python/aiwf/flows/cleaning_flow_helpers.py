@@ -11,6 +11,8 @@ from aiwf.flows.cleaning_artifacts import (
 )
 from aiwf.flows.office_artifacts import (
     OfficeArtifactContext,
+    collect_accel_office_artifact_issues,
+    materialize_accel_office_artifacts,
     select_office_artifact_registrations,
 )
 from aiwf.paths import resolve_bus_root, resolve_job_root
@@ -127,12 +129,25 @@ def prepare_accel_result(
     if accel.get("ok") and isinstance(accel_outputs, dict) and isinstance(accel_outputs.get("cleaned_parquet"), dict):
         if not accel_parquet_valid:
             accel_validation_error = f"invalid parquet from accel output: {accel_parquet_path or '<empty path>'}"
+    office_output_issues: List[str] = []
+    if accel.get("ok") and isinstance(accel_outputs, dict):
+        office_output_issues = collect_accel_office_artifact_issues(
+            accel_outputs,
+            params_effective=params_effective,
+        )
+        if office_output_issues:
+            office_error = "; ".join(office_output_issues)
+            if accel_validation_error:
+                accel_validation_error = f"{accel_validation_error}; {office_error}"
+            else:
+                accel_validation_error = office_error
 
     use_accel_outputs = (
         accel.get("ok")
         and isinstance(accel_outputs, dict)
         and isinstance(accel_outputs.get("cleaned_parquet"), dict)
         and accel_parquet_valid
+        and not office_output_issues
     )
 
     return {
@@ -216,15 +231,10 @@ def materialize_office_outputs(
 
 def materialize_accel_outputs(
     *,
-    job_id: str,
-    artifacts_dir: str,
     params_effective: Dict[str, Any],
-    local_rows: List[Dict[str, Any]],
-    local_quality: Dict[str, Any],
     accel_outputs: Dict[str, Any],
     accel_profile: Dict[str, Any],
     sha256_file: Callable[..., str],
-    materialize_office_outputs_fn: Callable[..., Dict[str, Any]],
 ) -> Dict[str, Any]:
     out = {
         "profile": {
@@ -241,13 +251,10 @@ def materialize_accel_outputs(
         )
     )
     out.update(
-        materialize_office_outputs_fn(
-            job_id=job_id,
-            artifacts_dir=artifacts_dir,
+        materialize_accel_office_artifacts(
+            accel_outputs,
             params_effective=params_effective,
-            rows=local_rows,
-            quality=local_quality,
-            profile_source="accel+local_office",
+            sha256_file=sha256_file,
         )
     )
     return out

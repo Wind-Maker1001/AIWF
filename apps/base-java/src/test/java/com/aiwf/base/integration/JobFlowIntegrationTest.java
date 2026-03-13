@@ -152,7 +152,7 @@ class JobFlowIntegrationTest extends IntegrationTestSupport {
 
         Map<String, Object> out = readJsonMap(response);
         assertThat(String.valueOf(out.get("error"))).contains("500");
-        assertThat(readJobStatus(jobId)).isEqualTo("RUNNING");
+        assertThat(readJobStatus(jobId)).isEqualTo("FAILED");
 
         List<Map<String, Object>> audits = jdbc.queryForList(
                 "SELECT actor, action, job_id, step_id FROM dbo.audit_log WHERE job_id = ? ORDER BY audit_id ASC",

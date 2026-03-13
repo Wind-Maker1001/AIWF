@@ -51,11 +51,13 @@ class RuntimeTaskControllerTest {
     @Test
     void getTaskReturnsTask() throws Exception {
         when(tasks.getTask(eq("t1")))
-                .thenReturn(new RuntimeTaskGetResp(true, new RuntimeTaskResp("t1", "default", "transform_rows_v2", "done", 1L, 2L, null, null, "accel-rust")));
+                .thenReturn(new RuntimeTaskGetResp(true, new RuntimeTaskResp("t1", "default", "transform_rows_v2", "done", 1L, 2L, null, null, "accel-rust", "idem-1", 2)));
         mockMvc.perform(get("/api/v1/runtime/tasks/t1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ok").value(true))
-                .andExpect(jsonPath("$.task.task_id").value("t1"));
+                .andExpect(jsonPath("$.task.task_id").value("t1"))
+                .andExpect(jsonPath("$.task.idempotency_key").value("idem-1"))
+                .andExpect(jsonPath("$.task.attempts").value(2));
     }
 
     @Test
@@ -100,13 +102,15 @@ class RuntimeTaskControllerTest {
                 .thenReturn(new RuntimeTaskListResp(
                         true,
                         "tenant-a",
-                        java.util.List.of(new RuntimeTaskResp("t1", "tenant-a", "transform_rows_v2", "running", 1L, 2L, null, null, "accel-rust"))
+                        java.util.List.of(new RuntimeTaskResp("t1", "tenant-a", "transform_rows_v2", "running", 1L, 2L, null, null, "accel-rust", "idem-1", 2))
                 ));
 
         mockMvc.perform(get("/api/v1/runtime/tasks").param("tenant_id", "tenant-a").param("limit", "5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tenant_id").value("tenant-a"))
-                .andExpect(jsonPath("$.tasks[0].task_id").value("t1"));
+                .andExpect(jsonPath("$.tasks[0].task_id").value("t1"))
+                .andExpect(jsonPath("$.tasks[0].idempotency_key").value("idem-1"))
+                .andExpect(jsonPath("$.tasks[0].attempts").value(2));
     }
 
     @Test

@@ -91,6 +91,9 @@ function createOfflineIngest(deps = {}) {
   async function readInputRows(params, warnings, runtime = {}) {
     const files = collectInputFiles(params);
     if (files.length === 0) {
+      if (String(process.env.AIWF_ALLOW_DEMO_INPUT || "").trim() !== "1") {
+        throw new Error("未提供输入文件，请先选择或拖入至少一个输入文件。");
+      }
       return [
         { source_file: "builtin", source_type: "demo", row_no: 1, id: "1", amount: "100.25", text: "内置示例-就业数据" },
         { source_file: "builtin", source_type: "demo", row_no: 2, id: "2", amount: "230.50", text: "内置示例-教育数据" },

@@ -3,6 +3,8 @@ function createWorkflowPanelsUi(els, deps = {}) {
     setStatus = () => {},
     refreshRunHistory = async () => {},
     refreshReviewQueue = async () => {},
+    showReviewQueue = async () => { await refreshReviewQueue(); },
+    showQualityGate = async () => {},
     refreshReviewHistory = async () => {},
     refreshQueue = async () => {},
     refreshDiagnostics = async () => {},
@@ -18,6 +20,17 @@ function createWorkflowPanelsUi(els, deps = {}) {
     collectRunParamsForm = () => ({}),
     runPayload = () => ({}),
   } = deps;
+
+  function statusColor(status) {
+    const s = String(status || "").trim().toLowerCase();
+    if (!s) return "";
+    if (s === "done" || s === "passed" || s === "approved") return "#087443";
+    if (s === "failed" || s === "forbidden_graph" || s === "invalid_graph" || s === "rejected") return "#b42318";
+    if (s === "quality_blocked" || s === "pending_review" || s === "blocked") return "#b54708";
+    if (s === "canceled" || s === "cancelled" || s === "queued") return "#5c6b7a";
+    if (s === "running") return "#1d4ed8";
+    return "";
+  }
 
   function renderMigrationReport(migrated) {
     if (!els.migrationSummary || !els.migrationRows) return;
@@ -65,6 +78,10 @@ function createWorkflowPanelsUi(els, deps = {}) {
         ? it.result.template_validation.reduce((acc, x) => acc + (Array.isArray(x?.warnings) ? x.warnings.length : 0), 0)
         : 0;
       tdStatus.textContent = `${String(it.status || "")}${tplIssues > 0 ? ` | 模板告警:${tplIssues}` : ""}`;
+      const runStatusColor = statusColor(it?.status);
+      if (runStatusColor) tdStatus.style.color = runStatusColor;
+      const runStatus = String(it.status || "").trim().toLowerCase();
+      const guidedResumeStatus = runStatus === "pending_review" || runStatus === "quality_blocked";
       const nodeRuns = Array.isArray(it?.result?.node_runs) ? it.result.node_runs : [];
       const failedNodes = nodeRuns.filter((n) => String(n?.status || "") === "failed");
       const preferred = failedNodes.length ? failedNodes : nodeRuns;
@@ -83,6 +100,10 @@ function createWorkflowPanelsUi(els, deps = {}) {
           op.textContent = `${String(n.id || "")}(${String(n.type || "")})`;
           select.appendChild(op);
         });
+      }
+      if (guidedResumeStatus) {
+        select.disabled = true;
+        select.title = "该运行需要走专用处理路径，节点继续选择已暂时不可用";
       }
       const btn = document.createElement("button");
       btn.className = "mini";
@@ -105,7 +126,37 @@ function createWorkflowPanelsUi(els, deps = {}) {
       btnB.onclick = () => {
         if (els.compareRunB) els.compareRunB.value = String(it.run_id || "");
       };
+      if (runStatus === "pending_review") {
+        btn.textContent = "去审核队列";
+        btn.title = "该运行等待人工审核，请在审核队列中处理";
+      }
+      if (runStatus === "pending_review") btn.textContent = "从节点继续";
+      if (!preferred.length) {
+        btn.disabled = true;
+        btn.title = "鏃犲彲续跑鑺傜偣";
+      }
+      if (!failedNodes.length) {
+        btnRetryFailed.disabled = true;
+        btnRetryFailed.title = "璇ヨ繍琛屾棤澶辫触鑺傜偣";
+      }
+      if (runStatus === "pending_review") btn.disabled = false;
+      if (runStatus === "quality_blocked") {
+        btn.textContent = "查看质量门禁";
+        btn.title = "该运行被质量门禁拦截，请查看质量门禁报告";
+        btn.disabled = false;
+        btnRetryFailed.disabled = true;
+      }
       btn.onclick = async () => {
+        if (runStatus === "pending_review") {
+          await showReviewQueue();
+          setStatus(`该运行 ${String(it.run_id || "").slice(0, 10)} 等待审核，请在审核队列中处理`, false);
+          return;
+        }
+        if (runStatus === "quality_blocked") {
+          await showQualityGate(String(it.run_id || ""));
+          setStatus(`该运行 ${String(it.run_id || "").slice(0, 10)} 琚川閲忛棬绂佹嫤鎴紝璇锋煡鐪嬭川閲忛棬绂佹姤鍛?`, false);
+          return;
+        }
         const nodeId = String(select.value || "").trim();
         if (!nodeId) return;
         const out = await window.aiwfDesktop.replayWorkflowRun({ run_id: it.run_id, node_id: nodeId }, {});
@@ -115,6 +166,14 @@ function createWorkflowPanelsUi(els, deps = {}) {
         setStatus(out?.ok ? `续跑完成: ${it.run_id}` : `续跑失败: ${out?.error || "unknown"}`, !!out?.ok);
       };
       btnRetryFailed.onclick = async () => {
+        if (runStatus === "pending_review") {
+          setStatus("审核待处理运行不支持“重试失败节点”，请去审核队列", false);
+          return;
+        }
+        if (runStatus === "quality_blocked") {
+          setStatus("质量门禁运行不支持“重试失败节点”，请先查看质量门禁报告", false);
+          return;
+        }
         const failed = failedNodes[0];
         if (!failed?.id) {
           setStatus("该运行无失败节点", false);
@@ -148,6 +207,8 @@ function createWorkflowPanelsUi(els, deps = {}) {
       tdStatus.textContent = String(it.status || "");
       if (String(it.status || "") === "failed") tdStatus.style.color = "#b42318";
       if (String(it.status || "") === "done") tdStatus.style.color = "#087443";
+      const queueStatusColor = statusColor(it?.status);
+      if (queueStatusColor) tdStatus.style.color = queueStatusColor;
       const cancelBtn = document.createElement("button");
       cancelBtn.className = "mini del";
       cancelBtn.textContent = "取消";
