@@ -25,10 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -73,7 +70,7 @@ public class JobService {
     public JobCreateResp createJob(String owner) {
         String jobId = jobs.createJob(owner);
         try {
-            ensureJobDirs(jobId);
+            JobWorkspaceSupport.ensureJobDirs(jobsBusRoot, jobId);
         } catch (RuntimeException e) {
             recordJobDirFailure(jobId, defaultIfBlank(owner, "base"), e);
             throw ApiException.internalServerError(
@@ -82,7 +79,13 @@ public class JobService {
                     Map.of("job_id", jobId)
             );
         }
-        return new JobCreateResp(jobId, owner, JobStatus.RUNNING.toDb(), Paths.get(jobsRoot(), jobId).toString(), null);
+        return new JobCreateResp(
+                jobId,
+                owner,
+                JobStatus.RUNNING.toDb(),
+                Paths.get(JobWorkspaceSupport.jobsRoot(jobsBusRoot), jobId).toString(),
+                null
+        );
     }
 
     public JobCreateResp createJob(String owner, Map<String, Object> policy) {
@@ -121,14 +124,14 @@ public class JobService {
         String effectiveActor = defaultIfBlank(actor, "glue");
         String effectiveRuleset = (rulesetVersion == null || rulesetVersion.isBlank()) ? "v1" : rulesetVersion;
         try {
-            ensureJobDirs(jobId);
+            JobWorkspaceSupport.ensureJobDirs(jobsBusRoot, jobId);
         } catch (RuntimeException e) {
             recordJobDirFailure(jobId, effectiveActor, e);
             return GlueRunResult.failed(jobId, flow, "failed to prepare job directories");
         }
 
         try {
-            GlueJobContext jobContext = buildJobContext(jobId);
+            GlueJobContext jobContext = JobWorkspaceSupport.buildJobContext(jobsBusRoot, jobId);
             return glue.runFlow(jobId, flow, new GlueRunFlowReq(
                     jobId,
                     flow,
@@ -136,7 +139,7 @@ public class JobService {
                     effectiveRuleset,
                     newTraceId(),
                     jobContext,
-                    buildGlueParams(params)
+                    GlueRunParamsSupport.filterReservedKeys(params, RESERVED_GLUE_PARAM_KEYS)
             ));
         } catch (RestClientException e) {
             jobs.audit(new AuditEvent(jobId, effectiveActor, "FLOW_RUN_FAIL", flow, e.getMessage()));
@@ -184,49 +187,9 @@ public class JobService {
         return failStep(jobId, stepId, actor, msg, msg);
     }
 
-    private void ensureJobDirs(String jobId) {
-        Path jobRoot = Paths.get(jobsRoot(), jobId);
-        try {
-            Files.createDirectories(jobRoot);
-            Files.createDirectories(jobRoot.resolve("stage"));
-            Files.createDirectories(jobRoot.resolve("artifacts"));
-            Files.createDirectories(jobRoot.resolve("evidence"));
-        } catch (Exception e) {
-            throw new IllegalStateException("failed to prepare job directories for " + jobId, e);
-        }
-    }
-
     private void recordJobDirFailure(String jobId, String actor, Exception error) {
         jobs.audit(new AuditEvent(jobId, actor, JOB_DIRS_FAIL_ACTION, null, defaultIfBlank(error.getMessage(), error.getClass().getSimpleName())));
         jobStatus.onStepFail(jobId);
-    }
-
-    private String jobsRoot() {
-        return Paths.get(jobsBusRoot, "jobs").toString();
-    }
-
-    private GlueJobContext buildJobContext(String jobId) {
-        Path jobRoot = Paths.get(jobsRoot(), jobId);
-        return new GlueJobContext(
-                jobRoot.toString(),
-                jobRoot.resolve("stage").toString(),
-                jobRoot.resolve("artifacts").toString(),
-                jobRoot.resolve("evidence").toString()
-        );
-    }
-
-    private Map<String, Object> buildGlueParams(Map<String, Object> params) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        if (params == null || params.isEmpty()) {
-            return out;
-        }
-        // Keep the Glue transport contract explicit, but preserve job_root until master-side glue consumes only job_context.
-        params.forEach((key, value) -> {
-            if (!RESERVED_GLUE_PARAM_KEYS.contains(key)) {
-                out.put(key, value);
-            }
-        });
-        return out;
     }
 
     private String newTraceId() {

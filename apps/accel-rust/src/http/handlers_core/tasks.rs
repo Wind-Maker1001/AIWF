@@ -1,11 +1,13 @@
+#[path = "tasks_support.rs"]
+mod support;
+
 use crate::{
     current_task_cfg,
-    transform_support::{can_cancel_status, utc_now_iso},
 };
 use accel_rust::{
     app_state::AppState,
     task_store::{
-        persist_tasks_to_store, prune_tasks, task_store_cancel_task, task_store_get_task,
+        task_store_cancel_task, task_store_get_task,
         task_store_remote_enabled,
     },
 };
@@ -16,15 +18,11 @@ use axum::{
     response::IntoResponse,
 };
 use serde_json::json;
-use std::sync::atomic::Ordering;
 
-fn mark_cancel_flag(state: &AppState, task_id: &str) {
-    if let Ok(flags) = state.cancel_flags.lock()
-        && let Some(flag) = flags.get(task_id)
-    {
-        flag.store(true, Ordering::Relaxed);
-    }
-}
+#[cfg(test)]
+use crate::transform_support::utc_now_iso;
+#[cfg(test)]
+use std::sync::atomic::Ordering;
 
 pub(crate) async fn get_task_operator(
     State(state): State<AppState>,
@@ -34,47 +32,21 @@ pub(crate) async fn get_task_operator(
     if task_store_remote_enabled(&cfg) {
         match task_store_get_task(&task_id, &cfg) {
             Ok(Some(remote)) => {
-                if let Ok(mut t) = state.tasks.lock() {
-                    t.insert(task_id.clone(), remote.clone());
-                    let _ = prune_tasks(&mut t, &cfg);
-                    persist_tasks_to_store(&t, cfg.store_path.as_ref());
-                }
+                support::cache_remote_task(&state, &task_id, &remote, &cfg);
                 return (StatusCode::OK, Json(remote)).into_response();
             }
-            Ok(None) => {
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(json!({"ok": false, "error": "task_not_found", "task_id": task_id})),
-                )
-                    .into_response();
-            }
+            Ok(None) => return support::task_not_found_response(&task_id),
             Err(e) => {
                 tracing::error!("remote task-store get failed task_id={task_id}: {e}");
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({"ok": false, "error": "task_store_unavailable", "detail": e, "task_id": task_id})),
-                )
-                    .into_response();
+                return support::task_store_unavailable_response(&task_id, &e);
             }
         }
     }
 
-    let out = if let Ok(mut t) = state.tasks.lock() {
-        let removed = prune_tasks(&mut t, &cfg);
-        if removed > 0 {
-            persist_tasks_to_store(&t, cfg.store_path.as_ref());
-        }
-        t.get(&task_id).cloned()
-    } else {
-        None
-    };
+    let out = support::load_local_task(&state, &task_id, &cfg);
     match out {
         Some(v) => (StatusCode::OK, Json(v)).into_response(),
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"ok": false, "error": "task_not_found", "task_id": task_id})),
-        )
-            .into_response(),
+        None => support::task_not_found_response(&task_id),
     }
 }
 
@@ -90,72 +62,20 @@ pub(crate) async fn cancel_task_operator(
     if task_store_remote_enabled(&cfg) {
         match task_store_cancel_task(&task_id, &cfg) {
             Ok(Some(v)) => {
-                if let Ok(mut t) = state.tasks.lock()
-                    && let Some(cur) = t.get_mut(&task_id)
-                {
-                    if let Some(status) = v.get("status").and_then(|x| x.as_str()) {
-                        cur.status = status.to_string();
-                        cur.updated_at = utc_now_iso();
-                    }
-                    let _ = prune_tasks(&mut t, &cfg);
-                    persist_tasks_to_store(&t, cfg.store_path.as_ref());
-                }
-                if v.get("cancelled").and_then(|x| x.as_bool()) == Some(true)
-                {
-                    mark_cancel_flag(&state, &task_id);
-                    if let Ok(mut m) = state.metrics.lock() {
-                    m.task_cancel_effective_total += 1;
-                    }
-                }
+                let _ = support::apply_remote_cancel_result(&state, &task_id, &v, &cfg);
                 return (StatusCode::OK, Json(v)).into_response();
             }
-            Ok(None) => {
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(json!({"ok": false, "error": "task_not_found", "task_id": task_id})),
-                )
-                    .into_response();
-            }
+            Ok(None) => return support::task_not_found_response(&task_id),
             Err(e) => {
                 tracing::error!("remote task-store cancel failed task_id={task_id}: {e}");
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    Json(json!({"ok": false, "error": "task_store_unavailable", "detail": e, "task_id": task_id})),
-                )
-                    .into_response();
+                return support::task_store_unavailable_response(&task_id, &e);
             }
         }
     }
 
-    let mut cancelled = false;
-    let mut status = "not_found".to_string();
-    if let Ok(mut t) = state.tasks.lock() {
-        let removed = prune_tasks(&mut t, &cfg);
-        if removed > 0 {
-            persist_tasks_to_store(&t, cfg.store_path.as_ref());
-        }
-        if let Some(cur) = t.get_mut(&task_id) {
-            status = cur.status.clone();
-            if can_cancel_status(&status) {
-                cur.status = "cancelled".to_string();
-                cur.updated_at = utc_now_iso();
-                mark_cancel_flag(&state, &task_id);
-                status = cur.status.clone();
-                cancelled = true;
-                if let Ok(mut m) = state.metrics.lock() {
-                    m.task_cancel_effective_total += 1;
-                }
-            }
-            persist_tasks_to_store(&t, cfg.store_path.as_ref());
-        }
-    }
-    if status == "not_found" {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({"ok": false, "error": "task_not_found", "task_id": task_id})),
-        )
-            .into_response();
-    }
+    let Some((cancelled, status)) = support::cancel_local_task(&state, &task_id, &cfg) else {
+        return support::task_not_found_response(&task_id);
+    };
     (
         StatusCode::OK,
         Json(json!({

@@ -11,6 +11,27 @@ from aiwf.registry_events import record_registry_event
 from aiwf.registry_policy import default_conflict_policy, normalize_conflict_policy
 from aiwf.runtime_state import get_runtime_state
 from aiwf.registry_utils import infer_caller_module
+from aiwf.ingest_file_readers import (
+    load_docx_input as _load_docx_input_impl,
+    load_image_input as _load_image_input_impl,
+    load_pdf_input as _load_pdf_input_impl,
+    load_txt_input as _load_txt_input_impl,
+    load_xlsx_input as _load_xlsx_input_impl,
+    read_docx as _read_docx_impl,
+    read_image as _read_image_impl,
+    read_pdf as _read_pdf_impl,
+    read_text_with_fallback as _read_text_with_fallback_impl,
+    read_txt as _read_txt_impl,
+    read_xlsx as _read_xlsx_impl,
+    split_text_to_rows as _split_text_to_rows_impl,
+)
+from aiwf.ingest_ocr import (
+    resolve_tesseract_cmd as _resolve_tesseract_cmd,
+    ocr_preprocess_mode as _ocr_preprocess_mode,
+    ocr_try_modes as _ocr_try_modes,
+    preprocess_image_for_ocr as _ingest_preprocess_image_for_ocr,
+    ocr_text_score as _ingest_ocr_text_score,
+)
 
 
 InputReaderFn = Callable[[str, Dict[str, Any]], Tuple[List[Dict[str, Any]], Dict[str, Any]]]
@@ -300,70 +321,16 @@ def list_input_reader_domains() -> List[Dict[str, Any]]:
     )
 
 
-def _resolve_tesseract_cmd() -> Optional[str]:
-    env_cmd = os.environ.get("TESSERACT_CMD")
-    if env_cmd and os.path.exists(env_cmd):
-        return env_cmd
-    candidates = [
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-        "/usr/bin/tesseract",
-        "/usr/local/bin/tesseract",
-        "/opt/homebrew/bin/tesseract",
-    ]
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return None
-
-
-def _ocr_preprocess_mode(value: Optional[str]) -> str:
-    mode = str(value or os.environ.get("AIWF_OCR_PREPROCESS") or "adaptive").strip().lower()
-    if mode not in {"none", "off", "gray", "adaptive"}:
-        return "adaptive"
-    return mode
-
-
-def _ocr_try_modes(value: Optional[str]) -> List[str]:
-    raw = str(value or os.environ.get("AIWF_OCR_TRY_MODES") or "").strip()
-    if raw:
-        out: List[str] = []
-        for token in raw.split(","):
-            m = _ocr_preprocess_mode(token)
-            if m not in out:
-                out.append(m)
-        if out:
-            return out
-    mode = _ocr_preprocess_mode(value)
-    if mode in {"none", "off"}:
-        return ["none"]
-    if mode == "gray":
-        return ["gray", "none"]
-    return ["adaptive", "gray", "none"]
+def _split_text_to_rows(text: str, path: str, source_type: str, by_line: bool = False) -> List[Dict[str, Any]]:
+    return _split_text_to_rows_impl(text, path, source_type, by_line=by_line)
 
 
 def _preprocess_image_for_ocr(image: Any, mode: str) -> Any:
-    if mode in {"none", "off"}:
-        return image
-    try:
-        from PIL import ImageFilter, ImageOps  # type: ignore
-    except Exception:
-        return image
-    gray = ImageOps.grayscale(image)
-    if mode == "gray":
-        return gray
-    enhanced = ImageOps.autocontrast(gray)
-    filtered = enhanced.filter(ImageFilter.MedianFilter(size=3))
-    return filtered.point(lambda x: 255 if x > 160 else 0, mode="1")
+    return _ingest_preprocess_image_for_ocr(image, mode)
 
 
 def _ocr_text_score(text: str) -> int:
-    if not text:
-        return 0
-    s = str(text).strip()
-    if not s:
-        return 0
-    return len(re.findall(r"[A-Za-z0-9\u4e00-\u9fff]", s))
+    return _ingest_ocr_text_score(text)
 
 
 def _ocr_extract_text(pytesseract: Any, image: Any, lang: str, config: str, modes: List[str]) -> str:
@@ -388,70 +355,20 @@ def _ocr_extract_text(pytesseract: Any, image: Any, lang: str, config: str, mode
     return best
 
 
-def _split_text_to_rows(text: str, path: str, source_type: str, by_line: bool = False) -> List[Dict[str, Any]]:
-    if by_line:
-        chunks = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    else:
-        chunks = [p.strip() for p in text.split("\n\n") if p.strip()]
-    rows: List[Dict[str, Any]] = []
-    for i, c in enumerate(chunks):
-        rows.append(
-            {
-                "text": c,
-                "source_file": os.path.basename(path),
-                "source_path": path,
-                "source_type": source_type,
-                "chunk_index": i,
-            }
-        )
-    return rows
-
-
 def _read_text_with_fallback(path: str) -> str:
-    encodings = ["utf-8-sig", "utf-8", "gb18030", "gbk"]
-    last_err: Optional[Exception] = None
-    for enc in encodings:
-        try:
-            with open(path, "r", encoding=enc, errors="strict") as f:
-                return f.read()
-        except Exception as e:
-            last_err = e
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        txt = f.read()
-    if txt:
-        return txt
-    raise RuntimeError(f"cannot decode text file: {path}, last_err={last_err}")
+    return _read_text_with_fallback_impl(path)
 
 
 def read_txt(path: str, *, by_line: bool = False) -> List[Dict[str, Any]]:
-    text = _read_text_with_fallback(path)
-    return _split_text_to_rows(text, path, "txt", by_line=by_line)
+    return _read_txt_impl(path, by_line=by_line)
 
 
 def read_docx(path: str, *, by_line: bool = False) -> List[Dict[str, Any]]:
-    try:
-        from docx import Document  # type: ignore
-    except Exception as e:
-        raise RuntimeError(f"docx support requires python-docx: {e}")
-    doc = Document(path)
-    text = "\n".join(p.text for p in doc.paragraphs if p.text and p.text.strip())
-    return _split_text_to_rows(text, path, "docx", by_line=by_line)
+    return _read_docx_impl(path, by_line=by_line)
 
 
 def read_pdf(path: str, *, by_line: bool = False) -> List[Dict[str, Any]]:
-    try:
-        from pypdf import PdfReader  # type: ignore
-    except Exception as e:
-        raise RuntimeError(f"pdf support requires pypdf: {e}")
-    reader = PdfReader(path)
-    rows: List[Dict[str, Any]] = []
-    for page_idx, page in enumerate(reader.pages):
-        text = page.extract_text() or ""
-        chunks = _split_text_to_rows(text, path, "pdf", by_line=by_line)
-        for c in chunks:
-            c["page"] = page_idx + 1
-        rows.extend(chunks)
-    return rows
+    return _read_pdf_impl(path, by_line=by_line)
 
 
 def read_image(
@@ -462,93 +379,44 @@ def read_image(
     ocr_config: Optional[str] = None,
     ocr_preprocess: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    try:
-        from PIL import Image  # type: ignore
-    except Exception as e:
-        raise RuntimeError(f"image support requires Pillow: {e}")
-    try:
-        import pytesseract  # type: ignore
-    except Exception as e:
-        raise RuntimeError(f"image OCR support requires pytesseract: {e}")
-    cmd = _resolve_tesseract_cmd()
-    if cmd:
-        pytesseract.pytesseract.tesseract_cmd = cmd
-    lang = str(ocr_lang or os.environ.get("AIWF_OCR_LANG") or "eng+chi_sim").strip()
-    config = str(ocr_config or os.environ.get("AIWF_OCR_CONFIG") or "--oem 1 --psm 6").strip()
-    modes = _ocr_try_modes(ocr_preprocess)
-    with Image.open(path) as image:
-        text = _ocr_extract_text(pytesseract, image, lang, config, modes)
-    return _split_text_to_rows(text, path, "image", by_line=by_line)
+    return _read_image_impl(
+        path,
+        by_line=by_line,
+        ocr_lang=ocr_lang,
+        ocr_config=ocr_config,
+        ocr_preprocess=ocr_preprocess,
+        resolve_tesseract_cmd=_resolve_tesseract_cmd,
+        ocr_try_modes=_ocr_try_modes,
+        ocr_extract_text=_ocr_extract_text,
+    )
 
 
 def read_xlsx(path: str, *, include_all_sheets: bool = False) -> List[Dict[str, Any]]:
-    try:
-        from openpyxl import load_workbook  # type: ignore
-    except Exception as e:
-        raise RuntimeError(f"xlsx support requires openpyxl: {e}")
-    wb = load_workbook(path, read_only=True, data_only=True)
-    try:
-        out: List[Dict[str, Any]] = []
-        sheet_names = wb.sheetnames if include_all_sheets else [wb.sheetnames[0]]
-        for sheet_name in sheet_names:
-            ws = wb[sheet_name]
-            rows_iter = ws.iter_rows(values_only=True)
-            try:
-                header_raw = next(rows_iter)
-            except StopIteration:
-                continue
-            headers = [str(h).strip() if h is not None and str(h).strip() else f"col_{i+1}" for i, h in enumerate(header_raw)]
-            for row_idx, row in enumerate(rows_iter, start=2):
-                obj: Dict[str, Any] = {}
-                non_empty = False
-                for i, v in enumerate(row):
-                    obj[headers[i]] = v
-                    if v is not None and str(v).strip() != "":
-                        non_empty = True
-                if non_empty:
-                    obj["source_file"] = os.path.basename(path)
-                    obj["source_path"] = path
-                    obj["source_type"] = "xlsx"
-                    obj["sheet_name"] = sheet_name
-                    obj["row_index"] = row_idx
-                    out.append(obj)
-        return out
-    finally:
-        wb.close()
+    return _read_xlsx_impl(path, include_all_sheets=include_all_sheets)
 
 
 def _load_txt_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    return read_txt(path, by_line=bool(options.get("text_by_line", False))), {"input_format": "txt"}
+    return _load_txt_input_impl(path, options)
 
 
 def _load_docx_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    return read_docx(path, by_line=bool(options.get("text_by_line", False))), {"input_format": "docx"}
+    return _load_docx_input_impl(path, options)
 
 
 def _load_pdf_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    return read_pdf(path, by_line=bool(options.get("text_by_line", False))), {"input_format": "pdf"}
+    return _load_pdf_input_impl(path, options)
 
 
 def _load_image_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    if not bool(options.get("ocr_enabled", True)):
-        return [], {"input_format": "image", "skipped": True, "reason": "ocr disabled"}
-    return (
-        read_image(
-            path,
-            by_line=bool(options.get("text_by_line", False)),
-            ocr_lang=options.get("ocr_lang"),
-            ocr_config=options.get("ocr_config"),
-            ocr_preprocess=options.get("ocr_preprocess"),
-        ),
-        {"input_format": "image"},
+    return _load_image_input_impl(
+        path,
+        options,
+        read_image_fn=lambda file_path, **kwargs: read_image(file_path, **kwargs),
     )
 
 
 def _load_xlsx_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    return (
-        read_xlsx(path, include_all_sheets=bool(options.get("xlsx_all_sheets", False))),
-        {"input_format": "xlsx"},
-    )
+    return _load_xlsx_input_impl(path, options)
 
 
 def load_rows_from_file(

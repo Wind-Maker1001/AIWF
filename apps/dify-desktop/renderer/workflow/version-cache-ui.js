@@ -1,3 +1,9 @@
+import {
+  cacheStatsStatusText,
+  versionComparePayload,
+  versionListRequestPayload,
+} from "./version-cache-support.js";
+
 function createWorkflowVersionCacheUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -8,7 +14,7 @@ function createWorkflowVersionCacheUi(els, deps = {}) {
 
   async function refreshVersions() {
     try {
-      const out = await window.aiwfDesktop.listWorkflowVersions({ limit: 120 });
+      const out = await window.aiwfDesktop.listWorkflowVersions(versionListRequestPayload());
       renderVersionRows(out?.items || []);
     } catch {
       renderVersionRows([]);
@@ -16,13 +22,12 @@ function createWorkflowVersionCacheUi(els, deps = {}) {
   }
 
   async function compareVersions() {
-    const a = String(els.versionCompareA?.value || "").trim();
-    const b = String(els.versionCompareB?.value || "").trim();
-    if (!a || !b) {
+    const payload = versionComparePayload(els.versionCompareA?.value || "", els.versionCompareB?.value || "");
+    if (!payload.version_a || !payload.version_b) {
       setStatus("请填写版本 A/B", false);
       return;
     }
-    const out = await window.aiwfDesktop.compareWorkflowVersions({ version_a: a, version_b: b });
+    const out = await window.aiwfDesktop.compareWorkflowVersions(payload);
     renderVersionCompare(out);
     setStatus(out?.ok ? "版本对比完成" : `版本对比失败: ${out?.error || "unknown"}`, !!out?.ok);
   }
@@ -39,7 +44,7 @@ function createWorkflowVersionCacheUi(els, deps = {}) {
   async function clearCache() {
     const out = await window.aiwfDesktop.clearWorkflowNodeCache();
     renderCacheStats(out?.stats || {});
-    setStatus(out?.ok ? "缓存已清空" : `清空缓存失败: ${out?.error || "unknown"}`, !!out?.ok);
+    setStatus(cacheStatsStatusText(!!out?.ok, out?.error), !!out?.ok);
   }
 
   return {

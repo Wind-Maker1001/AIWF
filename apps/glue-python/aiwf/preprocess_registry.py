@@ -3,11 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
-from aiwf.registry_domains import normalize_registry_domain, summarize_registry_domains
-from aiwf.registry_events import record_registry_event
-from aiwf.registry_policy import default_conflict_policy, normalize_conflict_policy
+from aiwf.registry_domains import normalize_registry_domain
 from aiwf.runtime_state import get_runtime_state
 from aiwf.registry_utils import infer_caller_module
+from aiwf.preprocess_registry_support import (
+    get_named,
+    list_details,
+    list_domains,
+    list_names,
+    normalize_preprocess_op as _normalize_preprocess_op,
+    resolve_registration_conflict,
+    unregister_named,
+)
 
 
 PreprocessTransformFn = Callable[[Any, Dict[str, Any]], Tuple[Any, bool]]
@@ -55,13 +62,6 @@ class PipelineStageRegistration:
     domain: Optional[str]
     domain_metadata: Mapping[str, Any]
     source_module: str
-
-
-def _normalize_preprocess_op(op: str) -> str:
-    normalized = str(op or "").strip().lower()
-    if not normalized:
-        raise ValueError("preprocess op must be non-empty")
-    return normalized
 
 
 def _ensure_builtin_preprocess_registry() -> None:
@@ -121,42 +121,16 @@ def _register_field_transform(
     )
     source = str(source_module or infer_caller_module())
     existing = state.field_transforms.get(normalized)
-    if existing is not None:
-        policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
-        if policy == "error":
-            record_registry_event(
-                registry="field_transform",
-                name=normalized,
-                action="error",
-                policy=policy,
-                existing_source_module=existing.source_module,
-                new_source_module=source,
-                detail="registration already exists",
-            )
-            raise RuntimeError(
-                f"field transform {normalized} already registered by {existing.source_module}"
-            )
-        if policy == "keep":
-            record_registry_event(
-                registry="field_transform",
-                name=normalized,
-                action="keep",
-                policy=policy,
-                existing_source_module=existing.source_module,
-                new_source_module=source,
-                detail="kept existing registration",
-            )
-            return existing
-        action = "replace_with_warning" if policy == "warn" else "replace"
-        record_registry_event(
-            registry="field_transform",
-            name=normalized,
-            action=action,
-            policy=policy,
-            existing_source_module=existing.source_module,
-            new_source_module=source,
-            detail="replaced existing registration",
-        )
+    conflict = resolve_registration_conflict(
+        registry="field_transform",
+        item_label="field transform",
+        normalized=normalized,
+        existing=existing,
+        source=source,
+        on_conflict=on_conflict,
+    )
+    if conflict is not None:
+        return conflict
     registration = FieldTransformRegistration(
         op=normalized,
         handler=handler,
@@ -191,43 +165,40 @@ def register_field_transform(
 
 def unregister_field_transform(op: str) -> Optional[FieldTransformRegistration]:
     _ensure_builtin_preprocess_registry()
-    normalized = _normalize_preprocess_op(op)
-    return get_runtime_state().field_transforms.pop(normalized, None)
+    return unregister_named(get_runtime_state().field_transforms, op)
 
 
 def get_field_transform(op: str) -> FieldTransformRegistration:
     _ensure_builtin_preprocess_registry()
-    normalized = _normalize_preprocess_op(op)
-    registration = get_runtime_state().field_transforms.get(normalized)
-    if registration is None:
-        raise KeyError(f"unknown field transform: {normalized}")
-    return registration
+    return get_named(get_runtime_state().field_transforms, op, "field transform")
 
 
 def list_field_transforms() -> List[str]:
     _ensure_builtin_preprocess_registry()
-    return sorted(get_runtime_state().field_transforms.keys())
+    return list_names(get_runtime_state().field_transforms)
 
 
 def list_field_transform_details() -> List[Dict[str, Any]]:
     _ensure_builtin_preprocess_registry()
     state = get_runtime_state()
-    return [
-        {
+    return list_details(
+        state.field_transforms.values(),
+        key=lambda item: item.op,
+        serializer=lambda registration: {
             "op": registration.op,
             "domain": registration.domain,
             "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
-        }
-        for registration in sorted(state.field_transforms.values(), key=lambda item: item.op)
-    ]
+        },
+    )
 
 
 def list_field_transform_domains() -> List[Dict[str, Any]]:
     _ensure_builtin_preprocess_registry()
     state = get_runtime_state()
-    return summarize_registry_domains(
-        sorted(state.field_transforms.values(), key=lambda item: item.op),
+    return list_domains(
+        state.field_transforms.values(),
+        key=lambda item: item.op,
         item_name_attr="op",
         list_key="field_transforms",
     )
@@ -253,42 +224,16 @@ def _register_row_filter(
     )
     source = str(source_module or infer_caller_module())
     existing = state.row_filters.get(normalized)
-    if existing is not None:
-        policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
-        if policy == "error":
-            record_registry_event(
-                registry="row_filter",
-                name=normalized,
-                action="error",
-                policy=policy,
-                existing_source_module=existing.source_module,
-                new_source_module=source,
-                detail="registration already exists",
-            )
-            raise RuntimeError(
-                f"row filter {normalized} already registered by {existing.source_module}"
-            )
-        if policy == "keep":
-            record_registry_event(
-                registry="row_filter",
-                name=normalized,
-                action="keep",
-                policy=policy,
-                existing_source_module=existing.source_module,
-                new_source_module=source,
-                detail="kept existing registration",
-            )
-            return existing
-        action = "replace_with_warning" if policy == "warn" else "replace"
-        record_registry_event(
-            registry="row_filter",
-            name=normalized,
-            action=action,
-            policy=policy,
-            existing_source_module=existing.source_module,
-            new_source_module=source,
-            detail="replaced existing registration",
-        )
+    conflict = resolve_registration_conflict(
+        registry="row_filter",
+        item_label="row filter",
+        normalized=normalized,
+        existing=existing,
+        source=source,
+        on_conflict=on_conflict,
+    )
+    if conflict is not None:
+        return conflict
     registration = RowFilterRegistration(
         op=normalized,
         handler=handler,
@@ -326,44 +271,41 @@ def register_row_filter(
 
 def unregister_row_filter(op: str) -> Optional[RowFilterRegistration]:
     _ensure_builtin_preprocess_registry()
-    normalized = _normalize_preprocess_op(op)
-    return get_runtime_state().row_filters.pop(normalized, None)
+    return unregister_named(get_runtime_state().row_filters, op)
 
 
 def get_row_filter(op: str) -> RowFilterRegistration:
     _ensure_builtin_preprocess_registry()
-    normalized = _normalize_preprocess_op(op)
-    registration = get_runtime_state().row_filters.get(normalized)
-    if registration is None:
-        raise KeyError(f"unknown row filter: {normalized}")
-    return registration
+    return get_named(get_runtime_state().row_filters, op, "row filter")
 
 
 def list_row_filters() -> List[str]:
     _ensure_builtin_preprocess_registry()
-    return sorted(get_runtime_state().row_filters.keys())
+    return list_names(get_runtime_state().row_filters)
 
 
 def list_row_filter_details() -> List[Dict[str, Any]]:
     _ensure_builtin_preprocess_registry()
     state = get_runtime_state()
-    return [
-        {
+    return list_details(
+        state.row_filters.values(),
+        key=lambda item: item.op,
+        serializer=lambda registration: {
             "op": registration.op,
             "requires_field": registration.requires_field,
             "domain": registration.domain,
             "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
-        }
-        for registration in sorted(state.row_filters.values(), key=lambda item: item.op)
-    ]
+        },
+    )
 
 
 def list_row_filter_domains() -> List[Dict[str, Any]]:
     _ensure_builtin_preprocess_registry()
     state = get_runtime_state()
-    return summarize_registry_domains(
-        sorted(state.row_filters.values(), key=lambda item: item.op),
+    return list_domains(
+        state.row_filters.values(),
+        key=lambda item: item.op,
         item_name_attr="op",
         list_key="row_filters",
     )
@@ -390,42 +332,16 @@ def _register_pipeline_stage(
     )
     source = str(source_module or infer_caller_module())
     existing = state.pipeline_stages.get(normalized)
-    if existing is not None:
-        policy = normalize_conflict_policy(on_conflict, default_conflict_policy())
-        if policy == "error":
-            record_registry_event(
-                registry="pipeline_stage",
-                name=normalized,
-                action="error",
-                policy=policy,
-                existing_source_module=existing.source_module,
-                new_source_module=source,
-                detail="registration already exists",
-            )
-            raise RuntimeError(
-                f"pipeline stage {normalized} already registered by {existing.source_module}"
-            )
-        if policy == "keep":
-            record_registry_event(
-                registry="pipeline_stage",
-                name=normalized,
-                action="keep",
-                policy=policy,
-                existing_source_module=existing.source_module,
-                new_source_module=source,
-                detail="kept existing registration",
-            )
-            return existing
-        action = "replace_with_warning" if policy == "warn" else "replace"
-        record_registry_event(
-            registry="pipeline_stage",
-            name=normalized,
-            action=action,
-            policy=policy,
-            existing_source_module=existing.source_module,
-            new_source_module=source,
-            detail="replaced existing registration",
-        )
+    conflict = resolve_registration_conflict(
+        registry="pipeline_stage",
+        item_label="pipeline stage",
+        normalized=normalized,
+        existing=existing,
+        source=source,
+        on_conflict=on_conflict,
+    )
+    if conflict is not None:
+        return conflict
 
     effective_validator = validator or default_validator
     effective_prepare = prepare_config or default_prepare_config
@@ -478,44 +394,41 @@ def register_pipeline_stage(
 
 def unregister_pipeline_stage(name: str) -> Optional[PipelineStageRegistration]:
     _ensure_builtin_preprocess_registry()
-    normalized = _normalize_preprocess_op(name)
-    return get_runtime_state().pipeline_stages.pop(normalized, None)
+    return unregister_named(get_runtime_state().pipeline_stages, name)
 
 
 def get_pipeline_stage(name: str) -> PipelineStageRegistration:
     _ensure_builtin_preprocess_registry()
-    normalized = _normalize_preprocess_op(name)
-    registration = get_runtime_state().pipeline_stages.get(normalized)
-    if registration is None:
-        raise KeyError(f"unknown pipeline stage: {normalized}")
-    return registration
+    return get_named(get_runtime_state().pipeline_stages, name, "pipeline stage")
 
 
 def list_pipeline_stages() -> List[str]:
     _ensure_builtin_preprocess_registry()
-    return sorted(get_runtime_state().pipeline_stages.keys())
+    return list_names(get_runtime_state().pipeline_stages)
 
 
 def list_pipeline_stage_details() -> List[Dict[str, Any]]:
     _ensure_builtin_preprocess_registry()
     state = get_runtime_state()
-    return [
-        {
+    return list_details(
+        state.pipeline_stages.values(),
+        key=lambda item: item.name,
+        serializer=lambda registration: {
             "name": registration.name,
             "has_custom_executor": registration.executor is not None,
             "domain": registration.domain,
             "domain_metadata": dict(registration.domain_metadata),
             "source_module": registration.source_module,
-        }
-        for registration in sorted(state.pipeline_stages.values(), key=lambda item: item.name)
-    ]
+        },
+    )
 
 
 def list_pipeline_stage_domains() -> List[Dict[str, Any]]:
     _ensure_builtin_preprocess_registry()
     state = get_runtime_state()
-    return summarize_registry_domains(
-        sorted(state.pipeline_stages.values(), key=lambda item: item.name),
+    return list_domains(
+        state.pipeline_stages.values(),
+        key=lambda item: item.name,
         item_name_attr="name",
         list_key="pipeline_stages",
     )

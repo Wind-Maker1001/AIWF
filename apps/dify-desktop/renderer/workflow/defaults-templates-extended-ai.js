@@ -1,0 +1,65 @@
+export const NODE_CONFIG_TEMPLATES_EXTENDED_AI = {
+  plugin_operator_v1: {
+    plugin: "",
+    op: "run",
+    payload: {},
+  },
+  explain_plan_v2: {
+    steps: [],
+    rows: [],
+    actual_stats: [],
+    persist_feedback: true,
+    include_runtime_stats: false,
+  },
+  manual_review: {
+    review_key: "manual_review",
+    default_approve: true,
+    default_reviewer: "reviewer",
+    default_comment: "",
+  },
+  sql_chart_v1: {
+    rows: [],
+    chart_type: "bar",
+    category_field: "category",
+    value_field: "value",
+    series_field: "series",
+    top_n: 100,
+  },
+  office_slot_fill_v1: {
+    template_kind: "pptx",
+    template_version: "v1",
+    required_slots: ["title", "chart_main"],
+    slots: {
+      title: "报告标题",
+      chart_main: { categories: [], series: [] },
+    },
+    chart_source_node: "sql_chart_v1",
+  },
+  ai_strategy_v1: {
+    providers: [],
+    allow_ai_on_data: false,
+  },
+  ds_refine: {
+    reuse_existing: false,
+    provider_name: "DeepSeek",
+    ai_endpoint: "https://api.deepseek.com/v1/chat/completions",
+    ai_api_key: "",
+    ai_model: "deepseek-chat",
+  },
+  ai_refine: {
+    reuse_existing: true,
+    provider_name: "",
+    ai_endpoint: "",
+    ai_api_key: "",
+    ai_model: "",
+    allow_ai_on_data: false,
+  },
+  ai_audit: {
+    numeric_lock: true,
+    citation_required: true,
+    recalc_verify: true,
+    max_new_numbers: 0,
+    max_metric_delta: 0,
+  },
+  md_output: {},
+};

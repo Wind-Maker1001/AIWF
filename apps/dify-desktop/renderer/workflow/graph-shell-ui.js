@@ -1,9 +1,14 @@
+import {
+  applyGraphShellClearState,
+  applyGraphShellResetState,
+} from "./graph-shell-support.js";
+
 function createWorkflowGraphShellUi(els, deps = {}) {
   const {
     store,
-    setStatus = () => {},
-    renderAll = () => {},
     setSelectedEdge = () => {},
+    renderAll = () => {},
+    setStatus = () => {},
     getResetWorkflowName = () => "自由编排流程",
     renderMigrationReport = () => {},
   } = deps;
@@ -15,20 +20,25 @@ function createWorkflowGraphShellUi(els, deps = {}) {
   }
 
   function resetWorkflow() {
-    store.reset();
-    setSelectedEdge(null);
-    if (els.workflowName) els.workflowName.value = getResetWorkflowName();
-    renderAll();
-    renderMigrationReport({ migrated: false });
-    setStatus("已重置默认流程", true);
+    applyGraphShellResetState({
+      store,
+      setSelectedEdge,
+      renderAll,
+      renderMigrationReport,
+      setStatus,
+      workflowName: els.workflowName,
+      getResetWorkflowName,
+    });
   }
 
   function clearWorkflow() {
-    store.clear();
-    setSelectedEdge(null);
-    renderAll();
-    renderMigrationReport({ migrated: false });
-    setStatus("画布已清空", true);
+    applyGraphShellClearState({
+      store,
+      setSelectedEdge,
+      renderAll,
+      renderMigrationReport,
+      setStatus,
+    });
   }
 
   return {

@@ -1,8 +1,10 @@
-﻿import { defaultNodeConfig, defaultWorkflowGraph } from "./defaults.js";
-
-function deepClone(v) {
-  return JSON.parse(JSON.stringify(v));
-}
+import { defaultNodeConfig, defaultWorkflowGraph } from "./defaults.js";
+import {
+  deepClone,
+  nextNodeIdFromNodes,
+  normalizeImportedGraph,
+  wouldGraphCreateCycle,
+} from "./store-support.js";
 
 export function createWorkflowStore() {
   const state = {
@@ -21,11 +23,7 @@ export function createWorkflowStore() {
   }
 
   function nextNodeId() {
-    const ids = state.graph.nodes
-      .map((n) => Number(String(n.id).replace(/^n/, "")))
-      .filter((n) => Number.isFinite(n));
-    const next = (ids.length ? Math.max(...ids) : 0) + 1;
-    return `n${next}`;
+    return nextNodeIdFromNodes(state.graph.nodes);
   }
 
   function addNode(type, x = 40, y = 40, config) {
@@ -77,25 +75,7 @@ export function createWorkflowStore() {
   }
 
   function wouldCreateCycle(from, to) {
-    const out = new Map();
-    for (const n of state.graph.nodes) out.set(n.id, []);
-    for (const e of state.graph.edges) {
-      if (!out.has(e.from)) out.set(e.from, []);
-      out.get(e.from).push(e.to);
-    }
-    if (!out.has(from)) out.set(from, []);
-    out.get(from).push(to);
-    const stack = [to];
-    const seen = new Set();
-    while (stack.length) {
-      const cur = stack.pop();
-      if (cur === from) return true;
-      if (seen.has(cur)) continue;
-      seen.add(cur);
-      const next = out.get(cur) || [];
-      for (const n of next) stack.push(n);
-    }
-    return false;
+    return wouldGraphCreateCycle(state.graph.nodes, state.graph.edges, from, to);
   }
 
   function unlink(from, to) {
@@ -127,36 +107,7 @@ export function createWorkflowStore() {
   }
 
   function importGraph(graph) {
-    const g = graph && typeof graph === "object" ? graph : {};
-    const nodes = Array.isArray(g.nodes)
-      ? g.nodes.map((n, i) => ({
-          id: String(n?.id || `n${i + 1}`),
-          type: String(n?.type || "ingest_files"),
-          x: Number.isFinite(Number(n?.x)) ? Math.round(Number(n.x)) : 40 + i * 30,
-          y: Number.isFinite(Number(n?.y)) ? Math.round(Number(n.y)) : 40 + i * 20,
-          config:
-            n?.config && typeof n.config === "object"
-              ? deepClone(n.config)
-              : defaultNodeConfig(String(n?.type || "ingest_files")),
-        }))
-      : [];
-    const idSet = new Set(nodes.map((n) => n.id));
-    const edges = Array.isArray(g.edges)
-      ? g.edges
-          .map((e) => ({
-            from: String(e?.from || ""),
-            to: String(e?.to || ""),
-            when: typeof e?.when === "undefined" ? null : deepClone(e.when),
-          }))
-          .filter((e) => e.from && e.to && idSet.has(e.from) && idSet.has(e.to) && e.from !== e.to)
-      : [];
-
-    state.graph = {
-      workflow_id: String(g.workflow_id || "custom_v1"),
-      name: String(g.name || "自定义流程"),
-      nodes,
-      edges,
-    };
+    state.graph = normalizeImportedGraph(graph);
     state.linkFrom = null;
   }
 

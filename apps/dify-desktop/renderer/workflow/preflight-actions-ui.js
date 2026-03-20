@@ -1,3 +1,9 @@
+import {
+  buildTemplateAcceptanceReport,
+  exportFormatFromValue,
+  findTemplateById,
+} from "./preflight-actions-support.js";
+
 function createWorkflowPreflightActionsUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -14,7 +20,7 @@ function createWorkflowPreflightActionsUi(els, deps = {}) {
 
   async function exportPreflightReport() {
     const report = getLastPreflightReport() || await runWorkflowPreflight();
-    const format = String(els.preflightExportFormat?.value || "md").trim().toLowerCase() === "json" ? "json" : "md";
+    const format = exportFormatFromValue(els.preflightExportFormat?.value || "md");
     const out = await window.aiwfDesktop.exportWorkflowPreflightReport({
       report,
       format,
@@ -28,23 +34,22 @@ function createWorkflowPreflightActionsUi(els, deps = {}) {
 
   async function runTemplateAcceptance() {
     const id = String(els.templateSelect?.value || "").trim();
-    const tpl = allTemplates().find((x) => String(x.id || "") === id);
+    const tpl = findTemplateById(allTemplates(), id);
     const before = await runWorkflowPreflight();
     const fix = autoFixGraphStructure();
     setLastAutoFixSummary(fix);
     renderAutoFixDiff(fix);
     const after = await runWorkflowPreflight();
     const accepted = !!after?.ok;
-    const report = {
-      ts: new Date().toISOString(),
-      template_id: id || "",
-      template_name: String(tpl?.name || ""),
+    const report = buildTemplateAcceptanceReport({
+      templateId: id,
+      templateName: tpl?.name || "",
       accepted,
       governance: currentTemplateGovernance(),
       before,
-      auto_fix: fix,
+      autoFix: fix,
       after,
-    };
+    });
     setLastTemplateAcceptanceReport(report);
     if (accepted) setStatus("模板验收通过", true);
     else setStatus("模板验收未通过：仍有错误，请修复后重试", false);
@@ -54,7 +59,7 @@ function createWorkflowPreflightActionsUi(els, deps = {}) {
 
   async function exportTemplateAcceptanceReport() {
     const report = getLastTemplateAcceptanceReport() || await runTemplateAcceptance();
-    const format = String(els.templateAcceptanceExportFormat?.value || "md").trim().toLowerCase() === "json" ? "json" : "md";
+    const format = exportFormatFromValue(els.templateAcceptanceExportFormat?.value || "md");
     const out = await window.aiwfDesktop.exportWorkflowTemplateAcceptanceReport({
       report,
       format,

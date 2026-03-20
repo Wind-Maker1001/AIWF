@@ -1,12 +1,9 @@
-﻿const fs = require("fs");
+const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const crypto = require("crypto");
 const { Readable } = require("stream");
 const { readTextFileSmart } = require("./offline_text");
 const {
-  listInstalledFonts: listInstalledRuntimeFonts,
-  hasAnyFontFile,
   runImageOcr,
   runPdfOcr,
 } = require("./offline_runtime");
@@ -22,335 +19,36 @@ const {
 } = require("./offline_paper");
 const { createOfflineOutputs } = require("./offline_outputs");
 const { createOfflineIngest } = require("./offline_ingest");
-const IMG_EXT = new Set([".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff"]);
-function loadDesktopThemes() {
-  const defaults = {
-    fluent_ms: { title: "Fluent 宣传风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
-    fluent_ms_light: { title: "Fluent Light", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
-    fluent_ms_strong: { title: "Fluent Strong", primary: "005FB8", secondary: "083B7A", bg: "EEF5FD" },
-    fluent_ms_vibrant: { title: "Fluent Vibrant", primary: "0A66C2", secondary: "0078D4", bg: "EDF5FF" },
-    professional: { title: "专业风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
-    academic: { title: "学术风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
-    debate: { title: "辩论风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
-    assignment: { title: "作业风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
-    debate_plus: { title: "辩论增强", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
-    business: { title: "商务风", primary: "0F6CBD", secondary: "0B3A75", bg: "F7FAFE" },
-  };
-  const p = process.env.AIWF_OFFICE_THEME_FILE_DESKTOP
-    || path.join(__dirname, "..", "..", "rules", "templates", "office_themes_desktop.json");
-  try {
-    if (!fs.existsSync(p)) return defaults;
-    const obj = JSON.parse(fs.readFileSync(p, "utf8"));
-    if (obj && typeof obj === "object") return { ...defaults, ...obj };
-  } catch {}
-  return defaults;
-}
+const { createOfflineEngineConfig } = require("./offline_engine_config");
+const {
+  ExcelJS,
+  IMG_EXT,
+  ensureDir,
+  extractPdfTextFromBuffer,
+  imageSize,
+  isMissingNodeModuleError,
+  makeJobId,
+  mammoth,
+  normalizeAmount,
+  normalizeCell,
+  resolveOfficeFont,
+  sha256File,
+} = require("./offline_engine_runtime");
 
-function loadDesktopLayouts() {
-  const defaults = {
-    default: {
-      xlsx_data_sheet_name: "cleaned",
-      xlsx_summary_sheet_name: "summary",
-      docx_max_table_rows: 20,
-      pptx_sample_rows: 8,
-      pptx_max_findings: 6,
-      pptx_max_evidence: 6,
-    },
-    fluent_ms: {
-      xlsx_data_sheet_name: "cleaned",
-      xlsx_summary_sheet_name: "summary",
-      docx_max_table_rows: 24,
-      pptx_sample_rows: 10,
-      pptx_max_findings: 8,
-      pptx_max_evidence: 8,
-    },
-    fluent_ms_light: {
-      xlsx_data_sheet_name: "cleaned",
-      xlsx_summary_sheet_name: "summary",
-      docx_max_table_rows: 24,
-      pptx_sample_rows: 10,
-      pptx_max_findings: 8,
-      pptx_max_evidence: 8,
-    },
-    fluent_ms_strong: {
-      xlsx_data_sheet_name: "cleaned",
-      xlsx_summary_sheet_name: "summary",
-      docx_max_table_rows: 22,
-      pptx_sample_rows: 8,
-      pptx_max_findings: 7,
-      pptx_max_evidence: 7,
-    },
-    fluent_ms_vibrant: {
-      xlsx_data_sheet_name: "cleaned",
-      xlsx_summary_sheet_name: "summary",
-      docx_max_table_rows: 26,
-      pptx_sample_rows: 10,
-      pptx_max_findings: 9,
-      pptx_max_evidence: 10,
-    },
-  };
-  const p = process.env.AIWF_OFFICE_LAYOUT_FILE_DESKTOP
-    || path.join(__dirname, "..", "..", "rules", "templates", "office_layouts_desktop.json");
-  try {
-    if (!fs.existsSync(p)) return defaults;
-    const obj = JSON.parse(fs.readFileSync(p, "utf8"));
-    if (obj && typeof obj === "object") return { ...defaults, ...obj };
-  } catch {}
-  return defaults;
-}
-
-const OFFICE_THEMES = loadDesktopThemes();
-const OFFICE_LAYOUTS = loadDesktopLayouts();
-const CLEANING_TEMPLATES = loadCleaningTemplates();
-
-function toTemplateLabel(id) {
-  if (!id) return "通用模板";
-  if (id === "finance_report_v1") return "财报模板 v1（资产/利润/现金流）";
-  const s = String(id).replace(/[_-]+/g, " ").trim();
-  if (!s) return "通用模板";
-  return s.replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-function normalizeTemplateEntry(entry, templatesDir) {
-  if (!entry || typeof entry !== "object") return null;
-  const id = String(entry.id || "").trim().toLowerCase();
-  if (!id || id === "default") return null;
-  const file = String(entry.file || "").trim();
-  if (!file) return null;
-  const fp = path.join(templatesDir, file);
-  if (!fs.existsSync(fp)) return null;
-  let rules = null;
-  try {
-    const raw = String(fs.readFileSync(fp, "utf8") || "").replace(/^\uFEFF/, "");
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object" || typeof obj.rules !== "object") return null;
-    rules = obj.rules;
-  } catch {
-    return null;
-  }
-  return {
-    id,
-    file,
-    label: String(entry.label || "").trim() || toTemplateLabel(id),
-    description: String(entry.description || "").trim(),
-    rules,
-  };
-}
-
-function loadCleaningTemplates() {
-  const templatesDir = path.join(__dirname, "..", "..", "rules", "templates");
-  const out = [];
-  const byId = new Map();
-  const add = (entry) => {
-    if (!entry || !entry.id || byId.has(entry.id)) return;
-    byId.set(entry.id, entry);
-    out.push(entry);
-  };
-
-  add({
-    id: "default",
-    file: "",
-    label: "通用模板",
-    description: "不追加模板规则，沿用通用清洗链路。",
-    rules: null,
-  });
-
-  const registryPath = path.join(templatesDir, "cleaning_templates_desktop.json");
-  try {
-    if (fs.existsSync(registryPath)) {
-      const raw = String(fs.readFileSync(registryPath, "utf8") || "").replace(/^\uFEFF/, "");
-      const reg = JSON.parse(raw);
-      const items = Array.isArray(reg?.templates) ? reg.templates : [];
-      items.forEach((it) => add(normalizeTemplateEntry(it, templatesDir)));
-    }
-  } catch {}
-
-  try {
-    if (fs.existsSync(templatesDir)) {
-      const files = fs.readdirSync(templatesDir).filter((n) => /^generic_.*\.json$/i.test(n));
-      files.forEach((file) => {
-        const fp = path.join(templatesDir, file);
-        let obj = null;
-        try {
-          const raw = String(fs.readFileSync(fp, "utf8") || "").replace(/^\uFEFF/, "");
-          obj = JSON.parse(raw);
-        } catch {
-          return;
-        }
-        if (!obj || typeof obj !== "object" || typeof obj.rules !== "object") return;
-        const id = String(obj?.meta?.template_id || path.basename(file, ".json")).trim().toLowerCase();
-        if (!id || byId.has(id)) return;
-        add({
-          id,
-          file,
-          label: String(obj?.meta?.template_label || "").trim() || toTemplateLabel(id),
-          description: String(obj?.meta?.template_description || "").trim(),
-          rules: obj.rules,
-        });
-      });
-    }
-  } catch {}
-
-  return {
-    list: out.map((x) => ({
-      id: x.id,
-      label: x.label,
-      description: x.description,
-      file: x.file,
-      rules: x.rules || null,
-    })),
-    byId,
-  };
-}
-
-function resolveOfficeTheme(name) {
-  const forceFluent = String(process.env.AIWF_FORCE_FLUENT_STYLE || "1").trim() !== "0";
-  if (forceFluent) {
-    const nk = String(name || "").trim().toLowerCase();
-    if (nk && OFFICE_THEMES[nk] && nk.startsWith("fluent_ms")) return OFFICE_THEMES[nk];
-    return OFFICE_THEMES.fluent_ms_light || OFFICE_THEMES.fluent_ms || OFFICE_THEMES.assignment;
-  }
-  const k = String(name || "assignment").trim().toLowerCase();
-  return OFFICE_THEMES[k] || OFFICE_THEMES.assignment;
-}
-
-function resolveOfficeLayout(name) {
-  const forceFluent = String(process.env.AIWF_FORCE_FLUENT_STYLE || "1").trim() !== "0";
-  const nk = String(name || "assignment").trim().toLowerCase();
-  const k = forceFluent
-    ? ((nk && nk.startsWith("fluent_ms")) ? nk : "fluent_ms_light")
-    : nk;
-  const base = OFFICE_LAYOUTS.default || {};
-  const ext = OFFICE_LAYOUTS[k] || {};
-  return { ...base, ...ext };
-}
-
-function ensureDir(p) {
-  fs.mkdirSync(p, { recursive: true });
-}
-
-function resolveCleaningTemplateParams(params = {}) {
-  const p = { ...(params || {}) };
-  const t = String(p.cleaning_template || "").trim().toLowerCase();
-  if (!t || t === "default") return p;
-  const tpl = CLEANING_TEMPLATES.byId.get(t);
-  if (!tpl || !tpl.rules) return p;
-  // Let caller-provided rules override template defaults.
-  p.rules = { ...tpl.rules, ...(p.rules || {}) };
-  return p;
-}
-
-function sha256File(p) {
-  const h = crypto.createHash("sha256");
-  h.update(fs.readFileSync(p));
-  return h.digest("hex");
-}
-
-function makeJobId() {
-  if (typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID().replace(/-/g, "");
-  }
-  const uuid = getUuidModule();
-  if (uuid && typeof uuid.v4 === "function") {
-    return uuid.v4().replace(/-/g, "");
-  }
-  throw new Error("no uuid generator available");
-}
-
-function isMissingNodeModuleError(err) {
-  if (!err) return false;
-  if (String(err.code || "") === "MODULE_NOT_FOUND") return true;
-  return /Cannot find module/i.test(String(err.message || err));
-}
-
-function normalizeCell(v) {
-  if (v === null || v === undefined) return "";
-  return String(v).trim();
-}
-
-function normalizeAmount(v) {
-  if (v === null || v === undefined) return null;
-  const s = String(v).replace(/[,，\s$¥￥\uFFFD?]/g, "").trim();
-  if (!s) return null;
-  const n = Number(s);
-  if (!Number.isFinite(n)) return null;
-  return Math.round(n * 100) / 100;
-}
-
-function createLazyModuleLoader(moduleName) {
-  let cached = null;
-  let loadError = null;
-  return function loadModule() {
-    if (cached) return cached;
-    if (loadError) throw loadError;
-    try {
-      cached = require(moduleName);
-      return cached;
-    } catch (e) {
-      loadError = e;
-      throw e;
-    }
-  };
-}
-
-const getExcelJSModule = createLazyModuleLoader("exceljs");
-const getMammothModule = createLazyModuleLoader("mammoth");
-const getImageSizeModule = createLazyModuleLoader("image-size");
-const getPdfParseModule = createLazyModuleLoader("pdf-parse");
-const getUuidModule = createLazyModuleLoader("uuid");
-
-const ExcelJS = {};
-Object.defineProperty(ExcelJS, "Workbook", {
-  enumerable: true,
-  get() {
-    return getExcelJSModule().Workbook;
-  },
-});
-
-const mammoth = {
-  extractRawText(...args) {
-    return getMammothModule().extractRawText(...args);
-  },
-};
-
-const imageSize = {
-  imageSize(...args) {
-    const mod = getImageSizeModule();
-    if (typeof mod === "function") return mod(...args);
-    if (mod && typeof mod.imageSize === "function") return mod.imageSize(...args);
-    if (mod && typeof mod.default === "function") return mod.default(...args);
-    throw new Error("unsupported image-size module shape");
-  },
-};
-
-function resolveOfficeFont(params = {}, warnings = []) {
-  const lang = String(params.office_lang || "zh").toLowerCase();
-  const installed = listInstalledRuntimeFonts();
-  if (lang === "en") return "Calibri";
-
-  const candidates = [
-    { family: "Microsoft YaHei", files: ["msyh.ttc", "msyh.ttf", "msyhbd.ttc", "msyhbd.ttf"] },
-    { family: "SimHei", files: ["simhei.ttf"] },
-    { family: "SimSun", files: ["simsun.ttc", "simsun.ttf"] },
-    { family: "DengXian", files: ["deng.ttf", "dengb.ttf"] },
-    { family: "Noto Sans CJK SC", files: ["NotoSansCJKsc-Regular.otf", "NotoSansCJK-Regular.ttc"] },
-    { family: "Source Han Sans SC", files: ["SourceHanSansSC-Regular.otf"] },
-    { family: "Segoe UI", files: ["segoeui.ttf", "segoeuib.ttf"] },
-  ];
-
-  for (const c of candidates) {
-    if (hasAnyFontFile(installed, c.files)) return c.family;
-  }
-
-  warnings.push("\u672a\u68c0\u6d4b\u5230\u6838\u5fc3\u4e2d\u6587\u5b57\u4f53\uff0c\u5df2\u56de\u9000\u5230 Calibri\uff0c\u53ef\u80fd\u51fa\u73b0\u4e2d\u6587\u663e\u793a\u5f02\u5e38\u3002");
-  return "Calibri";
-}
+const {
+  listCleaningTemplates,
+  normalizeReportTitle,
+  resolveCleaningTemplateParams,
+  resolveOfficeLayout,
+  resolveOfficeTheme,
+} = createOfflineEngineConfig();
 
 const OFFLINE_OUTPUTS = createOfflineOutputs({
   resolveOfficeTheme,
   resolveOfficeFont,
   resolveOfficeLayout,
 });
+
 const OFFLINE_INGEST = createOfflineIngest({
   fs,
   path,
@@ -371,32 +69,6 @@ const OFFLINE_INGEST = createOfflineIngest({
   IMG_EXT,
 });
 
-async function extractPdfTextFromBuffer(buf) {
-  const pdfParse = getPdfParseModule();
-  if (typeof pdfParse === "function") {
-    const out = await pdfParse(buf);
-    return String((out && out.text) || "");
-  }
-  if (pdfParse && typeof pdfParse.default === "function") {
-    const out = await pdfParse.default(buf);
-    return String((out && out.text) || "");
-  }
-  const PDFParse = pdfParse && pdfParse.PDFParse;
-  if (typeof PDFParse === "function") {
-    let parser = null;
-    try {
-      parser = new PDFParse({ data: buf });
-      const out = await parser.getText();
-      return String((out && out.text) || "");
-    } finally {
-      try {
-        if (parser && typeof parser.destroy === "function") parser.destroy();
-      } catch {}
-    }
-  }
-  throw new Error("unsupported pdf-parse module shape");
-}
-
 async function readInputRows(params, warnings, runtime = {}) {
   return OFFLINE_INGEST.readInputRows(params, warnings, runtime);
 }
@@ -408,6 +80,7 @@ function cleanRows(rawRows, params = {}) {
 function applyQualityGates(quality, params = {}) {
   return OFFLINE_INGEST.applyQualityGates(quality, params);
 }
+
 function buildDataQualityInsights(rows) {
   return OFFLINE_OUTPUTS.buildDataQualityInsights(rows);
 }
@@ -415,13 +88,16 @@ function buildDataQualityInsights(rows) {
 function buildEvidenceHighlights(rows, maxItems = 8) {
   return OFFLINE_OUTPUTS.buildEvidenceHighlights(rows, maxItems);
 }
+
 function filterRowsForOffice(rows) {
   if (typeof OFFLINE_OUTPUTS.filterRowsForOffice === "function") return OFFLINE_OUTPUTS.filterRowsForOffice(rows);
   return { rows: Array.isArray(rows) ? rows : [], filtered: 0, removedRows: [] };
 }
+
 function computeOfficeQualityScore(rows, quality, warnings, options = {}) {
   return OFFLINE_OUTPUTS.computeOfficeQualityScore(rows, quality, warnings, options);
 }
+
 function assessContentQuality(rows, options = {}) {
   if (typeof OFFLINE_OUTPUTS.assessContentQuality === "function") {
     return OFFLINE_OUTPUTS.assessContentQuality(rows, options);
@@ -533,20 +209,6 @@ async function runOfflineDebatePreview(payload) {
   };
 }
 
-function listCleaningTemplates() {
-  return { ok: true, templates: CLEANING_TEMPLATES.list };
-}
-
-function normalizeReportTitle(rawTitle, fallback = "辩论资料库") {
-  const t = String(rawTitle || "").trim();
-  if (!t) return fallback;
-  const badCount = (t.match(/[?\uFFFD]/g) || []).length;
-  const cjkCount = (t.match(/[\u4E00-\u9FFF]/g) || []).length;
-  const ratio = badCount / Math.max(1, t.length);
-  if (badCount >= 2 && (ratio >= 0.2 || cjkCount === 0)) return fallback;
-  return t;
-}
-
 async function runOfflineCleaning(payload) {
   const t0 = Date.now();
   const params = resolveCleaningTemplateParams(payload?.params || {});
@@ -570,9 +232,9 @@ async function runOfflineCleaning(payload) {
   const fidelity = { enabled: false, reasons: [] };
 
   const evalTextRows = (rows || [])
-    .map((r) => rowTextForQuality(r))
-    .filter((t) => String(t || "").length >= 4);
-  const corruptRows = evalTextRows.filter((t) => isLikelyCorruptedText(t)).length;
+    .map((row) => rowTextForQuality(row))
+    .filter((text) => String(text || "").length >= 4);
+  const corruptRows = evalTextRows.filter((text) => isLikelyCorruptedText(text)).length;
   const corruptRatio = evalTextRows.length > 0 ? (corruptRows / evalTextRows.length) : 0;
   const autoFidelity = params.md_fidelity_auto !== false;
 
@@ -639,14 +301,11 @@ async function runOfflineCleaning(payload) {
   const paperMdIndexPath = path.join(artDir, "paper_markdown_index.md");
   const aiCorpusPath = path.join(artDir, "ai_corpus.md");
   const qualityReportPath = path.join(artDir, "quality_report.md");
-  let filteredNoiseWritten = false;
 
   const qualityScore = computeOfficeQualityScore(rows, quality, warnings, { md_only: mdOnly });
-  const contentQuality = assessContentQuality(rows, {
-    min_content_score: params.min_content_score,
-  });
+  const contentQuality = assessContentQuality(rows, params);
+  let filteredNoiseWritten = false;
   const outputGateMeta = {
-    source_files: String(params.input_files || "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean).slice(0, 20),
     strict_output_gate: strictOutputGate,
     preflight_passed: preflightPassed,
     preflight_risk_score: Number(params.preflight_risk_score || 0),
@@ -685,14 +344,15 @@ async function runOfflineCleaning(payload) {
     fidelity,
     qualityScore,
     contentQuality,
-    outputGateMeta: outputGateMeta,
+    outputGateMeta,
   });
+
   if (!mdOnly) {
     try {
       const officeFiltered = filterRowsForOffice(rows);
       const officeRows = Array.isArray(officeFiltered?.rows) ? officeFiltered.rows : rows;
       const filteredCount = Number(officeFiltered?.filtered || 0);
-      const filteredRemovedRows = Array.isArray(officeFiltered?.removedRows) ? officeFiltered?.removedRows : [];
+      const filteredRemovedRows = Array.isArray(officeFiltered?.removedRows) ? officeFiltered.removedRows : [];
       if (filteredCount > 0) warnings.push(`已过滤 ${filteredCount} 行“问号密度过高”文本，避免 Office 成品出现乱码片段。`);
       outputGateMeta.filtered_question_mark_rows = filteredCount;
       if (filteredRemovedRows.length > 0) {
@@ -745,6 +405,3 @@ async function runOfflineCleaning(payload) {
 }
 
 module.exports = { runOfflineCleaning, runOfflinePrecheck, runOfflineDebatePreview, listCleaningTemplates };
-
-
-

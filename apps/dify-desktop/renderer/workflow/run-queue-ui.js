@@ -1,3 +1,11 @@
+import {
+  normalizeQueueControl,
+  normalizeQueueItems,
+  queueControlStatusText,
+  queueRequestPayload,
+  runHistoryRequestPayload,
+} from "./run-queue-support.js";
+
 function createWorkflowRunQueueUi(deps = {}) {
   const {
     setStatus = () => {},
@@ -8,8 +16,8 @@ function createWorkflowRunQueueUi(deps = {}) {
 
   async function refreshRunHistory() {
     try {
-      const out = await window.aiwfDesktop.listWorkflowRuns({ limit: 80 });
-      renderRunHistoryRows(out?.items || []);
+      const out = await window.aiwfDesktop.listWorkflowRuns(runHistoryRequestPayload());
+      renderRunHistoryRows(normalizeQueueItems(out));
     } catch {
       renderRunHistoryRows([]);
     }
@@ -17,9 +25,9 @@ function createWorkflowRunQueueUi(deps = {}) {
 
   async function refreshQueue() {
     try {
-      const out = await window.aiwfDesktop.listWorkflowQueue({ limit: 120 });
-      renderQueueRows(out?.items || []);
-      renderQueueControl(out?.control || {});
+      const out = await window.aiwfDesktop.listWorkflowQueue(queueRequestPayload());
+      renderQueueRows(normalizeQueueItems(out));
+      renderQueueControl(normalizeQueueControl(out));
     } catch {
       renderQueueRows([]);
       renderQueueControl({});
@@ -28,13 +36,13 @@ function createWorkflowRunQueueUi(deps = {}) {
 
   async function pauseQueue() {
     const out = await window.aiwfDesktop.setWorkflowQueueControl({ paused: true });
-    setStatus(out?.ok ? "队列已暂停" : `暂停失败: ${out?.error || "unknown"}`, !!out?.ok);
+    setStatus(queueControlStatusText(true, out?.error), !!out?.ok);
     await refreshQueue();
   }
 
   async function resumeQueue() {
     const out = await window.aiwfDesktop.setWorkflowQueueControl({ paused: false });
-    setStatus(out?.ok ? "队列已恢复" : `恢复失败: ${out?.error || "unknown"}`, !!out?.ok);
+    setStatus(queueControlStatusText(false, out?.error), !!out?.ok);
     await refreshQueue();
   }
 

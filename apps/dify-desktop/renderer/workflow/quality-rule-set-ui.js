@@ -1,3 +1,10 @@
+import {
+  buildQualityRuleSetOptions,
+  collectQualityRulesFromGraph,
+  currentQualityRuleSetId,
+  normalizeQualityRuleSets,
+} from "./quality-rule-set-support.js";
+
 function createWorkflowQualityRuleSetUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -15,28 +22,17 @@ function createWorkflowQualityRuleSetUi(els, deps = {}) {
     if (!els.qualityRuleSetSelect) return;
     try {
       const out = await window.aiwfDesktop.listQualityRuleSets();
-      const sets = Array.isArray(out?.sets) ? out.sets : [];
+      const sets = normalizeQualityRuleSets(out);
       const cur = String(els.qualityRuleSetId?.value || "").trim();
       els.qualityRuleSetSelect.innerHTML = '<option value="">选择规则集...</option>';
-      sets.forEach((s) => {
-        const id = String(s?.id || "");
-        if (!id) return;
+      buildQualityRuleSetOptions(sets).forEach((item) => {
         const op = createOptionElement();
-        op.value = id;
-        op.textContent = `${String(s?.name || id)} (${String(s?.version || "v1")})`;
+        op.value = item.value;
+        op.textContent = item.textContent;
         els.qualityRuleSetSelect.appendChild(op);
       });
       if (cur) els.qualityRuleSetSelect.value = cur;
     } catch {}
-  }
-
-  function collectRulesFromGraph() {
-    const g = exportGraph();
-    const nodes = Array.isArray(g?.nodes) ? g.nodes : [];
-    const target = nodes.find((n) => ["quality_check_v2", "quality_check_v3", "quality_check_v4"].includes(String(n?.type || "")));
-    if (!target) return {};
-    const cfg = target?.config && typeof target.config === "object" ? target.config : {};
-    return cfg.rules && typeof cfg.rules === "object" ? cfg.rules : {};
   }
 
   async function saveQualityRuleSetFromGraph() {
@@ -45,7 +41,7 @@ function createWorkflowQualityRuleSetUi(els, deps = {}) {
       setStatus("请先填写质量规则集ID", false);
       return;
     }
-    const rules = collectRulesFromGraph();
+    const rules = collectQualityRulesFromGraph(exportGraph());
     const out = await window.aiwfDesktop.saveQualityRuleSet({
       set: {
         id,
@@ -64,7 +60,7 @@ function createWorkflowQualityRuleSetUi(els, deps = {}) {
   }
 
   async function removeQualityRuleSetCurrent() {
-    const id = String(els.qualityRuleSetId?.value || els.qualityRuleSetSelect?.value || "").trim();
+    const id = currentQualityRuleSetId(els);
     if (!id) {
       setStatus("请先选择质量规则集", false);
       return;

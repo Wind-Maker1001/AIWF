@@ -1,3 +1,12 @@
+import {
+  sandboxAlertsPayload,
+  sandboxExportFormat,
+  sandboxListPayload,
+  sandboxMutePayload,
+  sandboxPresetExportPayload,
+  sandboxRulesPayload,
+} from "./sandbox-support.js";
+
 function createWorkflowSandboxUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -14,22 +23,17 @@ function createWorkflowSandboxUi(els, deps = {}) {
   } = deps;
 
   async function refreshSandboxAlerts() {
-    const out = await window.aiwfDesktop.getWorkflowSandboxAlerts({
-      limit: 500,
-      thresholds: sandboxThresholdsPayload(),
-      dedup_window_sec: sandboxDedupWindowSec(),
-    });
+    const out = await window.aiwfDesktop.getWorkflowSandboxAlerts(
+      sandboxAlertsPayload(sandboxThresholdsPayload(), sandboxDedupWindowSec(), 500)
+    );
     if (out?.rules) applySandboxRulesToUi(out.rules);
     renderSandboxRows(out || {});
   }
 
   async function exportSandboxAudit() {
-    const format = String(els.sandboxExportFormat?.value || "md").trim() || "md";
     const out = await window.aiwfDesktop.exportWorkflowSandboxAuditReport({
-      limit: 500,
-      thresholds: sandboxThresholdsPayload(),
-      dedup_window_sec: sandboxDedupWindowSec(),
-      format,
+      ...sandboxAlertsPayload(sandboxThresholdsPayload(), sandboxDedupWindowSec(), 500),
+      format: sandboxExportFormat(els.sandboxExportFormat?.value || "md"),
     });
     if (!out?.ok) {
       if (!out?.canceled) setStatus(`导出 Sandbox 报告失败: ${out?.error || "unknown"}`, false);
@@ -49,14 +53,14 @@ function createWorkflowSandboxUi(els, deps = {}) {
   }
 
   async function refreshSandboxRuleVersions() {
-    const out = await window.aiwfDesktop.listWorkflowSandboxRuleVersions({ limit: 80 });
+    const out = await window.aiwfDesktop.listWorkflowSandboxRuleVersions(sandboxListPayload(80));
     renderSandboxRuleVersionRows(out?.items || []);
   }
 
   async function saveSandboxRules() {
-    const out = await window.aiwfDesktop.setWorkflowSandboxAlertRules({
-      rules: sandboxRulesPayloadFromUi(),
-    });
+    const out = await window.aiwfDesktop.setWorkflowSandboxAlertRules(
+      sandboxRulesPayload(sandboxRulesPayloadFromUi())
+    );
     if (!out?.ok) {
       setStatus(`保存 Sandbox 规则失败: ${out?.error || "unknown"}`, false);
       return;
@@ -70,9 +74,9 @@ function createWorkflowSandboxUi(els, deps = {}) {
   async function applySandboxPreset() {
     const preset = String(els.sandboxPreset?.value || "balanced").trim().toLowerCase();
     applySandboxPresetToUi(preset);
-    const out = await window.aiwfDesktop.setWorkflowSandboxAlertRules({
-      rules: sandboxRulesPayloadFromUi(),
-    });
+    const out = await window.aiwfDesktop.setWorkflowSandboxAlertRules(
+      sandboxRulesPayload(sandboxRulesPayloadFromUi())
+    );
     if (!out?.ok) {
       setStatus(`应用预设失败: ${out?.error || "unknown"}`, false);
       return;
@@ -84,12 +88,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
   }
 
   async function applySandboxMute() {
-    const out = await window.aiwfDesktop.muteWorkflowSandboxAlert({
-      node_type: String(els.sandboxMuteNodeType?.value || "*").trim() || "*",
-      node_id: String(els.sandboxMuteNodeId?.value || "*").trim() || "*",
-      code: String(els.sandboxMuteCode?.value || "*").trim() || "*",
-      minutes: Number(els.sandboxMuteMinutes?.value || 60),
-    });
+    const out = await window.aiwfDesktop.muteWorkflowSandboxAlert(sandboxMutePayload(els));
     if (!out?.ok) {
       setStatus(`应用静默失败: ${out?.error || "unknown"}`, false);
       return;
@@ -100,9 +99,9 @@ function createWorkflowSandboxUi(els, deps = {}) {
   }
 
   async function exportSandboxPreset() {
-    const out = await window.aiwfDesktop.exportWorkflowSandboxPreset({
-      preset: currentSandboxPresetPayload(),
-    });
+    const out = await window.aiwfDesktop.exportWorkflowSandboxPreset(
+      sandboxPresetExportPayload(currentSandboxPresetPayload())
+    );
     if (!out?.ok) {
       if (!out?.canceled) setStatus(`导出预设失败: ${out?.error || "unknown"}`, false);
       return;
@@ -123,7 +122,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
   }
 
   async function refreshSandboxAutoFixLog() {
-    const out = await window.aiwfDesktop.listWorkflowSandboxAutoFixActions({ limit: 120 });
+    const out = await window.aiwfDesktop.listWorkflowSandboxAutoFixActions(sandboxListPayload(120));
     renderSandboxAutoFixRows(out?.items || []);
   }
 

@@ -9,6 +9,28 @@ $ErrorActionPreference = "Stop"
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
+function Stop-LingeringDesktopProcesses([string]$WorkspaceRoot) {
+  $workspacePrefix = ([System.IO.Path]::GetFullPath($WorkspaceRoot)).TrimEnd("\")
+  $matches = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.ProcessId -ne $PID -and
+    $_.ExecutablePath -and
+    ([System.IO.Path]::GetFullPath($_.ExecutablePath)).StartsWith($workspacePrefix, [System.StringComparison]::OrdinalIgnoreCase) -and
+    @("electron.exe", "AIWF Dify Desktop.exe", "AIWF Dify Desktop Lite.exe") -contains $_.Name
+  })
+
+  foreach ($item in @($matches | Sort-Object ProcessId -Descending)) {
+    try {
+      taskkill /F /T /PID $item.ProcessId | Out-Null
+      Warn ("stopped lingering desktop process pid={0} name={1}" -f $item.ProcessId, $item.Name)
+    } catch {
+      Warn ("failed stopping lingering desktop process pid={0}: {1}" -f $item.ProcessId, $_.Exception.Message)
+    }
+  }
+
+  if ($matches.Count -gt 0) {
+    Start-Sleep -Seconds 2
+  }
+}
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (-not $DesktopDir) {
@@ -25,6 +47,7 @@ try {
   Remove-Item $bootMarker -Force -ErrorAction SilentlyContinue
   $prevBootMarker = $env:AIWF_BOOT_MARKER_PATH
   $proc = $null
+  Stop-LingeringDesktopProcesses -WorkspaceRoot $DesktopDir
   Info "building desktop lite unpacked app"
   $builderCli = Join-Path $DesktopDir "node_modules\electron-builder\out\cli\cli.js"
   if (-not (Test-Path $builderCli)) {

@@ -1,3 +1,5 @@
+import { normalizeReviewQueueItems } from "./review-queue-support.js";
+
 function createWorkflowReviewQueueUi(deps = {}) {
   const {
     renderReviewRows = () => {},
@@ -6,7 +8,7 @@ function createWorkflowReviewQueueUi(deps = {}) {
   async function refreshReviewQueue() {
     try {
       const out = await window.aiwfDesktop.listManualReviews();
-      renderReviewRows(out?.items || []);
+      renderReviewRows(normalizeReviewQueueItems(out));
     } catch {
       renderReviewRows([]);
     }

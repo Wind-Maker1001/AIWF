@@ -6,11 +6,16 @@ from typing import Any, Callable, Dict, Optional
 from aiwf.flows.cleaning_flow_helpers import (
     materialize_accel_outputs,
     materialize_local_outputs,
-    materialize_office_outputs,
     prepare_accel_result,
     prepare_job_layout,
     prepare_local_clean_cache,
     resolve_base_url,
+)
+from aiwf.flows.cleaning_orchestrator_support import (
+    build_office_outputs_fn,
+    build_success_result,
+    collect_materialized_artifacts,
+    register_artifacts,
 )
 
 
@@ -98,17 +103,15 @@ def run_cleaning_flow(
             is_valid_parquet_file=is_valid_parquet_file,
         )
 
-        def office_outputs_fn(**kwargs: Any) -> Dict[str, Any]:
-            return materialize_office_outputs(
-                **kwargs,
-                office_rows_subset=office_rows_subset,
-                build_profile=build_profile,
-                write_profile_illustration_png=write_profile_illustration_png,
-                write_fin_xlsx=write_fin_xlsx,
-                write_audit_docx=write_audit_docx,
-                write_deck_pptx=write_deck_pptx,
-                sha256_file=sha256_file,
-            )
+        office_outputs_fn = build_office_outputs_fn(
+            office_rows_subset=office_rows_subset,
+            build_profile=build_profile,
+            write_profile_illustration_png=write_profile_illustration_png,
+            write_fin_xlsx=write_fin_xlsx,
+            write_audit_docx=write_audit_docx,
+            write_deck_pptx=write_deck_pptx,
+            sha256_file=sha256_file,
+        )
 
         if accel_result["use_accel_outputs"]:
             materialized = materialize_accel_outputs(
@@ -142,21 +145,16 @@ def run_cleaning_flow(
                 materialize_office_outputs_fn=office_outputs_fn,
             )
 
-        artifacts = list(materialized.get("core_artifacts") or [])
-        artifacts.extend(list(materialized.get("office_artifacts") or []))
+        artifacts = collect_materialized_artifacts(materialized)
 
-        for a in artifacts:
-            base_artifact_upsert(
-                base_url=base_url,
-                job_id=job_id,
-                actor=actor,
-                artifact_id=a["artifact_id"],
-                kind=a["kind"],
-                path=a["path"],
-                sha256=a["sha256"],
-                extra_json=None,
-                headers=headers,
-            )
+        register_artifacts(
+            base_artifact_upsert=base_artifact_upsert,
+            base_url=base_url,
+            job_id=job_id,
+            actor=actor,
+            artifacts=artifacts,
+            headers=headers,
+        )
 
         base_step_done(
             base_url=base_url,
@@ -167,24 +165,13 @@ def run_cleaning_flow(
             headers=headers,
         )
 
-        return {
-            "ok": True,
-            "job_id": job_id,
-            "flow": "cleaning",
-            "output_hash": materialized["sha_parquet"],
-            "seconds": round(time.time() - t0, 3),
-            "artifacts": artifacts,
-            "profile": materialized["profile"],
-            "accel": {
-                "attempted": accel_result["accel"].get("attempted", False),
-                "ok": accel_result["accel"].get("ok", False),
-                "used_fallback": not accel_result["use_accel_outputs"],
-                "validation_error": accel_result["accel_validation_error"],
-                "office_generation_mode": (accel_result["accel_resp"] or {}).get("office_generation_mode"),
-                "office_generation_warning": (accel_result["accel_resp"] or {}).get("office_generation_warning"),
-                "detail": accel_result["accel"],
-            },
-        }
+        return build_success_result(
+            job_id=job_id,
+            materialized=materialized,
+            artifacts=artifacts,
+            accel_result=accel_result,
+            started_at=t0,
+        )
     except Exception as e:
         try:
             base_step_fail(

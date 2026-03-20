@@ -1,8 +1,8 @@
+import { applyWorkflowStatus } from "./status-ui-support.js";
+
 function createWorkflowStatusUi(els) {
   function setStatus(text, ok = true) {
-    if (!els.status) return;
-    els.status.className = `status ${ok ? "ok" : "bad"}`;
-    els.status.textContent = text;
+    applyWorkflowStatus(els, text, ok);
   }
 
   return { setStatus };

@@ -27,10 +27,7 @@ public class JobRepository {
     public String createJob(String owner) {
         String jobId = UUID.randomUUID().toString().replace("-", "");
         jdbc.update(
-                """
-                INSERT INTO dbo.jobs (job_id, owner, status, created_at)
-                VALUES (?, ?, ?, SYSDATETIME())
-                """,
+                JobRepositorySupport.INSERT_JOB,
                 jobId,
                 owner,
                 JobStatus.RUNNING.toDb()
@@ -42,13 +39,8 @@ public class JobRepository {
     public JobRow getJob(String jobId) {
         try {
             return jdbc.queryForObject(
-                    "SELECT job_id, owner, status, created_at FROM dbo.jobs WHERE job_id = ?",
-                    (rs, rowNum) -> new JobRow(
-                            rs.getString("job_id"),
-                            rs.getObject("created_at"),
-                            rs.getString("owner"),
-                            JobStatus.fromDb(rs.getString("status"))
-                    ),
+                    JobRepositorySupport.SELECT_JOB,
+                    JobRepositorySupport.JOB_ROW_MAPPER,
                     jobId
             );
         } catch (EmptyResultDataAccessException e) {
@@ -58,26 +50,8 @@ public class JobRepository {
 
     public List<StepRow> listSteps(String jobId) {
         return jdbc.query(
-                """
-                SELECT job_id, step_id, status, input_uri, output_uri, ruleset_version, params_json,
-                       started_at, ended_at, output_hash, error
-                FROM dbo.steps
-                WHERE job_id = ?
-                ORDER BY started_at ASC
-                """,
-                (rs, rowNum) -> new StepRow(
-                        rs.getString("job_id"),
-                        rs.getString("step_id"),
-                        StepStatus.fromDb(rs.getString("status")),
-                        rs.getString("input_uri"),
-                        rs.getString("output_uri"),
-                        rs.getString("ruleset_version"),
-                        rs.getString("params_json"),
-                        rs.getObject("started_at"),
-                        rs.getObject("ended_at"),
-                        rs.getString("output_hash"),
-                        rs.getString("error")
-                ),
+                JobRepositorySupport.SELECT_STEPS,
+                JobRepositorySupport.STEP_ROW_MAPPER,
                 jobId
         );
     }
@@ -85,25 +59,8 @@ public class JobRepository {
     public StepRow getStep(String jobId, String stepId) {
         try {
             return jdbc.queryForObject(
-                    """
-                    SELECT job_id, step_id, status, input_uri, output_uri, ruleset_version, params_json,
-                           started_at, ended_at, output_hash, error
-                    FROM dbo.steps
-                    WHERE job_id = ? AND step_id = ?
-                    """,
-                    (rs, rowNum) -> new StepRow(
-                            rs.getString("job_id"),
-                            rs.getString("step_id"),
-                            StepStatus.fromDb(rs.getString("status")),
-                            rs.getString("input_uri"),
-                            rs.getString("output_uri"),
-                            rs.getString("ruleset_version"),
-                            rs.getString("params_json"),
-                            rs.getObject("started_at"),
-                            rs.getObject("ended_at"),
-                            rs.getString("output_hash"),
-                            rs.getString("error")
-                    ),
+                    JobRepositorySupport.SELECT_STEP,
+                    JobRepositorySupport.STEP_ROW_MAPPER,
                     jobId,
                     stepId
             );
@@ -123,16 +80,7 @@ public class JobRepository {
         String rv = safeRulesetVersion(rulesetVersion);
 
         int updated = jdbc.update(
-                """
-                UPDATE dbo.steps
-                SET status = ?,
-                    input_uri = ?,
-                    output_uri = ?,
-                    ruleset_version = ?,
-                    params_json = ?,
-                    started_at = COALESCE(started_at, SYSDATETIME())
-                WHERE job_id = ? AND step_id = ? AND status = ?
-                """,
+                JobRepositorySupport.UPDATE_STEP_RUNNING,
                 StepStatus.RUNNING.toDb(),
                 inputUri,
                 outputUri,
@@ -149,12 +97,7 @@ public class JobRepository {
 
         try {
             jdbc.update(
-                    """
-                    INSERT INTO dbo.steps
-                        (job_id, step_id, status, input_uri, output_uri, ruleset_version, params_json, started_at)
-                    VALUES
-                        (?, ?, ?, ?, ?, ?, ?, SYSDATETIME())
-                    """,
+                    JobRepositorySupport.INSERT_STEP_RUNNING,
                     jobId,
                     stepId,
                     StepStatus.RUNNING.toDb(),
@@ -166,16 +109,7 @@ public class JobRepository {
             return new StepTransitionResult(getStep(jobId, stepId), true);
         } catch (DuplicateKeyException e) {
             int retried = jdbc.update(
-                    """
-                    UPDATE dbo.steps
-                    SET status = ?,
-                        input_uri = ?,
-                        output_uri = ?,
-                        ruleset_version = ?,
-                        params_json = ?,
-                        started_at = COALESCE(started_at, SYSDATETIME())
-                    WHERE job_id = ? AND step_id = ? AND status = ?
-                    """,
+                    JobRepositorySupport.UPDATE_STEP_RUNNING,
                     StepStatus.RUNNING.toDb(),
                     inputUri,
                     outputUri,
@@ -191,13 +125,7 @@ public class JobRepository {
 
     public StepTransitionResult markStepDone(String jobId, String stepId, String outputHash) {
         int updated = jdbc.update(
-                """
-                UPDATE dbo.steps
-                SET status = ?,
-                    output_hash = ?,
-                    ended_at = SYSDATETIME()
-                WHERE job_id = ? AND step_id = ? AND status = ?
-                """,
+                JobRepositorySupport.UPDATE_STEP_DONE,
                 StepStatus.DONE.toDb(),
                 outputHash,
                 jobId,
@@ -209,13 +137,7 @@ public class JobRepository {
 
     public StepTransitionResult markStepFailed(String jobId, String stepId, String error) {
         int updated = jdbc.update(
-                """
-                UPDATE dbo.steps
-                SET status = ?,
-                    error = ?,
-                    ended_at = SYSDATETIME()
-                WHERE job_id = ? AND step_id = ? AND status = ?
-                """,
+                JobRepositorySupport.UPDATE_STEP_FAILED,
                 StepStatus.FAILED.toDb(),
                 error,
                 jobId,
@@ -227,19 +149,8 @@ public class JobRepository {
 
     public List<ArtifactRow> listArtifacts(String jobId) {
         return jdbc.query(
-                """
-                SELECT artifact_id, kind, path, sha256, created_at
-                FROM dbo.artifacts
-                WHERE job_id = ?
-                ORDER BY created_at DESC
-                """,
-                (rs, rowNum) -> new ArtifactRow(
-                        rs.getString("artifact_id"),
-                        rs.getString("kind"),
-                        rs.getString("path"),
-                        rs.getString("sha256"),
-                        rs.getObject("created_at")
-                ),
+                JobRepositorySupport.SELECT_ARTIFACTS,
+                JobRepositorySupport.ARTIFACT_ROW_MAPPER,
                 jobId
         );
     }
@@ -252,13 +163,7 @@ public class JobRepository {
             String sha256
     ) {
         int updated = jdbc.update(
-                """
-                UPDATE dbo.artifacts
-                SET kind = ?,
-                    path = ?,
-                    sha256 = ?
-                WHERE job_id = ? AND artifact_id = ?
-                """,
+                JobRepositorySupport.UPDATE_ARTIFACT,
                 kind,
                 path,
                 sha256,
@@ -269,10 +174,7 @@ public class JobRepository {
         completeUpsert(
                 updated,
                 () -> jdbc.update(
-                        """
-                        INSERT INTO dbo.artifacts (job_id, artifact_id, kind, path, sha256, created_at)
-                        VALUES (?, ?, ?, ?, ?, SYSDATETIME())
-                        """,
+                        JobRepositorySupport.INSERT_ARTIFACT,
                         jobId,
                         artifactId,
                         kind,
@@ -280,13 +182,7 @@ public class JobRepository {
                         sha256
                 ),
                 () -> jdbc.update(
-                        """
-                        UPDATE dbo.artifacts
-                        SET kind = ?,
-                            path = ?,
-                            sha256 = ?
-                        WHERE job_id = ? AND artifact_id = ?
-                        """,
+                        JobRepositorySupport.UPDATE_ARTIFACT,
                         kind,
                         path,
                         sha256,
@@ -298,10 +194,7 @@ public class JobRepository {
 
     public void audit(AuditEvent event) {
         jdbc.update(
-                """
-                INSERT INTO dbo.audit_log (job_id, actor, action, step_id, detail_json, created_at)
-                VALUES (?, ?, ?, ?, ?, SYSDATETIME())
-                """,
+                JobRepositorySupport.INSERT_AUDIT,
                 event.jobId(),
                 event.actor(),
                 event.action(),

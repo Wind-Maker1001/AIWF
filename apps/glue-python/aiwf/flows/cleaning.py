@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import hashlib
 import os
 import time
-from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from aiwf.office_style import (
@@ -19,7 +17,6 @@ from aiwf.office_outputs import (
 )
 from aiwf.flows.artifact_selection import validate_artifact_selection_config_with_tokens
 from aiwf.flows.cleaning_artifacts import list_cleaning_artifact_tokens
-from aiwf.accel_client import run_cleaning_operator, transform_rows_v2_operator
 from aiwf.flows.office_artifacts import list_office_artifact_tokens
 from aiwf.flows.cleaning_config import (
     is_generic_rules_enabled as _is_generic_rules_enabled_impl,
@@ -52,13 +49,19 @@ from aiwf.flows.cleaning_outputs import (
 )
 from aiwf.flows.cleaning_profile import build_profile_impl
 from aiwf.flows.cleaning_quality import apply_quality_gates_impl
-from aiwf.flows.cleaning_transport import (
-    base_artifact_upsert_impl,
-    base_step_done_impl,
-    base_step_fail_impl,
-    base_step_start_impl,
-    headers_from_params_impl,
-    post_json_impl,
+from aiwf.flows.cleaning_runtime_support import (
+    base_artifact_upsert as _base_artifact_upsert_impl_runtime,
+    base_step_done as _base_step_done_impl_runtime,
+    base_step_fail as _base_step_fail_impl_runtime,
+    base_step_start as _base_step_start_impl_runtime,
+    ensure_dirs as _ensure_dirs_impl_runtime,
+    headers_from_params as _headers_from_params_impl_runtime,
+    is_valid_parquet_file as _is_valid_parquet_file_impl_runtime,
+    post_json as _post_json_impl_runtime,
+    sha256_file as _sha256_file_impl_runtime,
+    try_accel_cleaning as _try_accel_cleaning_impl_runtime,
+    try_rust_transform_rows_v2 as _try_rust_transform_rows_v2_impl_runtime,
+    utc_now_str as _utc_now_str_impl_runtime,
 )
 from aiwf.flows.cleaning_simple_rules import clean_rows_simple as _clean_rows_simple
 from aiwf.flows.cleaning_generic_rules import clean_rows_generic as _clean_rows_generic_external
@@ -66,20 +69,15 @@ from aiwf.paths import resolve_path
 
 
 def _sha256_file(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    return _sha256_file_impl_runtime(path)
 
 
 def _ensure_dirs(*paths: str) -> None:
-    for p in paths:
-        os.makedirs(p, exist_ok=True)
+    return _ensure_dirs_impl_runtime(*paths)
 
 
 def _utc_now_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return _utc_now_str_impl_runtime()
 
 
 def _write_profile_illustration_png(path: str, profile: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> bool:
@@ -87,28 +85,15 @@ def _write_profile_illustration_png(path: str, profile: Dict[str, Any], params: 
 
 
 def _is_valid_parquet_file(path: str) -> bool:
-    # Lightweight parquet validation using magic bytes.
-    if not path or not os.path.isfile(path):
-        return False
-    try:
-        size = os.path.getsize(path)
-        if size < 8:
-            return False
-        with open(path, "rb") as f:
-            head = f.read(4)
-            f.seek(-4, os.SEEK_END)
-            tail = f.read(4)
-        return head == b"PAR1" and tail == b"PAR1"
-    except Exception:
-        return False
+    return _is_valid_parquet_file_impl_runtime(path)
 
 
 def _headers_from_params(params: Dict[str, Any]) -> Dict[str, str]:
-    return headers_from_params_impl(params, env_api_key=os.getenv("AIWF_API_KEY"))
+    return _headers_from_params_impl_runtime(params, env_api_key=os.getenv("AIWF_API_KEY"))
 
 
 def _post_json(url: str, body: Dict[str, Any], headers: Dict[str, str]) -> None:
-    return post_json_impl(url, body, headers)
+    return _post_json_impl_runtime(url, body, headers)
 
 
 def _try_accel_cleaning(
@@ -120,7 +105,7 @@ def _try_accel_cleaning(
     input_uri: Optional[str],
     output_uri: Optional[str],
 ) -> Dict[str, Any]:
-    return run_cleaning_operator(
+    return _try_accel_cleaning_impl_runtime(
         params=params,
         job_id=job_id,
         step_id=step_id,
@@ -132,19 +117,11 @@ def _try_accel_cleaning(
 
 
 def _try_rust_transform_rows_v2(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
-    rules = _rules_dict(params)
-    return transform_rows_v2_operator(
-        raw_rows=raw_rows,
-        params=params,
-        rules=rules,
-        quality_gates={
-            "max_invalid_rows": _rule_param(params, "max_invalid_rows"),
-            "min_output_rows": _rule_param(params, "min_output_rows"),
-            "max_invalid_ratio": _rule_param(params, "max_invalid_ratio"),
-            "required_fields": _rule_param(params, "required_fields"),
-            "max_required_missing_ratio": _rule_param(params, "max_required_missing_ratio"),
-        },
-        schema_hint={"source": "glue-python.cleaning"},
+    return _try_rust_transform_rows_v2_impl_runtime(
+        raw_rows,
+        params,
+        rules_dict=_rules_dict,
+        rule_param=_rule_param,
     )
 
 
@@ -159,7 +136,7 @@ def _base_step_start(
     params: Dict[str, Any],
     headers: Dict[str, str],
 ) -> None:
-    return base_step_start_impl(
+    return _base_step_start_impl_runtime(
         base_url=base_url,
         job_id=job_id,
         step_id=step_id,
@@ -169,7 +146,7 @@ def _base_step_start(
         output_uri=output_uri,
         params=params,
         headers=headers,
-        post_json=_post_json,
+        post_json_fn=_post_json,
     )
 
 
@@ -181,14 +158,14 @@ def _base_step_done(
     output_hash: str,
     headers: Dict[str, str],
 ) -> None:
-    return base_step_done_impl(
+    return _base_step_done_impl_runtime(
         base_url=base_url,
         job_id=job_id,
         step_id=step_id,
         actor=actor,
         output_hash=output_hash,
         headers=headers,
-        post_json=_post_json,
+        post_json_fn=_post_json,
     )
 
 
@@ -200,14 +177,14 @@ def _base_step_fail(
     error: str,
     headers: Dict[str, str],
 ) -> None:
-    return base_step_fail_impl(
+    return _base_step_fail_impl_runtime(
         base_url=base_url,
         job_id=job_id,
         step_id=step_id,
         actor=actor,
         error=error,
         headers=headers,
-        post_json=_post_json,
+        post_json_fn=_post_json,
     )
 
 
@@ -222,7 +199,7 @@ def _base_artifact_upsert(
     extra_json: Optional[str],
     headers: Dict[str, str],
 ) -> None:
-    return base_artifact_upsert_impl(
+    return _base_artifact_upsert_impl_runtime(
         base_url=base_url,
         job_id=job_id,
         actor=actor,

@@ -1,3 +1,8 @@
+import {
+  normalizeQualityGateExportFormat,
+  parseQualityGatePrefs,
+} from "./quality-gate-support.js";
+
 function createWorkflowQualityGateUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -15,17 +20,11 @@ function createWorkflowQualityGateUi(els, deps = {}) {
 
   function loadQualityGatePrefs() {
     try {
-      const raw = localStorage.getItem(prefsStorageKey);
-      if (!raw) return;
-      const obj = JSON.parse(raw);
-      const filter = obj?.filter && typeof obj.filter === "object" ? obj.filter : {};
-      if (els.qualityGateRunIdFilter) els.qualityGateRunIdFilter.value = String(filter.run_id || "");
-      const status = String(filter.status || "all").trim().toLowerCase();
-      if (els.qualityGateStatusFilter) {
-        els.qualityGateStatusFilter.value = (status === "blocked" || status === "pass") ? status : "all";
-      }
-      const fmt = String(obj?.format || "md").trim().toLowerCase();
-      if (els.qualityGateExportFormat) els.qualityGateExportFormat.value = fmt === "json" ? "json" : "md";
+      const prefs = parseQualityGatePrefs(localStorage.getItem(prefsStorageKey));
+      if (!prefs) return;
+      if (els.qualityGateRunIdFilter) els.qualityGateRunIdFilter.value = prefs.filter.run_id;
+      if (els.qualityGateStatusFilter) els.qualityGateStatusFilter.value = prefs.filter.status;
+      if (els.qualityGateExportFormat) els.qualityGateExportFormat.value = prefs.format;
     } catch {}
   }
 
@@ -46,7 +45,7 @@ function createWorkflowQualityGateUi(els, deps = {}) {
     saveQualityGatePrefs();
     const out = await window.aiwfDesktop.exportWorkflowQualityGateReports({
       limit: 500,
-      format: String(els.qualityGateExportFormat?.value || "md").trim().toLowerCase() === "json" ? "json" : "md",
+      format: normalizeQualityGateExportFormat(els.qualityGateExportFormat?.value || "md"),
       filter: qualityGateFilterPayload(),
     });
     if (!out?.ok) {

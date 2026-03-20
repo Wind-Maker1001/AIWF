@@ -1,0 +1,37 @@
+function getWorkflowEditorElements($) {
+  return {
+    selectedNodeInfo: $("selectedNodeInfo"),
+    selectedEdgeInfo: $("selectedEdgeInfo"),
+    edgeWhenKind: $("edgeWhenKind"),
+    edgeWhenBoolWrap: $("edgeWhenBoolWrap"),
+    edgeWhenBool: $("edgeWhenBool"),
+    edgeWhenPathWrap: $("edgeWhenPathWrap"),
+    edgeWhenPath: $("edgeWhenPath"),
+    edgePathHints: $("edgePathHints"),
+    edgePathHintSelect: $("edgePathHintSelect"),
+    edgeWhenRuleWrap: $("edgeWhenRuleWrap"),
+    edgeWhenField: $("edgeWhenField"),
+    edgeFieldHints: $("edgeFieldHints"),
+    edgeFieldHintSelect: $("edgeFieldHintSelect"),
+    edgeWhenOp: $("edgeWhenOp"),
+    edgeWhenValue: $("edgeWhenValue"),
+    btnBuildEdgeWhen: $("btnBuildEdgeWhen"),
+    btnParseEdgeWhen: $("btnParseEdgeWhen"),
+    edgeWhenText: $("edgeWhenText"),
+    btnApplyEdgeCfg: $("btnApplyEdgeCfg"),
+    btnClearEdgeCfg: $("btnClearEdgeCfg"),
+    nodeConfig: $("nodeConfig"),
+    btnApplyNodeCfg: $("btnApplyNodeCfg"),
+    btnResetNodeCfg: $("btnResetNodeCfg"),
+    btnFormatNodeCfg: $("btnFormatNodeCfg"),
+    btnCfgForm: $("btnCfgForm"),
+    btnCfgJson: $("btnCfgJson"),
+    nodeConfigForm: $("nodeConfigForm"),
+    inputMapRows: $("inputMapRows"),
+    outputMapRows: $("outputMapRows"),
+    btnAddInputMap: $("btnAddInputMap"),
+    btnAddOutputMap: $("btnAddOutputMap"),
+  };
+}
+
+export { getWorkflowEditorElements };

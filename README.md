@@ -65,6 +65,7 @@ Active onboarding and operations docs:
 - [docs/quickstart_backend.md](docs/quickstart_backend.md)
 - [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
 - [docs/verification.md](docs/verification.md)
+- [docs/project_review_20260313.md](docs/project_review_20260313.md)
 - [docs/dify_desktop_app.md](docs/dify_desktop_app.md)
 - [docs/dify_local_integration.md](docs/dify_local_integration.md)
 

@@ -1,3 +1,10 @@
+import {
+  auditLogRequestPayload,
+  failureSummaryRequestPayload,
+  normalizeTimelineRunId,
+  timelineStatusMessage,
+} from "./audit-ui-support.js";
+
 function createWorkflowAuditUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -7,23 +14,23 @@ function createWorkflowAuditUi(els, deps = {}) {
   } = deps;
 
   async function refreshTimeline() {
-    const runId = String(els.timelineRunId?.value || "").trim();
+    const runId = normalizeTimelineRunId(els.timelineRunId?.value || "");
     if (!runId) {
       setStatus("请先填写 Run ID", false);
       return;
     }
     const out = await window.aiwfDesktop.getWorkflowRunTimeline({ run_id: runId });
     renderTimelineRows(out);
-    setStatus(out?.ok ? "时间线刷新完成" : `时间线刷新失败: ${out?.error || "unknown"}`, !!out?.ok);
+    setStatus(timelineStatusMessage(out), !!out?.ok);
   }
 
   async function refreshFailureSummary() {
-    const out = await window.aiwfDesktop.getWorkflowFailureSummary({ limit: 500 });
+    const out = await window.aiwfDesktop.getWorkflowFailureSummary(failureSummaryRequestPayload());
     renderFailureRows(out || {});
   }
 
   async function refreshAudit() {
-    const out = await window.aiwfDesktop.listWorkflowAuditLogs({ limit: 120 });
+    const out = await window.aiwfDesktop.listWorkflowAuditLogs(auditLogRequestPayload());
     renderAuditRows(out?.items || []);
   }
 

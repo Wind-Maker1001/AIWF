@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-from aiwf.accel_transport import (
-    DEFAULT_ACCEL_BASE_URL,
-    get_json as _get_json_impl,
+from aiwf.rust_client_support import (
     json_or_ok as _json_or_ok_impl,
+    operator_get as _operator_get_impl,
+    operator_post as _operator_post_impl,
     operator_url as _operator_url,
-    post_json as _post_json_impl,
+    request_json as _request_json_impl,
+    request_text as _request_text_impl,
 )
 
 def _url(base: str, path: str) -> str:
@@ -14,11 +15,11 @@ def _url(base: str, path: str) -> str:
 
 
 def post_json(path: str, payload: Dict[str, Any], base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
-    return _post_json_impl(path, payload, base_url=base_url or DEFAULT_ACCEL_BASE_URL, timeout=timeout)
+    return _operator_post_impl(path, payload, base_url=base_url, timeout=timeout)
 
 
 def get_json(path: str, base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
-    return _get_json_impl(path, base_url=base_url or DEFAULT_ACCEL_BASE_URL, timeout=timeout)
+    return _operator_get_impl(path, base_url=base_url, timeout=timeout)
 
 
 def _json_or_ok(response: Any, context: str) -> Dict[str, Any]:
@@ -516,12 +517,7 @@ def submit_transform_rows_v2(
 
 
 def get_task(task_id: str, base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
-    import requests
-
-    r = requests.get(_url(base_url, f"/tasks/{task_id}"), timeout=timeout)
-    if r.status_code >= 400:
-        raise RuntimeError(f"GET /tasks/{task_id} -> {r.status_code} {r.text}")
-    return _json_or_ok(r, f"GET /tasks/{task_id}")
+    return _request_json_impl("GET", base_url, f"/tasks/{task_id}", timeout=timeout)
 
 
 def health(base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
@@ -533,18 +529,8 @@ def reload_runtime_config(base_url: str = "http://127.0.0.1:18082", timeout: flo
 
 
 def get_metrics(base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> str:
-    import requests
-
-    r = requests.get(_url(base_url, "/metrics"), timeout=timeout)
-    if r.status_code >= 400:
-        raise RuntimeError(f"GET /metrics -> {r.status_code} {r.text}")
-    return r.text
+    return _request_text_impl(base_url, "/metrics", timeout=timeout)
 
 
 def cancel_task(task_id: str, base_url: str = "http://127.0.0.1:18082", timeout: float = 10.0) -> Dict[str, Any]:
-    import requests
-
-    r = requests.post(_url(base_url, f"/tasks/{task_id}/cancel"), timeout=timeout)
-    if r.status_code >= 400:
-        raise RuntimeError(f"POST /tasks/{task_id}/cancel -> {r.status_code} {r.text}")
-    return _json_or_ok(r, f"POST /tasks/{task_id}/cancel")
+    return _request_json_impl("POST", base_url, f"/tasks/{task_id}/cancel", timeout=timeout)

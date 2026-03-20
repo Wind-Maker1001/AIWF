@@ -1,3 +1,9 @@
+import {
+  loadWorkflowStatusMessage,
+  saveWorkflowName,
+  stringifyWorkflowGraph,
+} from "./flow-io-support.js";
+
 function createWorkflowFlowIoUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -10,7 +16,7 @@ function createWorkflowFlowIoUi(els, deps = {}) {
   } = deps;
 
   function exportJson() {
-    const json = JSON.stringify(graphPayload(), null, 2);
+    const json = stringifyWorkflowGraph(graphPayload());
     if (els.log) els.log.textContent = json;
     setStatus("已导出流程 JSON 到右侧日志区", true);
   }
@@ -18,7 +24,7 @@ function createWorkflowFlowIoUi(els, deps = {}) {
   async function saveFlow() {
     try {
       const graph = graphPayload();
-      const name = String(els.workflowName?.value || "").trim() || "workflow";
+      const name = saveWorkflowName(els.workflowName?.value || "");
       const out = await window.aiwfDesktop.saveWorkflow(graph, name);
       if (out?.ok) {
         setStatus(`流程已保存: ${out.path}`, true);
@@ -42,11 +48,7 @@ function createWorkflowFlowIoUi(els, deps = {}) {
       applyLoadedWorkflowGraph(migrated.graph || {});
       if (els.workflowName) els.workflowName.value = getLoadedWorkflowName() || "自定义流程";
       renderMigrationReport(migrated);
-      if (migrated.migrated) {
-        setStatus(`流程已加载并迁移: ${out.path} (${migrated.notes.join(", ")})`, true);
-      } else {
-        setStatus(`流程已加载: ${out.path}`, true);
-      }
+      setStatus(loadWorkflowStatusMessage(out.path, migrated), true);
     } catch (e) {
       setStatus(`加载失败: ${e}`, false);
     }

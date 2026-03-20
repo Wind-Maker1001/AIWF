@@ -27,81 +27,44 @@ public class RuntimeTaskService {
     }
 
     public RuntimeTaskUpsertResp upsertTask(RuntimeTaskUpsertReq body) {
-        String taskId = trimToNull(body.taskId());
-        if (taskId == null) {
-            throw ApiException.badRequest("task_id_required", "task_id required");
-        }
-
-        String tenantId = defaultIfBlank(body.tenantId(), "default");
-        String operator = defaultIfBlank(body.operator(), "transform_rows_v2");
-        RuntimeTaskStatus status = parseStatus(body.status(), RuntimeTaskStatus.QUEUED);
-        String idempotencyKey = trimToNull(body.idempotencyKey());
-        long createdAt = body.createdAt() == null ? 0L : body.createdAt();
-        long updatedAt = body.updatedAt() == null ? 0L : body.updatedAt();
-        int attempts = body.attempts() == null ? 0 : Math.max(0, body.attempts());
-        if (createdAt <= 0) {
-            createdAt = updatedAt > 0 ? updatedAt : (System.currentTimeMillis() / 1000L);
-        }
-        if (updatedAt <= 0) {
-            updatedAt = createdAt;
-        }
+        long nowEpoch = System.currentTimeMillis() / 1000L;
+        RuntimeTaskServiceSupport.PreparedRuntimeTaskUpsert prepared = RuntimeTaskServiceSupport.prepareUpsert(
+                body,
+                JsonUtil.toJsonOrNull(body.result()),
+                nowEpoch
+        );
 
         try {
-            RuntimeTaskRow existing = tasks.getTask(taskId);
-            if (existing == null && idempotencyKey != null) {
-                existing = tasks.getTaskByTenantOperatorAndIdempotencyKey(tenantId, operator, idempotencyKey);
+            RuntimeTaskRow existing = tasks.getTask(prepared.taskId());
+            if (existing == null && prepared.idempotencyKey() != null) {
+                existing = tasks.getTaskByTenantOperatorAndIdempotencyKey(
+                        prepared.tenantId(),
+                        prepared.operator(),
+                        prepared.idempotencyKey()
+                );
                 if (existing != null) {
                     return new RuntimeTaskUpsertResp(true, existing.taskId(), existing.tenantId(), existing.status().toDb());
                 }
             }
-            if (existing != null) {
-                if (!Objects.equals(existing.tenantId(), tenantId)) {
-                    throw ApiException.conflict(
-                            "runtime_task_tenant_conflict",
-                            "runtime task tenant cannot change",
-                            Map.of("task_id", taskId, "tenant_id", existing.tenantId())
-                    );
-                }
-                if (!Objects.equals(existing.operator(), operator)) {
-                    throw ApiException.conflict(
-                            "runtime_task_operator_conflict",
-                            "runtime task operator cannot change",
-                            Map.of("task_id", taskId, "operator", existing.operator())
-                    );
-                }
-                if (existing.idempotencyKey() != null && idempotencyKey != null && !Objects.equals(existing.idempotencyKey(), idempotencyKey)) {
-                    throw ApiException.conflict(
-                            "runtime_task_idempotency_conflict",
-                            "runtime task idempotency key cannot change",
-                            Map.of("task_id", taskId, "idempotency_key", existing.idempotencyKey())
-                    );
-                }
-                if (updatedAt < existing.updatedAtEpoch()) {
-                    return new RuntimeTaskUpsertResp(true, existing.taskId(), existing.tenantId(), existing.status().toDb());
-                }
-                if (!existing.status().canTransitionTo(status)) {
-                    return new RuntimeTaskUpsertResp(true, existing.taskId(), existing.tenantId(), existing.status().toDb());
-                }
-                createdAt = existing.createdAtEpoch();
-                if (idempotencyKey == null) {
-                    idempotencyKey = existing.idempotencyKey();
-                }
-                attempts = Math.max(existing.attempts(), attempts);
+            RuntimeTaskServiceSupport.UpsertResolution resolution = RuntimeTaskServiceSupport.applyExisting(existing, prepared);
+            if (!resolution.shouldProceed()) {
+                return resolution.immediateResponse();
             }
+            RuntimeTaskServiceSupport.PreparedRuntimeTaskUpsert effective = resolution.prepared();
             tasks.upsertTask(
-                    taskId,
-                    tenantId,
-                    operator,
-                    status,
-                    createdAt,
-                    updatedAt,
-                    JsonUtil.toJsonOrNull(body.result()),
-                    trimToNull(body.error()),
-                    defaultIfBlank(body.source(), "accel-rust"),
-                    idempotencyKey,
-                    attempts
+                    effective.taskId(),
+                    effective.tenantId(),
+                    effective.operator(),
+                    effective.status(),
+                    effective.createdAtEpoch(),
+                    effective.updatedAtEpoch(),
+                    effective.resultJson(),
+                    effective.error(),
+                    effective.source(),
+                    effective.idempotencyKey(),
+                    effective.attempts()
             );
-            return new RuntimeTaskUpsertResp(true, taskId, tenantId, status.toDb());
+            return new RuntimeTaskUpsertResp(true, effective.taskId(), effective.tenantId(), effective.status().toDb());
         } catch (DataAccessException e) {
             throw ApiException.serviceUnavailable("runtime_task_store_unavailable", String.valueOf(e.getMostSpecificCause()));
         }
@@ -117,7 +80,7 @@ public class RuntimeTaskService {
         if (row == null) {
             throw ApiException.notFound("task_not_found", "task not found", Map.of("task_id", taskId));
         }
-        return new RuntimeTaskGetResp(true, toRuntimeTaskResp(row));
+        return new RuntimeTaskGetResp(true, RuntimeTaskServiceSupport.toRuntimeTaskResp(row));
     }
 
     public RuntimeTaskCancelResp cancelTask(String taskId) {
@@ -136,60 +99,15 @@ public class RuntimeTaskService {
     }
 
     public RuntimeTaskListResp listTasksByTenant(String tenantId, int limit) {
-        String effectiveTenantId = defaultIfBlank(tenantId, "default");
+        String effectiveTenantId = RuntimeTaskServiceSupport.defaultIfBlank(tenantId, "default");
         try {
             return new RuntimeTaskListResp(
                     true,
                     effectiveTenantId,
-                    tasks.listTasksByTenant(effectiveTenantId, limit).stream().map(this::toRuntimeTaskResp).toList()
+                    tasks.listTasksByTenant(effectiveTenantId, limit).stream().map(RuntimeTaskServiceSupport::toRuntimeTaskResp).toList()
             );
         } catch (DataAccessException e) {
             throw ApiException.serviceUnavailable("runtime_task_store_unavailable", String.valueOf(e.getMostSpecificCause()));
-        }
-    }
-
-    private static String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private static String defaultIfBlank(String value, String fallback) {
-        String trimmed = trimToNull(value);
-        return trimmed == null ? fallback : trimmed;
-    }
-
-    private RuntimeTaskResp toRuntimeTaskResp(RuntimeTaskRow row) {
-        return new RuntimeTaskResp(
-                row.taskId(),
-                row.tenantId(),
-                row.operator(),
-                row.status().toDb(),
-                row.createdAtEpoch(),
-                row.updatedAtEpoch(),
-                row.resultJson(),
-                row.error(),
-                row.source(),
-                row.idempotencyKey(),
-                row.attempts()
-        );
-    }
-
-    private RuntimeTaskStatus parseStatus(String value, RuntimeTaskStatus fallback) {
-        String trimmed = trimToNull(value);
-        if (trimmed == null) {
-            return fallback;
-        }
-        try {
-            return RuntimeTaskStatus.fromDb(trimmed);
-        } catch (IllegalArgumentException e) {
-            throw ApiException.badRequest(
-                    "runtime_task_status_invalid",
-                    "invalid runtime task status",
-                    Map.of("status", trimmed)
-            );
         }
     }
 }
