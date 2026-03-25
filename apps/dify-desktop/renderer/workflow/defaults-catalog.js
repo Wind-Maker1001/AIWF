@@ -1,84 +1,29 @@
-﻿export const NODE_CATALOG = [
-  { type: "ingest_files", name: "接收文件", desc: "接收原始文件输入并标准化路径" },
-  { type: "clean_md", name: "清洗 Markdown", desc: "提取正文并生成可供 AI 使用的 Markdown" },
-  { type: "compute_rust", name: "计算 (Rust)", desc: "调用 Rust 服务计算指标" },
-  { type: "transform_rows_v3", name: "清洗变换 v3", desc: "调用 Rust transform_rows_v3（AST 表达式 + lineage）" },
-  { type: "join_rows_v2", name: "多键 Join v2", desc: "调用 Rust join_rows_v2（inner/left/right/full/semi/anti）" },
-  { type: "join_rows_v3", name: "Join v3", desc: "调用 Rust join_rows_v3（auto/hash/sort_merge + spill 标记）" },
-  { type: "join_rows_v4", name: "Join v4", desc: "调用 Rust join_rows_v4（bloom 预过滤 + 策略优化）" },
-  { type: "aggregate_rows_v2", name: "聚合 v2", desc: "调用 Rust aggregate_rows_v2（含 stddev/percentile）" },
-  { type: "aggregate_rows_v3", name: "聚合 v3", desc: "调用 Rust aggregate_rows_v3（approx_count_distinct/approx_percentile）" },
-  { type: "aggregate_rows_v4", name: "聚合 v4", desc: "调用 Rust aggregate_rows_v4（近似+精确核验）" },
-  { type: "quality_check_v2", name: "质量检查 v2", desc: "调用 Rust quality_check_v2（范围/依赖/漂移）" },
-  { type: "quality_check_v3", name: "质量检查 v3", desc: "调用 Rust quality_check_v3（IQR 异常 + PSI 漂移）" },
-  { type: "quality_check_v4", name: "质量检查 v4", desc: "调用 Rust quality_check_v4（规则+IQR 异常检测）" },
-  { type: "plugin_registry_v1", name: "插件注册表 v1", desc: "动态注册/查询/删除 Rust 插件清单" },
-  { type: "window_rows_v1", name: "窗口函数 v1", desc: "调用 Rust window_rows_v1（row_number/rank/lag/lead/moving_avg）" },
-  { type: "optimizer_v1", name: "执行优化器 v1", desc: "调用 Rust optimizer_v1（执行引擎/策略建议）" },
-  { type: "load_rows_v2", name: "加载数据 v2", desc: "调用 Rust load_rows_v2（csv/jsonl/parquet/txt 等）" },
-  { type: "load_rows_v3", name: "连接器加载 v3", desc: "调用 Rust load_rows_v3（重试/续跑 token/connector 选项）" },
-  { type: "schema_registry_v1_infer", name: "Schema 推断", desc: "推断并可写入 schema registry" },
-  { type: "schema_registry_v1_get", name: "Schema 查询", desc: "按 name/version 查询 schema" },
-  { type: "schema_registry_v1_register", name: "Schema 注册", desc: "注册或更新 schema 到 registry" },
-  { type: "schema_registry_v2_check_compat", name: "Schema 兼容性", desc: "检查 schema 版本兼容（backward/forward/full）" },
-  { type: "schema_registry_v2_suggest_migration", name: "Schema 迁移建议", desc: "生成 schema 升级迁移步骤建议" },
-  { type: "udf_wasm_v1", name: "UDF WASM v1", desc: "调用 Rust udf_wasm_v1（离线内置沙箱模式）" },
-  { type: "time_series_v1", name: "时序分析 v1", desc: "滚动均值 + 环比/同比基础指标" },
-  { type: "stats_v1", name: "统计分析 v1", desc: "相关系数与线性回归" },
-  { type: "entity_linking_v1", name: "实体归一 v1", desc: "实体标准化与去重映射" },
-  { type: "table_reconstruct_v1", name: "表格重建 v1", desc: "从原始行文本重建表格行列" },
-  { type: "feature_store_v1_upsert", name: "特征入库 v1", desc: "按 key 存储特征向量/字段" },
-  { type: "feature_store_v1_get", name: "特征查询 v1", desc: "按 key 读取特征记录" },
-  { type: "lineage_v2", name: "血缘图 v2", desc: "字段依赖边提取与审计输出" },
-  { type: "lineage_v3", name: "血缘图 v3", desc: "字段+步骤双层血缘输出" },
-  { type: "rule_simulator_v1", name: "规则模拟 v1", desc: "候选规则影响评估" },
-  { type: "constraint_solver_v1", name: "约束求解 v1", desc: "一致性约束检查" },
-  { type: "chart_data_prep_v1", name: "图表数据准备 v1", desc: "生成 categories/series 图表结构" },
-  { type: "diff_audit_v1", name: "差异审计 v1", desc: "两批数据新增/删除/变更对比" },
-  { type: "vector_index_v1_build", name: "向量索引构建 v1", desc: "构建本地文本向量索引" },
-  { type: "vector_index_v1_search", name: "向量检索 v1", desc: "查询本地向量索引召回证据" },
-  { type: "evidence_rank_v1", name: "证据排序 v1", desc: "按多因子对证据打分排序" },
-  { type: "fact_crosscheck_v1", name: "事实交叉核验 v1", desc: "同类 claim 支持/未证实判定" },
-  { type: "timeseries_forecast_v1", name: "时序预测 v1", desc: "naive_drift/naive_last 预测" },
-  { type: "finance_ratio_v1", name: "财务比率 v1", desc: "流动比率/杠杆/利润率/现金流率" },
-  { type: "anomaly_explain_v1", name: "异常解释 v1", desc: "按字段贡献解释异常记录" },
-  { type: "evidence_conflict_v1", name: "证据冲突检测 v1", desc: "检测同主题证据间支持/反驳冲突" },
-  { type: "template_bind_v1", name: "模板绑定 v1", desc: "把 JSON 数据绑定到模板占位符" },
-  { type: "provenance_sign_v1", name: "溯源签名 v1", desc: "生成哈希链签名记录" },
-  { type: "stream_state_v1_save", name: "流状态保存 v1", desc: "保存流式状态与 offset" },
-  { type: "stream_state_v1_load", name: "流状态加载 v1", desc: "恢复流式状态与 offset" },
-  { type: "stream_state_v2", name: "流状态 v2", desc: "统一 save/load/delete + version 校验" },
-  { type: "parquet_io_v2", name: "Parquet IO v2", desc: "Parquet 读写/探查（列裁剪+过滤）" },
-  { type: "udf_wasm_v2", name: "UDF WASM v2", desc: "UDF v2（签名校验/输出限制/操作白名单）" },
-  { type: "explain_plan_v1", name: "执行计划解释 v1", desc: "生成步骤级估算成本与优化建议" },
-  { type: "query_lang_v1", name: "查询DSL v1", desc: "where/select/limit 轻量查询" },
-  { type: "columnar_eval_v1", name: "列式执行 v1", desc: "Arrow 列式过滤/投影执行" },
-  { type: "stream_window_v1", name: "流窗口 v1", desc: "事件时间窗口+watermark+触发" },
-  { type: "stream_window_v2", name: "流窗口 v2", desc: "tumbling/sliding/session + lateness side output" },
-  { type: "sketch_v1", name: "Sketch v1", desc: "统一 HLL/TDigest/TopK 草图接口" },
-  { type: "runtime_stats_v1", name: "运行统计 v1", desc: "记录/汇总算子时延与错误码" },
-  { type: "capabilities_v1", name: "能力发现 v1", desc: "查询 Rust 算子能力/版本矩阵" },
-  { type: "io_contract_v1", name: "I/O合约校验 v1", desc: "校验目标算子输入契约，避免脏输入进入执行链路" },
-  { type: "failure_policy_v1", name: "失败策略 v1", desc: "按错误类型输出重试与恢复动作建议" },
-  { type: "incremental_plan_v1", name: "增量计划 v1", desc: "输出缓存命中与断点续跑计划" },
-  { type: "tenant_isolation_v1", name: "租户隔离 v1", desc: "按租户配置并发/配额隔离策略" },
-  { type: "operator_policy_v1", name: "算子权限 v1", desc: "按租户配置算子 allow/deny 策略" },
-  { type: "optimizer_adaptive_v2", name: "自适应路由 v2", desc: "基于运行统计自动推荐执行引擎" },
-  { type: "vector_index_v2_build", name: "向量索引构建 v2", desc: "支持分片/增量/元数据" },
-  { type: "vector_index_v2_search", name: "向量检索 v2", desc: "支持 filter 与分片检索" },
-  { type: "vector_index_v2_eval", name: "向量检索评估 v2", desc: "按标注样本评估 recall@k 与 MRR" },
-  { type: "stream_reliability_v1", name: "流可靠性 v1", desc: "去重/断点/DLQ 统一控制" },
-  { type: "lineage_provenance_v1", name: "血缘签名融合 v1", desc: "合并 lineage 与 provenance 输出" },
-  { type: "contract_regression_v1", name: "合约回归 v1", desc: "自动生成 I/O 合约回归样例" },
-  { type: "perf_baseline_v1", name: "性能基线 v1", desc: "设置/检查算子 p95 性能门禁" },
-  { type: "plugin_operator_v1", name: "插件算子 v1", desc: "通过插件 ABI 执行外部算子" },
-  { type: "explain_plan_v2", name: "执行计划解释 v2", desc: "融合实际统计与运行统计的执行解释" },
-  { type: "manual_review", name: "人工审核", desc: "人工门禁节点，可批准/驳回后分支" },
-  { type: "sql_chart_v1", name: "SQL图表 v1", desc: "将行数据转换为图表 categories/series" },
-  { type: "office_slot_fill_v1", name: "Office插槽填充 v1", desc: "将图表/文本数据绑定到模板插槽，供 DOCX/PPTX/XLSX 渲染" },
-  { type: "ai_strategy_v1", name: "AI策略路由 v1", desc: "按主备策略路由外部AI并降级重试" },
-  { type: "ds_refine", name: "DS提炼（推荐）", desc: "使用 DeepSeek API 提炼 PDF/图片抽取文本（内部映射到 ai_refine）" },
-  { type: "ai_refine", name: "AI 提炼", desc: "外部 AI 对内容进行摘要提炼" },
-  { type: "ai_audit", name: "AI 审核", desc: "审核门禁，不通过则阻断后续流程" },
-  { type: "md_output", name: "Markdown 输出", desc: "写出 workflow_summary 与产物索引" },
-];
+import { DESKTOP_RUST_OPERATOR_TYPES } from "./rust_operator_manifest.generated.js";
+import { RUST_OPERATOR_PRESENTATIONS } from "./rust-operator-presentations.js";
+import {
+  buildRustOperatorPalettePolicy,
+} from "./rust-operator-palette-policy.js";
+import {
+  DESKTOP_RUST_OPERATOR_METADATA,
+} from "./rust_operator_manifest.generated.js";
+import { LOCAL_NODE_PRESENTATIONS } from "./local-node-presentations.js";
+import {
+  buildLocalNodePalettePolicy,
+} from "./local-node-palette-policy.js";
+
+const localPalettePolicy = buildLocalNodePalettePolicy(LOCAL_NODE_PRESENTATIONS);
+if (!localPalettePolicy.ok) {
+  throw new Error(localPalettePolicy.errors.join("; "));
+}
+export const LOCAL_NODE_CATALOG = Object.freeze(localPalettePolicy.entries);
+
+const palettePolicy = buildRustOperatorPalettePolicy(DESKTOP_RUST_OPERATOR_METADATA, RUST_OPERATOR_PRESENTATIONS);
+if (!palettePolicy.ok) {
+  throw new Error(palettePolicy.errors.join("; "));
+}
+export const RUST_NODE_CATALOG = Object.freeze(palettePolicy.entries);
+
+export const NODE_CATALOG = Object.freeze([
+  ...LOCAL_NODE_CATALOG,
+  ...RUST_NODE_CATALOG,
+]);

@@ -48,7 +48,11 @@ test("workflow debug api ui exposes working methods and disables without debug f
       unlink: () => {},
       linkToFrom: () => ({ ok: true }),
       exportGraph: () => state.graph,
-      importGraph: (graph) => { state.graph = graph; calls.push("import"); },
+      importGraph: (graph) => {
+        state.graph = graph;
+        calls.push("import");
+        return { graph };
+      },
     },
     canvas: {
       getRouteMetrics: () => ({ edges: 1 }),

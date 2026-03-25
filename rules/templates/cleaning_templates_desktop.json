@@ -1,4 +1,5 @@
-﻿{
+{
+  "schema_version": "cleaning_template_registry.v1",
   "templates": [
     {
       "id": "finance_report_v1",

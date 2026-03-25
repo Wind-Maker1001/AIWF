@@ -1,16 +1,28 @@
 function createWorkflowPreflightUi(els, deps = {}) {
-  const { focusNodeInCanvas = () => {} } = deps;
+  const {
+    focusNodeInCanvas = () => {},
+    createElement = (tag) => document.createElement(tag),
+  } = deps;
 
   function computePreflightRisk(issues = []) {
     const list = Array.isArray(issues) ? issues : [];
     let risk = 0;
-    list.forEach((it) => {
-      const level = String(it?.level || "").toLowerCase();
-      const kind = String(it?.kind || "").toLowerCase();
-      if (level === "error") risk += kind === "io_contract" ? 35 : 28;
-      else risk += kind === "io_contract" ? 12 : 8;
-      const msg = String(it?.message || "").toLowerCase();
-      if (msg.includes("endpoint") && msg.includes("为空")) risk += 18;
+    list.forEach((issue) => {
+      const level = String(issue?.level || "").toLowerCase();
+      const kind = String(issue?.kind || "").toLowerCase();
+      if (level === "error") {
+        if (kind === "io_contract") risk += 35;
+        else if (kind === "unknown_node_type") risk += 32;
+        else risk += 28;
+      } else if (kind === "io_contract") {
+        risk += 12;
+      } else {
+        risk += 8;
+      }
+      const message = String(issue?.message || "").toLowerCase();
+      if (message.includes("endpoint") && (message.includes("为空") || message.includes("blank"))) {
+        risk += 18;
+      }
     });
     const score = Math.max(0, Math.min(100, Math.round(risk)));
     let level = "low";
@@ -28,11 +40,43 @@ function createWorkflowPreflightUi(els, deps = {}) {
     return { score, level, label, color };
   }
 
+  function normalizeIssue(issue = {}) {
+    const kind = String(issue.kind || "").trim().toLowerCase();
+    const level = String(issue.level || "warning").trim().toLowerCase();
+    const nodeId = String(issue.node_id || "").trim();
+    const originalMessage = String(issue.message || "").trim();
+    const contractBoundary = String(issue.contract_boundary || "").trim();
+    const resolutionHint = String(issue.resolution_hint || "").trim();
+    const actionTextFromIssue = String(issue.action_text || "").trim();
+    if (kind === "unknown_node_type") {
+      return {
+        level,
+        kind,
+        nodeId,
+        message: [
+          "发现未注册节点类型。",
+          "该节点不在当前桌面节点目录内，主路径已禁止导入、添加和运行。",
+          contractBoundary ? `边界: ${contractBoundary}.` : "",
+          resolutionHint ? `处理方式: ${resolutionHint}.` : "处理方式：替换为已注册节点，或先同步 Rust manifest / local node policy。",
+          originalMessage ? `原始错误: ${originalMessage}` : "",
+        ].filter(Boolean).join(" "),
+        actionText: nodeId ? (actionTextFromIssue || "定位节点") : "同步目录或替换节点类型",
+      };
+    }
+    return {
+      level,
+      kind,
+      nodeId,
+      message: originalMessage,
+      actionText: nodeId ? (actionTextFromIssue || "定位节点") : "-",
+    };
+  }
+
   function renderPreflightReport(report) {
     const rep = report && typeof report === "object" ? report : { ok: true, issues: [] };
     const issues = Array.isArray(rep.issues) ? rep.issues : [];
-    const errorCount = issues.filter((x) => String(x.level || "") === "error").length;
-    const warnCount = issues.filter((x) => String(x.level || "") === "warning").length;
+    const errorCount = issues.filter((item) => String(item?.level || "").toLowerCase() === "error").length;
+    const warnCount = issues.filter((item) => String(item?.level || "").toLowerCase() === "warning").length;
     const totalCount = issues.length;
     const risk = rep.risk && typeof rep.risk === "object" ? rep.risk : computePreflightRisk(issues);
     if (els.preflightSummary) {
@@ -49,26 +93,25 @@ function createWorkflowPreflightUi(els, deps = {}) {
       els.preflightRows.innerHTML = '<tr><td colspan="4" style="color:#74879b">暂无问题</td></tr>';
       return;
     }
-    issues.forEach((it) => {
-      const tr = document.createElement("tr");
-      const tdLevel = document.createElement("td");
-      const tdType = document.createElement("td");
-      const tdMsg = document.createElement("td");
-      const tdAct = document.createElement("td");
-      const level = String(it.level || "warning");
-      tdLevel.textContent = level === "error" ? "错误" : "警告";
-      tdLevel.style.color = level === "error" ? "#b42318" : "#7a4a00";
-      tdType.textContent = String(it.kind || "");
-      tdMsg.textContent = String(it.message || "");
-      const nodeId = String(it.node_id || "").trim();
-      if (nodeId) {
-        const btn = document.createElement("button");
+    issues.forEach((issue) => {
+      const normalized = normalizeIssue(issue);
+      const tr = createElement("tr");
+      const tdLevel = createElement("td");
+      const tdType = createElement("td");
+      const tdMsg = createElement("td");
+      const tdAct = createElement("td");
+      tdLevel.textContent = normalized.level === "error" ? "错误" : "警告";
+      tdLevel.style.color = normalized.level === "error" ? "#b42318" : "#7a4a00";
+      tdType.textContent = normalized.kind || "";
+      tdMsg.textContent = normalized.message || "";
+      if (normalized.nodeId) {
+        const btn = createElement("button");
         btn.className = "mini";
-        btn.textContent = "定位节点";
-        btn.onclick = () => focusNodeInCanvas(nodeId);
+        btn.textContent = normalized.actionText;
+        btn.onclick = () => focusNodeInCanvas(normalized.nodeId);
         tdAct.appendChild(btn);
       } else {
-        tdAct.textContent = "-";
+        tdAct.textContent = normalized.actionText;
       }
       tr.append(tdLevel, tdType, tdMsg, tdAct);
       els.preflightRows.appendChild(tr);
@@ -76,40 +119,45 @@ function createWorkflowPreflightUi(els, deps = {}) {
   }
 
   function renderAutoFixDiff(summary) {
-    const s = summary && typeof summary === "object" ? summary : null;
+    const result = summary && typeof summary === "object" ? summary : null;
     if (els.preflightFixSummary) {
-      if (!s || !s.changed) {
+      if (!result || !result.changed) {
         els.preflightFixSummary.textContent = "自动修复差异: 暂无";
         els.preflightFixSummary.style.color = "#5e7389";
       } else {
-        els.preflightFixSummary.textContent =
-          `自动修复差异: 重复连线 ${s.removed_dup_edges || 0}，自环 ${s.removed_self_loops || 0}，断裂连线 ${s.removed_broken_edges || 0}，孤立节点 ${s.removed_isolated_nodes || 0}`;
+        els.preflightFixSummary.textContent = [
+          "自动修复差异:",
+          `重复边 ${result.removed_dup_edges || 0}`,
+          `自环 ${result.removed_self_loops || 0}`,
+          `断裂边 ${result.removed_broken_edges || 0}`,
+          `孤立节点 ${result.removed_isolated_nodes || 0}`,
+        ].join(" ");
         els.preflightFixSummary.style.color = "#087443";
       }
     }
     if (!els.preflightFixRows) return;
     els.preflightFixRows.innerHTML = "";
-    if (!s || !s.changed) {
+    if (!result || !result.changed) {
       els.preflightFixRows.innerHTML = '<tr><td colspan="2" style="color:#74879b">暂无</td></tr>';
       return;
     }
     const groups = [
-      { key: "dup_edges", label: "重复连线", rows: Array.isArray(s.dup_edges) ? s.dup_edges : [] },
-      { key: "self_loops", label: "自环连线", rows: Array.isArray(s.self_loops) ? s.self_loops : [] },
-      { key: "broken_edges", label: "断裂连线", rows: Array.isArray(s.broken_edges) ? s.broken_edges : [] },
-      { key: "isolated_nodes", label: "孤立节点", rows: Array.isArray(s.isolated_nodes) ? s.isolated_nodes : [] },
+      { key: "dup_edges", label: "重复边", rows: Array.isArray(result.dup_edges) ? result.dup_edges : [] },
+      { key: "self_loops", label: "自环", rows: Array.isArray(result.self_loops) ? result.self_loops : [] },
+      { key: "broken_edges", label: "断裂边", rows: Array.isArray(result.broken_edges) ? result.broken_edges : [] },
+      { key: "isolated_nodes", label: "孤立节点", rows: Array.isArray(result.isolated_nodes) ? result.isolated_nodes : [] },
     ];
-    groups.forEach((g) => {
-      g.rows.slice(0, 30).forEach((it) => {
-        const tr = document.createElement("tr");
-        const tdType = document.createElement("td");
-        const tdDetail = document.createElement("td");
-        tdType.textContent = g.label;
-        if (g.key === "isolated_nodes") {
-          tdDetail.textContent = String(it?.id || "");
+    groups.forEach((group) => {
+      group.rows.slice(0, 30).forEach((item) => {
+        const tr = createElement("tr");
+        const tdType = createElement("td");
+        const tdDetail = createElement("td");
+        tdType.textContent = group.label;
+        if (group.key === "isolated_nodes") {
+          tdDetail.textContent = String(item?.id || "");
         } else {
-          const from = String(it?.from || "");
-          const to = String(it?.to || "");
+          const from = String(item?.from || "");
+          const to = String(item?.to || "");
           tdDetail.textContent = `${from} -> ${to}`;
         }
         tr.append(tdType, tdDetail);

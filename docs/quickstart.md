@@ -5,18 +5,26 @@ Use this page as the canonical documentation entrypoint for the current codebase
 ## Core
 
 - Repository overview: [../README.md](../README.md)
+- Native WinUI quickstart: [quickstart_native_winui.md](quickstart_native_winui.md)
+- Native WinUI delivery: [offline_delivery_native_winui.md](offline_delivery_native_winui.md)
 - Backend quickstart: [quickstart_backend.md](quickstart_backend.md)
-- Desktop offline quickstart: [quickstart_desktop_offline.md](quickstart_desktop_offline.md)
 - Verification guide: [verification.md](verification.md)
 - Cleaning rules: [cleaning_rules.md](cleaning_rules.md)
+- Frontend convergence decision: [frontend_convergence_decision_20260320.md](frontend_convergence_decision_20260320.md)
+- Electron compatibility retirement: [electron_compatibility_retirement_plan_20260321.md](electron_compatibility_retirement_plan_20260321.md)
+- Personal sideload certificate: [personal_sideload_certificate_20260321.md](personal_sideload_certificate_20260321.md)
 
 ## Runtime and Delivery
 
-- Desktop app guide: [dify_desktop_app.md](dify_desktop_app.md)
 - Dify/local backend integration: [dify_local_integration.md](dify_local_integration.md)
-- Offline bundle delivery: [offline_delivery_minimal.md](offline_delivery_minimal.md)
 - Finance template usage: [finance_template_v1.md](finance_template_v1.md)
-- Native WinUI bootstrap: [../apps/dify-native-winui/README.md](../apps/dify-native-winui/README.md)
+- Native WinUI frontend: [../apps/dify-native-winui/README.md](../apps/dify-native-winui/README.md)
+
+## Compatibility
+
+- Desktop offline quickstart: [quickstart_desktop_offline.md](quickstart_desktop_offline.md)
+- Electron compatibility guide: [dify_desktop_app.md](dify_desktop_app.md)
+- Electron offline bundle delivery: [offline_delivery_minimal.md](offline_delivery_minimal.md)
 
 ## Quality and Performance
 

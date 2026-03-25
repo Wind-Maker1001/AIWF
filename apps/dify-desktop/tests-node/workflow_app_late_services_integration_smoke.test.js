@@ -70,7 +70,7 @@ test("workflow late services smoke wires palette flow io canvas view and app pub
   const statuses = [];
   const calls = [];
   const store = {
-    state: { graph: { name: "Flow Smoke", nodes: [], edges: [] } },
+    state: { graph: { name: "Flow Smoke", workflow_id: "wf_smoke", version: "1.0.0", nodes: [{ id: "n1", type: "clean_md" }], edges: [] } },
     addNode(type, x, y, config) {
       calls.push({ addNode: { type, x, y, config } });
       return "n1";
@@ -78,6 +78,7 @@ test("workflow late services smoke wires palette flow io canvas view and app pub
     exportGraph() {
       return {
         workflow_id: "wf_smoke",
+        version: "1.0.0",
         name: "Flow Smoke",
         nodes: [
           { id: "n1", type: "clean_md", x: 10, y: 10, config: {} },
@@ -174,7 +175,7 @@ test("workflow late services smoke wires palette flow io canvas view and app pub
       syncAppSchemaFormFromJson: () => {},
       syncRunParamsJsonFromForm: () => {},
       syncRunParamsFormFromJson: () => {},
-      runPayload: () => ({ workflow_id: "wf_smoke" }),
+      runPayload: () => ({ workflow_id: "wf_smoke", workflow_version: "1.0.0" }),
       renderNodeRuns: () => {},
       refreshDiagnostics: async () => { calls.push("diag"); },
       refreshRunHistory: async () => { calls.push("history"); },

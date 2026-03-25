@@ -2,8 +2,26 @@ import { IO_CONTRACT_COMPATIBLE_OPERATORS } from "./preflight-rust-helpers.js";
 
 function buildGraphValidationIssues(valid = {}) {
   const issues = [];
-  (valid.errors || []).forEach((msg) => issues.push({ level: "error", kind: "graph", message: String(msg) }));
-  (valid.warnings || []).forEach((msg) => issues.push({ level: "warning", kind: "graph", message: String(msg) }));
+  const classifyKind = (message) => /unregistered node types/i.test(String(message || ""))
+    ? "unknown_node_type"
+    : "graph";
+  const buildIssue = (level, msg) => {
+    const message = String(msg || "");
+    const kind = classifyKind(message);
+    if (kind === "unknown_node_type") {
+      return {
+        level,
+        kind,
+        message,
+        contract_boundary: "node_catalog_truth",
+        resolution_hint: "replace node type or sync Rust manifest / local node policy",
+        action_text: "定位节点",
+      };
+    }
+    return { level, kind, message };
+  };
+  (valid.errors || []).forEach((msg) => issues.push(buildIssue("error", msg)));
+  (valid.warnings || []).forEach((msg) => issues.push(buildIssue("warning", msg)));
   return issues;
 }
 

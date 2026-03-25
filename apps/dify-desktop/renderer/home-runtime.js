@@ -163,7 +163,7 @@ async function refreshRouteDiagnostics(){
     }
     latestRouteSummaryMeta = r;
     if(!r.exists){
-      routeDiagHintEl.textContent = "暂无路由诊断数据（先打开 Workflow Studio 并操作画布）";
+      routeDiagHintEl.textContent = "暂无路由诊断数据（先打开 Legacy Workflow Studio 并操作画布）";
       routeDiagEl.textContent = JSON.stringify({workflows:{}}, null, 2);
       return;
     }

@@ -1,62 +1,65 @@
-﻿{
-  "fluent_ms": {
-    "title": "Fluent 宣传风",
-    "primary": "0F6CBD",
-    "secondary": "0B3A75",
-    "bg": "F7FAFE"
-  },
-  "fluent_ms_light": {
-    "title": "Fluent Light",
-    "primary": "0F6CBD",
-    "secondary": "0B3A75",
-    "bg": "F7FAFE"
-  },
-  "fluent_ms_strong": {
-    "title": "Fluent Strong",
-    "primary": "005FB8",
-    "secondary": "083B7A",
-    "bg": "EEF5FD"
-  },
-  "fluent_ms_vibrant": {
-    "title": "Fluent Vibrant",
-    "primary": "0A66C2",
-    "secondary": "0078D4",
-    "bg": "EDF5FF"
-  },
-  "assignment": {
-    "title": "作业风 v1",
-    "primary": "245C73",
-    "secondary": "2F7C94",
-    "bg": "EEF8FB"
-  },
-  "debate_plus": {
-    "title": "辩论增强",
-    "primary": "5E1B4F",
-    "secondary": "7C2868",
-    "bg": "FAF1F8"
-  },
-  "academic": {
-    "title": "学术风",
-    "primary": "2F3E63",
-    "secondary": "445A8D",
-    "bg": "F1F3FA"
-  },
-  "professional": {
-    "title": "专业风",
-    "primary": "1F4E78",
-    "secondary": "2C6A9D",
-    "bg": "EEF5FC"
-  },
-  "business": {
-    "title": "商务风",
-    "primary": "1B4D3E",
-    "secondary": "2D7561",
-    "bg": "ECF7F2"
-  },
-  "debate": {
-    "title": "辩论风（经典）",
-    "primary": "7A1F1F",
-    "secondary": "9C2F2F",
-    "bg": "FDF4F4"
+{
+  "schema_version": "office_theme_catalog.v1",
+  "themes": {
+    "fluent_ms": {
+      "title": "Fluent 宣传风",
+      "primary": "0F6CBD",
+      "secondary": "0B3A75",
+      "bg": "F7FAFE"
+    },
+    "fluent_ms_light": {
+      "title": "Fluent Light",
+      "primary": "0F6CBD",
+      "secondary": "0B3A75",
+      "bg": "F7FAFE"
+    },
+    "fluent_ms_strong": {
+      "title": "Fluent Strong",
+      "primary": "005FB8",
+      "secondary": "083B7A",
+      "bg": "EEF5FD"
+    },
+    "fluent_ms_vibrant": {
+      "title": "Fluent Vibrant",
+      "primary": "0A66C2",
+      "secondary": "0078D4",
+      "bg": "EDF5FF"
+    },
+    "assignment": {
+      "title": "作业风 v1",
+      "primary": "245C73",
+      "secondary": "2F7C94",
+      "bg": "EEF8FB"
+    },
+    "debate_plus": {
+      "title": "辩论增强",
+      "primary": "5E1B4F",
+      "secondary": "7C2868",
+      "bg": "FAF1F8"
+    },
+    "academic": {
+      "title": "学术风",
+      "primary": "2F3E63",
+      "secondary": "445A8D",
+      "bg": "F1F3FA"
+    },
+    "professional": {
+      "title": "专业风",
+      "primary": "1F4E78",
+      "secondary": "2C6A9D",
+      "bg": "EEF5FC"
+    },
+    "business": {
+      "title": "商务风",
+      "primary": "1B4D3E",
+      "secondary": "2D7561",
+      "bg": "ECF7F2"
+    },
+    "debate": {
+      "title": "辩论风（经典）",
+      "primary": "7A1F1F",
+      "secondary": "9C2F2F",
+      "bg": "FDF4F4"
+    }
   }
 }

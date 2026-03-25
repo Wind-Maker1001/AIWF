@@ -16,6 +16,7 @@ function createWorkflowConfigUi(els, deps = {}) {
   const {
     store,
     canvas,
+    nodeCatalog = [],
     nodeFormSchemas = {},
     edgeHintsByNodeType = {},
     setStatus = () => {},
@@ -83,6 +84,7 @@ function createWorkflowConfigUi(els, deps = {}) {
 
   const nodeEditorSupport = createWorkflowConfigNodeEditorSupport(els, {
     canvas,
+    nodeCatalog,
     singleSelectedNode,
     prettyJson,
     renderNodeConfigForm,

@@ -1,6 +1,16 @@
+const {
+  WORKFLOW_SCHEMA_VERSION,
+  normalizeWorkflowContract,
+  validateWorkflowTopLevel,
+} = require("./workflow_contract");
+const {
+  findUnknownWorkflowNodeTypes,
+} = require("./workflow_node_catalog_contract");
+
 function defaultWorkflowGraph() {
   return {
     workflow_id: "minimal_v1",
+    version: WORKFLOW_SCHEMA_VERSION,
     nodes: [
       { id: "n1", type: "ingest_files" },
       { id: "n2", type: "clean_md" },
@@ -20,27 +30,56 @@ function defaultWorkflowGraph() {
 }
 
 function normalizeWorkflow(payload = {}) {
-  const wf = payload.workflow && Array.isArray(payload.workflow.nodes)
-    ? payload.workflow
-    : defaultWorkflowGraph();
-  const nodes = Array.isArray(wf.nodes)
-    ? wf.nodes.map((n, i) => ({
+  const rawWorkflow =
+    payload.workflow && typeof payload.workflow === "object"
+      ? payload.workflow
+      : defaultWorkflowGraph();
+  const contract = normalizeWorkflowContract(
+    {
+      ...rawWorkflow,
+      workflow_id: String(payload.workflow_id || rawWorkflow.workflow_id || ""),
+      version: String(payload.workflow_version || rawWorkflow.version || ""),
+    },
+    { allowVersionMigration: true },
+  );
+
+  const base = contract.graph || {
+    ...rawWorkflow,
+    workflow_id: String(payload.workflow_id || rawWorkflow.workflow_id || "custom_v1"),
+    version: String(payload.workflow_version || rawWorkflow.version || WORKFLOW_SCHEMA_VERSION),
+    nodes: Array.isArray(rawWorkflow.nodes) ? rawWorkflow.nodes : [],
+    edges: Array.isArray(rawWorkflow.edges) ? rawWorkflow.edges : [],
+  };
+
+  const nodes = Array.isArray(base.nodes)
+    ? base.nodes.map((n, i) => ({
       id: String(n.id || `n${i + 1}`),
       type: String(n.type || ""),
       config: n.config && typeof n.config === "object" ? n.config : {},
     }))
     : [];
-  const edges = Array.isArray(wf.edges)
-    ? wf.edges.map((e) => ({
+  const edges = Array.isArray(base.edges)
+    ? base.edges.map((e) => ({
       from: String(e.from || ""),
       to: String(e.to || ""),
       when: typeof e.when === "undefined" ? null : e.when,
     }))
     : [];
+
   return {
-    workflow_id: String(payload.workflow_id || wf.workflow_id || "custom_v1"),
-    nodes,
-    edges,
+    graph: {
+      ...base,
+      workflow_id: String(base.workflow_id || "custom_v1"),
+      version: String(base.version || WORKFLOW_SCHEMA_VERSION),
+      nodes,
+      edges,
+    },
+    contract: {
+      ok: contract.ok,
+      migrated: contract.migrated,
+      notes: Array.isArray(contract.notes) ? [...contract.notes] : [],
+      errors: Array.isArray(contract.errors) ? [...contract.errors] : [],
+    },
   };
 }
 
@@ -70,15 +109,23 @@ function topoSort(nodes, edges) {
 }
 
 function validateGraph(graph) {
-  const errors = [];
+  const topLevel = validateWorkflowTopLevel(graph, { requireNonEmptyNodes: true });
+  const errors = [...topLevel.errors];
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
   const idSet = new Set();
-  for (const n of graph.nodes) {
+  const unknownNodeTypes = findUnknownWorkflowNodeTypes(graph);
+  if (unknownNodeTypes.length > 0) {
+    errors.push(`workflow contains unregistered node types: ${unknownNodeTypes.join(", ")}`);
+  }
+
+  for (const n of nodes) {
     if (!n.id) errors.push("node missing id");
     if (idSet.has(n.id)) errors.push(`duplicate node id: ${n.id}`);
     idSet.add(n.id);
     if (!n.type) errors.push(`node ${n.id} missing type`);
   }
-  for (const e of graph.edges) {
+  for (const e of edges) {
     if (!idSet.has(e.from)) errors.push(`edge from does not exist: ${e.from}`);
     if (!idSet.has(e.to)) errors.push(`edge to does not exist: ${e.to}`);
     if (typeof e.when !== "undefined" && e.when !== null) {
@@ -88,8 +135,8 @@ function validateGraph(graph) {
       }
     }
   }
-  const ordered = topoSort(graph.nodes, graph.edges);
-  if (ordered.length !== graph.nodes.length) errors.push("workflow has cycle; only DAG is supported");
+  const ordered = topoSort(nodes, edges);
+  if (ordered.length !== nodes.length) errors.push("workflow has cycle; only DAG is supported");
   return { ok: errors.length === 0, errors, ordered };
 }
 

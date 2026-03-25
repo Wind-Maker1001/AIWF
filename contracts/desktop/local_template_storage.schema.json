@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "aiwf/contracts/desktop/local_template_storage.schema.json",
+  "title": "AIWF Local Template Storage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "items"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local_template_storage.v1"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/localTemplateEntry"
+      }
+    }
+  },
+  "definitions": {
+    "localTemplateEntry": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "name",
+        "graph"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "local_template_entry.v1"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "template_spec_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "graph": {
+          "type": "object"
+        },
+        "params_schema": {
+          "type": "object"
+        },
+        "governance": {
+          "type": "object"
+        },
+        "runtime_defaults": {
+          "type": "object"
+        },
+        "created_at": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

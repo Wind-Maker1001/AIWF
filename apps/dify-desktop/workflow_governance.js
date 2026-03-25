@@ -1,7 +1,121 @@
 const path = require("path");
+const {
+  GOVERNANCE_CAPABILITY_SCHEMA_VERSION,
+  GOVERNANCE_CAPABILITY_SOURCE_AUTHORITY,
+  GOVERNANCE_CAPABILITY_ITEMS,
+  GOVERNANCE_CAPABILITIES,
+  GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS,
+} = require("./workflow_governance_capabilities.generated.js");
+const GOVERNANCE_CONTROL_PLANE_META_ROUTE = "/governance/meta/control-plane";
+const GOVERNANCE_DEFAULT_GLUE_URL = "http://127.0.0.1:18081";
 
 function deepClone(v) {
   return JSON.parse(JSON.stringify(v));
+}
+
+function normalizeBaseUrl(url) {
+  return String(url || "").trim().replace(/\/$/, "");
+}
+
+function resolveGovernanceOwnedRoutePrefix(surface = {}, preferredOwnedPrefix = "") {
+  const preferred = String(preferredOwnedPrefix || "").trim();
+  const owned = Array.isArray(surface?.owned_route_prefixes) ? surface.owned_route_prefixes : [];
+  if (preferred) {
+    const direct = owned.find((item) => String(item || "").trim() === preferred);
+    if (direct) return String(direct).trim();
+    const preferredLeaf = preferred.replace(/^\/+|\/+$/g, "").split("/").pop() || "";
+    if (preferredLeaf) {
+      const fuzzy = owned.find((item) => {
+        const candidateLeaf = String(item || "").trim().replace(/^\/+|\/+$/g, "").split("/").pop() || "";
+        return candidateLeaf.startsWith(preferredLeaf);
+      });
+      if (fuzzy) return String(fuzzy).trim();
+    }
+  }
+  return String(surface?.route_prefix || "").trim();
+}
+
+function createGovernanceControlPlaneSupport(deps = {}) {
+  const {
+    loadConfig = () => ({}),
+    fetchImpl = typeof fetch === "function" ? fetch : null,
+    env = process.env,
+    defaultGlueUrl = GOVERNANCE_DEFAULT_GLUE_URL,
+  } = deps;
+
+  const boundaryCache = new Map();
+
+  function mergedConfig(cfg = null) {
+    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
+  }
+
+  function resolveGlueUrl(cfg = null) {
+    const merged = mergedConfig(cfg);
+    return normalizeBaseUrl(merged.glueUrl || env.AIWF_GLUE_URL || defaultGlueUrl);
+  }
+
+  function headers(apiKey) {
+    const out = { "Content-Type": "application/json" };
+    const key = String(apiKey || "").trim();
+    if (key) out["X-API-Key"] = key;
+    return out;
+  }
+
+  async function parseResponse(resp) {
+    const text = await resp.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { ok: false, error: text };
+    }
+  }
+
+  async function fetchBoundary(cfg = null) {
+    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for governance control plane support");
+    const merged = mergedConfig(cfg);
+    const baseUrl = resolveGlueUrl(merged);
+    if (boundaryCache.has(baseUrl)) {
+      return boundaryCache.get(baseUrl);
+    }
+    const resp = await fetchImpl(`${baseUrl}${GOVERNANCE_CONTROL_PLANE_META_ROUTE}`, {
+      method: "GET",
+      headers: headers(merged.apiKey),
+    });
+    const payload = await parseResponse(resp);
+    if (!resp.ok || payload?.ok === false || !payload?.boundary || typeof payload.boundary !== "object") {
+      throw new Error(String(payload?.error || `governance control plane boundary failed: http ${resp.status}`));
+    }
+    boundaryCache.set(baseUrl, payload.boundary);
+    return payload.boundary;
+  }
+
+  async function resolveRoutePrefix(capability, options = {}) {
+    const normalizedCapability = String(capability || "").trim();
+    if (!normalizedCapability) throw new Error("governance capability is required");
+    const boundary = await fetchBoundary(options?.cfg || null);
+    const surfaces = Array.isArray(boundary?.governance_surfaces) ? boundary.governance_surfaces : [];
+    const surface = surfaces.find((item) => String(item?.capability || "").trim() === normalizedCapability);
+    if (!surface) {
+      throw new Error(`governance boundary missing capability: ${normalizedCapability}`);
+    }
+    const routePrefix = resolveGovernanceOwnedRoutePrefix(surface, options?.preferredOwnedPrefix || "");
+    if (!routePrefix) {
+      throw new Error(`governance boundary route prefix missing for capability: ${normalizedCapability}`);
+    }
+    return routePrefix;
+  }
+
+  function clearBoundaryCache() {
+    boundaryCache.clear();
+  }
+
+  return {
+    clearBoundaryCache,
+    fetchBoundary,
+    resolveGlueUrl,
+    resolveRoutePrefix,
+  };
 }
 
 function defaultGovernanceProfile() {
@@ -180,6 +294,13 @@ function initAiBudgetState(profile = defaultGovernanceProfile()) {
 }
 
 module.exports = {
+  GOVERNANCE_CAPABILITY_SCHEMA_VERSION,
+  GOVERNANCE_CAPABILITY_SOURCE_AUTHORITY,
+  GOVERNANCE_CAPABILITY_ITEMS,
+  GOVERNANCE_CAPABILITIES,
+  GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS,
+  GOVERNANCE_CONTROL_PLANE_META_ROUTE,
+  GOVERNANCE_DEFAULT_GLUE_URL,
   defaultGovernanceProfile,
   mergeGovernanceProfile,
   authorizeGraph,
@@ -187,5 +308,7 @@ module.exports = {
   buildLineageSummary,
   evaluateSla,
   initAiBudgetState,
+  createGovernanceControlPlaneSupport,
+  resolveGovernanceOwnedRoutePrefix,
   deepClone,
 };

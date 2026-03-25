@@ -8,6 +8,46 @@ const { createWorkflowSandboxSupport } = require("./workflow_ipc_sandbox_alerts"
 const { registerWorkflowSandboxManagementIpc } = require("./workflow_ipc_sandbox_management");
 const { registerWorkflowSandboxIoIpc } = require("./workflow_ipc_sandbox_io");
 const { registerWorkflowReviewIpc } = require("./workflow_ipc_review");
+const { createWorkflowQualityRuleSetSupport } = require("./workflow_quality_rule_store");
+const { createWorkflowSandboxRuleStore } = require("./workflow_sandbox_rule_store");
+const { createWorkflowSandboxAutoFixStore } = require("./workflow_sandbox_autofix_store");
+const { createWorkflowAppRegistryStore } = require("./workflow_app_registry_store");
+const { createWorkflowVersionStore } = require("./workflow_version_store");
+const { createWorkflowManualReviewStore } = require("./workflow_manual_review_store");
+const { GLUE_PROVIDER, createWorkflowRunAuditStore } = require("./workflow_run_audit_store");
+const { createWorkflowRunBaselineStore } = require("./workflow_run_baseline_store");
+
+function createWorkflowAuditMirrorSupport(deps) {
+  const {
+    appendAudit,
+    appendRunHistory,
+    loadConfig = () => ({}),
+    workflowRunAuditStore,
+  } = deps;
+
+  function shouldWriteLocalAuditMirror(cfg = null) {
+    return false;
+  }
+
+  function shouldWriteLocalRunHistoryMirror(cfg = null) {
+    return false;
+  }
+
+  function appendAuditMirrored(action, detail, cfg = null) {
+    workflowRunAuditStore.mirrorAudit(action, detail, cfg).catch(() => {});
+  }
+
+  function appendRunHistoryMirrored(run, payload, mergedConfig) {
+    workflowRunAuditStore.mirrorRun(run, payload, mergedConfig, mergedConfig).catch(() => {});
+  }
+
+  return {
+    appendAuditMirrored,
+    appendRunHistoryMirrored,
+    shouldWriteLocalAuditMirror,
+    shouldWriteLocalRunHistoryMirror,
+  };
+}
 
 function registerWorkflowIpc(ctx) {
   const {
@@ -24,7 +64,6 @@ function registerWorkflowIpc(ctx) {
     appendAudit,
     appendDiagnostics,
     appendRunHistory,
-    appendWorkflowVersion,
     cacheStats,
     clearNodeCache,
     createNodeCacheApi,
@@ -33,11 +72,7 @@ function registerWorkflowIpc(ctx) {
     diagnosticsLogPath,
     extractSandboxViolations,
     isMockIoAllowed,
-    listQualityRuleCenter,
-    listRunBaselines,
     listTemplateMarketplace,
-    listWorkflowApps,
-    listWorkflowVersions,
     loadQueueControl,
     loadWorkflowQueue,
     normalizeQueueControl,
@@ -46,17 +81,8 @@ function registerWorkflowIpc(ctx) {
     resolveMockFilePath,
     resolveOutputRoot,
     runHistoryPath,
-    reviewHistoryPath,
-    reviewQueuePath,
-    sandboxAlertRuleVersionsPath,
-    sandboxAlertRulesPath,
-    sandboxAlertStatePath,
-    sandboxAutoFixStatePath,
-    saveQualityRuleCenter,
     saveQueueControl,
-    saveRunBaselines,
     saveTemplateMarketplace,
-    saveWorkflowApps,
     saveWorkflowQueue,
     workflowAuditPath,
     writeJsonFile,
@@ -74,12 +100,55 @@ function registerWorkflowIpc(ctx) {
     control: loadQueueControl(),
   };
 
+  const qualityRuleSetSupport = createWorkflowQualityRuleSetSupport({
+    loadConfig,
+    nowIso,
+  });
+
+  const workflowAppRegistryStore = createWorkflowAppRegistryStore({
+    loadConfig,
+    nowIso,
+    validateWorkflowGraph: (graph) => {
+      const { assertWorkflowContract } = require("./workflow_contract");
+      assertWorkflowContract(graph, { requireNonEmptyNodes: true });
+    },
+  });
+
+  const workflowVersionStore = createWorkflowVersionStore({
+    loadConfig,
+  });
+
+  const workflowRunAuditStore = createWorkflowRunAuditStore({
+    loadConfig,
+    fs,
+    runHistoryPath,
+    workflowAuditPath,
+  });
+
+  const workflowAuditMirrorSupport = createWorkflowAuditMirrorSupport({
+    appendAudit,
+    appendRunHistory,
+    loadConfig,
+    workflowRunAuditStore,
+  });
+  const {
+    appendAuditMirrored,
+    appendRunHistoryMirrored,
+  } = workflowAuditMirrorSupport;
+
   const historySupport = createWorkflowHistorySupport({
     fs,
     diagnosticsLogPath,
     runHistoryPath,
-    reviewQueuePath,
-    reviewHistoryPath,
+    listRunRecords: (limit, cfg = null) => workflowRunAuditStore.listRuns(limit, cfg),
+  });
+
+  const workflowManualReviewStore = createWorkflowManualReviewStore({
+    loadConfig,
+  });
+
+  const workflowRunBaselineStore = createWorkflowRunBaselineStore({
+    loadConfig,
   });
 
   const sandboxSupport = createWorkflowSandboxSupport({
@@ -87,18 +156,27 @@ function registerWorkflowIpc(ctx) {
     readJsonFile,
     writeJsonFile,
     nowIso,
-    appendAudit,
+    appendAudit: appendAuditMirrored,
     extractSandboxViolations,
-    sandboxAlertRuleVersionsPath,
-    sandboxAlertRulesPath,
-    sandboxAlertStatePath,
-    sandboxAutoFixStatePath,
-    workflowAuditPath,
     listRunHistory: historySupport.listRunHistory,
+    listRunRecords: (limit, cfg = null) => workflowRunAuditStore.listRuns(limit, cfg),
     queueState,
     defaultQueueControl,
     saveQueueControl,
-    enqueueReviews: historySupport.enqueueReviews,
+    enqueueReviews: (items) => {
+      workflowManualReviewStore.enqueue(items).catch(() => {});
+    },
+    persistSandboxAutoFixState: (state, cfg = null) => sandboxAutoFixStore.persistStateMirror(state, cfg),
+  });
+
+  const sandboxRuleStore = createWorkflowSandboxRuleStore({
+    loadConfig,
+    sandboxSupport,
+  });
+
+  const sandboxAutoFixStore = createWorkflowSandboxAutoFixStore({
+    loadConfig,
+    sandboxSupport,
   });
 
   function nowIso() {
@@ -107,9 +185,9 @@ function registerWorkflowIpc(ctx) {
 
   const reportSupport = createWorkflowReportSupport({
     deepClone,
-    findRunById: historySupport.findRunById,
-    listQualityRuleCenter,
-    listRunBaselines,
+    getRun: (runId, cfg = null) => workflowRunAuditStore.getRun(runId, cfg),
+    listRunBaselines: (limit = 200, cfg = null) => workflowRunBaselineStore.list(limit, cfg),
+    qualityRuleSetSupport,
   });
 
   registerWorkflowReportIpc(
@@ -118,10 +196,10 @@ function registerWorkflowIpc(ctx) {
       isMockIoAllowed,
       resolveMockFilePath,
       nowIso,
-      appendAudit,
-      findRunById: historySupport.findRunById,
-      listRunBaselines,
-      saveRunBaselines,
+      appendAudit: appendAuditMirrored,
+      getRun: (runId, cfg = null) => workflowRunAuditStore.getRun(runId, cfg),
+      listRunBaselines: (limit = 200, cfg = null) => workflowRunBaselineStore.list(limit, cfg),
+      saveRunBaseline: (item, cfg = null) => workflowRunBaselineStore.save(item, cfg),
       buildRunCompare: reportSupport.buildRunCompare,
       buildRunRegressionAgainstBaseline: reportSupport.buildRunRegressionAgainstBaseline,
       renderCompareHtml: reportSupport.renderCompareHtml,
@@ -136,10 +214,10 @@ function registerWorkflowIpc(ctx) {
     {
       readDiagnostics: historySupport.readDiagnostics,
       buildPerfDashboard: historySupport.buildPerfDashboard,
-      listRunHistory: historySupport.listRunHistory,
-      findRunById: historySupport.findRunById,
-      runTimeline: historySupport.runTimeline,
-      failureSummary: historySupport.failureSummary,
+      listRunHistory: (limit) => workflowRunAuditStore.listRuns(limit),
+      getRun: (runId, cfg = null) => workflowRunAuditStore.getRun(runId, cfg),
+      runTimeline: (runId) => workflowRunAuditStore.getRunTimeline(runId),
+      failureSummary: (limit) => workflowRunAuditStore.getFailureSummary(limit),
     }
   );
 
@@ -150,25 +228,25 @@ function registerWorkflowIpc(ctx) {
       resolveOutputRoot,
       createNodeCacheApi,
       appendDiagnostics,
-      appendRunHistory,
+      appendRunHistory: appendRunHistoryMirrored,
       extractSandboxViolations,
-      appendAudit,
-      historySupport,
+      appendAudit: appendAuditMirrored,
+      getRun: (runId, cfg = null) => workflowRunAuditStore.getRun(runId, cfg),
+      enqueueReviews: (items, cfg = null) => workflowManualReviewStore.enqueue(items, cfg),
       reportSupport,
       sandboxSupport,
+      sandboxRuleStore,
+      sandboxAutoFixStore,
+      workflowManualReviewStore,
     }
   );
 
   registerWorkflowReviewIpc(
     { ipcMain, dialog, app, fs, path, loadConfig, runMinimalWorkflow },
     {
-      loadReviewQueue: historySupport.loadReviewQueue,
-      saveReviewQueue: historySupport.saveReviewQueue,
-      listReviewHistory: historySupport.listReviewHistory,
-      filterReviewHistory: historySupport.filterReviewHistory,
       isMockIoAllowed,
       resolveMockFilePath,
-      findRunById: historySupport.findRunById,
+      getRun: (runId, cfg = null) => workflowRunAuditStore.getRun(runId, cfg),
       normalizeWorkflowConfig,
       applyQualityRuleSetToPayload: reportSupport.applyQualityRuleSetToPayload,
       applySandboxAutoFixPayload: sandboxSupport.applySandboxAutoFixPayload,
@@ -176,27 +254,28 @@ function registerWorkflowIpc(ctx) {
       resolveOutputRoot,
       createNodeCacheApi,
       appendDiagnostics,
-      appendRunHistory,
+      appendRunHistory: appendRunHistoryMirrored,
       extractSandboxViolations,
       appendSandboxViolationAudit: sandboxSupport.appendSandboxViolationAudit,
       maybeApplySandboxAutoFix: sandboxSupport.maybeApplySandboxAutoFix,
-      enqueueReviews: historySupport.enqueueReviews,
-      reviewHistoryPath,
+      enqueueReviews: (items, cfg = null) => workflowManualReviewStore.enqueue(items, cfg),
+      sandboxRuleStore,
+      sandboxAutoFixStore,
+      workflowManualReviewStore,
     }
   );
 
   registerWorkflowStoreIpc(
     { ipcMain, dialog, app, fs, path },
     {
-      appendAudit,
-      appendWorkflowVersion,
+      appendAudit: appendAuditMirrored,
       isMockIoAllowed,
-      listQualityRuleCenter,
       listTemplateMarketplace,
       nowIso,
+      qualityRuleSetSupport,
       resolveMockFilePath,
-      saveQualityRuleCenter,
       saveTemplateMarketplace,
+      workflowVersionStore,
     }
   );
 
@@ -214,18 +293,19 @@ function registerWorkflowIpc(ctx) {
       resolveOutputRoot,
       createNodeCacheApi,
       appendDiagnostics,
-      appendRunHistory,
+      appendRunHistory: appendRunHistoryMirrored,
       extractSandboxViolations,
-      appendAudit,
-      enqueueReviews: historySupport.enqueueReviews,
-      listWorkflowVersions,
-      listWorkflowApps,
-      saveWorkflowApps,
+      appendAudit: appendAuditMirrored,
+      enqueueReviews: (items, cfg = null) => workflowManualReviewStore.enqueue(items, cfg),
       cacheStats,
       clearNodeCache,
       nowIso,
       reportSupport,
       sandboxSupport,
+      sandboxRuleStore,
+      sandboxAutoFixStore,
+      workflowAppRegistryStore,
+      workflowVersionStore,
     }
   );
 
@@ -235,8 +315,11 @@ function registerWorkflowIpc(ctx) {
       isMockIoAllowed,
       resolveMockFilePath,
       nowIso,
-      appendAudit,
+      appendAudit: appendAuditMirrored,
       sandboxSupport,
+      sandboxRuleStore,
+      sandboxAutoFixStore,
+      workflowRunAuditStore,
     }
   );
 
@@ -246,15 +329,20 @@ function registerWorkflowIpc(ctx) {
       isMockIoAllowed,
       resolveMockFilePath,
       sandboxAlertDedupWindowSec: sandboxSupport.sandboxAlertDedupWindowSec,
-      sandboxAlerts: sandboxSupport.sandboxAlerts,
+      sandboxAlerts: async (limit, thresholds, dedupWindowSec) => {
+        const rulesOut = await sandboxRuleStore.getRules();
+        if (!rulesOut?.ok) return rulesOut;
+        return await sandboxSupport.sandboxAlerts(limit, thresholds, dedupWindowSec, rulesOut.rules || {});
+      },
       nowIso,
-      appendAudit,
+      appendAudit: appendAuditMirrored,
     }
   );
 
 }
 
 module.exports = {
+  createWorkflowAuditMirrorSupport,
   registerWorkflowIpc,
 };
 

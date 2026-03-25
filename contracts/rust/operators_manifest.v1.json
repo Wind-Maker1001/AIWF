@@ -1,0 +1,1532 @@
+{
+  "manifest_version": "v1",
+  "authority": "rust_operator_catalog",
+  "owner": "apps/accel-rust",
+  "source_inputs": [
+    "apps/accel-rust/src/operator_catalog_data.rs",
+    "apps/accel-rust/src/operators/workflow/engine.rs"
+  ],
+  "operators": [
+    {
+      "operator": "aggregate_pushdown_v1",
+      "version": "v1",
+      "domain": "transform",
+      "source_module": "misc_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "aggregate_rows_v1",
+      "version": "v1",
+      "domain": "analytics",
+      "source_module": "operators.analytics",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "aggregate_rows_v2",
+      "version": "v2",
+      "domain": "analytics",
+      "source_module": "operators.analytics",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "aggregate_rows_v3",
+      "version": "v3",
+      "domain": "analytics",
+      "source_module": "operators.analytics",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "aggregate_rows_v4",
+      "version": "v4",
+      "domain": "analytics",
+      "source_module": "operators.analytics",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "anomaly_explain_v1",
+      "version": "v1",
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "capabilities_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.contracts",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "chart_data_prep_v1",
+      "version": "v1",
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "cleaning",
+      "version": null,
+      "domain": "transform",
+      "source_module": "cleaning_runtime",
+      "published": false,
+      "workflow_exposable": false,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "columnar_eval_v1",
+      "version": "v1",
+      "domain": "platform",
+      "source_module": "platform_ops.streaming",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "compute_metrics",
+      "version": null,
+      "domain": "transform",
+      "source_module": "cleaning_runtime",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "constraint_solver_v1",
+      "version": "v1",
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "contract_regression_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.reliability",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "diff_audit_v1",
+      "version": "v1",
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "entity_extract_v1",
+      "version": "v1",
+      "domain": "transform",
+      "source_module": "misc_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "entity_linking_v1",
+      "version": "v1",
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "evidence_rank_v1",
+      "version": "v1",
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "explain_plan_v1",
+      "version": "v1",
+      "domain": "execution",
+      "source_module": "execution_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "explain_plan_v2",
+      "version": "v2",
+      "domain": "governance",
+      "source_module": "governance.planning",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "fact_crosscheck_v1",
+      "version": "v1",
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "failure_policy_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.contracts",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "feature_store_v1_get",
+      "version": null,
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "feature_store_v1_upsert",
+      "version": null,
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "finance_ratio_v1",
+      "version": "v1",
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "incremental_plan_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.planning",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": true,
+        "checkpoint": true,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "io_contract_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.contracts",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "join_rows_v1",
+      "version": "v1",
+      "domain": "join",
+      "source_module": "operators.join",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "join_rows_v2",
+      "version": "v2",
+      "domain": "join",
+      "source_module": "operators.join",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "join_rows_v3",
+      "version": "v3",
+      "domain": "join",
+      "source_module": "operators.join",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "join_rows_v4",
+      "version": "v4",
+      "domain": "join",
+      "source_module": "operators.join",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "lineage_provenance_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.reliability",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "lineage_v2",
+      "version": "v2",
+      "domain": "workflow",
+      "source_module": "operators.workflow",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "lineage_v3",
+      "version": "v3",
+      "domain": "workflow",
+      "source_module": "operators.workflow",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "load_rows_v2",
+      "version": "v2",
+      "domain": "storage",
+      "source_module": "load_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "load_rows_v3",
+      "version": "v3",
+      "domain": "storage",
+      "source_module": "load_ops",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": false,
+        "checkpoint": true,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "normalize_schema_v1",
+      "version": "v1",
+      "domain": "transform",
+      "source_module": "misc_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "operator_policy_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.tenant",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "optimizer_adaptive_v2",
+      "version": "v2",
+      "domain": "governance",
+      "source_module": "governance.tenant",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "optimizer_v1",
+      "version": "v1",
+      "domain": "execution",
+      "source_module": "execution_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "parquet_io_v2",
+      "version": "v2",
+      "domain": "execution",
+      "source_module": "execution_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "perf_baseline_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.reliability",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": true,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "plugin_exec_v1",
+      "version": "v1",
+      "domain": "integration",
+      "source_module": "plugin_runtime",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "plugin_health_v1",
+      "version": "v1",
+      "domain": "integration",
+      "source_module": "plugin_runtime",
+      "published": false,
+      "workflow_exposable": false,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "plugin_operator_v1",
+      "version": "v1",
+      "domain": "integration",
+      "source_module": "plugin_runtime",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "plugin_registry_v1",
+      "version": "v1",
+      "domain": "integration",
+      "source_module": "plugin_runtime",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "provenance_sign_v1",
+      "version": "v1",
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "quality_check_v1",
+      "version": "v1",
+      "domain": "analytics",
+      "source_module": "operators.analytics",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "quality_check_v2",
+      "version": "v2",
+      "domain": "analytics",
+      "source_module": "operators.analytics",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "quality_check_v3",
+      "version": "v3",
+      "domain": "analytics",
+      "source_module": "operators.analytics",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "quality_check_v4",
+      "version": "v4",
+      "domain": "analytics",
+      "source_module": "operators.analytics",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "query_lang_v1",
+      "version": "v1",
+      "domain": "platform",
+      "source_module": "platform_ops.state_query",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "rule_simulator_v1",
+      "version": "v1",
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "rules_package_get_v1",
+      "version": "v1",
+      "domain": "transform",
+      "source_module": "misc_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "rules_package_publish_v1",
+      "version": "v1",
+      "domain": "transform",
+      "source_module": "misc_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "runtime_stats_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.contracts",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "save_rows_v1",
+      "version": "v1",
+      "domain": "storage",
+      "source_module": "load_ops",
+      "published": false,
+      "workflow_exposable": false,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "schema_registry_v1_get",
+      "version": null,
+      "domain": "schema",
+      "source_module": "schema_registry",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "schema_registry_v1_infer",
+      "version": null,
+      "domain": "schema",
+      "source_module": "schema_registry",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "schema_registry_v1_register",
+      "version": null,
+      "domain": "schema",
+      "source_module": "schema_registry",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "schema_registry_v2_check_compat",
+      "version": null,
+      "domain": "schema",
+      "source_module": "schema_registry",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "schema_registry_v2_get",
+      "version": null,
+      "domain": "schema",
+      "source_module": "schema_registry",
+      "published": false,
+      "workflow_exposable": false,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "schema_registry_v2_infer",
+      "version": null,
+      "domain": "schema",
+      "source_module": "schema_registry",
+      "published": false,
+      "workflow_exposable": false,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "schema_registry_v2_register",
+      "version": null,
+      "domain": "schema",
+      "source_module": "schema_registry",
+      "published": false,
+      "workflow_exposable": false,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "schema_registry_v2_suggest_migration",
+      "version": null,
+      "domain": "schema",
+      "source_module": "schema_registry",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "sketch_v1",
+      "version": "v1",
+      "domain": "platform",
+      "source_module": "platform_ops.streaming",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "stats_v1",
+      "version": "v1",
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "stream_reliability_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.reliability",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": false,
+        "checkpoint": true,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "stream_state_v1_load",
+      "version": null,
+      "domain": "platform",
+      "source_module": "platform_ops.state_query",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "stream_state_v1_save",
+      "version": null,
+      "domain": "platform",
+      "source_module": "platform_ops.state_query",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "stream_state_v2",
+      "version": "v2",
+      "domain": "execution",
+      "source_module": "execution_ops",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": false,
+        "checkpoint": true,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "stream_window_v1",
+      "version": "v1",
+      "domain": "platform",
+      "source_module": "platform_ops.streaming",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "stream_window_v2",
+      "version": "v2",
+      "domain": "platform",
+      "source_module": "platform_ops.streaming",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": false,
+        "checkpoint": true,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "table_reconstruct_v1",
+      "version": "v1",
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "template_bind_v1",
+      "version": "v1",
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "tenant_isolation_v1",
+      "version": "v1",
+      "domain": "governance",
+      "source_module": "governance.tenant",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "text_preprocess_v2",
+      "version": "v2",
+      "domain": "transform",
+      "source_module": "misc_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "time_series_v1",
+      "version": "v1",
+      "domain": "analysis",
+      "source_module": "analysis_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "timeseries_forecast_v1",
+      "version": "v1",
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "transform_rows_v2",
+      "version": "v2",
+      "domain": "transform",
+      "source_module": "operators.transform",
+      "published": false,
+      "workflow_exposable": false,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": true,
+        "cache": true,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "transform_rows_v3",
+      "version": "v3",
+      "domain": "transform",
+      "source_module": "operators.transform",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": true,
+        "cache": true,
+        "checkpoint": true,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "udf_wasm_v1",
+      "version": "v1",
+      "domain": "execution",
+      "source_module": "wasm_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "udf_wasm_v2",
+      "version": "v2",
+      "domain": "execution",
+      "source_module": "wasm_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "vector_index_v1_build",
+      "version": null,
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "vector_index_v1_search",
+      "version": null,
+      "domain": "intelligence",
+      "source_module": "platform_ops.intelligence",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "vector_index_v2_build",
+      "version": null,
+      "domain": "governance",
+      "source_module": "governance.reliability",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "vector_index_v2_eval",
+      "version": null,
+      "domain": "governance",
+      "source_module": "governance.reliability",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "vector_index_v2_search",
+      "version": null,
+      "domain": "governance",
+      "source_module": "governance.reliability",
+      "published": true,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": true
+      }
+    },
+    {
+      "operator": "window_rows_v1",
+      "version": "v1",
+      "domain": "execution",
+      "source_module": "execution_ops",
+      "published": false,
+      "workflow_exposable": true,
+      "desktop_exposable": true,
+      "direct_http_only": false,
+      "internal_only": false,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    },
+    {
+      "operator": "workflow_run",
+      "version": null,
+      "domain": "workflow",
+      "source_module": "operators.workflow",
+      "published": false,
+      "workflow_exposable": false,
+      "desktop_exposable": false,
+      "direct_http_only": false,
+      "internal_only": true,
+      "capabilities": {
+        "streaming": false,
+        "cache": false,
+        "checkpoint": false,
+        "io_contract": false
+      }
+    }
+  ],
+  "summary": {
+    "known_operator_count": 89,
+    "published_operator_count": 26,
+    "workflow_exposable_count": 81,
+    "desktop_exposable_count": 70,
+    "direct_http_only_count": 0,
+    "internal_only_count": 19
+  }
+}

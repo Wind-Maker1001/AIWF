@@ -4,7 +4,8 @@ param(
   [string]$Configuration = "Debug",
   [switch]$SkipBuild,
   [int]$AutoExitMs = 0,
-  [string]$OutputDir = ""
+  [string]$OutputDir = "",
+  [switch]$SkipEnsureGlueBridge
 )
 
 Set-StrictMode -Version Latest
@@ -30,6 +31,27 @@ if (-not $Root) {
 $projectPath = Join-Path $Root "apps\dify-native-winui\src\WinUI3Bootstrap\WinUI3Bootstrap.csproj"
 if (-not (Test-Path $projectPath)) {
   throw "native winui project not found: $projectPath"
+}
+
+if (-not $SkipEnsureGlueBridge) {
+  $ensureGlueScript = Join-Path $PSScriptRoot "ensure_local_governance_bridge.ps1"
+  if (-not (Test-Path $ensureGlueScript)) {
+    throw "ensure_local_governance_bridge script not found: $ensureGlueScript"
+  }
+  Info "ensuring local governance bridge is healthy"
+  & $ensureGlueScript -Root $Root -StartIfMissing
+  if ($LASTEXITCODE -ne 0) {
+    throw "local governance bridge is not healthy"
+  }
+  $env:AIWF_MANUAL_REVIEW_PROVIDER = "glue_http"
+  $env:AIWF_QUALITY_RULE_SET_PROVIDER = "glue_http"
+  $env:AIWF_WORKFLOW_APP_REGISTRY_PROVIDER = "glue_http"
+  $env:AIWF_WORKFLOW_VERSION_PROVIDER = "glue_http"
+  $env:AIWF_WORKFLOW_RUN_AUDIT_PROVIDER = "glue_http"
+  $env:AIWF_RUN_BASELINE_PROVIDER = "glue_http"
+  Info "default launch will use backend-owned manual review, quality rule, app registry, workflow version, run audit, and run baseline providers"
+} else {
+  Warn "skip local governance bridge health/start check"
 }
 
 try {

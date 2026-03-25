@@ -29,18 +29,18 @@ $evidenceSpecs = @(
   },
   [pscustomobject]@{
     name = "manifest.json"
-    docs = @("docs\offline_delivery_minimal.md")
-    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1")
+    docs = @("docs\offline_delivery_minimal.md", "docs\offline_delivery_native_winui.md")
+    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1", "ops\scripts\package_native_winui_bundle.ps1", "ops\scripts\release_frontend_productize.ps1")
   },
   [pscustomobject]@{
     name = "RELEASE_NOTES.md"
-    docs = @("docs\offline_delivery_minimal.md")
-    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1")
+    docs = @("docs\offline_delivery_minimal.md", "docs\offline_delivery_native_winui.md")
+    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1", "ops\scripts\package_native_winui_bundle.ps1", "ops\scripts\release_frontend_productize.ps1")
   },
   [pscustomobject]@{
     name = "SHA256SUMS.txt"
-    docs = @("docs\offline_delivery_minimal.md")
-    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1")
+    docs = @("docs\offline_delivery_minimal.md", "docs\offline_delivery_native_winui.md")
+    scripts = @("ops\scripts\package_offline_bundle.ps1", "ops\scripts\release_productize.ps1", "ops\scripts\package_native_winui_bundle.ps1", "ops\scripts\release_frontend_productize.ps1")
   }
 )
 

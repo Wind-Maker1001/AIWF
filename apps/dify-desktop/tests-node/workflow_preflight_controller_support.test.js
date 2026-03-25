@@ -22,6 +22,19 @@ test("workflow preflight support normalizes graph validation and rust context", 
     { level: "warning", kind: "graph", message: "warn graph" },
   ]);
 
+  assert.deepEqual(buildGraphValidationIssues({
+    errors: ["workflow contains unregistered node types: unknown_future_node"],
+  }), [
+    {
+      level: "error",
+      kind: "unknown_node_type",
+      message: "workflow contains unregistered node types: unknown_future_node",
+      contract_boundary: "node_catalog_truth",
+      resolution_hint: "replace node type or sync Rust manifest / local node policy",
+      action_text: "定位节点",
+    },
+  ]);
+
   const rustCtx = collectRustPreflightContext({
     nodes: [
       { id: "n1", type: "transform_rows_v3" },

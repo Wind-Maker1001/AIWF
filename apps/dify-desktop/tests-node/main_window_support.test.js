@@ -82,3 +82,19 @@ test("workflow window allows responsive canvas layout widths", () => {
   assert.equal(created[0].options?.minHeight, 680);
   assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1" });
 });
+
+test("workflow admin argv opens explicit legacy admin mode", () => {
+  const { support, created } = makeSupport(false);
+  support.bootFromArgv(["--workflow-admin"]);
+  assert.equal(created.length, 1);
+  assert.deepEqual(created[0].loaded?.loadOptions?.query, { legacyAdmin: "1" });
+});
+
+test("workflow admin mode can combine with debug api in dev", () => {
+  withEnv({}, () => {
+    const { support, created } = makeSupport(false);
+    support.bootFromArgv(["--workflow-admin", "--workflow-debug-api"]);
+    assert.equal(created.length, 1);
+    assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", legacyAdmin: "1" });
+  });
+});

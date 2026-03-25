@@ -60,6 +60,8 @@ test("workflow preflight controller reports missing rust endpoint for compatible
     inputFiles: { value: "D:/input.csv" },
   }, {
     graphPayload: () => ({
+      workflow_id: "wf_preflight",
+      version: "1.0.0",
       nodes: [
         { id: "n1", type: "transform_rows_v3", config: {} },
         { id: "n2", type: "md_output", config: {} },
@@ -74,7 +76,37 @@ test("workflow preflight controller reports missing rust endpoint for compatible
   const report = await controller.runWorkflowPreflight();
 
   assert.equal(report.ok, false);
-  assert.match(report.issues[0].message, /Rust Endpoint 为空/);
+  assert.match(report.issues[0].message, /Rust Endpoint/);
+  assert.equal(lastReport, report);
+  assert.equal(rendered.length, 1);
+});
+
+test("workflow preflight controller reports unregistered node types before runtime", async () => {
+  const { createWorkflowPreflightControllerUi } = await loadPreflightControllerUiModule();
+  let lastReport = null;
+  const rendered = [];
+  const controller = createWorkflowPreflightControllerUi({
+    rustEndpoint: { value: "" },
+    rustRequired: { checked: false },
+    inputFiles: { value: "" },
+  }, {
+    graphPayload: () => ({
+      workflow_id: "wf_unknown_preflight",
+      version: "1.0.0",
+      nodes: [
+        { id: "n1", type: "unknown_future_node", config: {} },
+      ],
+      edges: [],
+    }),
+    computePreflightRisk: (issues) => ({ score: issues.length, level: "high", label: "高风险" }),
+    renderPreflightReport: (report) => rendered.push(report),
+    setLastPreflightReport: (report) => { lastReport = report; },
+  });
+
+  const report = await controller.runWorkflowPreflight();
+
+  assert.equal(report.ok, false);
+  assert.match(report.issues.map((item) => item.message).join(" | "), /unregistered node types/i);
   assert.equal(lastReport, report);
   assert.equal(rendered.length, 1);
 });

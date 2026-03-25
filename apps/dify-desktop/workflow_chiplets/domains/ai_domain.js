@@ -166,6 +166,24 @@ function registerAiDomainChiplets(registry, deps = {}, helpers = {}) {
     },
   });
 
+  const aiRefineChiplet = registry.resolve("ai_refine");
+  registry.register("ds_refine", {
+    ...aiRefineChiplet,
+    id: "chiplet.ds_refine.v1",
+    async run(ctx, node) {
+      const cfg = node?.config && typeof node.config === "object" ? node.config : {};
+      return aiRefineChiplet.run(ctx, {
+        ...(node && typeof node === "object" ? node : {}),
+        type: "ai_refine",
+        config: {
+          ...cfg,
+          provider_name: String(cfg.provider_name || "DeepSeek"),
+          ai_model: String(cfg.ai_model || "deepseek-chat"),
+        },
+      });
+    },
+  });
+
   registry.register("ai_audit", {
     id: "chiplet.ai_audit.v1",
     priority: 60,

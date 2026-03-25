@@ -1,0 +1,325 @@
+{
+  "schema_version": "node_config_contracts.v1",
+  "authority": "contracts/desktop/node_config_contracts.v1.json",
+  "owner": "architecture",
+  "nodes": [
+    {
+      "type": "ingest_files",
+      "quality": "typed",
+      "validators": [
+        { "kind": "object", "path": "input_map" }
+      ]
+    },
+    {
+      "type": "clean_md",
+      "quality": "typed",
+      "validators": [
+        { "kind": "boolean", "path": "export_canonical_bundle" },
+        { "kind": "string", "path": "canonical_title" }
+      ]
+    },
+    {
+      "type": "manual_review",
+      "quality": "typed",
+      "validators": [
+        { "kind": "string_non_empty", "path": "review_key" },
+        { "kind": "boolean", "path": "default_approve" },
+        { "kind": "string", "path": "default_reviewer" },
+        { "kind": "string", "path": "default_comment" }
+      ]
+    },
+    {
+      "type": "ai_refine",
+      "quality": "typed",
+      "validators": [
+        { "kind": "boolean", "path": "reuse_existing" },
+        { "kind": "boolean", "path": "allow_ai_on_data" },
+        { "kind": "string", "path": "provider_name" },
+        { "kind": "string", "path": "ai_endpoint" },
+        { "kind": "string", "path": "ai_api_key" },
+        { "kind": "string", "path": "ai_model" }
+      ]
+    },
+    {
+      "type": "ds_refine",
+      "quality": "typed",
+      "validators": [
+        { "kind": "boolean", "path": "reuse_existing" },
+        { "kind": "boolean", "path": "allow_ai_on_data" },
+        { "kind": "string", "path": "provider_name" },
+        { "kind": "string", "path": "ai_endpoint" },
+        { "kind": "string", "path": "ai_api_key" },
+        { "kind": "string", "path": "ai_model" }
+      ]
+    },
+    {
+      "type": "ai_strategy_v1",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "ai_providers", "path": "providers" },
+        { "kind": "boolean", "path": "allow_ai_on_data" }
+      ]
+    },
+    {
+      "type": "ai_audit",
+      "quality": "typed",
+      "validators": [
+        { "kind": "boolean", "path": "numeric_lock" },
+        { "kind": "boolean", "path": "citation_required" },
+        { "kind": "boolean", "path": "recalc_verify" },
+        { "kind": "integer_min", "path": "max_new_numbers", "min": 0 },
+        { "kind": "integer_min", "path": "max_metric_delta", "min": 0 }
+      ]
+    },
+    {
+      "type": "load_rows_v2",
+      "quality": "enum_constrained",
+      "validators": [
+        { "kind": "enum", "path": "source_type", "allowed": ["jsonl", "csv", "sqlite", "sqlserver", "parquet", "txt", "pdf", "docx", "xlsx", "image"] },
+        { "kind": "string", "path": "source" },
+        { "kind": "string_non_empty", "path": "query" },
+        { "kind": "integer_min", "path": "limit", "min": 1 }
+      ]
+    },
+    {
+      "type": "load_rows_v3",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "enum", "path": "source_type", "allowed": ["jsonl", "csv", "sqlite", "sqlserver", "parquet", "txt", "pdf", "docx", "xlsx", "image"] },
+        { "kind": "string", "path": "source" },
+        { "kind": "string_non_empty", "path": "query" },
+        { "kind": "integer_min", "path": "limit", "min": 1 },
+        { "kind": "integer_min", "path": "max_retries", "min": 0 },
+        { "kind": "integer_min", "path": "retry_backoff_ms", "min": 0 },
+        { "kind": "string_non_empty", "path": "resume_token" },
+        { "kind": "json_object", "path": "connector_options" }
+      ]
+    },
+    {
+      "type": "transform_rows_v3",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "rules_object", "path": "rules" },
+        { "kind": "computed_fields", "path": "computed_fields_v3" }
+      ]
+    },
+    {
+      "type": "join_rows_v2",
+      "quality": "enum_constrained",
+      "validators": [
+        { "kind": "array", "path": "left_rows" },
+        { "kind": "array", "path": "right_rows" },
+        { "kind": "string_array_non_empty", "path": "left_on" },
+        { "kind": "string_array_non_empty", "path": "right_on" },
+        { "kind": "enum", "path": "join_type", "allowed": ["inner", "left", "right", "full", "semi", "anti"] }
+      ]
+    },
+    {
+      "type": "quality_check_v2",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "rules_object", "path": "rules" }
+      ]
+    },
+    {
+      "type": "quality_check_v3",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "rules_object", "path": "rules" }
+      ]
+    },
+    {
+      "type": "quality_check_v4",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "rules_object", "path": "rules" },
+        { "kind": "string", "path": "rules_dsl" }
+      ]
+    },
+    {
+      "type": "aggregate_rows_v2",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "string_array_non_empty", "path": "group_by" },
+        { "kind": "aggregate_defs", "path": "aggregates" }
+      ]
+    },
+    {
+      "type": "lineage_v2",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "rules_object", "path": "rules" },
+        { "kind": "computed_fields", "path": "computed_fields_v3" }
+      ]
+    },
+    {
+      "type": "lineage_v3",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "rules_object", "path": "rules" },
+        { "kind": "computed_fields", "path": "computed_fields_v3" },
+        { "kind": "workflow_steps", "path": "workflow_steps" },
+        { "kind": "array", "path": "rows" }
+      ]
+    },
+    {
+      "type": "rule_simulator_v1",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "rules_object", "path": "rules" },
+        { "kind": "rules_object", "path": "candidate_rules" }
+      ]
+    },
+    {
+      "type": "constraint_solver_v1",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "constraint_defs", "path": "constraints" }
+      ]
+    },
+    {
+      "type": "sql_chart_v1",
+      "quality": "typed",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "string_non_empty", "path": "chart_type" },
+        { "kind": "string_non_empty", "path": "category_field" },
+        { "kind": "string_non_empty", "path": "value_field" },
+        { "kind": "string_non_empty", "path": "series_field" },
+        { "kind": "integer_min", "path": "top_n", "min": 1 }
+      ]
+    },
+    {
+      "type": "office_slot_fill_v1",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "enum", "path": "template_kind", "allowed": ["docx", "pptx", "xlsx"] },
+        { "kind": "string_non_empty", "path": "template_version" },
+        { "kind": "string_array_non_empty", "path": "required_slots" },
+        { "kind": "slot_bindings", "path": "slots" },
+        { "kind": "string_non_empty", "path": "chart_source_node" }
+      ]
+    },
+    {
+      "type": "join_rows_v3",
+      "quality": "enum_constrained",
+      "validators": [
+        { "kind": "array", "path": "left_rows" },
+        { "kind": "array", "path": "right_rows" },
+        { "kind": "string_array_non_empty", "path": "left_on" },
+        { "kind": "string_array_non_empty", "path": "right_on" },
+        { "kind": "enum", "path": "join_type", "allowed": ["inner", "left", "right", "full", "semi", "anti"] },
+        { "kind": "enum", "path": "strategy", "allowed": ["auto", "hash", "sort_merge"] },
+        { "kind": "integer_min", "path": "chunk_size", "min": 1 }
+      ]
+    },
+    {
+      "type": "join_rows_v4",
+      "quality": "enum_constrained",
+      "validators": [
+        { "kind": "array", "path": "left_rows" },
+        { "kind": "array", "path": "right_rows" },
+        { "kind": "string_array_non_empty", "path": "left_on" },
+        { "kind": "string_array_non_empty", "path": "right_on" },
+        { "kind": "enum", "path": "join_type", "allowed": ["inner", "left", "right", "full", "semi", "anti"] },
+        { "kind": "enum", "path": "strategy", "allowed": ["auto", "hash", "sort_merge"] },
+        { "kind": "integer_min", "path": "chunk_size", "min": 1 },
+        { "kind": "boolean", "path": "enable_bloom" }
+      ]
+    },
+    {
+      "type": "aggregate_rows_v3",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "string_array_non_empty", "path": "group_by" },
+        { "kind": "aggregate_defs", "path": "aggregates" },
+        { "kind": "integer_min", "path": "approx_sample_size", "min": 1 }
+      ]
+    },
+    {
+      "type": "aggregate_rows_v4",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "string_array_non_empty", "path": "group_by" },
+        { "kind": "aggregate_defs", "path": "aggregates" },
+        { "kind": "integer_min", "path": "approx_sample_size", "min": 1 },
+        { "kind": "boolean", "path": "verify_exact" },
+        { "kind": "integer_min", "path": "parallel_workers", "min": 1 }
+      ]
+    },
+    {
+      "type": "window_rows_v1",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "string_array_non_empty", "path": "partition_by" },
+        { "kind": "string_non_empty", "path": "order_by" },
+        { "kind": "window_functions", "path": "functions" }
+      ]
+    },
+    {
+      "type": "plugin_registry_v1",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "enum", "path": "op", "allowed": ["list", "get", "register", "upsert", "delete", "unregister"] },
+        { "kind": "string", "path": "plugin" },
+        { "kind": "manifest_object", "path": "manifest" },
+        { "kind": "conditional_required_non_empty", "path": "manifest.command", "when_path": "op", "one_of": ["register", "upsert"] }
+      ]
+    },
+    {
+      "type": "optimizer_v1",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "row_objects", "path": "rows" },
+        { "kind": "integer_min", "path": "row_count_hint", "min": 0 },
+        { "kind": "boolean", "path": "prefer_arrow" },
+        { "kind": "json_object", "path": "join_hint" },
+        { "kind": "json_object", "path": "aggregate_hint" }
+      ]
+    },
+    {
+      "type": "parquet_io_v2",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "enum", "path": "op", "allowed": ["write", "save", "read", "load", "inspect", "inspect_schema", "merge_small"] },
+        { "kind": "string", "path": "path" },
+        { "kind": "row_objects", "path": "rows" },
+        { "kind": "enum", "path": "parquet_mode", "allowed": ["typed", "payload"] },
+        { "kind": "integer_min", "path": "limit", "min": 1 },
+        { "kind": "string_array_non_empty", "path": "columns" },
+        { "kind": "string_non_empty", "path": "predicate_field" },
+        { "kind": "json_compatible", "path": "predicate_eq" },
+        { "kind": "string_array_non_empty", "path": "partition_by" },
+        { "kind": "enum", "path": "compression", "allowed": ["snappy", "gzip", "zstd", "none", "uncompressed"] },
+        { "kind": "boolean", "path": "recursive" },
+        { "kind": "enum", "path": "schema_mode", "allowed": ["additive", "strict", "widen"] },
+        { "kind": "paired_required", "path": "predicate_field", "paired_path": "predicate_eq", "message": "predicate_field/predicate_eq must be provided together for read/load" }
+      ]
+    },
+    {
+      "type": "udf_wasm_v2",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "row_objects", "path": "rows" },
+        { "kind": "string", "path": "field" },
+        { "kind": "string", "path": "output_field" },
+        { "kind": "string", "path": "op" },
+        { "kind": "string", "path": "wasm_base64" },
+        { "kind": "integer_min", "path": "max_output_bytes", "min": 1 },
+        { "kind": "string_non_empty", "path": "signed_token" },
+        { "kind": "string_array_non_empty", "path": "allowed_ops" },
+        { "kind": "op_in_allowed_ops", "path": "op", "allowed_path": "allowed_ops" }
+      ]
+    }
+  ]
+}

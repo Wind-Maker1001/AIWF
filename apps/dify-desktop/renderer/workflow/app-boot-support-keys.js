@@ -68,6 +68,7 @@ const TOOLBAR_BINDING_KEYS = [
   "saveQualityRuleSetFromGraph",
   "removeQualityRuleSetCurrent",
   "renderPalette",
+  "renderNodeTypePolicyHint",
   "applyDeepSeekDefaults",
   "refreshOfflineBoundaryHint",
 ];

@@ -136,6 +136,15 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
                         </Button.Resources>
                     </Button>
+                    <Button x:Name="GovernanceNavButton" AutomationProperties.AutomationId="GovernanceNavButton" Click="OnGovernanceNavClick" Content="治理" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF111111" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFBD5D5" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
+                        </Button.Resources>
+                    </Button>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
@@ -690,6 +699,426 @@
                                         <TextBlock x:Name="DurationTextBlock" AutomationProperties.AutomationId="DurationTextBlock" Text="-" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+
+            <Grid x:Name="GovernanceSectionGrid">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="12" Padding="10">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="4" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="#FFC62828" CornerRadius="2" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="治理" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                            <TextBlock Text="人工审核队列与审核历史" Foreground="#FF4B5563" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto" HorizontalScrollMode="Disabled" Margin="0,10,0,0">
+                    <Grid x:Name="GovernanceCardsGrid" RowSpacing="14">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border x:Name="GovernancePendingCard" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="待审核队列" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshPendingReviewsButton"
+                                            AutomationProperties.AutomationId="RefreshPendingReviewsButton"
+                                            Click="OnRefreshPendingReviewsClick"
+                                            Content="刷新"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <TextBlock x:Name="GovernanceBoundaryHintTextBlock"
+                                           AutomationProperties.AutomationId="GovernanceBoundaryHintTextBlock"
+                                           Text="正在从 Bridge 查询治理边界。"
+                                           Foreground="#FF374151"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="GovernanceBoundaryRoutesTextBlock"
+                                           AutomationProperties.AutomationId="GovernanceBoundaryRoutesTextBlock"
+                                           Text="-"
+                                           Foreground="#FF6B7280"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="GovernancePendingHintTextBlock" Text="使用当前 Bridge URL 查询后端审核队列。" Foreground="#FF4B5563" TextWrapping="Wrap" />
+                                <ListView x:Name="PendingReviewsListView"
+                                          AutomationProperties.AutomationId="PendingReviewsListView"
+                                          Height="260"
+                                          MinHeight="220"
+                                          SelectionChanged="OnPendingReviewSelectionChanged" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="GovernanceDecisionCard" Grid.Row="1" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="审核操作" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock x:Name="SelectedReviewSummaryTextBlock" AutomationProperties.AutomationId="SelectedReviewSummaryTextBlock" Text="未选中待审核项" Foreground="#FF374151" TextWrapping="Wrap" />
+                                <TextBlock x:Name="SelectedReviewDetailTextBlock" AutomationProperties.AutomationId="SelectedReviewDetailTextBlock" Text="-" Foreground="#FF6B7280" TextWrapping="Wrap" />
+                                <TextBlock Text="审核人" />
+                                <TextBox x:Name="GovernanceReviewerTextBox" AutomationProperties.AutomationId="GovernanceReviewerTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="native-reviewer" />
+                                <TextBlock Text="备注" />
+                                <TextBox x:Name="GovernanceCommentTextBox" AutomationProperties.AutomationId="GovernanceCommentTextBox" Style="{StaticResource TouchTextBoxStyle}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="88" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0"
+                                            x:Name="ApproveReviewButton"
+                                            AutomationProperties.AutomationId="ApproveReviewButton"
+                                            Click="OnApproveReviewClick"
+                                            Content="批准"
+                                            MinHeight="40"
+                                            IsEnabled="False" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RejectReviewButton"
+                                            AutomationProperties.AutomationId="RejectReviewButton"
+                                            Click="OnRejectReviewClick"
+                                            Content="拒绝"
+                                            MinHeight="40"
+                                            IsEnabled="False" />
+                                </Grid>
+                                <TextBlock x:Name="GovernanceStatusTextBlock" AutomationProperties.AutomationId="GovernanceStatusTextBlock" Text="-" Foreground="#FF4B5563" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="GovernanceHistoryCard" Grid.Row="2" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="审核历史" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshReviewHistoryButton"
+                                            AutomationProperties.AutomationId="RefreshReviewHistoryButton"
+                                            Click="OnRefreshReviewHistoryClick"
+                                            Content="刷新"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="GovernanceHistoryRunIdTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="GovernanceHistoryRunIdTextBox"
+                                             PlaceholderText="筛选 Run ID"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="GovernanceHistoryReviewerTextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="GovernanceHistoryReviewerTextBox"
+                                             PlaceholderText="筛选审核人"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <ComboBox x:Name="GovernanceHistoryStatusComboBox"
+                                              Grid.Column="2"
+                                              AutomationProperties.AutomationId="GovernanceHistoryStatusComboBox"
+                                              Style="{StaticResource TouchComboBoxStyle}"
+                                              SelectedIndex="0">
+                                        <ComboBoxItem Content="" />
+                                        <ComboBoxItem Content="approved" />
+                                        <ComboBoxItem Content="rejected" />
+                                    </ComboBox>
+                                </Grid>
+                                <ListView x:Name="ReviewHistoryListView"
+                                          AutomationProperties.AutomationId="ReviewHistoryListView"
+                                          Height="260"
+                                          MinHeight="220" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="GovernanceAuditCard" Grid.Row="3" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="运行审计" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshGovernanceAuditButton"
+                                            AutomationProperties.AutomationId="RefreshGovernanceAuditButton"
+                                            Click="OnRefreshGovernanceAuditClick"
+                                            Content="刷新"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="GovernanceTimelineRunIdTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="GovernanceTimelineRunIdTextBox"
+                                             PlaceholderText="按 Run ID 查询时间线"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="GovernanceAuditActionTextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="GovernanceAuditActionTextBox"
+                                             PlaceholderText="筛选审计 action（可选）"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBlock x:Name="GovernanceAuditSummaryTextBlock"
+                                               Grid.Column="2"
+                                               AutomationProperties.AutomationId="GovernanceAuditSummaryTextBlock"
+                                               Text="-"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center"
+                                               Foreground="#FF4B5563" />
+                                </Grid>
+                                <TextBlock Text="最近运行" FontWeight="SemiBold" Foreground="#FF374151" />
+                                <ListView x:Name="GovernanceRecentRunsListView"
+                                          AutomationProperties.AutomationId="GovernanceRecentRunsListView"
+                                          Height="180"
+                                          MinHeight="160"
+                                          SelectionChanged="OnGovernanceRunSelectionChanged" />
+                                <TextBlock Text="运行时间线" FontWeight="SemiBold" Foreground="#FF374151" />
+                                <ListView x:Name="GovernanceTimelineListView"
+                                          AutomationProperties.AutomationId="GovernanceTimelineListView"
+                                          Height="180"
+                                          MinHeight="160" />
+                                <TextBlock Text="失败摘要" FontWeight="SemiBold" Foreground="#FF374151" />
+                                <ListView x:Name="GovernanceFailureSummaryListView"
+                                          AutomationProperties.AutomationId="GovernanceFailureSummaryListView"
+                                          Height="160"
+                                          MinHeight="140" />
+                                <TextBlock Text="审计事件" FontWeight="SemiBold" Foreground="#FF374151" />
+                                <ListView x:Name="GovernanceAuditLogListView"
+                                          AutomationProperties.AutomationId="GovernanceAuditLogListView"
+                                          Height="180"
+                                          MinHeight="160" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="GovernanceQualityRuleCard" Grid.Row="4" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="质量规则集" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshQualityRuleSetsButton"
+                                            AutomationProperties.AutomationId="RefreshQualityRuleSetsButton"
+                                            Click="OnRefreshQualityRuleSetsClick"
+                                            Content="刷新"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button Grid.Column="2"
+                                            x:Name="DeleteQualityRuleSetButton"
+                                            AutomationProperties.AutomationId="DeleteQualityRuleSetButton"
+                                            Click="OnDeleteQualityRuleSetClick"
+                                            Content="删除"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="QualityRuleSetIdTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="QualityRuleSetIdTextBox"
+                                             PlaceholderText="规则集 ID"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="QualityRuleSetNameTextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="QualityRuleSetNameTextBox"
+                                             PlaceholderText="规则集名称"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="QualityRuleSetVersionTextBox"
+                                             Grid.Column="2"
+                                             AutomationProperties.AutomationId="QualityRuleSetVersionTextBox"
+                                             PlaceholderText="版本"
+                                             Text="v1"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <Button Grid.Column="3"
+                                            x:Name="SaveQualityRuleSetButton"
+                                            AutomationProperties.AutomationId="SaveQualityRuleSetButton"
+                                            Click="OnSaveQualityRuleSetClick"
+                                            Content="保存"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <ListView x:Name="QualityRuleSetListView"
+                                          AutomationProperties.AutomationId="QualityRuleSetListView"
+                                          Height="180"
+                                          MinHeight="160"
+                                          SelectionChanged="OnQualityRuleSetSelectionChanged" />
+                                <TextBox x:Name="QualityRuleSetJsonTextBox"
+                                         AutomationProperties.AutomationId="QualityRuleSetJsonTextBox"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="180"
+                                         Style="{StaticResource TouchTextBoxStyle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="GovernanceSandboxCard" Grid.Row="5" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Sandbox 治理" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshSandboxGovernanceButton"
+                                            AutomationProperties.AutomationId="RefreshSandboxGovernanceButton"
+                                            Click="OnRefreshSandboxGovernanceClick"
+                                            Content="刷新"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button Grid.Column="2"
+                                            x:Name="SaveSandboxRulesButton"
+                                            AutomationProperties.AutomationId="SaveSandboxRulesButton"
+                                            Click="OnSaveSandboxRulesClick"
+                                            Content="保存"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                    <Button Grid.Column="3"
+                                            x:Name="RollbackSandboxRuleVersionButton"
+                                            AutomationProperties.AutomationId="RollbackSandboxRuleVersionButton"
+                                            Click="OnRollbackSandboxRuleVersionClick"
+                                            Content="回滚"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                </Grid>
+                                <ListView x:Name="SandboxRuleVersionsListView"
+                                          AutomationProperties.AutomationId="SandboxRuleVersionsListView"
+                                          Height="180"
+                                          MinHeight="160"
+                                          SelectionChanged="OnSandboxRuleVersionSelectionChanged" />
+                                <TextBox x:Name="SandboxRulesJsonTextBox"
+                                         AutomationProperties.AutomationId="SandboxRulesJsonTextBox"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="180"
+                                         Style="{StaticResource TouchTextBoxStyle}" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SandboxMuteNodeTypeTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="SandboxMuteNodeTypeTextBox"
+                                             PlaceholderText="mute node_type"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="SandboxMuteNodeIdTextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="SandboxMuteNodeIdTextBox"
+                                             PlaceholderText="mute node_id"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="SandboxMuteCodeTextBox"
+                                             Grid.Column="2"
+                                             AutomationProperties.AutomationId="SandboxMuteCodeTextBox"
+                                             PlaceholderText="mute code"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="SandboxMuteMinutesTextBox"
+                                             Grid.Column="3"
+                                             AutomationProperties.AutomationId="SandboxMuteMinutesTextBox"
+                                             PlaceholderText="分钟"
+                                             Text="60"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <Button Grid.Column="4"
+                                            x:Name="ApplySandboxMuteButton"
+                                            AutomationProperties.AutomationId="ApplySandboxMuteButton"
+                                            Click="OnApplySandboxMuteClick"
+                                            Content="应用静默"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <TextBlock Text="AutoFix 状态" FontWeight="SemiBold" Foreground="#FF374151" />
+                                <TextBlock x:Name="SandboxAutoFixStateTextBlock"
+                                           AutomationProperties.AutomationId="SandboxAutoFixStateTextBlock"
+                                           Text="-"
+                                           Foreground="#FF4B5563"
+                                           TextWrapping="Wrap" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SandboxAutoFixModeTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="SandboxAutoFixModeTextBox"
+                                             PlaceholderText="forced isolation mode"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="SandboxAutoFixUntilTextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="SandboxAutoFixUntilTextBox"
+                                             PlaceholderText="forced until (ISO8601)"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="SandboxAutoFixGreenStreakTextBox"
+                                             Grid.Column="2"
+                                             AutomationProperties.AutomationId="SandboxAutoFixGreenStreakTextBox"
+                                             PlaceholderText="green streak"
+                                             Text="0"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <Button Grid.Column="3"
+                                            x:Name="SaveSandboxAutoFixStateButton"
+                                            AutomationProperties.AutomationId="SaveSandboxAutoFixStateButton"
+                                            Click="OnSaveSandboxAutoFixStateClick"
+                                            Content="保存 AutoFix"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button Grid.Column="4"
+                                            x:Name="ClearSandboxAutoFixOverrideButton"
+                                            AutomationProperties.AutomationId="ClearSandboxAutoFixOverrideButton"
+                                            Click="OnClearSandboxAutoFixOverrideClick"
+                                            Content="清空 override"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <TextBlock Text="AutoFix 历史" FontWeight="SemiBold" Foreground="#FF374151" />
+                                <ListView x:Name="SandboxAutoFixActionsListView"
+                                          AutomationProperties.AutomationId="SandboxAutoFixActionsListView"
+                                          Height="160"
+                                          MinHeight="140" />
                             </StackPanel>
                         </Border>
                     </Grid>

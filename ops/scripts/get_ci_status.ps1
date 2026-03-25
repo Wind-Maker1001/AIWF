@@ -110,12 +110,38 @@ function Select-LatestRun {
   }
   return $null
 }
+function Get-LocalArchitectureScorecardSummary([string]$RepoRoot) {
+  $path = Join-Path $RepoRoot "ops\logs\architecture\architecture_scorecard_release_ready_latest.json"
+  $summary = [ordered]@{
+    Path = $path
+    Exists = $false
+    OverallStatus = "missing"
+    GeneratedAt = ""
+    Profile = ""
+  }
+  if (-not (Test-Path $path)) {
+    return [pscustomobject]$summary
+  }
+  try {
+    $raw = Get-Content -Raw -Encoding UTF8 $path | ConvertFrom-Json
+    $summary.Exists = $true
+    $summary.OverallStatus = [string]$raw.overall_status
+    $summary.GeneratedAt = [string]$raw.generated_at
+    $summary.Profile = [string]$raw.profile
+  } catch {
+    $summary.Exists = $true
+    $summary.OverallStatus = "unreadable"
+  }
+  return [pscustomobject]$summary
+}
 
 $repoSlug = Resolve-RepoSlug
 $branchName = Resolve-BranchName -RequestedBranch $Branch
 $headSha = Resolve-HeadSha -RequestedRef $Ref -FallbackBranch $branchName
 $token = Get-GitHubToken
 $headers = New-GitHubHeaders -Token $token
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$architectureScorecard = Get-LocalArchitectureScorecardSummary -RepoRoot $repoRoot
 
 Info ("querying CI status for {0}@{1}" -f $branchName, $headSha)
 $repoMeta = Invoke-RestMethod -Uri ("https://api.github.com/repos/{0}" -f $repoSlug) -Headers $headers -Method Get
@@ -200,4 +226,5 @@ if (-not [string]::IsNullOrWhiteSpace($scheduledFullNote)) {
     }
   }
   ScheduledFullNote = $scheduledFullNote
+  ArchitectureScorecard = $architectureScorecard
 }

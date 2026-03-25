@@ -3,6 +3,7 @@ param(
   [ValidateSet("Debug", "Release")]
   [string]$Configuration = "Release",
   [int]$AutoExitMs = 2500,
+  [string]$ExePath = "",
   [double]$MaxWindowActivatedMs = 0,
   [double]$MaxMainWindowCtorMs = 0,
   [double]$MaxCanvasInitMs = 0,
@@ -42,7 +43,7 @@ catch {
   throw "dotnet SDK not found. Install .NET SDK 8+ and Windows App SDK prerequisites first."
 }
 
-if (-not $SkipBuild) {
+if (-not $SkipBuild -and [string]::IsNullOrWhiteSpace($ExePath)) {
   Info "building native winui project"
   dotnet build $projectPath -c $Configuration -p:Platform=x64
   if ($LASTEXITCODE -ne 0) {
@@ -53,9 +54,12 @@ if (-not $SkipBuild) {
   Warn "skip native winui build"
 }
 
-$exePath = Resolve-NativeWinUiExePath -Root $Root -Configuration $Configuration
-if (-not $exePath) {
-  throw "native winui executable not found: $exePath"
+$resolvedExePath = $ExePath
+if ([string]::IsNullOrWhiteSpace($resolvedExePath)) {
+  $resolvedExePath = Resolve-NativeWinUiExePath -Root $Root -Configuration $Configuration
+}
+if (-not $resolvedExePath -or -not (Test-Path $resolvedExePath)) {
+  throw "native winui executable not found: $resolvedExePath"
 }
 
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -67,8 +71,8 @@ $env:AIWF_NATIVE_PERF_LOG_PATH = $startupLogPath
 $env:AIWF_NATIVE_PERF_AUTO_EXIT_MS = "$AutoExitMs"
 
 try {
-  Info ("launching native winui app: " + $exePath)
-  $proc = Start-Process -FilePath $exePath -PassThru
+  Info ("launching native winui app: " + $resolvedExePath)
+  $proc = Start-Process -FilePath $resolvedExePath -PassThru
   $waitMs = [Math]::Max($AutoExitMs + 8000, 12000)
   if (-not $proc.WaitForExit($waitMs)) {
     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue

@@ -9,13 +9,9 @@ function registerWorkflowReviewIpc(ctx, deps) {
     runMinimalWorkflow,
   } = ctx;
   const {
-    loadReviewQueue,
-    saveReviewQueue,
-    listReviewHistory,
-    filterReviewHistory,
     isMockIoAllowed,
     resolveMockFilePath,
-    findRunById,
+    getRun,
     normalizeWorkflowConfig,
     applyQualityRuleSetToPayload,
     applySandboxAutoFixPayload,
@@ -28,22 +24,27 @@ function registerWorkflowReviewIpc(ctx, deps) {
     appendSandboxViolationAudit,
     maybeApplySandboxAutoFix,
     enqueueReviews,
+    sandboxRuleStore,
+    sandboxAutoFixStore,
+    workflowManualReviewStore,
   } = deps;
 
   ipcMain.handle("aiwf:listManualReviews", async () => {
-    return { ok: true, items: loadReviewQueue() };
+    return await workflowManualReviewStore.listQueue();
   });
 
   ipcMain.handle("aiwf:listManualReviewHistory", async (_evt, req) => {
-    const limit = Number(req?.limit || 200);
-    const safe = Number.isFinite(limit) ? Math.max(1, Math.min(2000, Math.floor(limit))) : 200;
-    const items = listReviewHistory(safe);
-    return { ok: true, items: filterReviewHistory(items, req?.filter || {}) };
+    return await workflowManualReviewStore.listHistory(req);
   });
 
   ipcMain.handle("aiwf:exportManualReviewHistory", async (_evt, req) => {
     try {
-      const items = filterReviewHistory(listReviewHistory(5000), req?.filter || {});
+      const listed = await workflowManualReviewStore.listHistory({
+        limit: 5000,
+        filter: req?.filter || {},
+      });
+      if (!listed?.ok) return listed;
+      const items = Array.isArray(listed.items) ? listed.items : [];
       const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {
@@ -80,25 +81,20 @@ function registerWorkflowReviewIpc(ctx, deps) {
       const approved = !!req?.approved;
       const reviewer = String(req?.reviewer || "reviewer").trim();
       const comment = String(req?.comment || "").trim();
-      const queue = loadReviewQueue();
-      const index = queue.findIndex((item) => String(item.run_id || "") === runId && String(item.review_key || "") === reviewKey);
-      if (index < 0) return { ok: false, error: "review task not found" };
-      const task = queue[index];
-      queue.splice(index, 1);
-      saveReviewQueue(queue);
-      const hist = {
-        ...task,
+      const mergedCfg = normalizeWorkflowConfig({ ...loadConfig(), ...(req?.cfg || {}) });
+      const submitted = await workflowManualReviewStore.submit({
+        run_id: runId,
+        review_key: reviewKey,
         approved,
         reviewer,
         comment,
-        status: approved ? "approved" : "rejected",
-        decided_at: new Date().toISOString(),
-      };
-      appendReviewHistory(hist);
+      }, mergedCfg);
+      if (!submitted?.ok) return submitted;
+      const hist = submitted.item;
       let resumed = null;
       const autoResume = req?.auto_resume !== false;
       if (autoResume) {
-        const found = findRunById(runId);
+        const found = await getRun(runId, mergedCfg);
         if (found) {
           const basePayload = found.payload && typeof found.payload === "object" ? found.payload : {};
           const replayPayload = {
@@ -106,19 +102,24 @@ function registerWorkflowReviewIpc(ctx, deps) {
             manual_review: {
               ...(basePayload.manual_review && typeof basePayload.manual_review === "object" ? basePayload.manual_review : {}),
               [reviewKey]: {
-                approved,
-                reviewer,
-                comment,
+                approved: !!hist?.approved,
+                reviewer: String(hist?.reviewer || reviewer),
+                comment: String(hist?.comment || comment),
               },
             },
             resume: {
               run_id: runId,
-              node_id: String(task.node_id || reviewKey || ""),
+              node_id: String(hist?.node_id || reviewKey || ""),
               outputs: found?.result?.node_outputs || {},
             },
           };
-          const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(found.config || {}) });
-          const effectivePayload = applyQualityRuleSetToPayload(applySandboxAutoFixPayload(replayPayload));
+          const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(found.config || {}), ...(req?.cfg || {}) });
+          const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
+          if (!rulesOut?.ok) return rulesOut;
+          const effectivePayload = await applyQualityRuleSetToPayload(
+            await sandboxAutoFixStore.applyPayload(replayPayload, merged),
+            merged
+          );
           const out = attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
             config: merged,
@@ -127,25 +128,19 @@ function registerWorkflowReviewIpc(ctx, deps) {
           }), effectivePayload || {});
           appendDiagnostics(out);
           appendRunHistory(out, effectivePayload, merged);
-          extractSandboxViolations(out).forEach((item) => appendSandboxViolationAudit(item, effectivePayload || {}));
-          maybeApplySandboxAutoFix(out, effectivePayload || {});
-          if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) enqueueReviews(out.pending_reviews);
+          extractSandboxViolations(out).forEach((item) => appendSandboxViolationAudit(item, effectivePayload || {}, rulesOut.rules || {}));
+          await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
+          if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
+            await enqueueReviews(out.pending_reviews, merged);
+          }
           resumed = out;
         }
       }
-      return { ok: true, item: hist, remaining: queue.length, resumed };
+      return { ok: true, provider: String(submitted?.provider || ""), item: hist, remaining: Number(submitted?.remaining || 0), resumed };
     } catch (error) {
       return { ok: false, error: String(error) };
     }
   });
-
-  function appendReviewHistory(item) {
-    const filePath = deps.reviewHistoryPath();
-    try {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.appendFileSync(filePath, `${JSON.stringify(item)}\n`, "utf8");
-    } catch {}
-  }
 }
 
 module.exports = {

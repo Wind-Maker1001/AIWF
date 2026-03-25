@@ -1,3 +1,10 @@
+const { assertWorkflowContract } = require("./workflow_contract");
+const { TEMPLATE_PACK_ENTRY_SCHEMA_VERSION } = require("./workflow_ipc_state");
+const {
+  exportTemplatePackArtifact,
+  normalizeTemplatePackArtifact,
+} = require("./workflow_template_pack_contract");
+
 function registerWorkflowStoreIpc(ctx, deps) {
   const {
     ipcMain,
@@ -8,14 +15,13 @@ function registerWorkflowStoreIpc(ctx, deps) {
   } = ctx;
   const {
     appendAudit,
-    appendWorkflowVersion,
     isMockIoAllowed,
-    listQualityRuleCenter,
     listTemplateMarketplace,
     nowIso,
+    qualityRuleSetSupport,
     resolveMockFilePath,
-    saveQualityRuleCenter,
     saveTemplateMarketplace,
+    workflowVersionStore,
   } = deps;
 
   function safeWorkflowName(name) {
@@ -40,24 +46,35 @@ function registerWorkflowStoreIpc(ctx, deps) {
         pack = parsed && typeof parsed === "object" ? parsed : null;
       }
       if (!pack) return { ok: false, error: "pack or path required" };
-      const templates = Array.isArray(pack.templates) ? pack.templates : [];
+      const normalizedPack = normalizeTemplatePackArtifact(pack, {
+        allowVersionMigration: true,
+        source: fromPath || "inline",
+      });
+      const templates = Array.isArray(normalizedPack.templates) ? normalizedPack.templates : [];
       if (!templates.length) return { ok: false, error: "templates required" };
-      const id = String(pack.id || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`);
+      const id = String(normalizedPack.id || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`);
       const item = {
+        schema_version: TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
         id,
-        name: String(pack.name || id),
-        version: String(pack.version || "v1"),
+        name: String(normalizedPack.name || id),
+        version: String(normalizedPack.version || "v1"),
         source: fromPath || "inline",
         templates,
-        created_at: nowIso(),
+        created_at: String(normalizedPack.created_at || nowIso()),
       };
       const items = listTemplateMarketplace(5000);
       const index = items.findIndex((row) => String(row?.id || "") === id);
       if (index >= 0) items[index] = item;
       else items.unshift(item);
       saveTemplateMarketplace(items);
-      appendAudit("template_pack_install", { id, name: item.name, templates: templates.length });
-      return { ok: true, item };
+      appendAudit("template_pack_install", {
+        id,
+        name: item.name,
+        templates: templates.length,
+        migrated: !!normalizedPack.migrated,
+        notes: normalizedPack.notes || [],
+      });
+      return { ok: true, item, migrated: !!normalizedPack.migrated, notes: normalizedPack.notes || [] };
     } catch (error) {
       return { ok: false, error: String(error) };
     }
@@ -99,7 +116,10 @@ function registerWorkflowStoreIpc(ctx, deps) {
         filePath = pick.filePath;
       }
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, `${JSON.stringify(hit, null, 2)}\n`, "utf8");
+      const artifact = exportTemplatePackArtifact(hit, {
+        source: "marketplace_export",
+      });
+      fs.writeFileSync(filePath, `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
       return { ok: true, path: filePath };
     } catch (error) {
       return { ok: false, error: String(error) };
@@ -107,44 +127,35 @@ function registerWorkflowStoreIpc(ctx, deps) {
   });
 
   ipcMain.handle("aiwf:listQualityRuleSets", async () => {
-    return { ok: true, sets: listQualityRuleCenter() };
+    try {
+      return await qualityRuleSetSupport.listQualityRuleSets();
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
   });
 
   ipcMain.handle("aiwf:saveQualityRuleSet", async (_evt, req) => {
-    try {
-      const set = req?.set && typeof req.set === "object" ? req.set : null;
-      if (!set) return { ok: false, error: "set required" };
-      const id = String(set.id || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`);
-      const row = {
-        id,
-        name: String(set.name || id),
-        version: String(set.version || "v1"),
-        rules: set.rules && typeof set.rules === "object" ? set.rules : {},
-        scope: String(set.scope || "generic"),
-        updated_at: nowIso(),
-      };
-      const sets = listQualityRuleCenter();
-      const index = sets.findIndex((item) => String(item?.id || "") === id);
-      if (index >= 0) sets[index] = row;
-      else sets.unshift(row);
-      saveQualityRuleCenter(sets);
-      appendAudit("quality_rule_set_save", { id, name: row.name, scope: row.scope });
-      return { ok: true, set: row };
-    } catch (error) {
-      return { ok: false, error: String(error) };
+    const out = await qualityRuleSetSupport.saveQualityRuleSet(req);
+    if (out?.ok) {
+      appendAudit("quality_rule_set_save", {
+        id: String(out?.set?.id || ""),
+        name: String(out?.set?.name || ""),
+        scope: String(out?.set?.scope || ""),
+        provider: String(out?.provider || ""),
+      });
     }
+    return out;
   });
 
   ipcMain.handle("aiwf:removeQualityRuleSet", async (_evt, req) => {
-    try {
-      const id = String(req?.id || "").trim();
-      if (!id) return { ok: false, error: "id required" };
-      saveQualityRuleCenter(listQualityRuleCenter().filter((item) => String(item?.id || "") !== id));
-      appendAudit("quality_rule_set_remove", { id });
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: String(error) };
+    const out = await qualityRuleSetSupport.removeQualityRuleSet(req);
+    if (out?.ok) {
+      appendAudit("quality_rule_set_remove", {
+        id: String(out?.id || ""),
+        provider: String(out?.provider || ""),
+      });
     }
+    return out;
   });
 
   ipcMain.handle("aiwf:saveWorkflow", async (_evt, graph, name, opts) => {
@@ -170,16 +181,32 @@ function registerWorkflowStoreIpc(ctx, deps) {
       }
       if (canceled || !filePath) return { ok: false, canceled: true };
       const payload = graph && typeof graph === "object" ? graph : {};
+      assertWorkflowContract(payload, { requireNonEmptyNodes: true });
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-      appendWorkflowVersion({
+      const versionItem = {
         version_id: `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
         ts: nowIso(),
         workflow_name: String(payload?.name || safeName),
         workflow_id: String(payload?.workflow_id || "custom"),
         path: filePath,
         graph: payload,
-      });
+      };
+      const versionOut = await workflowVersionStore.recordVersion(versionItem);
+      if (!versionOut?.ok) {
+        appendAudit("workflow_version_record_failed", {
+          path: filePath,
+          workflow_name: String(payload?.name || safeName),
+          error: String(versionOut?.error || "unknown"),
+        });
+        return {
+          ok: false,
+          canceled: false,
+          saved_local: true,
+          path: filePath,
+          error: `workflow version record failed: ${versionOut?.error || "unknown"}`,
+        };
+      }
       appendAudit("workflow_save", { path: filePath, workflow_name: String(payload?.name || safeName) });
       return { ok: true, path: filePath };
     } catch (error) {

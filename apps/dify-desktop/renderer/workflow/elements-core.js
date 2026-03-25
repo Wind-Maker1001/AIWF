@@ -4,6 +4,7 @@ function getWorkflowCoreElements($) {
     paletteMode: $("paletteMode"),
     paletteSearch: $("paletteSearch"),
     nodeType: $("nodeType"),
+    nodeTypePolicyHint: $("nodeTypePolicyHint"),
     workflowName: $("workflowName"),
     templateSelect: $("templateSelect"),
     templateParamsForm: $("templateParamsForm"),

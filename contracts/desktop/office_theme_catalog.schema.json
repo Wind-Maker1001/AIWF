@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "aiwf/contracts/desktop/office_theme_catalog.schema.json",
+  "title": "AIWF Office Theme Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "themes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "office_theme_catalog.v1"
+    },
+    "themes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  }
+}

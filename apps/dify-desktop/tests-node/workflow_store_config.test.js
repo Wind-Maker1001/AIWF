@@ -41,6 +41,7 @@ test("workflow store import/export preserves node config", async () => {
   });
 
   const out = store.exportGraph();
+  assert.equal(out.version, "1.0.0");
   assert.equal(out.nodes.length, 2);
   assert.equal(out.nodes[0].config.source, "D:/a.csv");
   assert.equal(out.nodes[1].type, "aggregate_rows_v2");
@@ -69,5 +70,16 @@ test("workflow store preserves edge when condition", async () => {
   assert.equal(e.when.field, "approved");
   assert.equal(store.updateEdgeWhen("n1", "n2", "output.ok"), true);
   const out = store.exportGraph();
+  assert.equal(out.version, "1.0.0");
   assert.equal(out.edges[0].when, "output.ok");
+});
+
+test("workflow store rejects unregistered node types during authoring add", async () => {
+  const { createWorkflowStore } = await loadStoreModule();
+  const store = createWorkflowStore();
+
+  assert.throws(
+    () => store.addNode("unknown_future_node", 10, 20),
+    /unregistered node types in add_node/i,
+  );
 });

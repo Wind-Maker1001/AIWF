@@ -23,6 +23,11 @@ public sealed partial class MainWindow
         SetActiveSection(NavSection.Canvas);
     }
 
+    private void OnGovernanceNavClick(object sender, RoutedEventArgs e)
+    {
+        SetActiveSection(NavSection.Governance);
+    }
+
     private void SetActiveSection(NavSection section)
     {
         if (section == NavSection.Canvas)
@@ -40,15 +45,20 @@ public sealed partial class MainWindow
         ResultsSectionGrid.Visibility = section == NavSection.Results
             ? Visibility.Visible
             : Visibility.Collapsed;
+        GovernanceSectionGrid.Visibility = section == NavSection.Governance
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         ApplyNavButtonState(WorkspaceNavButton, section == NavSection.Workspace);
         ApplyNavButtonState(CanvasNavButton, section == NavSection.Canvas);
         ApplyNavButtonState(ResultNavButton, section == NavSection.Results);
+        ApplyNavButtonState(GovernanceNavButton, section == NavSection.Governance);
         var activeElement = section switch
         {
             NavSection.Workspace => WorkspaceSectionGrid,
             NavSection.Canvas => CanvasSectionGrid,
-            _ => ResultsSectionGrid
+            NavSection.Results => ResultsSectionGrid,
+            _ => GovernanceSectionGrid
         };
         PlaySectionEntrance(activeElement);
 
@@ -60,6 +70,11 @@ public sealed partial class MainWindow
         if (section == NavSection.Canvas && IsUiaSmokeMode)
         {
             TryForceSaveCanvasSnapshotForSmoke();
+        }
+
+        if (section == NavSection.Governance)
+        {
+            _ = RefreshGovernanceAsync();
         }
     }
 

@@ -1,3 +1,4 @@
+using AIWF.Native.Runtime;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Shapes;
 
@@ -42,5 +43,20 @@ public sealed partial class MainWindow
     {
         public string Title { get; set; } = string.Empty;
         public string Subtitle { get; set; } = string.Empty;
+    }
+
+    private sealed class GovernanceReviewListEntry
+    {
+        public required GovernanceManualReviewItem Item { get; init; }
+        public bool IsHistory { get; init; }
+
+        public override string ToString()
+        {
+            var status = string.IsNullOrWhiteSpace(Item.Status) ? "-" : Item.Status;
+            var reviewer = string.IsNullOrWhiteSpace(Item.Reviewer) ? "unassigned" : Item.Reviewer;
+            return IsHistory
+                ? $"{Item.RunId} | {Item.ReviewKey} | {status} | {reviewer}"
+                : $"{Item.RunId} | {Item.ReviewKey} | {status}";
+        }
     }
 }

@@ -55,7 +55,7 @@ function updateShellTabUi(){
   if (shellTabHintEl) {
     shellTabHintEl.textContent = isHome
       ? "当前为作业助手视图，适合拖文件、一键运行与验收操作。"
-      : "当前为 Workflow Studio 视图，适合节点编排、连线调试与高级工作流操作。";
+      : "当前为 Legacy Workflow Studio 视图，用于兼容旧版节点编排、连线调试与高级工作流操作。";
   }
 }
 function switchShellTab(nextTab, opts = {}){
@@ -230,4 +230,3 @@ const payloadFromUi=()=>{
   });
   return p;
 };
-

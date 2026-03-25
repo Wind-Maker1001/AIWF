@@ -8,6 +8,15 @@ param(
   [switch]$SkipRoutingBenchGate,
   [switch]$SkipRustTransformBenchGate,
   [switch]$SkipOpenApiSdkSyncGate,
+  [switch]$SkipWorkflowContractSyncGate,
+  [switch]$SkipGovernanceControlPlaneBoundaryGate,
+  [switch]$SkipOperatorCatalogSyncGate,
+  [switch]$SkipFallbackGovernanceGate,
+  [switch]$SkipGovernanceStoreSchemaVersionsGate,
+  [switch]$SkipLocalWorkflowStoreSchemaVersionsGate,
+  [switch]$SkipTemplatePackContractSyncGate,
+  [switch]$SkipLocalTemplateStorageContractSyncGate,
+  [switch]$SkipOfflineTemplateCatalogSyncGate,
   [int]$RustBenchRows = 100000,
   [int]$RustBenchRuns = 4,
   [int]$RustBenchWarmup = 1,
@@ -21,6 +30,83 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
+function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
+. (Join-Path $PSScriptRoot "governance_capability_export_support.ps1")
+function Read-FrontendVerificationEvidence([string]$Path, [string]$Role, [string]$Frontend) {
+  $summary = [ordered]@{
+    frontend_role = $Role
+    frontend = $Frontend
+    evidence_path = $Path
+    exists = $false
+    overall_status = "missing"
+    generated_at = ""
+    profile = ""
+    checks = [ordered]@{}
+  }
+  if (-not (Test-Path $Path)) {
+    return $summary
+  }
+  try {
+    $raw = Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
+    $summary.exists = $true
+    $summary.overall_status = [string]($raw.overall_status)
+    $summary.generated_at = [string]($raw.generated_at)
+    $summary.profile = [string]($raw.profile)
+    $summary.checks = if ($raw.checks) { $raw.checks } else { [ordered]@{} }
+  } catch {
+    $summary.exists = $true
+    $summary.overall_status = "unreadable"
+  }
+  return $summary
+}
+function Get-FrontendVerificationSummary([string]$Root) {
+  $dir = Join-Path $Root "ops\logs\frontend_verification"
+  $primaryPath = Join-Path $dir "frontend_primary_verification_latest.json"
+  $compatibilityPath = Join-Path $dir "frontend_compatibility_verification_latest.json"
+  return [ordered]@{
+    primary = Read-FrontendVerificationEvidence -Path $primaryPath -Role "primary" -Frontend "winui"
+    compatibility = Read-FrontendVerificationEvidence -Path $compatibilityPath -Role "compatibility" -Frontend "electron"
+  }
+}
+function Get-ArchitectureScorecardSummary([string]$Root) {
+  $dir = Join-Path $Root "ops\logs\architecture"
+  $jsonPath = Join-Path $dir "architecture_scorecard_release_ready_latest.json"
+  $mdPath = Join-Path $dir "architecture_scorecard_release_ready_latest.md"
+  $summary = [ordered]@{
+    evidence_path = $jsonPath
+    markdown_path = $mdPath
+    exists = $false
+    overall_status = "missing"
+    generated_at = ""
+    profile = ""
+    boundaries = [ordered]@{}
+  }
+  if (-not (Test-Path $jsonPath)) {
+    return $summary
+  }
+  try {
+    $raw = Get-Content -Raw -Encoding UTF8 $jsonPath | ConvertFrom-Json
+    $summary.exists = $true
+    $summary.overall_status = [string]($raw.overall_status)
+    $summary.generated_at = [string]($raw.generated_at)
+    $summary.profile = [string]($raw.profile)
+    $summary.boundaries = if ($raw.boundaries) { $raw.boundaries } else { [ordered]@{} }
+  } catch {
+    $summary.exists = $true
+    $summary.overall_status = "unreadable"
+  }
+  return $summary
+}
+function Assert-ArchitectureScorecardReleaseReady($Summary) {
+  if (-not $Summary.exists) {
+    throw "release blocked by architecture scorecard gate: missing release-ready scorecard. Run ci_check.ps1 -CiProfile Quick and ci_check.ps1 -CiProfile Compatibility first."
+  }
+  if ([string]$Summary.overall_status -ne "passed") {
+    throw ("release blocked by architecture scorecard gate: overall_status={0}. Refresh ci_check.ps1 -CiProfile Quick and ci_check.ps1 -CiProfile Compatibility before release." -f ([string]$Summary.overall_status))
+  }
+}
+
+Warn "release_productize.ps1 is the legacy Electron compatibility release path. Use release_frontend_productize.ps1 for the primary WinUI frontend."
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $pkg = Join-Path $PSScriptRoot "package_offline_bundle.ps1"
@@ -29,13 +115,70 @@ $asyncTrend = Join-Path $PSScriptRoot "check_async_bench_trend.ps1"
 $rustTransformBenchGate = Join-Path $PSScriptRoot "check_rust_transform_bench_gate.ps1"
 $sqlConnectivityGate = Join-Path $PSScriptRoot "check_sql_connectivity.ps1"
 $openApiSdkSyncGate = Join-Path $PSScriptRoot "check_openapi_sdk_sync.ps1"
+$workflowContractSyncGate = Join-Path $PSScriptRoot "check_workflow_contract_sync.ps1"
+$governanceCapabilityExportScript = Join-Path $PSScriptRoot "export_governance_capabilities.ps1"
+$governanceControlPlaneBoundaryGate = Join-Path $PSScriptRoot "check_governance_control_plane_boundary.ps1"
+$operatorCatalogSyncGate = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
+$fallbackGovernanceGate = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
+$governanceStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_governance_store_schema_versions.ps1"
+$localWorkflowStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_local_workflow_store_schema_versions.ps1"
+$templatePackContractSyncGate = Join-Path $PSScriptRoot "check_template_pack_contract_sync.ps1"
+$localTemplateStorageContractSyncGate = Join-Path $PSScriptRoot "check_local_template_storage_contract_sync.ps1"
+$offlineTemplateCatalogSyncGate = Join-Path $PSScriptRoot "check_offline_template_catalog_sync.ps1"
 $openApiSdkSyncGateStatus = "skipped"
 $openApiSdkSyncGateCheckedAt = ""
 $openApiSdkSyncGateError = ""
+$workflowContractSyncGateStatus = "skipped"
+$workflowContractSyncGateCheckedAt = ""
+$workflowContractSyncGateError = ""
+$governanceCapabilityExportStatus = "skipped"
+$governanceCapabilityExportCheckedAt = ""
+$governanceCapabilityExportError = ""
+$governanceControlPlaneBoundaryGateStatus = "skipped"
+$governanceControlPlaneBoundaryGateCheckedAt = ""
+$governanceControlPlaneBoundaryGateError = ""
+$operatorCatalogSyncGateStatus = "skipped"
+$operatorCatalogSyncGateCheckedAt = ""
+$operatorCatalogSyncGateError = ""
+$fallbackGovernanceGateStatus = "skipped"
+$fallbackGovernanceGateCheckedAt = ""
+$fallbackGovernanceGateError = ""
+$governanceStoreSchemaVersionsGateStatus = "skipped"
+$governanceStoreSchemaVersionsGateCheckedAt = ""
+$governanceStoreSchemaVersionsGateError = ""
+$localWorkflowStoreSchemaVersionsGateStatus = "skipped"
+$localWorkflowStoreSchemaVersionsGateCheckedAt = ""
+$localWorkflowStoreSchemaVersionsGateError = ""
+$templatePackContractSyncGateStatus = "skipped"
+$templatePackContractSyncGateCheckedAt = ""
+$templatePackContractSyncGateError = ""
+$localTemplateStorageContractSyncGateStatus = "skipped"
+$localTemplateStorageContractSyncGateCheckedAt = ""
+$localTemplateStorageContractSyncGateError = ""
+$offlineTemplateCatalogSyncGateStatus = "skipped"
+$offlineTemplateCatalogSyncGateCheckedAt = ""
+$offlineTemplateCatalogSyncGateError = ""
+$architectureScorecardGateStatus = "skipped"
+$architectureScorecardGateCheckedAt = ""
+$architectureScorecardGateError = ""
 $outRoot = Join-Path $root "release"
 New-Item -ItemType Directory -Path $outRoot -Force | Out-Null
 if (-not $EnvFile) {
   $EnvFile = Join-Path $root "ops\config\dev.env"
+}
+$architectureScorecardSummary = Get-ArchitectureScorecardSummary -Root $root
+
+Info "running architecture scorecard release gate"
+try {
+  Assert-ArchitectureScorecardReleaseReady $architectureScorecardSummary
+  $architectureScorecardGateStatus = "passed"
+  $architectureScorecardGateCheckedAt = (Get-Date).ToString("s")
+  Ok "architecture scorecard release gate passed"
+} catch {
+  $architectureScorecardGateStatus = "failed"
+  $architectureScorecardGateCheckedAt = (Get-Date).ToString("s")
+  $architectureScorecardGateError = [string]$_.Exception.Message
+  throw
 }
 
 if (-not $SkipOpenApiSdkSyncGate) {
@@ -53,6 +196,168 @@ if (-not $SkipOpenApiSdkSyncGate) {
 } else {
   $openApiSdkSyncGateCheckedAt = (Get-Date).ToString("s")
   Write-Host "[WARN] skip openapi/sdk sync release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipWorkflowContractSyncGate) {
+  if (-not (Test-Path $workflowContractSyncGate)) { throw "workflow contract sync gate script missing: $workflowContractSyncGate" }
+  Info "running workflow contract sync release gate"
+  powershell -ExecutionPolicy Bypass -File $workflowContractSyncGate
+  $workflowContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $workflowContractSyncGateStatus = "failed"
+    $workflowContractSyncGateError = "check_workflow_contract_sync.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by workflow contract sync gate"
+  }
+  $workflowContractSyncGateStatus = "passed"
+  Ok "workflow contract sync release gate passed"
+} else {
+  $workflowContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip workflow contract sync release gate" -ForegroundColor Yellow
+}
+
+$governanceCapabilityExportResult = Invoke-GovernanceCapabilityExportStep -ScriptPath $governanceCapabilityExportScript -FailureScope "release"
+$governanceCapabilityExportCheckedAt = [string]$governanceCapabilityExportResult.checked_at
+if (-not $governanceCapabilityExportResult.ok) {
+  $governanceCapabilityExportStatus = "failed"
+  $governanceCapabilityExportError = [string]$governanceCapabilityExportResult.error
+  throw [string]$governanceCapabilityExportResult.failure_message
+}
+$governanceCapabilityExportStatus = "passed"
+
+if (-not $SkipGovernanceControlPlaneBoundaryGate) {
+  if (-not (Test-Path $governanceControlPlaneBoundaryGate)) { throw "governance control plane boundary gate script missing: $governanceControlPlaneBoundaryGate" }
+  Info "running governance control plane boundary release gate"
+  powershell -ExecutionPolicy Bypass -File $governanceControlPlaneBoundaryGate
+  $governanceControlPlaneBoundaryGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $governanceControlPlaneBoundaryGateStatus = "failed"
+    $governanceControlPlaneBoundaryGateError = "check_governance_control_plane_boundary.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by governance control plane boundary gate"
+  }
+  $governanceControlPlaneBoundaryGateStatus = "passed"
+  Ok "governance control plane boundary release gate passed"
+} else {
+  $governanceControlPlaneBoundaryGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip governance control plane boundary release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipOperatorCatalogSyncGate) {
+  if (-not (Test-Path $operatorCatalogSyncGate)) { throw "operator catalog sync gate script missing: $operatorCatalogSyncGate" }
+  Info "running operator catalog sync release gate"
+  powershell -ExecutionPolicy Bypass -File $operatorCatalogSyncGate
+  $operatorCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $operatorCatalogSyncGateStatus = "failed"
+    $operatorCatalogSyncGateError = "check_operator_catalog_sync.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by operator catalog sync gate"
+  }
+  $operatorCatalogSyncGateStatus = "passed"
+  Ok "operator catalog sync release gate passed"
+} else {
+  $operatorCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip operator catalog sync release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipFallbackGovernanceGate) {
+  if (-not (Test-Path $fallbackGovernanceGate)) { throw "fallback governance gate script missing: $fallbackGovernanceGate" }
+  Info "running fallback governance release gate"
+  powershell -ExecutionPolicy Bypass -File $fallbackGovernanceGate
+  $fallbackGovernanceGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $fallbackGovernanceGateStatus = "failed"
+    $fallbackGovernanceGateError = "check_fallback_governance.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by fallback governance gate"
+  }
+  $fallbackGovernanceGateStatus = "passed"
+  Ok "fallback governance release gate passed"
+} else {
+  $fallbackGovernanceGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip fallback governance release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipGovernanceStoreSchemaVersionsGate) {
+  if (-not (Test-Path $governanceStoreSchemaVersionsGate)) { throw "governance store schema version gate script missing: $governanceStoreSchemaVersionsGate" }
+  Info "running governance store schema version release gate"
+  powershell -ExecutionPolicy Bypass -File $governanceStoreSchemaVersionsGate
+  $governanceStoreSchemaVersionsGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $governanceStoreSchemaVersionsGateStatus = "failed"
+    $governanceStoreSchemaVersionsGateError = "check_governance_store_schema_versions.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by governance store schema version gate"
+  }
+  $governanceStoreSchemaVersionsGateStatus = "passed"
+  Ok "governance store schema version release gate passed"
+} else {
+  $governanceStoreSchemaVersionsGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip governance store schema version release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipLocalWorkflowStoreSchemaVersionsGate) {
+  if (-not (Test-Path $localWorkflowStoreSchemaVersionsGate)) { throw "local workflow store schema version gate script missing: $localWorkflowStoreSchemaVersionsGate" }
+  Info "running local workflow store schema version release gate"
+  powershell -ExecutionPolicy Bypass -File $localWorkflowStoreSchemaVersionsGate
+  $localWorkflowStoreSchemaVersionsGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $localWorkflowStoreSchemaVersionsGateStatus = "failed"
+    $localWorkflowStoreSchemaVersionsGateError = "check_local_workflow_store_schema_versions.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by local workflow store schema version gate"
+  }
+  $localWorkflowStoreSchemaVersionsGateStatus = "passed"
+  Ok "local workflow store schema version release gate passed"
+} else {
+  $localWorkflowStoreSchemaVersionsGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip local workflow store schema version release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipTemplatePackContractSyncGate) {
+  if (-not (Test-Path $templatePackContractSyncGate)) { throw "template pack contract sync gate script missing: $templatePackContractSyncGate" }
+  Info "running template pack contract release gate"
+  powershell -ExecutionPolicy Bypass -File $templatePackContractSyncGate
+  $templatePackContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $templatePackContractSyncGateStatus = "failed"
+    $templatePackContractSyncGateError = "check_template_pack_contract_sync.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by template pack contract gate"
+  }
+  $templatePackContractSyncGateStatus = "passed"
+  Ok "template pack contract release gate passed"
+} else {
+  $templatePackContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip template pack contract release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipLocalTemplateStorageContractSyncGate) {
+  if (-not (Test-Path $localTemplateStorageContractSyncGate)) { throw "local template storage contract gate script missing: $localTemplateStorageContractSyncGate" }
+  Info "running local template storage contract release gate"
+  powershell -ExecutionPolicy Bypass -File $localTemplateStorageContractSyncGate
+  $localTemplateStorageContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $localTemplateStorageContractSyncGateStatus = "failed"
+    $localTemplateStorageContractSyncGateError = "check_local_template_storage_contract_sync.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by local template storage contract gate"
+  }
+  $localTemplateStorageContractSyncGateStatus = "passed"
+  Ok "local template storage contract release gate passed"
+} else {
+  $localTemplateStorageContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip local template storage contract release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipOfflineTemplateCatalogSyncGate) {
+  if (-not (Test-Path $offlineTemplateCatalogSyncGate)) { throw "offline template catalog sync gate script missing: $offlineTemplateCatalogSyncGate" }
+  Info "running offline template catalog release gate"
+  powershell -ExecutionPolicy Bypass -File $offlineTemplateCatalogSyncGate
+  $offlineTemplateCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $offlineTemplateCatalogSyncGateStatus = "failed"
+    $offlineTemplateCatalogSyncGateError = "check_offline_template_catalog_sync.ps1 exit code $LASTEXITCODE"
+    throw "release blocked by offline template catalog gate"
+  }
+  $offlineTemplateCatalogSyncGateStatus = "passed"
+  Ok "offline template catalog release gate passed"
+} else {
+  $offlineTemplateCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip offline template catalog release gate" -ForegroundColor Yellow
 }
 
 if (-not $SkipSqlConnectivityGate) {
@@ -141,6 +446,15 @@ foreach ($type in @("installer", "portable")) {
     ReleaseChannel = $Channel
     RequireChineseOcr = $true
     SkipOpenApiSdkSyncGate = $true
+    SkipWorkflowContractSyncGate = $true
+    SkipGovernanceControlPlaneBoundaryGate = $true
+    SkipOperatorCatalogSyncGate = $true
+    SkipFallbackGovernanceGate = $true
+    SkipGovernanceStoreSchemaVersionsGate = $true
+    SkipLocalWorkflowStoreSchemaVersionsGate = $true
+    SkipTemplatePackContractSyncGate = $true
+    SkipLocalTemplateStorageContractSyncGate = $true
+    SkipOfflineTemplateCatalogSyncGate = $true
   }
   if ($IncludeBundledTools) { $args.IncludeBundledTools = $true }
   if ($CollectBundledTools) { $args.CollectBundledTools = $true }
@@ -166,14 +480,83 @@ foreach ($type in @("installer", "portable")) {
 $auditPath = Join-Path $outRoot ("release_gate_audit_{0}.json" -f $Version)
 $audit = [ordered]@{
   version = $Version
+  frontend = "electron_compatibility"
   channel = $Channel
   generated_at = (Get-Date).ToString("s")
+  frontend_verification = Get-FrontendVerificationSummary -Root $root
+  architecture_scorecard = $architectureScorecardSummary
   gates = [ordered]@{
+    architecture_scorecard = [ordered]@{
+      status = $architectureScorecardGateStatus
+      checked_at = $architectureScorecardGateCheckedAt
+      script = "ops/logs/architecture/architecture_scorecard_release_ready_latest.json"
+      error = $architectureScorecardGateError
+    }
     openapi_sdk_sync = [ordered]@{
       status = $openApiSdkSyncGateStatus
       checked_at = $openApiSdkSyncGateCheckedAt
       script = "ops/scripts/check_openapi_sdk_sync.ps1"
       error = $openApiSdkSyncGateError
+    }
+    workflow_contract_sync = [ordered]@{
+      status = $workflowContractSyncGateStatus
+      checked_at = $workflowContractSyncGateCheckedAt
+      script = "ops/scripts/check_workflow_contract_sync.ps1"
+      error = $workflowContractSyncGateError
+    }
+    governance_capability_export = [ordered]@{
+      status = $governanceCapabilityExportStatus
+      checked_at = $governanceCapabilityExportCheckedAt
+      script = "ops/scripts/export_governance_capabilities.ps1"
+      error = $governanceCapabilityExportError
+    }
+    governance_control_plane_boundary = [ordered]@{
+      status = $governanceControlPlaneBoundaryGateStatus
+      checked_at = $governanceControlPlaneBoundaryGateCheckedAt
+      script = "ops/scripts/check_governance_control_plane_boundary.ps1"
+      error = $governanceControlPlaneBoundaryGateError
+    }
+    operator_catalog_sync = [ordered]@{
+      status = $operatorCatalogSyncGateStatus
+      checked_at = $operatorCatalogSyncGateCheckedAt
+      script = "ops/scripts/check_operator_catalog_sync.ps1"
+      error = $operatorCatalogSyncGateError
+    }
+    fallback_governance = [ordered]@{
+      status = $fallbackGovernanceGateStatus
+      checked_at = $fallbackGovernanceGateCheckedAt
+      script = "ops/scripts/check_fallback_governance.ps1"
+      error = $fallbackGovernanceGateError
+    }
+    governance_store_schema_versions = [ordered]@{
+      status = $governanceStoreSchemaVersionsGateStatus
+      checked_at = $governanceStoreSchemaVersionsGateCheckedAt
+      script = "ops/scripts/check_governance_store_schema_versions.ps1"
+      error = $governanceStoreSchemaVersionsGateError
+    }
+    local_workflow_store_schema_versions = [ordered]@{
+      status = $localWorkflowStoreSchemaVersionsGateStatus
+      checked_at = $localWorkflowStoreSchemaVersionsGateCheckedAt
+      script = "ops/scripts/check_local_workflow_store_schema_versions.ps1"
+      error = $localWorkflowStoreSchemaVersionsGateError
+    }
+    template_pack_contract_sync = [ordered]@{
+      status = $templatePackContractSyncGateStatus
+      checked_at = $templatePackContractSyncGateCheckedAt
+      script = "ops/scripts/check_template_pack_contract_sync.ps1"
+      error = $templatePackContractSyncGateError
+    }
+    local_template_storage_contract_sync = [ordered]@{
+      status = $localTemplateStorageContractSyncGateStatus
+      checked_at = $localTemplateStorageContractSyncGateCheckedAt
+      script = "ops/scripts/check_local_template_storage_contract_sync.ps1"
+      error = $localTemplateStorageContractSyncGateError
+    }
+    offline_template_catalog_sync = [ordered]@{
+      status = $offlineTemplateCatalogSyncGateStatus
+      checked_at = $offlineTemplateCatalogSyncGateCheckedAt
+      script = "ops/scripts/check_offline_template_catalog_sync.ps1"
+      error = $offlineTemplateCatalogSyncGateError
     }
   }
 }

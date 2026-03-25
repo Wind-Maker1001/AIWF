@@ -1,0 +1,73 @@
+{
+  "schema_version": "governance_capabilities.v1",
+  "source_authority": "apps/glue-python/aiwf/governance_surface.py",
+  "items": [
+    {
+      "constant": "QUALITY_RULE_SETS",
+      "capability": "quality_rule_sets",
+      "route_prefix": "/governance/quality-rule-sets",
+      "owned_route_prefixes": [
+        "/governance/quality-rule-sets"
+      ]
+    },
+    {
+      "constant": "WORKFLOW_SANDBOX_RULES",
+      "capability": "workflow_sandbox_rules",
+      "route_prefix": "/governance/workflow-sandbox/rules",
+      "owned_route_prefixes": [
+        "/governance/workflow-sandbox/rules",
+        "/governance/workflow-sandbox/rule-versions"
+      ]
+    },
+    {
+      "constant": "WORKFLOW_SANDBOX_AUTOFIX",
+      "capability": "workflow_sandbox_autofix",
+      "route_prefix": "/governance/workflow-sandbox/autofix-state",
+      "owned_route_prefixes": [
+        "/governance/workflow-sandbox/autofix-state",
+        "/governance/workflow-sandbox/autofix-actions"
+      ]
+    },
+    {
+      "constant": "WORKFLOW_APPS",
+      "capability": "workflow_apps",
+      "route_prefix": "/governance/workflow-apps",
+      "owned_route_prefixes": [
+        "/governance/workflow-apps"
+      ]
+    },
+    {
+      "constant": "WORKFLOW_VERSIONS",
+      "capability": "workflow_versions",
+      "route_prefix": "/governance/workflow-versions",
+      "owned_route_prefixes": [
+        "/governance/workflow-versions"
+      ]
+    },
+    {
+      "constant": "MANUAL_REVIEWS",
+      "capability": "manual_reviews",
+      "route_prefix": "/governance/manual-reviews",
+      "owned_route_prefixes": [
+        "/governance/manual-reviews"
+      ]
+    },
+    {
+      "constant": "WORKFLOW_RUN_AUDIT",
+      "capability": "workflow_run_audit",
+      "route_prefix": "/governance/workflow-runs",
+      "owned_route_prefixes": [
+        "/governance/workflow-runs",
+        "/governance/workflow-audit-events"
+      ]
+    },
+    {
+      "constant": "RUN_BASELINES",
+      "capability": "run_baselines",
+      "route_prefix": "/governance/run-baselines",
+      "owned_route_prefixes": [
+        "/governance/run-baselines"
+      ]
+    }
+  ]
+}

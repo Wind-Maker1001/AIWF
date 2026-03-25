@@ -1,14 +1,14 @@
 function createWorkflowReportSupport(deps) {
   const {
     deepClone,
-    findRunById,
-    listQualityRuleCenter,
-    listRunBaselines,
+    getRun = async () => null,
+    listRunBaselines = async () => ({ ok: true, items: [] }),
+    qualityRuleSetSupport = { getQualityRuleSet: async () => null },
   } = deps;
 
-  function buildRunCompare(runA, runB) {
-    const a = findRunById(runA);
-    const b = findRunById(runB);
+  async function buildRunCompare(runA, runB, cfg = null) {
+    const a = await getRun(runA, cfg);
+    const b = await getRun(runB, cfg);
     if (!a || !b) return { ok: false, error: "run not found" };
     const nodesA = Array.isArray(a?.result?.node_runs) ? a.result.node_runs : [];
     const nodesB = Array.isArray(b?.result?.node_runs) ? b.result.node_runs : [];
@@ -119,13 +119,16 @@ function createWorkflowReportSupport(deps) {
     ].join("\n");
   }
 
-  function applyQualityRuleSetToPayload(payload) {
+  async function applyQualityRuleSetToPayload(payload, cfg = null) {
     const nextPayload = payload && typeof payload === "object" ? { ...payload } : {};
     const workflow = nextPayload.workflow && typeof nextPayload.workflow === "object" ? deepClone(nextPayload.workflow) : null;
     const qualityRuleSetId = String(nextPayload?.quality_rule_set_id || "").trim();
     if (!workflow || !qualityRuleSetId) return nextPayload;
-    const hit = listQualityRuleCenter().find((item) => String(item?.id || "") === qualityRuleSetId);
-    if (!hit || !hit.rules || typeof hit.rules !== "object") return nextPayload;
+    const hit = await qualityRuleSetSupport.getQualityRuleSet(qualityRuleSetId, cfg);
+    if (!hit) throw new Error(`quality rule set not found: ${qualityRuleSetId}`);
+    if (!hit.rules || typeof hit.rules !== "object") {
+      throw new Error(`quality rule set has invalid rules payload: ${qualityRuleSetId}`);
+    }
     const targetTypes = new Set(["quality_check_v2", "quality_check_v3", "quality_check_v4"]);
     const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
     nodes.forEach((node) => {
@@ -139,6 +142,8 @@ function createWorkflowReportSupport(deps) {
           id: String(hit.id || ""),
           name: String(hit.name || ""),
           version: String(hit.version || "v1"),
+          provider: String(hit.provider || ""),
+          owner: String(hit.owner || ""),
         },
       };
     });
@@ -146,13 +151,15 @@ function createWorkflowReportSupport(deps) {
     return nextPayload;
   }
 
-  function buildRunRegressionAgainstBaseline(runId, baselineId) {
-    const current = findRunById(runId);
+  async function buildRunRegressionAgainstBaseline(runId, baselineId, cfg = null) {
+    const current = await getRun(runId, cfg);
     if (!current) return { ok: false, error: `run not found: ${runId}` };
-    const baseline = listRunBaselines().find((item) => String(item?.baseline_id || "") === String(baselineId || ""));
+    const baselineResp = await listRunBaselines(5000, cfg);
+    const baselineItems = Array.isArray(baselineResp?.items) ? baselineResp.items : [];
+    const baseline = baselineItems.find((item) => String(item?.baseline_id || "") === String(baselineId || ""));
     if (!baseline) return { ok: false, error: `baseline not found: ${baselineId}` };
     const baselineRunId = String(baseline?.run_id || "");
-    const compare = buildRunCompare(baselineRunId, runId);
+    const compare = await buildRunCompare(baselineRunId, runId, cfg);
     if (!compare?.ok) return compare;
     const changed = Array.isArray(compare.node_diff) ? compare.node_diff.filter((item) => item.status_changed || Math.abs(Number(item.seconds_delta || 0)) > 0.001) : [];
     const statusFlip = changed.filter((item) => item.status_changed);
@@ -198,9 +205,9 @@ function registerWorkflowReportIpc(ctx, deps) {
     resolveMockFilePath,
     nowIso,
     appendAudit,
-    findRunById,
+    getRun,
     listRunBaselines,
-    saveRunBaselines,
+    saveRunBaseline,
     buildRunCompare,
     buildRunRegressionAgainstBaseline,
     renderCompareHtml,
@@ -211,23 +218,22 @@ function registerWorkflowReportIpc(ctx, deps) {
 
   ipcMain.handle("aiwf:compareWorkflowRuns", async (_evt, req) => {
     try {
-      return buildRunCompare(String(req?.run_a || "").trim(), String(req?.run_b || "").trim());
+      return await buildRunCompare(String(req?.run_a || "").trim(), String(req?.run_b || "").trim(), {});
     } catch (error) {
       return { ok: false, error: String(error) };
     }
   });
 
   ipcMain.handle("aiwf:listRunBaselines", async () => {
-    return { ok: true, items: listRunBaselines() };
+    return await listRunBaselines(200, {});
   });
 
   ipcMain.handle("aiwf:saveRunBaseline", async (_evt, req) => {
     try {
       const runId = String(req?.run_id || "").trim();
       if (!runId) return { ok: false, error: "run_id required" };
-      const hit = findRunById(runId);
+      const hit = await getRun(runId, {});
       if (!hit) return { ok: false, error: "run not found" };
-      const items = listRunBaselines();
       const baselineId = String(req?.baseline_id || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`);
       const row = {
         baseline_id: baselineId,
@@ -237,12 +243,10 @@ function registerWorkflowReportIpc(ctx, deps) {
         created_at: nowIso(),
         notes: String(req?.notes || ""),
       };
-      const index = items.findIndex((item) => String(item?.baseline_id || "") === baselineId);
-      if (index >= 0) items[index] = row;
-      else items.unshift(row);
-      saveRunBaselines(items);
+      const out = await saveRunBaseline(row, {});
+      if (!out?.ok) return out;
       appendAudit("baseline_save", { baseline_id: baselineId, run_id: runId });
-      return { ok: true, item: row };
+      return out;
     } catch (error) {
       return { ok: false, error: String(error) };
     }
@@ -250,7 +254,7 @@ function registerWorkflowReportIpc(ctx, deps) {
 
   ipcMain.handle("aiwf:compareRunWithBaseline", async (_evt, req) => {
     try {
-      return buildRunRegressionAgainstBaseline(String(req?.run_id || "").trim(), String(req?.baseline_id || "").trim());
+      return await buildRunRegressionAgainstBaseline(String(req?.run_id || "").trim(), String(req?.baseline_id || "").trim(), {});
     } catch (error) {
       return { ok: false, error: String(error) };
     }
@@ -261,7 +265,7 @@ function registerWorkflowReportIpc(ctx, deps) {
       const runA = String(req?.run_a || "").trim();
       const runB = String(req?.run_b || "").trim();
       const format = String(req?.format || "md").trim().toLowerCase() === "html" ? "html" : "md";
-      const output = buildRunCompare(runA, runB);
+      const output = await buildRunCompare(runA, runB, {});
       if (!output?.ok) return output;
       const allowMockIo = isMockIoAllowed();
       let filePath = "";

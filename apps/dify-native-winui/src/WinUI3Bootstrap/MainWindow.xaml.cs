@@ -29,7 +29,8 @@ public sealed partial class MainWindow : Window
     {
         Workspace,
         Canvas,
-        Results
+        Results,
+        Governance
     }
     private enum InlineStatusTone
     {
@@ -43,6 +44,7 @@ public sealed partial class MainWindow : Window
     private readonly MainViewModel _viewModel = new();
     private readonly NodeCatalogService _nodeCatalog = new();
     private readonly WorkflowRunnerAdapter _runnerAdapter;
+    private readonly GovernanceBridgeClient _governanceClient;
     private readonly RunFlowCoordinator _runFlowCoordinator;
     private readonly CanvasRuntime.CanvasViewportEngine _canvasViewportEngine = new(CanvasMinScale, CanvasMaxScale);
     private readonly List<NodeTemplate> _quickNodeTemplates;
@@ -193,6 +195,7 @@ public sealed partial class MainWindow : Window
         NativePerfRecorder.Mark("main_window_ctor_enter");
         InitializeComponent();
         _runnerAdapter = new WorkflowRunnerAdapter(_http);
+        _governanceClient = new GovernanceBridgeClient(_http);
         _runFlowCoordinator = new RunFlowCoordinator(_http, _runnerAdapter);
         _quickNodeTemplates = _nodeCatalog
             .GetQuickTemplates()

@@ -87,7 +87,8 @@ public sealed partial class MainWindow
         {
             NavSection.Workspace => WorkspaceSectionGrid,
             NavSection.Canvas => CanvasSectionGrid,
-            _ => ResultsSectionGrid
+            NavSection.Results => ResultsSectionGrid,
+            _ => GovernanceSectionGrid
         };
         PlaySectionEntrance(activeElement);
     }

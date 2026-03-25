@@ -3,7 +3,7 @@ param(
   [string]$Ref = "",
   [string]$Owner = "ci",
   [string]$EnvFile = "",
-  [ValidateSet("Default","Quick","Full")]
+  [ValidateSet("Default","Quick","Full","Compatibility")]
   [string]$CiProfile = "Full",
   [bool]$RunFullIntegration = $true,
   [bool]$WaitForQuick = $true,
@@ -87,9 +87,26 @@ function Wait-FullCiSuccess {
 
   throw "timed out waiting for Full Integration to finish"
 }
+function Report-ArchitectureScorecard($Status) {
+  $scorecard = $Status.ArchitectureScorecard
+  if ($null -eq $scorecard) {
+    Warn "architecture scorecard summary unavailable in CI status snapshot"
+    return
+  }
+  if (-not $scorecard.Exists) {
+    Warn ("local release-ready architecture scorecard missing: {0}" -f $scorecard.Path)
+    return
+  }
+  if ($scorecard.OverallStatus -eq "passed") {
+    Ok ("local release-ready architecture scorecard passed: {0}" -f $scorecard.Path)
+    return
+  }
+  Warn ("local release-ready architecture scorecard status={0}: {1}" -f $scorecard.OverallStatus, $scorecard.Path)
+}
 
 $status = Get-CiStatusSnapshot
 Info ("verifying CI for {0}@{1}" -f $status.Branch, $status.HeadSha)
+Report-ArchitectureScorecard $status
 
 if ($null -eq $status.QuickCi) {
   if (-not $WaitForQuick) {
@@ -154,4 +171,5 @@ Ok "branch CI verification passed"
   QuickCi = $status.QuickCi
   ManualFullForHead = $status.ManualFullForHead
   ScheduledFullNote = $status.ScheduledFullNote
+  ArchitectureScorecard = $status.ArchitectureScorecard
 }

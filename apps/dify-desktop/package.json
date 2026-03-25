@@ -49,6 +49,9 @@
       "dify_adapter.js",
       "main_window_support.js",
       "workflow_engine.js",
+      "workflow_contract.js",
+      "workflow_node_config_contract.generated.js",
+      "workflow_governance_capabilities.generated.js",
       "workflow_graph.js",
       "workflow_utils.js",
       "workflow_services.js",
@@ -60,6 +63,14 @@
       "workflow_ipc_sandbox_alerts.js",
       "workflow_ipc_sandbox_management.js",
       "workflow_ipc_store.js",
+      "workflow_quality_rule_store.js",
+      "workflow_sandbox_rule_store.js",
+      "workflow_app_registry_store.js",
+      "workflow_version_store.js",
+      "workflow_manual_review_store.js",
+      "workflow_run_audit_store.js",
+      "workflow_run_baseline_store.js",
+      "workflow_sandbox_autofix_store.js",
       "workflow_chiplets/registry.js",
       "workflow_chiplets/runner.js",
       "workflow_chiplets/executor.js",
@@ -102,6 +113,30 @@
       "assets/**"
     ],
     "extraResources": [
+      {
+        "from": "../../contracts/desktop",
+        "to": "contracts/desktop",
+        "filter": [
+          "*.schema.json"
+        ]
+      },
+      {
+        "from": "../../contracts/workflow",
+        "to": "contracts/workflow",
+        "filter": [
+          "*.json"
+        ]
+      },
+      {
+        "from": "../../contracts/rust",
+        "to": "contracts/rust",
+        "filter": [
+          "operators_manifest.v1.json",
+          "operators_manifest.schema.json",
+          "operators_extension_v1.schema.json",
+          "transform_rows_v2.schema.json"
+        ]
+      },
       {
         "from": "tools",
         "to": "tools",

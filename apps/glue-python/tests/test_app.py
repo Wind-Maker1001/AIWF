@@ -11,6 +11,12 @@ from fastapi.testclient import TestClient
 
 from aiwf import extensions
 from aiwf.flows.registry import get_flow_registration, get_flow_runner, register_flow, unregister_flow
+from aiwf.governance_surface import (
+    GOVERNANCE_CONTROL_PLANE_ROLE,
+    GOVERNANCE_SURFACE_META_ROUTE,
+    list_governance_surface_entries,
+    validate_governance_surface_entries,
+)
 from aiwf.registry_events import clear_registry_events
 
 
@@ -73,6 +79,50 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(caps["artifacts"]["core_domains"][0]["name"], "cleaning-core")
         self.assertIn("xlsx_fin", caps["artifacts"]["office"])
         self.assertEqual(caps["artifacts"]["office_domains"][0]["name"], "cleaning-office")
+        self.assertEqual(caps["governance"]["quality_rule_sets"]["owner"], "glue-python")
+        self.assertEqual(caps["governance"]["quality_rule_sets"]["schema_version"], "quality_rule_set.v1")
+        self.assertEqual(caps["governance"]["surface_schema_version"], "governance_surface.v1")
+        self.assertEqual(caps["governance"]["control_plane_status"], "effective_second_control_plane")
+        self.assertEqual(caps["governance"]["control_plane_role"], GOVERNANCE_CONTROL_PLANE_ROLE)
+        self.assertEqual(caps["governance"]["governance_state_control_plane_owner"], "glue-python")
+        self.assertEqual(caps["governance"]["job_lifecycle_control_plane_owner"], "base-java")
+        self.assertEqual(caps["governance"]["operator_semantics_authority_owner"], "accel-rust")
+        self.assertEqual(caps["governance"]["workflow_authoring_surface_owner"], "dify-desktop")
+        self.assertEqual(caps["governance"]["workflow_sandbox_rules"]["owner"], "glue-python")
+        self.assertEqual(caps["governance"]["workflow_sandbox_rules"]["schema_version"], "workflow_sandbox_alert_rules.v1")
+        self.assertEqual(caps["governance"]["workflow_sandbox_rules"]["control_plane_role"], GOVERNANCE_CONTROL_PLANE_ROLE)
+        self.assertFalse(caps["governance"]["workflow_sandbox_rules"]["lifecycle_mutation_allowed"])
+        self.assertEqual(
+            caps["governance"]["workflow_sandbox_rules"]["owned_route_prefixes"],
+            ["/governance/workflow-sandbox/rules", "/governance/workflow-sandbox/rule-versions"],
+        )
+        self.assertEqual(caps["governance"]["workflow_sandbox_autofix"]["owner"], "glue-python")
+        self.assertEqual(caps["governance"]["workflow_sandbox_autofix"]["schema_version"], "workflow_sandbox_autofix_state.v1")
+        self.assertEqual(caps["governance"]["workflow_apps"]["owner"], "glue-python")
+        self.assertEqual(caps["governance"]["workflow_apps"]["schema_version"], "workflow_app_registry_entry.v1")
+        self.assertEqual(caps["governance"]["workflow_versions"]["owner"], "glue-python")
+        self.assertEqual(caps["governance"]["workflow_versions"]["schema_version"], "workflow_version_snapshot.v1")
+        self.assertEqual(caps["governance"]["manual_reviews"]["owner"], "glue-python")
+        self.assertEqual(caps["governance"]["manual_reviews"]["schema_version"], "manual_review_item.v1")
+        self.assertEqual(caps["governance"]["workflow_run_audit"]["owner"], "glue-python")
+        self.assertEqual(caps["governance"]["workflow_run_audit"]["schema_version"], "workflow_run_audit_entry.v1")
+        self.assertEqual(caps["governance"]["run_baselines"]["owner"], "glue-python")
+        self.assertEqual(caps["governance"]["run_baselines"]["schema_version"], "run_baseline_entry.v1")
+        self.assertEqual(caps["governance_surface"]["schema_version"], "governance_surface.v1")
+        self.assertEqual(caps["governance_surface"]["status"], "effective_second_control_plane")
+        self.assertEqual(caps["governance_surface"]["control_plane_role"], GOVERNANCE_CONTROL_PLANE_ROLE)
+        workflow_versions_surface = next(item for item in caps["governance_surface"]["items"] if item["capability"] == "workflow_versions")
+        self.assertEqual(workflow_versions_surface["route_prefix"], "/governance/workflow-versions")
+        self.assertEqual(workflow_versions_surface["owned_route_prefixes"], ["/governance/workflow-versions"])
+        self.assertFalse(workflow_versions_surface["lifecycle_mutation_allowed"])
+        self.assertEqual(workflow_versions_surface["job_lifecycle_control_plane_owner"], "base-java")
+        self.assertEqual(caps["control_plane_boundary"]["status"], "effective_second_control_plane")
+        self.assertEqual(caps["control_plane_boundary"]["control_plane_role"], GOVERNANCE_CONTROL_PLANE_ROLE)
+        self.assertEqual(caps["control_plane_boundary"]["governance_state_control_plane_owner"], "glue-python")
+        self.assertEqual(caps["control_plane_boundary"]["job_lifecycle_control_plane_owner"], "base-java")
+        self.assertEqual(caps["control_plane_boundary"]["operator_semantics_authority_owner"], "accel-rust")
+        self.assertEqual(caps["control_plane_boundary"]["meta_route"], GOVERNANCE_SURFACE_META_ROUTE)
+        self.assertGreaterEqual(len(caps["control_plane_boundary"]["governance_surfaces"]), 8)
         self.assertIn("parquet", caps["artifacts"]["selection_tokens"]["core"])
         self.assertIn("xlsx", caps["artifacts"]["selection_tokens"]["office"])
         self.assertEqual(caps["registry"]["default_conflict_policy"], "replace")
@@ -87,6 +137,38 @@ class AppRouteTests(unittest.TestCase):
         txt_reader = next(item for item in caps["input_format_details"] if item["input_format"] == "txt")
         self.assertTrue(txt_reader["source_module"].startswith("aiwf."))
 
+    def test_governance_control_plane_route_reports_split_explicitly(self):
+        resp = self.client.get("/governance/meta/control-plane")
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        boundary = payload["boundary"]
+        self.assertEqual(boundary["schema_version"], "governance_surface.v1")
+        self.assertEqual(boundary["status"], "effective_second_control_plane")
+        self.assertEqual(boundary["control_plane_role"], GOVERNANCE_CONTROL_PLANE_ROLE)
+        self.assertEqual(boundary["governance_state_control_plane_owner"], "glue-python")
+        self.assertEqual(boundary["job_lifecycle_control_plane_owner"], "base-java")
+        self.assertEqual(boundary["operator_semantics_authority_owner"], "accel-rust")
+        self.assertEqual(boundary["workflow_authoring_surface_owner"], "dify-desktop")
+        self.assertEqual(boundary["meta_route"], GOVERNANCE_SURFACE_META_ROUTE)
+        workflow_run_audit = next(item for item in boundary["governance_surfaces"] if item["capability"] == "workflow_run_audit")
+        self.assertEqual(workflow_run_audit["route_prefix"], "/governance/workflow-runs")
+        self.assertEqual(
+            workflow_run_audit["owned_route_prefixes"],
+            ["/governance/workflow-runs", "/governance/workflow-audit-events"],
+        )
+        self.assertEqual(workflow_run_audit["state_owner"], "glue-python")
+        self.assertEqual(workflow_run_audit["job_lifecycle_control_plane_owner"], "base-java")
+        self.assertFalse(workflow_run_audit["lifecycle_mutation_allowed"])
+
+    def test_governance_surface_entries_validate_cleanly(self):
+        entries = list_governance_surface_entries()
+        self.assertGreaterEqual(len(entries), 8)
+        self.assertEqual(validate_governance_surface_entries(entries), [])
+        self.assertTrue(all(item["control_plane_role"] == GOVERNANCE_CONTROL_PLANE_ROLE for item in entries))
+        self.assertTrue(all(item["route_prefix"].startswith("/governance/") for item in entries))
+        self.assertTrue(all(not item["lifecycle_mutation_allowed"] for item in entries))
+
     def test_unknown_flow_returns_404(self):
         resp = self.client.post(
             "/jobs/job1/run/unknown",
@@ -94,6 +176,415 @@ class AppRouteTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 404)
         self.assertFalse(resp.json()["ok"])
+
+    def test_quality_rule_set_routes_store_backend_owned_sets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.get("/governance/quality-rule-sets")
+                self.assertEqual(resp.status_code, 200)
+                self.assertEqual(resp.json()["sets"], [])
+
+                save_resp = self.client.put(
+                    "/governance/quality-rule-sets/finance_default",
+                    json={
+                        "set": {
+                            "name": "Finance Default",
+                            "version": "v2",
+                            "scope": "workflow",
+                            "rules": {"required_columns": ["amount"]},
+                        }
+                    },
+                )
+                self.assertEqual(save_resp.status_code, 200)
+                saved = save_resp.json()["set"]
+                self.assertEqual(saved["id"], "finance_default")
+                self.assertEqual(saved["owner"], "glue-python")
+                self.assertEqual(saved["schema_version"], "quality_rule_set.v1")
+
+                get_resp = self.client.get("/governance/quality-rule-sets/finance_default")
+                self.assertEqual(get_resp.status_code, 200)
+                self.assertEqual(
+                    get_resp.json()["set"]["rules"],
+                    {"required_columns": ["amount"]},
+                )
+
+                list_resp = self.client.get("/governance/quality-rule-sets")
+                self.assertEqual(list_resp.status_code, 200)
+                self.assertEqual(len(list_resp.json()["sets"]), 1)
+
+                delete_resp = self.client.delete("/governance/quality-rule-sets/finance_default")
+                self.assertEqual(delete_resp.status_code, 200)
+                self.assertTrue(delete_resp.json()["ok"])
+
+                missing_resp = self.client.get("/governance/quality-rule-sets/finance_default")
+                self.assertEqual(missing_resp.status_code, 404)
+                self.assertFalse(missing_resp.json()["ok"])
+
+    def test_quality_rule_set_routes_reject_invalid_ids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.put(
+                    "/governance/quality-rule-sets/not valid",
+                    json={"set": {"rules": {}}},
+                )
+                self.assertEqual(resp.status_code, 400)
+                self.assertFalse(resp.json()["ok"])
+
+    def test_workflow_sandbox_rule_routes_store_backend_owned_rules_and_versions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.get("/governance/workflow-sandbox/rules")
+                self.assertEqual(resp.status_code, 200)
+                self.assertEqual(resp.json()["provider"], "glue-python")
+                self.assertEqual(resp.json()["rules"]["whitelist_codes"], [])
+
+                save_resp = self.client.put(
+                    "/governance/workflow-sandbox/rules",
+                    json={
+                        "rules": {
+                            "whitelist_codes": ["sandbox_limit_exceeded:output"],
+                            "whitelist_node_types": ["ai_refine"],
+                            "mute_until_by_key": {
+                                "ai_refine::*::*": "2026-03-22T00:00:00Z",
+                            },
+                        },
+                        "meta": {"reason": "set_rules"},
+                    },
+                )
+                self.assertEqual(save_resp.status_code, 200)
+                saved = save_resp.json()
+                self.assertTrue(saved["version_id"])
+                self.assertEqual(saved["rules"]["whitelist_codes"], ["sandbox_limit_exceeded:output"])
+
+                versions_resp = self.client.get("/governance/workflow-sandbox/rule-versions")
+                self.assertEqual(versions_resp.status_code, 200)
+                items = versions_resp.json()["items"]
+                self.assertEqual(len(items), 1)
+                self.assertEqual(items[0]["meta"]["reason"], "set_rules")
+
+                rollback_resp = self.client.post(
+                    f"/governance/workflow-sandbox/rule-versions/{items[0]['version_id']}/rollback"
+                )
+                self.assertEqual(rollback_resp.status_code, 200)
+                self.assertTrue(rollback_resp.json()["version_id"])
+                self.assertEqual(
+                    rollback_resp.json()["rules"]["whitelist_node_types"],
+                    ["ai_refine"],
+                )
+
+    def test_workflow_sandbox_rule_routes_reject_missing_version_on_rollback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.post("/governance/workflow-sandbox/rule-versions/missing/rollback")
+                self.assertEqual(resp.status_code, 404)
+                self.assertFalse(resp.json()["ok"])
+
+    def test_workflow_sandbox_autofix_routes_store_backend_owned_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                get_resp = self.client.get("/governance/workflow-sandbox/autofix-state")
+                self.assertEqual(get_resp.status_code, 200)
+                self.assertEqual(get_resp.json()["state"]["green_streak"], 0)
+
+                put_resp = self.client.put(
+                    "/governance/workflow-sandbox/autofix-state",
+                    json={
+                        "violation_events": [{"run_id": "run_1"}],
+                        "forced_isolation_mode": "process",
+                        "forced_until": "2026-03-22T01:00:00Z",
+                        "last_actions": [{"ts": "2026-03-22T00:10:00Z", "actions": ["pause_queue"]}],
+                        "green_streak": 2,
+                    },
+                )
+                self.assertEqual(put_resp.status_code, 200)
+                self.assertEqual(put_resp.json()["state"]["forced_isolation_mode"], "process")
+
+                actions_resp = self.client.get("/governance/workflow-sandbox/autofix-actions?limit=20")
+                self.assertEqual(actions_resp.status_code, 200)
+                self.assertEqual(actions_resp.json()["forced_isolation_mode"], "process")
+                self.assertEqual(len(actions_resp.json()["items"]), 1)
+
+    def test_workflow_app_routes_store_backend_owned_registry_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                empty_resp = self.client.get("/governance/workflow-apps")
+                self.assertEqual(empty_resp.status_code, 200)
+                self.assertEqual(empty_resp.json()["items"], [])
+
+                save_resp = self.client.put(
+                    "/governance/workflow-apps/finance_app",
+                    json={
+                        "app": {
+                            "name": "Finance App",
+                            "workflow_id": "wf_finance",
+                            "graph": {
+                                "workflow_id": "wf_finance",
+                                "version": "workflow.v1",
+                                "nodes": [],
+                                "edges": [],
+                            },
+                            "params_schema": {"region": {"type": "string"}},
+                            "template_policy": {"version": 1, "governance": {"mode": "strict"}},
+                        }
+                    },
+                )
+                self.assertEqual(save_resp.status_code, 200)
+                item = save_resp.json()["item"]
+                self.assertEqual(item["app_id"], "finance_app")
+                self.assertEqual(item["owner"], "glue-python")
+                self.assertEqual(item["schema_version"], "workflow_app_registry_entry.v1")
+                self.assertEqual(item["template_policy"]["version"], 1)
+
+                get_resp = self.client.get("/governance/workflow-apps/finance_app")
+                self.assertEqual(get_resp.status_code, 200)
+                self.assertEqual(get_resp.json()["item"]["params_schema"]["region"]["type"], "string")
+
+                list_resp = self.client.get("/governance/workflow-apps")
+                self.assertEqual(list_resp.status_code, 200)
+                self.assertEqual(len(list_resp.json()["items"]), 1)
+
+    def test_workflow_app_routes_reject_invalid_graph_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.put(
+                    "/governance/workflow-apps/bad_app",
+                    json={
+                        "app": {
+                            "name": "Bad App",
+                            "graph": {"workflow_id": "wf_only"},
+                        }
+                    },
+                )
+                self.assertEqual(resp.status_code, 400)
+                self.assertFalse(resp.json()["ok"])
+
+    def test_workflow_version_routes_store_and_compare_backend_owned_snapshots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                empty_resp = self.client.get("/governance/workflow-versions")
+                self.assertEqual(empty_resp.status_code, 200)
+                self.assertEqual(empty_resp.json()["items"], [])
+
+                version_a = {
+                    "workflow_id": "wf_finance",
+                    "version": "workflow.v1",
+                    "nodes": [{"id": "n1", "type": "ingest_files"}],
+                    "edges": [],
+                }
+                version_b = {
+                    "workflow_id": "wf_finance",
+                    "version": "workflow.v1",
+                    "nodes": [{"id": "n1", "type": "ingest_files"}, {"id": "n2", "type": "quality_check_v3"}],
+                    "edges": [{"from": "n1", "to": "n2"}],
+                }
+
+                put_a = self.client.put(
+                    "/governance/workflow-versions/ver_a",
+                    json={"version": {"workflow_name": "Finance Flow", "graph": version_a}},
+                )
+                self.assertEqual(put_a.status_code, 200)
+                self.assertEqual(put_a.json()["item"]["owner"], "glue-python")
+
+                put_b = self.client.put(
+                    "/governance/workflow-versions/ver_b",
+                    json={"version": {"workflow_name": "Finance Flow", "graph": version_b}},
+                )
+                self.assertEqual(put_b.status_code, 200)
+
+                list_resp = self.client.get("/governance/workflow-versions?workflow_name=Finance%20Flow")
+                self.assertEqual(list_resp.status_code, 200)
+                self.assertEqual(len(list_resp.json()["items"]), 2)
+
+                get_resp = self.client.get("/governance/workflow-versions/ver_b")
+                self.assertEqual(get_resp.status_code, 200)
+                self.assertEqual(get_resp.json()["item"]["graph"]["nodes"][1]["type"], "quality_check_v3")
+
+                compare_resp = self.client.post(
+                    "/governance/workflow-versions/compare",
+                    json={"version_a": "ver_a", "version_b": "ver_b"},
+                )
+                self.assertEqual(compare_resp.status_code, 200)
+                compare = compare_resp.json()
+                self.assertTrue(compare["ok"])
+                self.assertEqual(compare["provider"], "glue-python")
+                self.assertEqual(compare["summary"]["changed_nodes"], 1)
+                self.assertEqual(compare["summary"]["added_edges"], 1)
+
+    def test_workflow_version_routes_reject_invalid_graph_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.put(
+                    "/governance/workflow-versions/ver_bad",
+                    json={"version": {"graph": {"workflow_id": "wf_only"}}},
+                )
+                self.assertEqual(resp.status_code, 400)
+                self.assertFalse(resp.json()["ok"])
+
+    def test_manual_review_routes_enqueue_list_submit_and_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                empty_resp = self.client.get("/governance/manual-reviews")
+                self.assertEqual(empty_resp.status_code, 200)
+                self.assertEqual(empty_resp.json()["items"], [])
+
+                enqueue_resp = self.client.post(
+                    "/governance/manual-reviews/enqueue",
+                    json={
+                        "items": [
+                            {
+                                "run_id": "run_1",
+                                "review_key": "gate_a",
+                                "workflow_id": "wf_finance",
+                                "node_id": "n7",
+                                "created_at": "2026-03-21T00:00:00Z",
+                            }
+                        ]
+                    },
+                )
+                self.assertEqual(enqueue_resp.status_code, 200)
+                self.assertEqual(len(enqueue_resp.json()["items"]), 1)
+
+                queue_resp = self.client.get("/governance/manual-reviews")
+                self.assertEqual(queue_resp.status_code, 200)
+                self.assertEqual(queue_resp.json()["items"][0]["review_key"], "gate_a")
+
+                submit_resp = self.client.post(
+                    "/governance/manual-reviews/submit",
+                    json={
+                        "run_id": "run_1",
+                        "review_key": "gate_a",
+                        "approved": True,
+                        "reviewer": "alice",
+                        "comment": "ok",
+                    },
+                )
+                self.assertEqual(submit_resp.status_code, 200)
+                self.assertEqual(submit_resp.json()["item"]["status"], "approved")
+                self.assertEqual(submit_resp.json()["remaining"], 0)
+
+                history_resp = self.client.get("/governance/manual-reviews/history?run_id=run_1&reviewer=ali")
+                self.assertEqual(history_resp.status_code, 200)
+                self.assertEqual(len(history_resp.json()["items"]), 1)
+                self.assertEqual(history_resp.json()["items"][0]["reviewer"], "alice")
+
+    def test_manual_review_submit_rejects_missing_task(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.post(
+                    "/governance/manual-reviews/submit",
+                    json={
+                        "run_id": "run_missing",
+                        "review_key": "gate_x",
+                        "approved": False,
+                    },
+                )
+                self.assertEqual(resp.status_code, 400)
+                self.assertFalse(resp.json()["ok"])
+
+    def test_workflow_run_audit_routes_store_and_query_backend_owned_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                put_ok = self.client.put(
+                    "/governance/workflow-runs/run_1",
+                    json={
+                        "run": {
+                            "workflow_id": "wf_finance",
+                            "status": "failed",
+                            "ok": False,
+                            "payload": {"workflow_id": "wf_finance"},
+                            "config": {"mode": "base_api"},
+                            "result": {
+                                "run_id": "run_1",
+                                "workflow_id": "wf_finance",
+                                "status": "failed",
+                                "ok": False,
+                                "node_runs": [
+                                    {
+                                        "id": "n1",
+                                        "type": "ingest_files",
+                                        "status": "done",
+                                        "started_at": "2026-03-21T00:00:00Z",
+                                        "ended_at": "2026-03-21T00:00:01Z",
+                                        "seconds": 1.0,
+                                    },
+                                    {
+                                        "id": "n2",
+                                        "type": "quality_check_v3",
+                                        "status": "failed",
+                                        "started_at": "2026-03-21T00:00:01Z",
+                                        "ended_at": "2026-03-21T00:00:03Z",
+                                        "seconds": 2.0,
+                                        "error": "boom",
+                                    },
+                                ],
+                            },
+                        }
+                    },
+                )
+                self.assertEqual(put_ok.status_code, 200)
+                self.assertEqual(put_ok.json()["item"]["owner"], "glue-python")
+
+                list_resp = self.client.get("/governance/workflow-runs?limit=20")
+                self.assertEqual(list_resp.status_code, 200)
+                self.assertEqual(len(list_resp.json()["items"]), 1)
+
+                timeline_resp = self.client.get("/governance/workflow-runs/run_1/timeline")
+                self.assertEqual(timeline_resp.status_code, 200)
+                self.assertEqual(len(timeline_resp.json()["timeline"]), 2)
+
+                failure_resp = self.client.get("/governance/workflow-runs/failure-summary?limit=20")
+                self.assertEqual(failure_resp.status_code, 200)
+                self.assertEqual(failure_resp.json()["failed_runs"], 1)
+                self.assertEqual(failure_resp.json()["by_node"]["quality_check_v3"]["failed"], 1)
+
+                audit_post = self.client.post(
+                    "/governance/workflow-audit-events",
+                    json={"event": {"action": "run_workflow", "detail": {"run_id": "run_1"}}},
+                )
+                self.assertEqual(audit_post.status_code, 200)
+                self.assertEqual(audit_post.json()["item"]["action"], "run_workflow")
+
+                audit_list = self.client.get("/governance/workflow-audit-events?action=run_workflow")
+                self.assertEqual(audit_list.status_code, 200)
+                self.assertEqual(len(audit_list.json()["items"]), 1)
+
+    def test_run_baseline_routes_store_backend_owned_baselines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                empty = self.client.get("/governance/run-baselines")
+                self.assertEqual(empty.status_code, 200)
+                self.assertEqual(empty.json()["items"], [])
+
+                put = self.client.put(
+                    "/governance/run-baselines/base_1",
+                    json={
+                        "baseline": {
+                            "name": "Base One",
+                            "run_id": "run_1",
+                            "workflow_id": "wf_finance",
+                            "notes": "seed",
+                        }
+                    },
+                )
+                self.assertEqual(put.status_code, 200)
+                self.assertEqual(put.json()["item"]["owner"], "glue-python")
+
+                get_resp = self.client.get("/governance/run-baselines/base_1")
+                self.assertEqual(get_resp.status_code, 200)
+                self.assertEqual(get_resp.json()["item"]["run_id"], "run_1")
+
+                list_resp = self.client.get("/governance/run-baselines")
+                self.assertEqual(list_resp.status_code, 200)
+                self.assertEqual(len(list_resp.json()["items"]), 1)
+
+    def test_workflow_run_audit_routes_reject_invalid_payload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.put(
+                    "/governance/workflow-runs/run_bad",
+                    json={"run": {"workflow_id": "wf_only", "payload": []}},
+                )
+                self.assertEqual(resp.status_code, 422)
 
     @patch.object(glue_app, "_run_flow_with_runner")
     def test_cleaning_success_response_shape(self, run_flow_with_runner):

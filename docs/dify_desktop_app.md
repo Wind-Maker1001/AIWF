@@ -1,12 +1,21 @@
-# AIWF Desktop App
+# AIWF Electron Compatibility Frontend
 
-This document describes the current Electron desktop app under `apps/dify-desktop`.
+This document describes the secondary Electron compatibility frontend under `apps/dify-desktop`.
+
+WinUI is the primary frontend. Electron remains for Workflow Studio compatibility, advanced diagnostics, and current Electron packaging paths.
 
 ## Current Surfaces
 
 - home screen for offline jobs, queue management, precheck, and local release helpers
-- embedded `Workflow Studio` for advanced workflow editing and diagnostics
+- explicit `Legacy Workflow Studio` compatibility window for advanced workflow editing
+- governance / diagnostics / publish panels are compatibility-only and require explicit admin mode: `--workflow-admin` or `?legacyAdmin=1`
 - optional `base_api` mode for calling local AIWF backend endpoints
+
+## Frontend Role
+
+- secondary Electron compatibility frontend
+- not the long-term primary desktop shell
+- use WinUI first for the main desktop path
 
 ## Runtime Modes
 
@@ -78,7 +87,19 @@ The current UI enables `md_only` by default. If you want the Office trio, unchec
 Helper script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron
+```
+
+Compatibility workflow entrypoint:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -Workflow
+```
+
+Compatibility admin entrypoint:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -WorkflowAdmin
 ```
 
 Core package scripts:
@@ -97,7 +118,7 @@ npm run release:oneclick
 Helper packaging path:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -BuildWin -BuildInstaller
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_electron_compatibility.ps1 -Version "<version>"
 ```
 
 Build artifacts are written under `apps/dify-desktop/dist`.
@@ -117,6 +138,9 @@ Useful generated files:
 ## Related Docs
 
 - [quickstart_desktop_offline.md](quickstart_desktop_offline.md)
+- [quickstart_native_winui.md](quickstart_native_winui.md)
+- [frontend_convergence_decision_20260320.md](frontend_convergence_decision_20260320.md)
+- [electron_compatibility_retirement_plan_20260321.md](electron_compatibility_retirement_plan_20260321.md)
 - [dify_local_integration.md](dify_local_integration.md)
 - [offline_delivery_minimal.md](offline_delivery_minimal.md)
 - [finance_template_v1.md](finance_template_v1.md)

@@ -12,34 +12,47 @@ function registerWorkflowSandboxManagementIpc(ctx, deps) {
     nowIso,
     appendAudit,
     sandboxSupport,
+    sandboxRuleStore,
+    sandboxAutoFixStore,
+    workflowRunAuditStore,
   } = deps;
 
   ipcMain.handle("aiwf:getWorkflowSandboxAlerts", async (_evt, req) => {
-    const limit = Number(req?.limit || 400);
-    const dedupWindowSec = Number.isFinite(Number(req?.dedup_window_sec))
-      ? Math.max(0, Math.floor(Number(req?.dedup_window_sec)))
-      : sandboxSupport.sandboxAlertDedupWindowSec(req || {});
-    return sandboxSupport.sandboxAlerts(limit, req?.thresholds || null, dedupWindowSec);
+    try {
+      const rulesOut = await sandboxRuleStore.getRules();
+      if (!rulesOut?.ok) return rulesOut;
+      const limit = Number(req?.limit || 400);
+      const dedupWindowSec = Number.isFinite(Number(req?.dedup_window_sec))
+        ? Math.max(0, Math.floor(Number(req?.dedup_window_sec)))
+        : sandboxSupport.sandboxAlertDedupWindowSec(req || {});
+      return await sandboxSupport.sandboxAlerts(limit, req?.thresholds || null, dedupWindowSec, rulesOut.rules || {});
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
   });
 
   ipcMain.handle("aiwf:getWorkflowSandboxAlertRules", async () => {
-    return { ok: true, rules: sandboxSupport.loadSandboxAlertRules() };
+    try {
+      return await sandboxRuleStore.getRules();
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
   });
 
   ipcMain.handle("aiwf:setWorkflowSandboxAlertRules", async (_evt, req) => {
     try {
-      const incoming = req?.rules && typeof req.rules === "object" ? req.rules : {};
-      const next = sandboxSupport.normalizeSandboxAlertRules(incoming);
-      sandboxSupport.saveSandboxAlertRules(next);
-      const ver = sandboxSupport.appendSandboxRuleVersion(next, { reason: "set_rules" });
+      const out = await sandboxRuleStore.saveRules(req);
+      if (!out?.ok) return out;
+      const next = sandboxSupport.normalizeSandboxAlertRules(out.rules || {});
       appendAudit("sandbox_alert_rules_set", {
-        version_id: String(ver?.version_id || ""),
+        provider: String(out?.provider || ""),
+        version_id: String(out?.version_id || ""),
         whitelist_codes: next.whitelist_codes.length,
         whitelist_node_types: next.whitelist_node_types.length,
         whitelist_keys: next.whitelist_keys.length,
         mute_keys: Object.keys(next.mute_until_by_key || {}).length,
       });
-      return { ok: true, rules: next };
+      return { ...out, rules: next };
     } catch (error) {
       return { ok: false, error: String(error) };
     }
@@ -47,76 +60,78 @@ function registerWorkflowSandboxManagementIpc(ctx, deps) {
 
   ipcMain.handle("aiwf:muteWorkflowSandboxAlert", async (_evt, req) => {
     try {
-      const nodeType = String(req?.node_type || "*").trim().toLowerCase() || "*";
-      const nodeId = String(req?.node_id || "*").trim().toLowerCase() || "*";
-      const code = String(req?.code || "*").trim().toLowerCase() || "*";
-      const minutes = Number(req?.minutes || 60);
-      const mins = Number.isFinite(minutes) ? Math.max(1, Math.floor(minutes)) : 60;
-      const key = `${nodeType}::${nodeId}::${code}`;
-      const rules = sandboxSupport.loadSandboxAlertRules();
-      rules.mute_until_by_key[key] = new Date(Date.now() + mins * 60000).toISOString();
-      const next = sandboxSupport.normalizeSandboxAlertRules(rules);
-      sandboxSupport.saveSandboxAlertRules(next);
-      const ver = sandboxSupport.appendSandboxRuleVersion(next, { reason: "mute", key, minutes: mins });
-      appendAudit("sandbox_alert_muted", { key, minutes: mins });
-      return { ok: true, key, mute_until: next.mute_until_by_key[key], version_id: String(ver?.version_id || ""), rules: next };
+      const out = await sandboxRuleStore.muteAlert(req);
+      if (!out?.ok) return out;
+      appendAudit("sandbox_alert_muted", {
+        key: String(out?.key || ""),
+        minutes: Number(req?.minutes || 60),
+        provider: String(out?.provider || ""),
+      });
+      return {
+        ...out,
+        rules: sandboxSupport.normalizeSandboxAlertRules(out.rules || {}),
+      };
     } catch (error) {
       return { ok: false, error: String(error) };
     }
   });
 
   ipcMain.handle("aiwf:listWorkflowSandboxRuleVersions", async (_evt, req) => {
-    const limit = Number(req?.limit || 100);
-    return { ok: true, items: sandboxSupport.listSandboxRuleVersions(limit) };
+    try {
+      const limit = Number(req?.limit || 100);
+      return await sandboxRuleStore.listVersions(limit);
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
   });
 
   ipcMain.handle("aiwf:compareWorkflowSandboxRuleVersions", async (_evt, req) => {
-    return sandboxSupport.compareSandboxRuleVersions(String(req?.version_a || ""), String(req?.version_b || ""));
+    try {
+      return await sandboxRuleStore.compareVersions(String(req?.version_a || ""), String(req?.version_b || ""));
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
   });
 
   ipcMain.handle("aiwf:rollbackWorkflowSandboxRuleVersion", async (_evt, req) => {
     try {
       const versionId = String(req?.version_id || "").trim();
       if (!versionId) return { ok: false, error: "version_id required" };
-      const hit = sandboxSupport.listSandboxRuleVersions(5000).find((item) => String(item.version_id || "") === versionId);
-      if (!hit) return { ok: false, error: "rule version not found" };
-      const rules = sandboxSupport.normalizeSandboxAlertRules(hit.rules || {});
-      sandboxSupport.saveSandboxAlertRules(rules);
-      const ver = sandboxSupport.appendSandboxRuleVersion(rules, { reason: "rollback", from_version_id: versionId });
-      appendAudit("sandbox_alert_rules_rollback", { from_version_id: versionId, new_version_id: String(ver?.version_id || "") });
-      return { ok: true, rules, version_id: String(ver?.version_id || "") };
+      const out = await sandboxRuleStore.rollbackVersion(versionId);
+      if (!out?.ok) return out;
+      appendAudit("sandbox_alert_rules_rollback", {
+        from_version_id: versionId,
+        new_version_id: String(out?.version_id || ""),
+        provider: String(out?.provider || ""),
+      });
+      return {
+        ...out,
+        rules: sandboxSupport.normalizeSandboxAlertRules(out.rules || {}),
+      };
     } catch (error) {
       return { ok: false, error: String(error) };
     }
   });
 
   ipcMain.handle("aiwf:getWorkflowSandboxAutoFixState", async () => {
-    return { ok: true, state: sandboxSupport.loadSandboxAutoFixState() };
+    return await sandboxAutoFixStore.getState();
   });
 
   ipcMain.handle("aiwf:listWorkflowSandboxAutoFixActions", async (_evt, req) => {
     const limit = Number(req?.limit || 100);
-    const safe = Number.isFinite(limit) ? Math.max(1, Math.min(1000, Math.floor(limit))) : 100;
-    const state = sandboxSupport.loadSandboxAutoFixState();
-    const items = Array.isArray(state.last_actions) ? state.last_actions.slice().reverse().slice(0, safe) : [];
-    return {
-      ok: true,
-      items,
-      forced_isolation_mode: String(state.forced_isolation_mode || ""),
-      forced_until: String(state.forced_until || ""),
-    };
+    return await sandboxAutoFixStore.listActions(limit);
   });
 
   ipcMain.handle("aiwf:listWorkflowAuditLogs", async (_evt, req) => {
     const limit = Number(req?.limit || 200);
     const action = String(req?.action || "");
-    return { ok: true, items: sandboxSupport.listAudit(limit, action) };
+    return await workflowRunAuditStore.listAuditLogs(limit, action);
   });
 
   ipcMain.handle("aiwf:listWorkflowQualityGateReports", async (_evt, req) => {
     const limit = Number(req?.limit || 200);
     const filter = req?.filter && typeof req.filter === "object" ? req.filter : {};
-    return { ok: true, items: sandboxSupport.listQualityGateReports(limit, filter) };
+    return await sandboxSupport.listQualityGateReports(limit, filter);
   });
 
   ipcMain.handle("aiwf:exportWorkflowQualityGateReports", async (_evt, req) => {
@@ -124,7 +139,9 @@ function registerWorkflowSandboxManagementIpc(ctx, deps) {
       const limit = Number(req?.limit || 300);
       const format = String(req?.format || "md").trim().toLowerCase() === "json" ? "json" : "md";
       const filter = req?.filter && typeof req.filter === "object" ? req.filter : {};
-      const items = sandboxSupport.listQualityGateReports(limit, filter);
+      const listed = await sandboxSupport.listQualityGateReports(limit, filter);
+      if (!listed?.ok) return listed;
+      const items = Array.isArray(listed.items) ? listed.items : [];
       const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {

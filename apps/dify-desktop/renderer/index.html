@@ -19,8 +19,7 @@
     <section class="card shell-tabs-card">
       <div class="bd shell-tabs-row" role="tablist" aria-label="工作区切换">
         <fluent-button id="tabHome" class="shell-tab">作业助手</fluent-button>
-        <fluent-button id="tabWorkflow" class="shell-tab secondary">Workflow Studio</fluent-button>
-        <div id="shellTabHint" class="hint-strip shell-tab-hint">当前为作业助手视图，适合拖文件、一键运行与验收操作。</div>
+        <div id="shellTabHint" class="hint-strip shell-tab-hint">当前为作业助手视图，适合拖文件、一键运行与验收操作。Legacy Workflow Studio 仅保留为显式兼容入口。</div>
       </div>
     </section>
 
@@ -90,7 +89,6 @@
             <fluent-button id="btnHealth" class="secondary">检查连通性</fluent-button>
             <fluent-button id="btnDifyWizard" class="secondary">Dify连接向导</fluent-button>
             <fluent-button id="btnSave" class="secondary">保存配置</fluent-button>
-            <fluent-button id="btnWorkflow" class="secondary">打开 Workflow Studio</fluent-button>
           </div>
           <div id="status" class="status"></div>
         </div>
@@ -232,15 +230,6 @@
     </section>
       </div>
 
-      <section id="workflowShellPane" class="shell-pane workflow-shell-pane" hidden>
-        <article class="card workflow-shell-card">
-          <div class="hd">Workflow Studio（高级模式）</div>
-          <div class="bd workflow-shell-body">
-            <div id="workflowEmbedHint" class="hint-strip shell-embed-hint">单窗口模式已启用：可在同一窗口中切换首页与 Workflow Studio，独立窗口入口仍保留在菜单中。</div>
-            <iframe id="workflowEmbedFrame" class="workflow-embed-frame" title="Workflow Studio"></iframe>
-          </div>
-        </article>
-      </section>
     </div>
   </div>
 

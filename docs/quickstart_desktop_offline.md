@@ -1,6 +1,8 @@
 # AIWF Desktop Offline Quickstart
 
-Use this path when you want the Electron desktop app and offline engine without starting the backend service chain locally.
+Use this path only when you explicitly need the Electron compatibility shell and offline engine without starting the backend service chain locally.
+
+WinUI is the primary frontend. Electron is the secondary compatibility frontend.
 
 ## What This Mode Does
 
@@ -13,7 +15,7 @@ Use this path when you want the Electron desktop app and offline engine without 
 Development run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron
 ```
 
 That script installs dependencies, runs `npm run smoke`, and then launches the app.
@@ -21,7 +23,7 @@ That script installs dependencies, runs `npm run smoke`, and then launches the a
 Windows packaging:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -BuildWin -BuildInstaller
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_electron_compatibility.ps1 -Version "<version>"
 ```
 
 Artifacts are written under `apps/dify-desktop/dist`.
@@ -85,6 +87,8 @@ The desktop app can also call your local AIWF backend in `base_api` mode and fal
 
 See:
 
+- [quickstart_native_winui.md](quickstart_native_winui.md)
+- [frontend_convergence_decision_20260320.md](frontend_convergence_decision_20260320.md)
 - [dify_desktop_app.md](dify_desktop_app.md)
 - [dify_local_integration.md](dify_local_integration.md)
 
@@ -99,4 +103,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\package_offline_bundle.ps
 See:
 
 - [offline_delivery_minimal.md](offline_delivery_minimal.md)
+- [electron_compatibility_retirement_plan_20260321.md](electron_compatibility_retirement_plan_20260321.md)
 - [finance_template_v1.md](finance_template_v1.md)
+
+The bundle now also carries `contracts/desktop/`, `contracts/workflow/`, `contracts/rust/`, and `contracts/governance/` so template-related desktop contracts, workflow contracts, Rust authority manifests, and governance capability authority ship with the offline artifact.

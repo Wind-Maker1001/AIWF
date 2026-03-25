@@ -47,6 +47,7 @@ function createWorkflowLateServices(ctx = {}) {
   const {
     handleAddNode,
     renderPalette,
+    renderNodeTypePolicyHint,
     handleCanvasDragOver,
     handleCanvasDrop,
   } = createWorkflowPaletteUi(els, buildPaletteUiDeps({ ...ctx, store }));
@@ -135,6 +136,7 @@ function createWorkflowLateServices(ctx = {}) {
     loadFlow,
     handleAddNode,
     renderPalette,
+    renderNodeTypePolicyHint,
     handleCanvasDragOver,
     handleCanvasDrop,
     syncCanvasPanels,

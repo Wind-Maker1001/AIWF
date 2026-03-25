@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
-  <title>AIWF Workflow Studio</title>
+  <title>AIWF Legacy Workflow Studio</title>
   <link rel="stylesheet" href="./fluent-shell.css" />
   <script type="module" src="./vendor/fluent-web-components.min.js"></script>
   <script type="module" src="./fluent-init.js"></script>
@@ -12,8 +12,9 @@
 <body class="page-workflow">
   <div class="wrap">
     <section class="hero">
-      <h2 style="margin:0">Workflow Studio</h2><div class="hero-badge">Fluent Canvas</div>
-      <div class="hero-copy">可自由拖拽节点、连线、运行。支持触屏平移/捏合缩放，数据计算节点默认走 Rust。</div>
+      <h2 style="margin:0">Legacy Workflow Studio</h2><div class="hero-badge">Fluent Canvas</div>
+      <div class="hero-copy">兼容旧版高级工作流画布，可自由拖拽节点、连线、运行。支持触屏平移/捏合缩放，数据计算节点默认走 Rust。</div>
+      <div class="hint-strip" style="margin-top:12px">WinUI 是主前端。治理、诊断、发布等兼容管理面默认隐藏；仅通过显式兼容管理入口（<code>--workflow-admin</code> 或 <code>?legacyAdmin=1</code>）显示。</div>
     </section>
     <section class="main">
       <article class="card">
@@ -34,6 +35,7 @@
           </div>
           <label>节点类型</label>
           <fluent-text-field id="nodeType" value="ingest_files"></fluent-text-field>
+          <div class="cfg-form" id="nodeTypePolicyHint"><div class="cfg-help">节点类型策略: -</div></div>
           <label>工作流名称</label>
           <fluent-text-field id="workflowName" value="自由编排流程"></fluent-text-field>
           <label>模板市场（本地）</label>
@@ -47,11 +49,11 @@
           <div class="btns" style="margin-top:8px">
             <fluent-button id="btnApplyTemplate" class="btn secondary">应用模板</fluent-button>
             <fluent-button id="btnSaveTemplate" class="btn secondary">保存为模板</fluent-button>
-            <fluent-button id="btnTemplatePackInstall" class="btn secondary">安装模板包</fluent-button>
-            <fluent-button id="btnTemplatePackRemove" class="btn secondary">移除模板包</fluent-button>
-            <fluent-button id="btnTemplatePackExport" class="btn secondary">导出模板包</fluent-button>
+            <fluent-button id="btnTemplatePackInstall" class="btn secondary compat-admin-only">安装模板包</fluent-button>
+            <fluent-button id="btnTemplatePackRemove" class="btn secondary compat-admin-only">移除模板包</fluent-button>
+            <fluent-button id="btnTemplatePackExport" class="btn secondary compat-admin-only">导出模板包</fluent-button>
           </div>
-          <div class="btns dev-only" style="margin-top:6px">
+          <div class="btns dev-only compat-admin-only" style="margin-top:6px">
             <fluent-button id="btnTemplateAcceptance" class="btn secondary">模板验收</fluent-button>
             <select id="templateAcceptanceExportFormat" style="border:1px solid #d2dceb;border-radius:8px;padding:6px 8px;font-size:12px">
               <option value="md">Markdown</option>
@@ -65,15 +67,17 @@
           <fluent-text-field id="reportTitle" value="Workflow 任务"></fluent-text-field>
           <label>质量规则集ID（可选，自动注入 quality_check 节点）</label>
           <input id="qualityRuleSetId" placeholder="例如: finance_strict_v1" />
-          <div class="btns" style="margin-top:6px">
-            <fluent-button id="btnQualityRuleSetsRefresh" class="btn secondary">刷新规则集</fluent-button>
-            <fluent-button id="btnQualityRuleSetSave" class="btn secondary">保存当前规则集</fluent-button>
-            <fluent-button id="btnQualityRuleSetRemove" class="btn secondary">删除规则集</fluent-button>
+          <div class="compat-admin-only">
+            <div class="btns" style="margin-top:6px">
+              <fluent-button id="btnQualityRuleSetsRefresh" class="btn secondary">刷新规则集</fluent-button>
+              <fluent-button id="btnQualityRuleSetSave" class="btn secondary">保存当前规则集</fluent-button>
+              <fluent-button id="btnQualityRuleSetRemove" class="btn secondary">删除规则集</fluent-button>
+            </div>
+            <label>质量规则集列表</label>
+            <select id="qualityRuleSetSelect" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
+              <option value="">选择规则集...</option>
+            </select>
           </div>
-          <label>质量规则集列表</label>
-          <select id="qualityRuleSetSelect" style="width:100%;border:1px solid #d2dceb;border-radius:8px;padding:8px 9px;font-size:13px">
-            <option value="">选择规则集...</option>
-          </select>
           <label>断点节点ID（可选，仅运行到该节点）</label>
           <input id="breakpointNodeId" placeholder="例如: n3" />
           <label><input id="exportCanonicalBundle" type="checkbox" style="width:auto;margin-right:6px" />导出熟肉包（Markdown + metadata + lineage）</label>
@@ -117,16 +121,16 @@
             <fluent-button id="btnAutoFixGraph" class="btn secondary">自动修复图结构</fluent-button>
             <fluent-button id="btnRun" class="btn">运行</fluent-button>
             <fluent-button id="btnEnqueueRun" class="btn secondary">加入队列</fluent-button>
-            <fluent-button id="btnSaveBaseline" class="btn secondary dev-only">保存为基线</fluent-button>
-            <fluent-button id="btnCompareBaseline" class="btn secondary dev-only">与基线对比</fluent-button>
-            <fluent-button id="btnLoadLineage" class="btn secondary">加载血缘图</fluent-button>
+            <fluent-button id="btnSaveBaseline" class="btn secondary dev-only compat-admin-only">保存为基线</fluent-button>
+            <fluent-button id="btnCompareBaseline" class="btn secondary dev-only compat-admin-only">与基线对比</fluent-button>
+            <fluent-button id="btnLoadLineage" class="btn secondary compat-admin-only">加载血缘图</fluent-button>
             <fluent-button id="btnQueueRefresh" class="btn secondary">刷新队列</fluent-button>
-            <fluent-button id="btnQueuePause" class="btn secondary dev-only">暂停队列</fluent-button>
-            <fluent-button id="btnQueueResume" class="btn secondary dev-only">恢复队列</fluent-button>
+            <fluent-button id="btnQueuePause" class="btn secondary dev-only compat-admin-only">暂停队列</fluent-button>
+            <fluent-button id="btnQueueResume" class="btn secondary dev-only compat-admin-only">恢复队列</fluent-button>
             <fluent-button id="btnExport" class="btn secondary">导出流程 JSON</fluent-button>
             <fluent-button id="btnSaveFlow" class="btn secondary">保存流程</fluent-button>
             <fluent-button id="btnLoadFlow" class="btn secondary">加载流程</fluent-button>
-            <fluent-button id="btnVersionsRefresh" class="btn secondary dev-only">版本列表</fluent-button>
+            <fluent-button id="btnVersionsRefresh" class="btn secondary dev-only compat-admin-only">版本列表</fluent-button>
           </div>
           <div id="status" class="status"></div>
         </div>
@@ -187,6 +191,7 @@
             </table>
           </div>
           <div class="cfg-meta" id="selectedNodeInfo">未选中节点</div>
+          <div class="cfg-form" id="selectedNodePolicyInfo"><div class="cfg-help">节点策略: -</div></div>
           <div class="cfg-meta" id="selectedEdgeInfo">未选中连线</div>
           <div class="cfg-form" id="edgeConfigForm">
             <div class="cfg-help">点击画布上的连线后可编辑条件（when），支持布尔值、字符串路径或对象条件。</div>
@@ -280,7 +285,7 @@
             <fluent-button id="btnResetNodeCfg" class="btn secondary">重置默认</fluent-button>
             <fluent-button id="btnFormatNodeCfg" class="btn secondary">格式化</fluent-button>
           </div>
-          <div class="btns dev-only" style="margin-bottom:8px">
+          <div class="btns dev-only compat-admin-only" style="margin-bottom:8px">
             <fluent-button id="btnDiagRefresh" class="btn secondary">刷新诊断</fluent-button>
             <fluent-button id="btnRunsRefresh" class="btn secondary">刷新运行记录</fluent-button>
             <fluent-button id="btnReviewsRefresh" class="btn secondary">刷新审核队列</fluent-button>
@@ -290,7 +295,7 @@
             <tbody id="nodeRuns"><tr><td colspan="5" style="color:#74879b">未运行</td></tr></tbody>
           </table>
           <div style="height:8px"></div>
-          <table class="dev-only">
+          <table class="dev-only compat-admin-only">
             <thead><tr><th>Chiplet</th><th>错误率</th><th>P95耗时</th><th>重试率</th><th>Fallback率</th></tr></thead>
             <tbody id="diagRuns"><tr><td colspan="5" style="color:#74879b">暂无诊断</td></tr></tbody>
           </table>
@@ -306,11 +311,11 @@
           </table>
           <div id="queueControlText" class="cfg-meta" style="margin-top:6px">队列状态: -</div>
           <div style="height:8px"></div>
-          <table class="dev-only">
+          <table class="dev-only compat-admin-only">
             <thead><tr><th>流程版本</th><th>时间</th><th>操作</th></tr></thead>
             <tbody id="versionRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
           </table>
-          <div class="cfg-form dev-only" style="margin-top:8px">
+          <div class="cfg-form dev-only compat-admin-only" style="margin-top:8px">
             <div class="cfg-help">版本差异</div>
             <label>Version A</label>
             <input id="versionCompareA" placeholder="version_id A" />
@@ -325,7 +330,7 @@
               <tbody id="versionCompareRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
             </table>
           </div>
-          <div class="cfg-form dev-only" style="margin-top:8px">
+          <div class="cfg-form dev-only compat-admin-only" style="margin-top:8px">
             <div class="cfg-help">节点缓存</div>
             <div id="cacheStatsText" class="cfg-meta">缓存状态: -</div>
             <div class="btns" style="margin-top:6px">
@@ -334,11 +339,11 @@
             </div>
           </div>
           <div style="height:8px"></div>
-          <table class="dev-only">
+          <table class="dev-only compat-admin-only">
             <thead><tr><th>审核键</th><th>状态</th><th>操作</th></tr></thead>
             <tbody id="reviewRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
           </table>
-          <div class="cfg-form dev-only" style="margin-top:8px">
+          <div class="cfg-form dev-only compat-admin-only" style="margin-top:8px">
             <div class="cfg-help">发布流程应用</div>
             <label>应用名称</label>
             <input id="appPublishName" placeholder="例如：财报清洗应用" />
@@ -369,7 +374,7 @@
               <tbody id="appRows"><tr><td colspan="3" style="color:#74879b">暂无</td></tr></tbody>
             </table>
           </div>
-          <div class="cfg-form dev-only" style="margin-top:8px">
+          <div class="cfg-form dev-only compat-admin-only" style="margin-top:8px">
             <div class="cfg-help">运行时间线与失败概览</div>
             <label>Run ID</label>
             <input id="timelineRunId" placeholder="输入 run_id 查看时间线" />
@@ -465,7 +470,7 @@
               <tbody id="qualityGateRows"><tr><td colspan="4" style="color:#74879b">暂无</td></tr></tbody>
             </table>
           </div>
-          <div class="cfg-form dev-only" style="margin-top:8px">
+          <div class="cfg-form dev-only compat-admin-only" style="margin-top:8px">
             <div class="cfg-help">操作审计</div>
             <div class="btns" style="margin-top:6px">
               <fluent-button id="btnAuditRefresh" class="btn secondary">刷新审计</fluent-button>
@@ -476,7 +481,7 @@
             </table>
           </div>
           <div style="height:8px"></div>
-          <div class="cfg-form dev-only">
+          <div class="cfg-form dev-only compat-admin-only">
             <div class="cfg-help">运行对比</div>
             <label>Run A</label>
             <input id="compareRunA" placeholder="run_id A" />
@@ -501,7 +506,7 @@
             </table>
           </div>
           <div style="height:8px"></div>
-          <div class="cfg-form dev-only">
+          <div class="cfg-form dev-only compat-admin-only">
             <div class="cfg-help">审核历史</div>
             <label>Run ID</label>
             <input id="reviewHistoryRunId" placeholder="可选：精确 run_id" />
@@ -527,7 +532,7 @@
             </table>
           </div>
           <div style="height:8px"></div>
-          <div class="cfg-form dev-only">
+          <div class="cfg-form dev-only compat-admin-only">
             <div class="cfg-help">流程迁移日志</div>
             <div id="migrationSummary" class="cfg-meta">暂无迁移</div>
             <table>

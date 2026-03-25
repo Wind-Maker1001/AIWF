@@ -53,13 +53,31 @@ test("workflow run payload support builds base payload and merges params", async
     sandboxMaxCpuMs: { value: "3000" },
     sandboxMaxRssMb: { value: "256" },
     sandboxMaxOutputBytes: { value: "4096" },
-  }, { workflow_id: "wf_1" }, 42);
+  }, { workflow_id: "wf_1", version: "1.0.0" }, 42);
 
   const merged = mergeRunPayload(base, { params: { strict_output_gate: true }, extra_flag: 1 });
   assert.equal(merged.workflow_id, "wf_1");
+  assert.equal(merged.workflow_version, "1.0.0");
+  assert.equal(merged.workflow.version, "1.0.0");
   assert.equal(merged.quality_rule_set_id, "set_1");
   assert.deepEqual(merged.chiplet_isolated_types, ["x", "y"]);
   assert.equal(merged.sandbox_alert_dedup_window_sec, 42);
   assert.equal(merged.params.strict_output_gate, true);
   assert.equal(merged.extra_flag, 1);
+});
+
+test("workflow run payload support rejects unregistered node types", async () => {
+  const {
+    buildBaseRunPayload,
+  } = await loadRunPayloadSupportModule();
+
+  assert.throws(
+    () => buildBaseRunPayload({}, {
+      workflow_id: "wf_bad_type",
+      version: "1.0.0",
+      nodes: [{ id: "n1", type: "unknown_future_node" }],
+      edges: [],
+    }),
+    /unregistered node types in run_payload/i,
+  );
 });

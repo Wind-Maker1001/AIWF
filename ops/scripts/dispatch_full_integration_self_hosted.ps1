@@ -2,7 +2,7 @@ param(
   [string]$Ref = "",
   [string]$Owner = "ci",
   [string]$EnvFile = "",
-  [ValidateSet("Default","Quick","Full")]
+  [ValidateSet("Default","Quick","Full","Compatibility")]
   [string]$CiProfile = "Full",
   [bool]$RunFullIntegration = $true,
   [switch]$Wait,

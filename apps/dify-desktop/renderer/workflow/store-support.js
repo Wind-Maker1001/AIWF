@@ -1,4 +1,9 @@
 import { defaultNodeConfig } from "./defaults.js";
+import { assertRegisteredWorkflowNodeTypes } from "./node-catalog-contract.js";
+import {
+  createWorkflowContractError,
+  normalizeWorkflowContract,
+} from "./workflow-contract.js";
 
 function deepClone(v) {
   return JSON.parse(JSON.stringify(v));
@@ -26,7 +31,15 @@ function normalizeStoreNode(node, index = 0) {
 }
 
 function normalizeImportedGraph(graph) {
-  const g = graph && typeof graph === "object" ? graph : {};
+  return normalizeImportedGraphWithContract(graph).graph;
+}
+
+function normalizeImportedGraphWithContract(graph) {
+  const contract = normalizeWorkflowContract(graph, { allowVersionMigration: true });
+  if (!contract.ok) throw createWorkflowContractError(contract.errors);
+  assertRegisteredWorkflowNodeTypes(contract.graph, { stage: "import" });
+
+  const g = contract.graph || {};
   const nodes = Array.isArray(g.nodes) ? g.nodes.map(normalizeStoreNode) : [];
   const idSet = new Set(nodes.map((n) => n.id));
   const edges = Array.isArray(g.edges)
@@ -40,10 +53,19 @@ function normalizeImportedGraph(graph) {
     : [];
 
   return {
-    workflow_id: String(g.workflow_id || "custom_v1"),
-    name: String(g.name || "自定义流程"),
-    nodes,
-    edges,
+    graph: {
+      ...g,
+      workflow_id: String(g.workflow_id || "custom_v1"),
+      version: String(g.version || ""),
+      name: String(g.name || "Custom Workflow"),
+      nodes,
+      edges,
+    },
+    contract: {
+      migrated: contract.migrated,
+      notes: Array.isArray(contract.notes) ? [...contract.notes] : [],
+      errors: [],
+    },
   };
 }
 
@@ -73,6 +95,7 @@ export {
   deepClone,
   nextNodeIdFromNodes,
   normalizeImportedGraph,
+  normalizeImportedGraphWithContract,
   normalizeStoreNode,
   wouldGraphCreateCycle,
 };

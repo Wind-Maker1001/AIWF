@@ -1,25 +1,36 @@
 import { defaultNodeConfig, defaultWorkflowGraph } from "./defaults.js";
+import { assertRegisteredWorkflowNodeType } from "./node-catalog-contract.js";
 import {
   deepClone,
   nextNodeIdFromNodes,
-  normalizeImportedGraph,
+  normalizeImportedGraphWithContract,
   wouldGraphCreateCycle,
 } from "./store-support.js";
+import { WORKFLOW_SCHEMA_VERSION } from "./workflow-contract.js";
 
 export function createWorkflowStore() {
   const state = {
     graph: defaultWorkflowGraph(),
     linkFrom: null,
+    lastImportContract: { migrated: false, notes: [], errors: [] },
   };
 
   function reset() {
     state.graph = defaultWorkflowGraph();
     state.linkFrom = null;
+    state.lastImportContract = { migrated: false, notes: [], errors: [] };
   }
 
   function clear() {
-    state.graph = { workflow_id: "custom", name: "空流程", nodes: [], edges: [] };
+    state.graph = {
+      workflow_id: "custom",
+      version: WORKFLOW_SCHEMA_VERSION,
+      name: "Empty Workflow",
+      nodes: [],
+      edges: [],
+    };
     state.linkFrom = null;
+    state.lastImportContract = { migrated: false, notes: [], errors: [] };
   }
 
   function nextNodeId() {
@@ -28,7 +39,7 @@ export function createWorkflowStore() {
 
   function addNode(type, x = 40, y = 40, config) {
     const id = nextNodeId();
-    const nodeType = String(type || "ingest_files");
+    const nodeType = assertRegisteredWorkflowNodeType(String(type || "ingest_files"), { stage: "add_node" });
     const cfg =
       config && typeof config === "object"
         ? deepClone(config)
@@ -99,7 +110,7 @@ export function createWorkflowStore() {
   }
 
   function setWorkflowName(name) {
-    state.graph.name = String(name || "").trim() || "自定义流程";
+    state.graph.name = String(name || "").trim() || "Custom Workflow";
   }
 
   function exportGraph() {
@@ -107,8 +118,11 @@ export function createWorkflowStore() {
   }
 
   function importGraph(graph) {
-    state.graph = normalizeImportedGraph(graph);
+    const imported = normalizeImportedGraphWithContract(graph);
+    state.graph = imported.graph;
     state.linkFrom = null;
+    state.lastImportContract = imported.contract;
+    return imported;
   }
 
   return {

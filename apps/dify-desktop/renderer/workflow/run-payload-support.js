@@ -1,3 +1,6 @@
+import { WORKFLOW_SCHEMA_VERSION } from "./workflow-contract.js";
+import { assertRegisteredWorkflowNodeTypes } from "./node-catalog-contract.js";
+
 function parseChipletIsolatedTypes(text) {
   return String(text || "")
     .split(/[;,]/)
@@ -11,9 +14,17 @@ function positiveIntegerOrDefault(value, fallback) {
 }
 
 function buildBaseRunPayload(els, graph, sandboxDedupWindowSec = 600) {
+  const normalizedGraph = graph && typeof graph === "object" ? graph : {};
+  assertRegisteredWorkflowNodeTypes(normalizedGraph, { stage: "run_payload" });
+  const workflowVersion = String(normalizedGraph.version || "").trim() || WORKFLOW_SCHEMA_VERSION;
   return {
-    workflow_id: graph.workflow_id || "custom_v1",
-    workflow: graph,
+    workflow_id: normalizedGraph.workflow_id || "custom_v1",
+    workflow_version: workflowVersion,
+    workflow: {
+      ...normalizedGraph,
+      workflow_id: normalizedGraph.workflow_id || "custom_v1",
+      version: workflowVersion,
+    },
     quality_rule_set_id: String(els.qualityRuleSetId?.value || els.qualityRuleSetSelect?.value || "").trim(),
     params: {
       report_title: String(els.reportTitle?.value || "").trim(),
@@ -21,7 +32,7 @@ function buildBaseRunPayload(els, graph, sandboxDedupWindowSec = 600) {
       md_only: true,
       paper_markdown_enabled: true,
       export_canonical_bundle: !!els.exportCanonicalBundle?.checked,
-      canonical_title: String(els.canonicalTitle?.value || "").trim() || "AIWF 熟肉语料",
+      canonical_title: String(els.canonicalTitle?.value || "").trim() || "AIWF 鐔熻倝璇枡",
       ocr_lang: "chi_sim+eng",
     },
     breakpoint_node_id: String(els.breakpointNodeId?.value || "").trim(),

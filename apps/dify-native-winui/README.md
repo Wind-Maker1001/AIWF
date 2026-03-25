@@ -1,10 +1,15 @@
-# AIWF Native Desktop (WinUI 3) - Bootstrap
+# AIWF Native Desktop (WinUI 3)
 
-This folder is the starting point for migrating the desktop GUI from Electron web UI to a native WinUI 3 shell.
+This folder contains the primary desktop frontend for AIWF.
 
-## Current scope
+Electron remains available as a secondary compatibility shell for Workflow Studio and transition-only use cases.
 
-- Native migration scaffold and architecture notes
+For this repository, the default release audience is personal/friend sideload distribution rather than enterprise trusted distribution.
+
+## Current role
+
+- Primary desktop frontend
+- Native shell and architecture notes
 - IPC bridge contract draft for integrating existing AIWF runtime services
 - WinUI 3 MVP shell with:
   - run configuration inputs
@@ -26,6 +31,47 @@ Run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_native_winui.ps1 -Configuration Debug
+```
+
+Publish:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\publish_native_winui.ps1 -Version "<version>" -Configuration Release
+```
+
+Bundle / release:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -BuildWin -Configuration Release -Version "<version>"
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -BuildInstaller -Configuration Release -Version "<version>" -CreateZip
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\package_native_winui_bundle.ps1 -Version "<version>" -Configuration Release -CreateZip
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_frontend_productize.ps1 -Version "<version>" -Frontend WinUI -Configuration Release -CreateZip
+```
+
+Optional MSIX preview:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\package_native_winui_msix.ps1 -Version "<version>" -Configuration Release
+```
+
+Trusted signed MSIX / appinstaller:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\package_native_winui_msix.ps1 -Version "<version>" -Configuration Release -SigningMode ProvidedPfx -PfxPath "<path-to-signing.pfx>" -PfxPassword "<password>" -CertificatePath "<path-to-signing.cer>" -GenerateAppInstaller -AppInstallerUriBase "https://example.com/aiwf/winui"
+```
+
+Stable WinUI releases should use trusted signing plus `appinstaller`, not preview self-signed MSIX.
+
+Trusted signing from a release host certificate store:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\package_native_winui_msix.ps1 -Version "<version>" -Configuration Release -SigningMode StoreThumbprint -SigningThumbprint "<thumbprint>" -CertificatePath "<path-to-signing.cer>" -GenerateAppInstaller -AppInstallerUriBase "https://example.com/aiwf/winui"
+```
+
+Bundle install entrypoint:
+
+```powershell
+.\Install_AIWF_Native_WinUI.cmd
 ```
 
 Smoke check:

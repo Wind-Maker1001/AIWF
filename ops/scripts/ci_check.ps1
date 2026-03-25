@@ -1,7 +1,7 @@
 param(
   [string]$EnvFile = "",
   [string]$Owner = "local",
-  [ValidateSet("Default","Quick","Full")]
+  [ValidateSet("Default","Quick","Full","Compatibility")]
   [string]$CiProfile = "Default",
   [switch]$SkipToolChecks,
   [switch]$SkipDocsChecks,
@@ -21,6 +21,18 @@ param(
   [switch]$SkipRustNewOpsBenchGate,
   [switch]$SkipRegressionBaselineGate,
   [switch]$SkipOpenApiSdkSync,
+  [switch]$SkipFrontendConvergence,
+  [switch]$SkipWorkflowContractSync,
+  [switch]$SkipGovernanceControlPlaneBoundary,
+  [switch]$SkipGovernanceStoreSchemaVersions,
+  [switch]$SkipLocalWorkflowStoreSchemaVersions,
+  [switch]$SkipTemplatePackContractSync,
+  [switch]$SkipLocalTemplateStorageContractSync,
+  [switch]$SkipOfflineTemplateCatalogSync,
+  [switch]$SkipNodeConfigSchemaCoverage,
+  [switch]$SkipLocalNodeCatalogPolicy,
+  [switch]$SkipOperatorCatalogSync,
+  [switch]$SkipFallbackGovernance,
   [switch]$SkipSecretScan,
   [switch]$SkipContractTests,
   [switch]$SkipChaosChecks,
@@ -37,37 +49,9 @@ $ErrorActionPreference = "Stop"
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
-function ApplyCiProfile([string]$ProfileName, [hashtable]$BoundParams) {
-  $normalized = "default"
-  if (-not [string]::IsNullOrWhiteSpace($ProfileName)) {
-    $normalized = $ProfileName.Trim().ToLowerInvariant()
-  }
-  if ($normalized -eq "default") { return }
-
-  Info "using ci profile: $normalized"
-  if ($normalized -eq "full") { return }
-
-  if ($normalized -ne "quick") {
-    throw "unsupported ci profile: $ProfileName"
-  }
-
-  $quickSkipParams = @(
-    "SkipRegressionQuality",
-    "SkipDesktopRealSampleAcceptance",
-    "SkipDesktopFinanceTemplateAcceptance",
-    "SkipDesktopStress",
-    "SkipRoutingBench",
-    "SkipAsyncBench",
-    "SkipRustTransformBenchGate",
-    "SkipRustNewOpsBenchGate",
-    "SkipContractTests",
-    "SkipChaosChecks",
-    "SkipSmoke",
-    "SkipNativeWinuiSmoke"
-  )
-
+function ApplyProfileSkips([string]$ProfileLabel, [string[]]$ParamNames, [hashtable]$BoundParams) {
   $applied = @()
-  foreach ($paramName in $quickSkipParams) {
+  foreach ($paramName in $ParamNames) {
     if ($BoundParams.ContainsKey($paramName)) { continue }
     Set-Variable -Name $paramName -Value $true -Scope Script
     $applied += $paramName
@@ -75,7 +59,1540 @@ function ApplyCiProfile([string]$ProfileName, [hashtable]$BoundParams) {
 
   if ($applied.Count -gt 0) {
     $labels = $applied | ForEach-Object { ($_ -replace "^Skip", "") }
-    Info ("quick profile auto-skips: {0}" -f ($labels -join ", "))
+    Info ("{0} profile auto-skips: {1}" -f $ProfileLabel, ($labels -join ", "))
+  }
+}
+function ApplyCiProfile([string]$ProfileName, [hashtable]$BoundParams) {
+  $normalized = "default"
+  if (-not [string]::IsNullOrWhiteSpace($ProfileName)) {
+    $normalized = $ProfileName.Trim().ToLowerInvariant()
+  }
+
+  if ($normalized -notin @("default", "quick", "full", "compatibility")) {
+    throw "unsupported ci profile: $ProfileName"
+  }
+
+  if ($normalized -ne "default") {
+    Info "using ci profile: $normalized"
+  }
+
+  if ($normalized -in @("default", "full")) {
+    ApplyProfileSkips -ProfileLabel "default/full" -ParamNames @("SkipDesktopPackageTests") -BoundParams $BoundParams
+    if (-not $BoundParams.ContainsKey("SkipDesktopPackageTests")) {
+      Info "Electron compatibility packaged startup checks moved to the explicit compatibility stage. Use -CiProfile Compatibility when you are changing Electron packaging paths."
+    }
+    return
+  }
+
+  if ($normalized -eq "quick") {
+  $quickSkipParams = @(
+    "SkipRegressionQuality",
+    "SkipDesktopRealSampleAcceptance",
+    "SkipDesktopFinanceTemplateAcceptance",
+    "SkipDesktopStress",
+    "SkipDesktopPackageTests",
+    "SkipRoutingBench",
+    "SkipAsyncBench",
+    "SkipRustTransformBenchGate",
+    "SkipRustNewOpsBenchGate",
+    "SkipContractTests",
+    "SkipChaosChecks",
+    "SkipSmoke"
+  )
+    ApplyProfileSkips -ProfileLabel "quick" -ParamNames $quickSkipParams -BoundParams $BoundParams
+    return
+  }
+
+  $compatibilitySkipParams = @(
+    "SkipJavaTests",
+    "SkipRustTests",
+    "SkipPythonTests",
+    "SkipRegressionQuality",
+    "SkipDesktopUiTests",
+    "SkipDesktopRealSampleAcceptance",
+    "SkipDesktopFinanceTemplateAcceptance",
+    "SkipDesktopStress",
+    "SkipRoutingBench",
+    "SkipAsyncBench",
+    "SkipRustTransformBenchGate",
+    "SkipRustNewOpsBenchGate",
+    "SkipRegressionBaselineGate",
+    "SkipContractTests",
+    "SkipChaosChecks",
+    "SkipSmoke",
+    "SkipSqlConnectivityGate",
+    "SkipNativeWinuiSmoke"
+  )
+  ApplyProfileSkips -ProfileLabel "compatibility" -ParamNames $compatibilitySkipParams -BoundParams $BoundParams
+}
+function Test-IsCiEnvironment() {
+  return [string]::Equals($env:CI, "true", [System.StringComparison]::OrdinalIgnoreCase) -or `
+    [string]::Equals($env:GITHUB_ACTIONS, "true", [System.StringComparison]::OrdinalIgnoreCase)
+}
+function New-FrontendCheckState([string]$Status, [string]$Reason = "") {
+  return [ordered]@{
+    status = $Status
+    reason = $Reason
+    updated_at = (Get-Date).ToString("s")
+  }
+}
+function Set-FrontendCheckState($State, [string]$Status, [string]$Reason = "") {
+  $State.status = $Status
+  $State.reason = $Reason
+  $State.updated_at = (Get-Date).ToString("s")
+}
+function Resolve-FrontendEvidenceOverall([object[]]$Checks) {
+  $states = @($Checks | ForEach-Object { [string]($_.status) })
+  if ($states -contains "failed") { return "failed" }
+  if ($states -contains "passed") { return "passed" }
+  if ($states -contains "running") { return "running" }
+  if ($states -contains "pending") { return "pending" }
+  return "skipped"
+}
+function Resolve-ArchitectureScorecardOverall([object[]]$Checks) {
+  $states = @($Checks | ForEach-Object { [string]($_.status) })
+  if ($states -contains "failed") { return "failed" }
+  if ($states -contains "pending") { return "pending" }
+  if ($states -contains "passed") { return "passed" }
+  if ($states -contains "running") { return "running" }
+  return "skipped"
+}
+function Get-ArchitectureScorecardMarkdownLines($Payload) {
+  $lines = @()
+  $lines += "# Architecture Scorecard"
+  $lines += ""
+  $lines += "- generated_at: $($Payload.generated_at)"
+  $lines += "- profile: $($Payload.profile)"
+  $lines += "- overall_status: $($Payload.overall_status)"
+  $lines += ""
+  $lines += "| Boundary | Status | Reason |"
+  $lines += "|---|---|---|"
+  foreach ($pair in @(
+    @{ name = "workflow_contract_sync"; item = $Payload.boundaries.workflow_contract_sync },
+    @{ name = "governance_control_plane_boundary"; item = $Payload.boundaries.governance_control_plane_boundary },
+    @{ name = "governance_store_schema_versions"; item = $Payload.boundaries.governance_store_schema_versions },
+    @{ name = "local_workflow_store_schema_versions"; item = $Payload.boundaries.local_workflow_store_schema_versions },
+    @{ name = "template_pack_contract_sync"; item = $Payload.boundaries.template_pack_contract_sync },
+    @{ name = "local_template_storage_contract_sync"; item = $Payload.boundaries.local_template_storage_contract_sync },
+    @{ name = "offline_template_catalog_sync"; item = $Payload.boundaries.offline_template_catalog_sync },
+    @{ name = "node_config_schema_coverage"; item = $Payload.boundaries.node_config_schema_coverage },
+    @{ name = "local_node_catalog_policy"; item = $Payload.boundaries.local_node_catalog_policy },
+    @{ name = "operator_catalog_sync"; item = $Payload.boundaries.operator_catalog_sync },
+    @{ name = "fallback_governance"; item = $Payload.boundaries.fallback_governance },
+    @{ name = "frontend_convergence"; item = $Payload.boundaries.frontend_convergence },
+    @{ name = "frontend_primary_verification"; item = $Payload.frontend.primary },
+    @{ name = "frontend_compatibility_verification"; item = $Payload.frontend.compatibility }
+  )) {
+    $reason = [string]($pair.item.reason)
+    if ([string]::IsNullOrWhiteSpace($reason)) {
+      $reason = [string]($pair.item.evidence_path)
+    }
+    $safeReason = $reason -replace "\|", "\|"
+    $lines += "| $($pair.name) | $([string]($pair.item.status)) | $safeReason |"
+  }
+  return ,$lines
+}
+function Write-FrontendEvidenceSnapshot([string]$Name, $Payload, [string]$Directory, [string]$Stamp) {
+  New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+  $timestampedPath = Join-Path $Directory ("{0}_{1}.json" -f $Name, $Stamp)
+  $latestPath = Join-Path $Directory ("{0}_latest.json" -f $Name)
+  $json = ($Payload | ConvertTo-Json -Depth 8)
+  Set-Content -Path $timestampedPath -Value $json -Encoding UTF8
+  Set-Content -Path $latestPath -Value $json -Encoding UTF8
+  return [ordered]@{
+    latest = $latestPath
+    snapshot = $timestampedPath
+  }
+}
+function Write-ArchitectureScorecardSnapshot($Payload, [string]$Directory, [string]$Stamp, [string]$ProfileLabel) {
+  New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+  $jsonLatestPath = Join-Path $Directory "architecture_scorecard_latest.json"
+  $mdLatestPath = Join-Path $Directory "architecture_scorecard_latest.md"
+  $jsonSnapshotPath = Join-Path $Directory ("architecture_scorecard_{0}.json" -f $Stamp)
+  $mdSnapshotPath = Join-Path $Directory ("architecture_scorecard_{0}.md" -f $Stamp)
+  $safeProfile = [string]($ProfileLabel.ToLowerInvariant())
+  $profileJsonLatestPath = Join-Path $Directory ("architecture_scorecard_{0}_latest.json" -f $safeProfile)
+  $profileMdLatestPath = Join-Path $Directory ("architecture_scorecard_{0}_latest.md" -f $safeProfile)
+  $profileJsonSnapshotPath = Join-Path $Directory ("architecture_scorecard_{0}_{1}.json" -f $safeProfile, $Stamp)
+  $profileMdSnapshotPath = Join-Path $Directory ("architecture_scorecard_{0}_{1}.md" -f $safeProfile, $Stamp)
+
+  $json = ($Payload | ConvertTo-Json -Depth 10)
+  Set-Content -Path $jsonLatestPath -Value $json -Encoding UTF8
+  Set-Content -Path $jsonSnapshotPath -Value $json -Encoding UTF8
+  Set-Content -Path $profileJsonLatestPath -Value $json -Encoding UTF8
+  Set-Content -Path $profileJsonSnapshotPath -Value $json -Encoding UTF8
+
+  $md = (Get-ArchitectureScorecardMarkdownLines $Payload) -join [Environment]::NewLine
+  Set-Content -Path $mdLatestPath -Value $md -Encoding UTF8
+  Set-Content -Path $mdSnapshotPath -Value $md -Encoding UTF8
+  Set-Content -Path $profileMdLatestPath -Value $md -Encoding UTF8
+  Set-Content -Path $profileMdSnapshotPath -Value $md -Encoding UTF8
+
+  return [ordered]@{
+    json_latest = $jsonLatestPath
+    json_snapshot = $jsonSnapshotPath
+    md_latest = $mdLatestPath
+    md_snapshot = $mdSnapshotPath
+    profile_json_latest = $profileJsonLatestPath
+    profile_json_snapshot = $profileJsonSnapshotPath
+    profile_md_latest = $profileMdLatestPath
+    profile_md_snapshot = $profileMdSnapshotPath
+  }
+}
+function Read-ArchitectureScorecardPayload([string]$Path) {
+  if (-not (Test-Path $Path)) { return $null }
+  try {
+    return Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
+  } catch {
+    return $null
+  }
+}
+function Parse-ScorecardTimestamp([string]$Value) {
+  if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
+  try {
+    return [datetime]::Parse($Value, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind)
+  } catch {
+    try {
+      return [datetime]::Parse($Value)
+    } catch {
+      return $null
+    }
+  }
+}
+function Get-OptionalPropertyValue($Object, [string]$Name) {
+  if ($null -eq $Object) { return "" }
+  $property = $Object.PSObject.Properties[$Name]
+  if ($null -eq $property) { return "" }
+  return [string]$property.Value
+}
+function Get-OptionalObjectProperty($Object, [string]$Name) {
+  if ($null -eq $Object) { return $null }
+  $property = $Object.PSObject.Properties[$Name]
+  if ($null -eq $property) { return $null }
+  return $property.Value
+}
+function Get-OptionalBooleanProperty($Object, [string]$Name) {
+  $value = Get-OptionalObjectProperty $Object $Name
+  if ($null -eq $value) { return $false }
+  if ($value -is [bool]) { return [bool]$value }
+  $text = [string]$value
+  return [string]::Equals($text, "true", [System.StringComparison]::OrdinalIgnoreCase)
+}
+function Resolve-ScorecardItemGeneratedAt($Payload, $Item) {
+  foreach ($candidate in @(
+    (Get-OptionalPropertyValue $Item "updated_at"),
+    (Get-OptionalPropertyValue $Item "generated_at"),
+    (Get-OptionalPropertyValue $Payload "generated_at")
+  )) {
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      return [string]$candidate
+    }
+  }
+  return ""
+}
+function Parse-JsonLineFromOutput([object[]]$Output) {
+  $lines = @($Output | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ })
+  for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+    $line = [string]$lines[$i]
+    if ($line.StartsWith("{") -and $line.EndsWith("}")) {
+      try {
+        return ($line | ConvertFrom-Json)
+      } catch {}
+    }
+  }
+  return $null
+}
+function Get-StringArrayProperty($Object, [string]$Name) {
+  $value = Get-OptionalObjectProperty $Object $Name
+  if ($null -eq $value) { return @() }
+  return @($value | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+}
+function New-WorkflowContractSyncDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  return [ordered]@{
+    required = @(Get-StringArrayProperty $Summary "required")
+    default_version = Get-OptionalPropertyValue $Summary "defaultVersion"
+    normalized_version = Get-OptionalPropertyValue $Summary "normalizedVersion"
+    import_migrated = (Get-OptionalBooleanProperty $Summary "importMigrated")
+    import_rejected_unknown_type = (Get-OptionalBooleanProperty $Summary "importRejectedUnknownType")
+    payload_rejected_unknown_type = (Get-OptionalBooleanProperty $Summary "payloadRejectedUnknownType")
+    authoring_rejected_unknown_type = (Get-OptionalBooleanProperty $Summary "authoringRejectedUnknownType")
+    preflight_unknown_type_guided = (Get-OptionalBooleanProperty $Summary "preflightUnknownTypeGuided")
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-WorkflowContractSyncReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "workflow contract sync checks failed" }
+    return "workflow contract sync checks passed"
+  }
+
+  $details = New-WorkflowContractSyncDetails $Summary
+  $required = @($details.required)
+  $base = "workflow contract sync checks {0} (required={1}; default_version={2}; normalized_version={3}; import_migrated={4}; import_unknown_type={5}; run_unknown_type={6}; authoring_unknown_type={7}; preflight_unknown_type_guided={8})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    $(if ($required.Count -gt 0) { $required -join ", " } else { "-" }),
+    [string]$details.default_version,
+    [string]$details.normalized_version,
+    [string]$details.import_migrated,
+    [string]$details.import_rejected_unknown_type,
+    [string]$details.payload_rejected_unknown_type,
+    [string]$details.authoring_rejected_unknown_type,
+    [string]$details.preflight_unknown_type_guided
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  $requiredMissing = @("workflow_id", "version", "nodes", "edges" | Where-Object { $_ -notin $required })
+  if ($requiredMissing.Count -gt 0) {
+    $fragments += "required fields missing: $($requiredMissing -join ', ')"
+  }
+  foreach ($entry in @(
+    @{ ok = [bool]$details.import_rejected_unknown_type; label = "import unknown node guard missing" },
+    @{ ok = [bool]$details.payload_rejected_unknown_type; label = "run payload unknown node guard missing" },
+    @{ ok = [bool]$details.authoring_rejected_unknown_type; label = "authoring unknown node guard missing" },
+    @{ ok = [bool]$details.preflight_unknown_type_guided; label = "preflight unknown node guidance missing" }
+  )) {
+    if (-not $entry.ok) {
+      $fragments += [string]$entry.label
+    }
+  }
+  if ([string]::IsNullOrWhiteSpace([string]$details.default_version)) {
+    $fragments += "default workflow version missing"
+  }
+  if ([string]::IsNullOrWhiteSpace([string]$details.normalized_version)) {
+    $fragments += "normalized workflow version missing"
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-WorkflowContractReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  $required = @(Get-StringArrayProperty $details "required")
+  $requiredMissing = @("workflow_id", "version", "nodes", "edges" | Where-Object { $_ -notin $required })
+  if ($requiredMissing.Count -gt 0) {
+    $issues += "workflow_contract_sync required fields missing: $($requiredMissing -join ', ')"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "import_rejected_unknown_type")) {
+    $issues += "workflow_contract_sync import path no longer rejects unknown node types"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "payload_rejected_unknown_type")) {
+    $issues += "workflow_contract_sync run payload path no longer rejects unknown node types"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "authoring_rejected_unknown_type")) {
+    $issues += "workflow_contract_sync authoring surface no longer rejects unknown node types"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "preflight_unknown_type_guided")) {
+    $issues += "workflow_contract_sync preflight no longer emits unknown node type guidance"
+  }
+  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "default_version"))) {
+    $issues += "workflow_contract_sync default workflow version missing"
+  }
+  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "normalized_version"))) {
+    $issues += "workflow_contract_sync normalized workflow version missing"
+  }
+  return @($issues | Sort-Object -Unique)
+}
+function New-GovernanceControlPlaneBoundaryDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $drift = Get-OptionalObjectProperty $Summary "drift"
+  return [ordered]@{
+    schema_version = Get-OptionalPropertyValue $Summary "schemaVersion"
+    control_plane_status = Get-OptionalPropertyValue $Summary "controlPlaneStatus"
+    control_plane_role = Get-OptionalPropertyValue $Summary "controlPlaneRole"
+    governance_state_control_plane_owner = Get-OptionalPropertyValue $Summary "governanceStateControlPlaneOwner"
+    job_lifecycle_control_plane_owner = Get-OptionalPropertyValue $Summary "jobLifecycleControlPlaneOwner"
+    meta_route = Get-OptionalPropertyValue $Summary "metaRoute"
+    manifest_path = Get-OptionalPropertyValue $Summary "manifestPath"
+    desktop_generated_path = Get-OptionalPropertyValue $Summary "desktopGeneratedPath"
+    winui_generated_path = Get-OptionalPropertyValue $Summary "winUiGeneratedPath"
+    surface_count = [int]($Summary.surfaceCount)
+    governance_route_count = [int]($Summary.governanceRouteCount)
+    covered_governance_route_count = [int]($Summary.coveredGovernanceRouteCount)
+    drift = [ordered]@{
+      missing_required_fields = @(Get-StringArrayProperty $drift "missingRequiredFields")
+      invalid_control_plane_roles = @(Get-StringArrayProperty $drift "invalidControlPlaneRoles")
+      invalid_state_owners = @(Get-StringArrayProperty $drift "invalidStateOwners")
+      invalid_lifecycle_owners = @(Get-StringArrayProperty $drift "invalidLifecycleOwners")
+      lifecycle_mutation_allowed = @(Get-StringArrayProperty $drift "lifecycleMutationAllowed")
+      invalid_owned_route_prefixes = @(Get-StringArrayProperty $drift "invalidOwnedRoutePrefixes")
+      duplicate_owned_route_prefixes = @(Get-StringArrayProperty $drift "duplicateOwnedRoutePrefixes")
+      uncovered_governance_routes = @(Get-StringArrayProperty $drift "uncoveredGovernanceRoutes")
+      missing_required_routes = @(Get-StringArrayProperty $drift "missingRequiredRoutes")
+      capability_map_drift = @(Get-StringArrayProperty $drift "capabilityMapDrift")
+      manifest_constant_drift = @(Get-StringArrayProperty $drift "manifestConstantDrift")
+      manifest_capability_drift = @(Get-StringArrayProperty $drift "manifestCapabilityDrift")
+      manifest_route_prefix_drift = @(Get-StringArrayProperty $drift "manifestRoutePrefixDrift")
+      manifest_owned_route_prefix_drift = @(Get-StringArrayProperty $drift "manifestOwnedRoutePrefixDrift")
+      manifest_source_authority_drift = @(Get-StringArrayProperty $drift "manifestSourceAuthorityDrift")
+      desktop_generated_capability_drift = @(Get-StringArrayProperty $drift "desktopGeneratedCapabilityDrift")
+      desktop_generated_route_prefix_drift = @(Get-StringArrayProperty $drift "desktopGeneratedRoutePrefixDrift")
+      winui_generated_capability_drift = @(Get-StringArrayProperty $drift "winUiGeneratedCapabilityDrift")
+      winui_generated_route_prefix_drift = @(Get-StringArrayProperty $drift "winUiGeneratedRoutePrefixDrift")
+      generated_source_authority_drift = @(Get-StringArrayProperty $drift "generatedSourceAuthorityDrift")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-GovernanceControlPlaneBoundaryReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "governance control plane boundary checks failed" }
+    return "governance control plane boundary checks passed"
+  }
+
+  $details = New-GovernanceControlPlaneBoundaryDetails $Summary
+  $base = "governance control plane boundary checks {0} (surfaces={1}; routes={2}/{3}; role={4}; meta={5}; manifest=governance_capabilities.v1.json; desktop_generated=workflow_governance_capabilities.generated.js; winui_generated=GovernanceCapabilities.Generated.cs)" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [int]$details.surface_count,
+    [int]$details.covered_governance_route_count,
+    [int]$details.governance_route_count,
+    [string]$details.control_plane_role,
+    [string]$details.meta_route
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  if ([string]::IsNullOrWhiteSpace([string]$details.schema_version)) {
+    $fragments += "schema version missing"
+  }
+  if ([int]$details.covered_governance_route_count -lt [int]$details.governance_route_count) {
+    $fragments += "uncovered governance routes present"
+  }
+  foreach ($entry in @(
+    @{ name = "missing_required_fields"; label = "surface metadata fields missing" },
+    @{ name = "invalid_control_plane_roles"; label = "control plane role drift" },
+    @{ name = "invalid_state_owners"; label = "state owner drift" },
+    @{ name = "invalid_lifecycle_owners"; label = "job lifecycle owner drift" },
+    @{ name = "lifecycle_mutation_allowed"; label = "lifecycle mutation exposure drift" },
+    @{ name = "invalid_owned_route_prefixes"; label = "invalid owned route prefixes" },
+    @{ name = "duplicate_owned_route_prefixes"; label = "duplicate owned route prefixes" },
+    @{ name = "uncovered_governance_routes"; label = "uncovered governance routes" },
+    @{ name = "missing_required_routes"; label = "required governance routes missing" },
+    @{ name = "capability_map_drift"; label = "governance capability map drift" },
+    @{ name = "manifest_constant_drift"; label = "governance capability manifest constant drift" },
+    @{ name = "manifest_capability_drift"; label = "governance capability manifest capability drift" },
+    @{ name = "manifest_route_prefix_drift"; label = "governance capability manifest route prefix drift" },
+    @{ name = "manifest_owned_route_prefix_drift"; label = "governance capability manifest owned route prefix drift" },
+    @{ name = "manifest_source_authority_drift"; label = "governance capability manifest source authority drift" },
+    @{ name = "desktop_generated_capability_drift"; label = "desktop governance capability generated drift" },
+    @{ name = "desktop_generated_route_prefix_drift"; label = "desktop governance capability route prefix drift" },
+    @{ name = "winui_generated_capability_drift"; label = "winui governance capability generated drift" },
+    @{ name = "winui_generated_route_prefix_drift"; label = "winui governance capability route prefix drift" },
+    @{ name = "generated_source_authority_drift"; label = "governance capability generated source authority drift" }
+  )) {
+    $values = @(Get-StringArrayProperty $details.drift $entry.name)
+    if ($values.Count -gt 0) {
+      $fragments += [string]$entry.label
+    }
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-GovernanceControlPlaneBoundaryReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "schema_version"))) {
+    $issues += "governance_control_plane_boundary schema version missing"
+  }
+  $routeCount = [int](Get-OptionalPropertyValue $details "governance_route_count")
+  $coveredRouteCount = [int](Get-OptionalPropertyValue $details "covered_governance_route_count")
+  if ($routeCount -gt 0 -and $coveredRouteCount -lt $routeCount) {
+    $issues += "governance_control_plane_boundary uncovered governance routes: $coveredRouteCount/$routeCount"
+  }
+  $drift = Get-OptionalObjectProperty $details "drift"
+  foreach ($entry in @(
+    @{ name = "missing_required_fields"; label = "surface metadata fields missing" },
+    @{ name = "invalid_control_plane_roles"; label = "control plane role drift" },
+    @{ name = "invalid_state_owners"; label = "state owner drift" },
+    @{ name = "invalid_lifecycle_owners"; label = "job lifecycle owner drift" },
+    @{ name = "lifecycle_mutation_allowed"; label = "lifecycle mutation exposure drift" },
+    @{ name = "invalid_owned_route_prefixes"; label = "invalid owned route prefixes" },
+    @{ name = "duplicate_owned_route_prefixes"; label = "duplicate owned route prefixes" },
+    @{ name = "uncovered_governance_routes"; label = "uncovered governance routes" },
+    @{ name = "missing_required_routes"; label = "required governance routes missing" },
+    @{ name = "capability_map_drift"; label = "governance capability map drift" },
+    @{ name = "manifest_constant_drift"; label = "governance capability manifest constant drift" },
+    @{ name = "manifest_capability_drift"; label = "governance capability manifest capability drift" },
+    @{ name = "manifest_route_prefix_drift"; label = "governance capability manifest route prefix drift" },
+    @{ name = "manifest_owned_route_prefix_drift"; label = "governance capability manifest owned route prefix drift" },
+    @{ name = "manifest_source_authority_drift"; label = "governance capability manifest source authority drift" },
+    @{ name = "desktop_generated_capability_drift"; label = "desktop governance capability generated drift" },
+    @{ name = "desktop_generated_route_prefix_drift"; label = "desktop governance capability route prefix drift" },
+    @{ name = "winui_generated_capability_drift"; label = "winui governance capability generated drift" },
+    @{ name = "winui_generated_route_prefix_drift"; label = "winui governance capability route prefix drift" },
+    @{ name = "generated_source_authority_drift"; label = "governance capability generated source authority drift" }
+  )) {
+    $values = @(Get-StringArrayProperty $drift $entry.name)
+    if ($values.Count -gt 0) {
+      $issues += "governance_control_plane_boundary $($entry.label): $($values -join ', ')"
+    }
+  }
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+  return @($issues | Sort-Object -Unique)
+}
+function New-GovernanceStoreSchemaVersionDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $drift = Get-OptionalObjectProperty $Summary "drift"
+  return [ordered]@{
+    required_store_modules = @(Get-StringArrayProperty $Summary "requiredStoreModules")
+    source_module_count = [int]($Summary.sourceModuleCount)
+    source_schema_version_count = [int]($Summary.sourceSchemaVersionCount)
+    required_runtime_outputs = @(Get-StringArrayProperty $Summary "requiredRuntimeOutputs")
+    runtime_check_count = [int]($Summary.runtimeCheckCount)
+    runtime_schema_version_count = [int]($Summary.runtimeSchemaVersionCount)
+    drift = [ordered]@{
+      missing_source_schema_version_modules = @(Get-StringArrayProperty $drift "missingSourceSchemaVersionModules")
+      missing_runtime_schema_version_outputs = @(Get-StringArrayProperty $drift "missingRuntimeSchemaVersionOutputs")
+      missing_required_runtime_outputs = @(Get-StringArrayProperty $drift "missingRequiredRuntimeOutputs")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-GovernanceStoreSchemaVersionReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "governance store schema version checks failed" }
+    return "governance store schema version checks passed"
+  }
+
+  $details = New-GovernanceStoreSchemaVersionDetails $Summary
+  $base = "governance store schema version checks {0} (source={1}/{2}; runtime={3}/{4})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [int]$details.source_schema_version_count,
+    [int]$details.source_module_count,
+    [int]$details.runtime_schema_version_count,
+    [int]$details.runtime_check_count
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  foreach ($entry in @(
+    @{ name = "missing_source_schema_version_modules"; label = "source modules missing schema_version" },
+    @{ name = "missing_runtime_schema_version_outputs"; label = "runtime outputs missing schema_version" },
+    @{ name = "missing_required_runtime_outputs"; label = "required runtime outputs missing" }
+  )) {
+    $values = @(Get-StringArrayProperty $details.drift $entry.name)
+    if ($values.Count -gt 0) {
+      $fragments += "$($entry.label): $($values -join ', ')"
+    }
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-GovernanceStoreSchemaVersionReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  foreach ($entry in @(
+    @{ name = "missing_source_schema_version_modules"; label = "source modules missing schema_version" },
+    @{ name = "missing_runtime_schema_version_outputs"; label = "runtime outputs missing schema_version" },
+    @{ name = "missing_required_runtime_outputs"; label = "required runtime outputs missing" }
+  )) {
+    $values = @(Get-StringArrayProperty (Get-OptionalObjectProperty $details "drift") $entry.name)
+    if ($values.Count -gt 0) {
+      $issues += "governance_store_schema_versions $($entry.label): $($values -join ', ')"
+    }
+  }
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+  return @($issues | Sort-Object -Unique)
+}
+function New-LocalWorkflowStoreSchemaVersionDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $drift = Get-OptionalObjectProperty $Summary "drift"
+  $legacyReads = Get-OptionalObjectProperty $Summary "legacyReads"
+  return [ordered]@{
+    required_store_modules = @(Get-StringArrayProperty $Summary "requiredStoreModules")
+    source_module_count = [int]($Summary.sourceModuleCount)
+    source_schema_version_count = [int]($Summary.sourceSchemaVersionCount)
+    required_runtime_outputs = @(Get-StringArrayProperty $Summary "requiredRuntimeOutputs")
+    runtime_check_count = [int]($Summary.runtimeCheckCount)
+    runtime_schema_version_count = [int]($Summary.runtimeSchemaVersionCount)
+    legacy_reads = [ordered]@{
+      workflow_task_queue = (Get-OptionalBooleanProperty $legacyReads "workflow_task_queue")
+      workflow_queue_control = (Get-OptionalBooleanProperty $legacyReads "workflow_queue_control")
+      template_marketplace = (Get-OptionalBooleanProperty $legacyReads "template_marketplace")
+      workflow_node_cache = (Get-OptionalBooleanProperty $legacyReads "workflow_node_cache")
+    }
+    drift = [ordered]@{
+      missing_source_schema_version_modules = @(Get-StringArrayProperty $drift "missingSourceSchemaVersionModules")
+      missing_runtime_schema_version_outputs = @(Get-StringArrayProperty $drift "missingRuntimeSchemaVersionOutputs")
+      missing_required_runtime_outputs = @(Get-StringArrayProperty $drift "missingRequiredRuntimeOutputs")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-LocalWorkflowStoreSchemaVersionReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "local workflow store schema version checks failed" }
+    return "local workflow store schema version checks passed"
+  }
+
+  $details = New-LocalWorkflowStoreSchemaVersionDetails $Summary
+  $base = "local workflow store schema version checks {0} (source={1}/{2}; runtime={3}/{4}; legacy_queue={5}; legacy_control={6}; legacy_templates={7}; legacy_cache={8})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [int]$details.source_schema_version_count,
+    [int]$details.source_module_count,
+    [int]$details.runtime_schema_version_count,
+    [int]$details.runtime_check_count,
+    [string]$details.legacy_reads.workflow_task_queue,
+    [string]$details.legacy_reads.workflow_queue_control,
+    [string]$details.legacy_reads.template_marketplace,
+    [string]$details.legacy_reads.workflow_node_cache
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  foreach ($entry in @(
+    @{ name = "missing_source_schema_version_modules"; label = "source modules missing schema_version" },
+    @{ name = "missing_runtime_schema_version_outputs"; label = "runtime outputs missing schema_version" },
+    @{ name = "missing_required_runtime_outputs"; label = "required runtime outputs missing" }
+  )) {
+    $values = @(Get-StringArrayProperty $details.drift $entry.name)
+    if ($values.Count -gt 0) {
+      $fragments += "$($entry.label): $($values -join ', ')"
+    }
+  }
+  foreach ($entry in @(
+    @{ ok = [bool]$details.legacy_reads.workflow_task_queue; label = "legacy workflow queue migration missing" },
+    @{ ok = [bool]$details.legacy_reads.workflow_queue_control; label = "legacy queue control migration missing" },
+    @{ ok = [bool]$details.legacy_reads.template_marketplace; label = "legacy template marketplace migration missing" },
+    @{ ok = [bool]$details.legacy_reads.workflow_node_cache; label = "legacy node cache migration missing" }
+  )) {
+    if (-not $entry.ok) {
+      $fragments += [string]$entry.label
+    }
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-LocalWorkflowStoreSchemaVersionReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  foreach ($entry in @(
+    @{ name = "missing_source_schema_version_modules"; label = "source modules missing schema_version" },
+    @{ name = "missing_runtime_schema_version_outputs"; label = "runtime outputs missing schema_version" },
+    @{ name = "missing_required_runtime_outputs"; label = "required runtime outputs missing" }
+  )) {
+    $values = @(Get-StringArrayProperty (Get-OptionalObjectProperty $details "drift") $entry.name)
+    if ($values.Count -gt 0) {
+      $issues += "local_workflow_store_schema_versions $($entry.label): $($values -join ', ')"
+    }
+  }
+  $legacyReads = Get-OptionalObjectProperty $details "legacy_reads"
+  foreach ($entry in @(
+    @{ name = "workflow_task_queue"; label = "legacy workflow queue migration missing" },
+    @{ name = "workflow_queue_control"; label = "legacy queue control migration missing" },
+    @{ name = "template_marketplace"; label = "legacy template marketplace migration missing" },
+    @{ name = "workflow_node_cache"; label = "legacy node cache migration missing" }
+  )) {
+    if (-not (Get-OptionalBooleanProperty $legacyReads $entry.name)) {
+      $issues += "local_workflow_store_schema_versions $($entry.label)"
+    }
+  }
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+  return @($issues | Sort-Object -Unique)
+}
+function New-TemplatePackContractDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  return [ordered]@{
+    schema_path = Get-OptionalPropertyValue $Summary "schemaPath"
+    artifact_schema_version = Get-OptionalPropertyValue $Summary "artifactSchemaVersion"
+    marketplace_entry_schema_version = Get-OptionalPropertyValue $Summary "marketplaceEntrySchemaVersion"
+    import_migrated = (Get-OptionalBooleanProperty $Summary "importMigrated")
+    install_migrated = (Get-OptionalBooleanProperty $Summary "installMigrated")
+    exported_artifact_schema_version = Get-OptionalPropertyValue $Summary "exportedArtifactSchemaVersion"
+    template_count = [int]($Summary.templateCount)
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-TemplatePackContractReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "template pack contract sync checks failed" }
+    return "template pack contract sync checks passed"
+  }
+
+  $details = New-TemplatePackContractDetails $Summary
+  $base = "template pack contract sync checks {0} (artifact={1}; entry={2}; import_migrated={3}; install_migrated={4}; exported_artifact={5}; templates={6})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [string]$details.artifact_schema_version,
+    [string]$details.marketplace_entry_schema_version,
+    [string]$details.import_migrated,
+    [string]$details.install_migrated,
+    [string]$details.exported_artifact_schema_version,
+    [int]$details.template_count
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  if ([string]::IsNullOrWhiteSpace([string]$details.artifact_schema_version)) {
+    $fragments += "artifact schema version missing"
+  }
+  if ([string]::IsNullOrWhiteSpace([string]$details.marketplace_entry_schema_version)) {
+    $fragments += "marketplace entry schema version missing"
+  }
+  if (-not [bool]$details.import_migrated) {
+    $fragments += "legacy template pack import migration missing"
+  }
+  if (-not [bool]$details.install_migrated) {
+    $fragments += "template pack install migration missing"
+  }
+  if ([string]$details.exported_artifact_schema_version -ne [string]$details.artifact_schema_version) {
+    $fragments += "template pack export schema drift"
+  }
+  if ([int]$details.template_count -lt 1) {
+    $fragments += "template pack export has no templates"
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-TemplatePackContractReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "artifact_schema_version"))) {
+    $issues += "template_pack_contract_sync artifact schema version missing"
+  }
+  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "marketplace_entry_schema_version"))) {
+    $issues += "template_pack_contract_sync marketplace entry schema version missing"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "import_migrated")) {
+    $issues += "template_pack_contract_sync legacy template pack import migration missing"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "install_migrated")) {
+    $issues += "template_pack_contract_sync template pack install migration missing"
+  }
+  if ((Get-OptionalPropertyValue $details "artifact_schema_version") -ne (Get-OptionalPropertyValue $details "exported_artifact_schema_version")) {
+    $issues += "template_pack_contract_sync exported artifact schema drift"
+  }
+  if ([int](Get-OptionalPropertyValue $details "template_count") -lt 1) {
+    $issues += "template_pack_contract_sync exported template pack is empty"
+  }
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+  return @($issues | Sort-Object -Unique)
+}
+function New-LocalTemplateStorageContractDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  return [ordered]@{
+    schema_path = Get-OptionalPropertyValue $Summary "schemaPath"
+    storage_schema_version = Get-OptionalPropertyValue $Summary "storageSchemaVersion"
+    entry_schema_version = Get-OptionalPropertyValue $Summary "entrySchemaVersion"
+    legacy_storage_migrated = (Get-OptionalBooleanProperty $Summary "legacyStorageMigrated")
+    local_storage_normalized_on_load = (Get-OptionalBooleanProperty $Summary "localStorageNormalizedOnLoad")
+    local_save_versioned = (Get-OptionalBooleanProperty $Summary "localSaveVersioned")
+    saved_entry_count = [int]($Summary.savedEntryCount)
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-LocalTemplateStorageContractReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "local template storage contract sync checks failed" }
+    return "local template storage contract sync checks passed"
+  }
+
+  $details = New-LocalTemplateStorageContractDetails $Summary
+  $base = "local template storage contract sync checks {0} (storage={1}; entry={2}; legacy_migrated={3}; normalized_on_load={4}; save_versioned={5}; saved_entries={6})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [string]$details.storage_schema_version,
+    [string]$details.entry_schema_version,
+    [string]$details.legacy_storage_migrated,
+    [string]$details.local_storage_normalized_on_load,
+    [string]$details.local_save_versioned,
+    [int]$details.saved_entry_count
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  if ([string]::IsNullOrWhiteSpace([string]$details.storage_schema_version)) {
+    $fragments += "local template storage schema version missing"
+  }
+  if ([string]::IsNullOrWhiteSpace([string]$details.entry_schema_version)) {
+    $fragments += "local template entry schema version missing"
+  }
+  if (-not [bool]$details.legacy_storage_migrated) {
+    $fragments += "legacy local template storage migration missing"
+  }
+  if (-not [bool]$details.local_storage_normalized_on_load) {
+    $fragments += "local template storage no longer rewrites legacy payloads on load"
+  }
+  if (-not [bool]$details.local_save_versioned) {
+    $fragments += "saveCurrentAsTemplate no longer writes versioned storage"
+  }
+  if ([int]$details.saved_entry_count -lt 1) {
+    $fragments += "no local template entries persisted"
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-LocalTemplateStorageContractReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "storage_schema_version"))) {
+    $issues += "local_template_storage_contract_sync storage schema version missing"
+  }
+  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "entry_schema_version"))) {
+    $issues += "local_template_storage_contract_sync entry schema version missing"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "legacy_storage_migrated")) {
+    $issues += "local_template_storage_contract_sync legacy storage migration missing"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "local_storage_normalized_on_load")) {
+    $issues += "local_template_storage_contract_sync legacy localStorage normalization missing"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "local_save_versioned")) {
+    $issues += "local_template_storage_contract_sync saveCurrentAsTemplate no longer writes versioned storage"
+  }
+  if ([int](Get-OptionalPropertyValue $details "saved_entry_count") -lt 1) {
+    $issues += "local_template_storage_contract_sync no local template entries persisted"
+  }
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+  return @($issues | Sort-Object -Unique)
+}
+function New-OfflineTemplateCatalogDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $schemaPaths = Get-OptionalObjectProperty $Summary "schemaPaths"
+  $filePaths = Get-OptionalObjectProperty $Summary "filePaths"
+  $schemaVersions = Get-OptionalObjectProperty $Summary "schemaVersions"
+  $migratedLegacy = Get-OptionalObjectProperty $Summary "migratedLegacy"
+  $runtime = Get-OptionalObjectProperty $Summary "runtime"
+  return [ordered]@{
+    schema_paths = [ordered]@{
+      theme = Get-OptionalPropertyValue $schemaPaths "theme"
+      layout = Get-OptionalPropertyValue $schemaPaths "layout"
+      registry = Get-OptionalPropertyValue $schemaPaths "registry"
+    }
+    file_paths = [ordered]@{
+      theme = Get-OptionalPropertyValue $filePaths "theme"
+      layout = Get-OptionalPropertyValue $filePaths "layout"
+      registry = Get-OptionalPropertyValue $filePaths "registry"
+    }
+    schema_versions = [ordered]@{
+      theme = Get-OptionalPropertyValue $schemaVersions "theme"
+      layout = Get-OptionalPropertyValue $schemaVersions "layout"
+      registry = Get-OptionalPropertyValue $schemaVersions "registry"
+    }
+    migrated_legacy = [ordered]@{
+      theme = (Get-OptionalBooleanProperty $migratedLegacy "theme")
+      layout = (Get-OptionalBooleanProperty $migratedLegacy "layout")
+      registry = (Get-OptionalBooleanProperty $migratedLegacy "registry")
+    }
+    runtime = [ordered]@{
+      theme_title = Get-OptionalPropertyValue $runtime "themeTitle"
+      layout_rows = [int](Get-OptionalPropertyValue $runtime "layoutRows")
+      cleaning_template_count = [int](Get-OptionalPropertyValue $runtime "cleaningTemplateCount")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-OfflineTemplateCatalogReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "offline template catalog sync checks failed" }
+    return "offline template catalog sync checks passed"
+  }
+
+  $details = New-OfflineTemplateCatalogDetails $Summary
+  $base = "offline template catalog sync checks {0} (theme={1}; layout={2}; registry={3}; runtime_theme={4}; runtime_layout_rows={5}; runtime_templates={6})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [string]$details.schema_versions.theme,
+    [string]$details.schema_versions.layout,
+    [string]$details.schema_versions.registry,
+    [string]$details.runtime.theme_title,
+    [int]$details.runtime.layout_rows,
+    [int]$details.runtime.cleaning_template_count
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  foreach ($entry in @(
+    @{ name = "theme"; label = "legacy office theme migration missing" },
+    @{ name = "layout"; label = "legacy office layout migration missing" },
+    @{ name = "registry"; label = "legacy cleaning template registry migration missing" }
+  )) {
+    if (-not (Get-OptionalBooleanProperty $details.migrated_legacy $entry.name)) {
+      $fragments += [string]$entry.label
+    }
+  }
+  if ([int]$details.runtime.cleaning_template_count -lt 1) {
+    $fragments += "offline engine cleaning template registry is empty"
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-OfflineTemplateCatalogReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  foreach ($entry in @(
+    @{ name = "theme"; label = "legacy office theme migration missing" },
+    @{ name = "layout"; label = "legacy office layout migration missing" },
+    @{ name = "registry"; label = "legacy cleaning template registry migration missing" }
+  )) {
+    if (-not (Get-OptionalBooleanProperty (Get-OptionalObjectProperty $details "migrated_legacy") $entry.name)) {
+      $issues += "offline_template_catalog_sync $($entry.label)"
+    }
+  }
+  if ([int](Get-OptionalPropertyValue (Get-OptionalObjectProperty $details "runtime") "cleaning_template_count") -lt 1) {
+    $issues += "offline_template_catalog_sync offline engine cleaning template registry is empty"
+  }
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+  return @($issues | Sort-Object -Unique)
+}
+function New-NodeConfigSchemaCoverageDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $qualityCounts = Get-OptionalObjectProperty $Summary "qualityCounts"
+  $drift = Get-OptionalObjectProperty $Summary "drift"
+  return [ordered]@{
+    contract_path = Get-OptionalPropertyValue $Summary "contractPath"
+    contract_cjs_path = Get-OptionalPropertyValue $Summary "contractCjsPath"
+    contract_esm_path = Get-OptionalPropertyValue $Summary "contractEsmPath"
+    target_count = [int]($Summary.targetCount)
+    covered_count = [int]($Summary.coveredCount)
+    minimum_nested_shape_constrained = [int]($Summary.minimumNestedShapeConstrained)
+    nested_shape_constrained_count = [int]($Summary.nestedShapeConstrainedCount)
+    nested_shape_constrained_deficit = [int]($Summary.nestedShapeConstrainedDeficit)
+    required_nested_node_types = @(Get-StringArrayProperty $Summary "requiredNestedNodeTypes")
+    required_nested_satisfied = @(Get-StringArrayProperty $Summary "requiredNestedSatisfied")
+    required_nested_missing = @(Get-StringArrayProperty $Summary "requiredNestedMissing")
+    quality_counts = [ordered]@{
+      typed = [int]($qualityCounts.typed)
+      enum_constrained = [int]($qualityCounts.enum_constrained)
+      nested_shape_constrained = [int]($qualityCounts.nested_shape_constrained)
+    }
+    drift = [ordered]@{
+      missing_from_catalog = @(Get-StringArrayProperty $drift "missingFromCatalog")
+      missing_from_cjs = @(Get-StringArrayProperty $drift "missingFromCjs")
+      missing_from_esm = @(Get-StringArrayProperty $drift "missingFromEsm")
+      id_drift = @(Get-StringArrayProperty $drift "idDrift")
+      missing_quality_cjs = @(Get-StringArrayProperty $drift "missingQualityCjs")
+      missing_quality_esm = @(Get-StringArrayProperty $drift "missingQualityEsm")
+      invalid_quality = @(Get-StringArrayProperty $drift "invalidQuality")
+      quality_drift = @(Get-StringArrayProperty $drift "qualityDrift")
+      contract_module_type_drift = @(Get-StringArrayProperty $drift "contractModuleTypeDrift")
+      contract_module_quality_drift = @(Get-StringArrayProperty $drift "contractModuleQualityDrift")
+      required_nested_types_missing_from_contract = @(Get-StringArrayProperty $drift "requiredNestedTypesMissingFromContract")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-NodeConfigSchemaCoverageReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "node config schema coverage checks failed" }
+    return "node config schema coverage checks passed"
+  }
+
+  $details = New-NodeConfigSchemaCoverageDetails $Summary
+  $typed = [int]($details.quality_counts.typed)
+  $enumConstrained = [int]($details.quality_counts.enum_constrained)
+  $nested = [int]($details.quality_counts.nested_shape_constrained)
+  $base = "node config schema coverage checks {0} ({1}/{2}; typed={3}; enum_constrained={4}; nested_shape_constrained={5}; contract=node_config_contracts.v1.json; generated=workflow_node_config_contract.generated.js)" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [int]$details.covered_count,
+    [int]$details.target_count,
+    $typed,
+    $enumConstrained,
+    $nested
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  $requiredMissing = @($details.required_nested_missing)
+  if ($requiredMissing.Count -gt 0) {
+    $fragments += "required nested missing: $($requiredMissing -join ', ')"
+  }
+  $nestedMinimum = [int]$details.minimum_nested_shape_constrained
+  if ($nestedMinimum -gt 0 -and [int]$details.nested_shape_constrained_count -lt $nestedMinimum) {
+    $fragments += "nested_shape_constrained deficit: $([int]$details.nested_shape_constrained_count)/$nestedMinimum"
+  }
+  if ([int]$details.covered_count -lt [int]$details.target_count) {
+    $fragments += "coverage gap: $([int]$details.covered_count)/$([int]$details.target_count)"
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-NodeConfigReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  $requiredMissing = @(Get-StringArrayProperty $details "required_nested_missing")
+  if ($requiredMissing.Count -gt 0) {
+    $issues += "node_config_schema_coverage missing required nested node coverage: $($requiredMissing -join ', ')"
+  }
+
+  $nestedMinimum = [int](Get-OptionalPropertyValue $details "minimum_nested_shape_constrained")
+  $nestedCount = [int](Get-OptionalPropertyValue $details "nested_shape_constrained_count")
+  if ($nestedMinimum -gt 0 -and $nestedCount -lt $nestedMinimum) {
+    $issues += "node_config_schema_coverage nested_shape_constrained deficit: $nestedCount/$nestedMinimum"
+  }
+
+  $targetCount = [int](Get-OptionalPropertyValue $details "target_count")
+  $coveredCount = [int](Get-OptionalPropertyValue $details "covered_count")
+  if ($targetCount -gt 0 -and $coveredCount -lt $targetCount) {
+    $issues += "node_config_schema_coverage coverage gap: $coveredCount/$targetCount"
+  }
+
+  $drift = Get-OptionalObjectProperty $details "drift"
+  foreach ($entry in @(
+    @{ name = "missing_from_catalog"; label = "defaults catalog drift" },
+    @{ name = "missing_from_cjs"; label = "workflow_contract.js coverage drift" },
+    @{ name = "missing_from_esm"; label = "renderer workflow-contract.js coverage drift" },
+    @{ name = "id_drift"; label = "CJS/ESM schema id drift" },
+    @{ name = "missing_quality_cjs"; label = "workflow_contract.js quality metadata drift" },
+    @{ name = "missing_quality_esm"; label = "renderer workflow-contract.js quality metadata drift" },
+    @{ name = "invalid_quality"; label = "invalid quality tier assignments" },
+    @{ name = "quality_drift"; label = "CJS/ESM quality tier drift" },
+    @{ name = "contract_module_type_drift"; label = "contract module type drift" },
+    @{ name = "contract_module_quality_drift"; label = "contract module quality drift" },
+    @{ name = "required_nested_types_missing_from_contract"; label = "required nested contract types missing" }
+  )) {
+    $values = @(Get-StringArrayProperty $drift $entry.name)
+    if ($values.Count -gt 0) {
+      $issues += "node_config_schema_coverage $($entry.label): $($values -join ', ')"
+    }
+  }
+
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+
+  return @($issues | Sort-Object -Unique)
+}
+function New-LocalNodeCatalogPolicyDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $drift = Get-OptionalObjectProperty $Summary "drift"
+  return [ordered]@{
+    local_node_type_count = [int]($Summary.localNodeTypeCount)
+    local_catalog_count = [int]($Summary.localCatalogCount)
+    required_local_node_types = @(Get-StringArrayProperty $Summary "requiredLocalNodeTypes")
+    drift = [ordered]@{
+      invalid_sections = @(Get-StringArrayProperty $drift "invalidSections")
+      missing_section_types = @(Get-StringArrayProperty $drift "missingSectionTypes")
+      missing_presentation_types = @(Get-StringArrayProperty $drift "missingPresentationTypes")
+      stale_presentation_types = @(Get-StringArrayProperty $drift "stalePresentationTypes")
+      invalid_presentation_entries = @(Get-StringArrayProperty $drift "invalidPresentationEntries")
+      duplicate_pinned_types = @(Get-StringArrayProperty $drift "duplicatePinnedTypes")
+      stale_pinned_types = @(Get-StringArrayProperty $drift "stalePinnedTypes")
+      missing_catalog_types = @(Get-StringArrayProperty $drift "missingCatalogTypes")
+      stale_catalog_types = @(Get-StringArrayProperty $drift "staleCatalogTypes")
+      missing_catalog_policy_source_types = @(Get-StringArrayProperty $drift "missingCatalogPolicySourceTypes")
+      catalog_metadata_drift = @(Get-StringArrayProperty $drift "catalogMetadataDrift")
+      required_local_type_missing = @(Get-StringArrayProperty $drift "requiredLocalTypeMissing")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-LocalNodeCatalogPolicyReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "local node catalog policy checks failed" }
+    return "local node catalog policy checks passed"
+  }
+
+  $details = New-LocalNodeCatalogPolicyDetails $Summary
+  $base = "local node catalog policy checks {0} (policy={1}; catalog={2})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [int]$details.local_node_type_count,
+    [int]$details.local_catalog_count
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  $drift = Get-OptionalObjectProperty $details "drift"
+  foreach ($entry in @(
+    @{ name = "invalid_sections"; label = "invalid sections" },
+    @{ name = "missing_section_types"; label = "missing section types" },
+    @{ name = "missing_presentation_types"; label = "missing presentations" },
+    @{ name = "stale_presentation_types"; label = "stale presentations" },
+    @{ name = "invalid_presentation_entries"; label = "invalid presentations" },
+    @{ name = "duplicate_pinned_types"; label = "duplicate pinned types" },
+    @{ name = "stale_pinned_types"; label = "stale pinned types" },
+    @{ name = "missing_catalog_types"; label = "catalog missing types" },
+    @{ name = "stale_catalog_types"; label = "catalog stale types" },
+    @{ name = "missing_catalog_policy_source_types"; label = "catalog policy source drift" },
+    @{ name = "catalog_metadata_drift"; label = "catalog metadata drift" },
+    @{ name = "required_local_type_missing"; label = "required local types missing" }
+  )) {
+    $values = @(Get-StringArrayProperty $drift $entry.name)
+    if ($values.Count -gt 0) {
+      $fragments += "$($entry.label): $($values -join ', ')"
+    }
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-LocalNodeCatalogReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  $drift = Get-OptionalObjectProperty $details "drift"
+  foreach ($entry in @(
+    @{ name = "invalid_sections"; label = "local node palette sections invalid" },
+    @{ name = "missing_section_types"; label = "local node palette policy missing node types" },
+    @{ name = "missing_presentation_types"; label = "local node presentations missing node types" },
+    @{ name = "stale_presentation_types"; label = "local node presentations have stale node types" },
+    @{ name = "invalid_presentation_entries"; label = "local node presentations have invalid entries" },
+    @{ name = "duplicate_pinned_types"; label = "local node palette pinned order duplicated" },
+    @{ name = "stale_pinned_types"; label = "local node palette pinned order has stale node types" },
+    @{ name = "missing_catalog_types"; label = "defaults catalog missing local node types" },
+    @{ name = "stale_catalog_types"; label = "defaults catalog has stale local node types" },
+    @{ name = "missing_catalog_policy_source_types"; label = "defaults catalog local node policy_source drift" },
+    @{ name = "catalog_metadata_drift"; label = "defaults catalog local node metadata drift" },
+    @{ name = "required_local_type_missing"; label = "required local node types missing from policy truth" }
+  )) {
+    $values = @(Get-StringArrayProperty $drift $entry.name)
+    if ($values.Count -gt 0) {
+      $issues += "local_node_catalog_policy $($entry.label): $($values -join ', ')"
+    }
+  }
+
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+
+  return @($issues | Sort-Object -Unique)
+}
+function New-OperatorCatalogSyncDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $drift = Get-OptionalObjectProperty $Summary "drift"
+  return [ordered]@{
+    manifest_path = Get-OptionalPropertyValue $Summary "manifestPath"
+    schema_path = Get-OptionalPropertyValue $Summary "schemaPath"
+    desktop_module_path = Get-OptionalPropertyValue $Summary "desktopModulePath"
+    renderer_module_path = Get-OptionalPropertyValue $Summary "rendererModulePath"
+    manifest_operator_count = [int]($Summary.manifestOperatorCount)
+    published_count = [int]($Summary.publishedCount)
+    workflow_count = [int]($Summary.workflowCount)
+    desktop_exposable_count = [int]($Summary.desktopExposableCount)
+    desktop_module_count = [int]($Summary.desktopModuleCount)
+    rust_mapped_count = [int]($Summary.rustMappedCount)
+    defaults_catalog_count = [int]($Summary.defaultsCatalogCount)
+    builtin_operator_count = [int]($Summary.builtinOperatorCount)
+    required_published_operators = @(Get-StringArrayProperty $Summary "requiredPublishedOperators")
+    drift = [ordered]@{
+      manifest_missing_operators = @(Get-StringArrayProperty $drift "manifestMissingOperators")
+      manifest_stale_operators = @(Get-StringArrayProperty $drift "manifestStaleOperators")
+      manifest_metadata_drift = @(Get-StringArrayProperty $drift "manifestMetadataDrift")
+      desktop_module_missing_operators = @(Get-StringArrayProperty $drift "desktopModuleMissingOperators")
+      desktop_module_stale_operators = @(Get-StringArrayProperty $drift "desktopModuleStaleOperators")
+      desktop_module_metadata_drift = @(Get-StringArrayProperty $drift "desktopModuleMetadataDrift")
+      renderer_module_drift = @(Get-StringArrayProperty $drift "rendererModuleDrift")
+      invalid_palette_sections = @(Get-StringArrayProperty $drift "invalidPaletteSections")
+      missing_palette_section_domains = @(Get-StringArrayProperty $drift "missingPaletteSectionDomains")
+      stale_pinned_operators = @(Get-StringArrayProperty $drift "stalePinnedOperators")
+      duplicate_pinned_operators = @(Get-StringArrayProperty $drift "duplicatePinnedOperators")
+      missing_presentation_operators = @(Get-StringArrayProperty $drift "missingPresentationOperators")
+      stale_presentation_operators = @(Get-StringArrayProperty $drift "stalePresentationOperators")
+      invalid_presentation_entries = @(Get-StringArrayProperty $drift "invalidPresentationEntries")
+      missing_published_in_catalog = @(Get-StringArrayProperty $drift "missingPublishedInCatalog")
+      missing_published_in_routing = @(Get-StringArrayProperty $drift "missingPublishedInRouting")
+      missing_desktop_exposable_in_catalog = @(Get-StringArrayProperty $drift "missingDesktopExposableInCatalog")
+      missing_desktop_exposable_in_routing = @(Get-StringArrayProperty $drift "missingDesktopExposableInRouting")
+      missing_catalog_group_entries = @(Get-StringArrayProperty $drift "missingCatalogGroupEntries")
+      missing_catalog_policy_section_entries = @(Get-StringArrayProperty $drift "missingCatalogPolicySectionEntries")
+      missing_catalog_policy_source_entries = @(Get-StringArrayProperty $drift "missingCatalogPolicySourceEntries")
+      stale_rust_routing = @(Get-StringArrayProperty $drift "staleRustRouting")
+      stale_catalog_operators = @(Get-StringArrayProperty $drift "staleCatalogOperators")
+      required_published_missing = @(Get-StringArrayProperty $drift "requiredPublishedMissing")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-OperatorCatalogSyncReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "operator catalog sync checks failed" }
+    return "operator catalog sync checks passed"
+  }
+
+  $details = New-OperatorCatalogSyncDetails $Summary
+  $base = "operator catalog sync checks {0} (published={1}; workflow={2}; rust_mapped={3}; defaults_catalog={4}; builtin={5})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [int]$details.published_count,
+    [int]$details.workflow_count,
+    [int]$details.rust_mapped_count,
+    [int]$details.defaults_catalog_count,
+    [int]$details.builtin_operator_count
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  $drift = Get-OptionalObjectProperty $details "drift"
+  foreach ($entry in @(
+    @{ name = "manifest_missing_operators"; label = "checked-in manifest missing" },
+    @{ name = "manifest_stale_operators"; label = "checked-in manifest stale" },
+    @{ name = "manifest_metadata_drift"; label = "checked-in manifest metadata drift" },
+    @{ name = "desktop_module_missing_operators"; label = "desktop manifest module missing" },
+    @{ name = "desktop_module_stale_operators"; label = "desktop manifest module stale" },
+    @{ name = "desktop_module_metadata_drift"; label = "desktop manifest module metadata drift" },
+    @{ name = "renderer_module_drift"; label = "renderer manifest module drift" },
+    @{ name = "invalid_palette_sections"; label = "rust palette sections invalid" },
+    @{ name = "missing_palette_section_domains"; label = "rust palette policy missing domains" },
+    @{ name = "stale_pinned_operators"; label = "rust palette pinned order stale" },
+    @{ name = "duplicate_pinned_operators"; label = "rust palette pinned order duplicated" },
+    @{ name = "missing_presentation_operators"; label = "rust presentation coverage missing" },
+    @{ name = "stale_presentation_operators"; label = "rust presentation stale" },
+    @{ name = "invalid_presentation_entries"; label = "rust presentation invalid" },
+    @{ name = "missing_published_in_catalog"; label = "defaults catalog missing" },
+    @{ name = "missing_published_in_routing"; label = "desktop rust routing missing" },
+    @{ name = "missing_desktop_exposable_in_catalog"; label = "desktop catalog missing desktop-exposable operators" },
+    @{ name = "missing_desktop_exposable_in_routing"; label = "desktop rust routing missing desktop-exposable operators" },
+    @{ name = "missing_catalog_group_entries"; label = "desktop catalog missing rust groups" },
+    @{ name = "missing_catalog_policy_section_entries"; label = "desktop catalog missing rust policy sections" },
+    @{ name = "missing_catalog_policy_source_entries"; label = "desktop catalog missing rust policy sources" },
+    @{ name = "stale_rust_routing"; label = "stale rust routing" },
+    @{ name = "stale_catalog_operators"; label = "stale defaults catalog operators" },
+    @{ name = "required_published_missing"; label = "required published operators missing" }
+  )) {
+    $values = @(Get-StringArrayProperty $drift $entry.name)
+    if ($values.Count -gt 0) {
+      $fragments += "$($entry.label): $($values -join ', ')"
+    }
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-OperatorCatalogReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  $drift = Get-OptionalObjectProperty $details "drift"
+  foreach ($entry in @(
+    @{ name = "manifest_missing_operators"; label = "checked-in manifest missing Rust operators" },
+    @{ name = "manifest_stale_operators"; label = "checked-in manifest has stale operators" },
+    @{ name = "manifest_metadata_drift"; label = "checked-in manifest metadata drift" },
+    @{ name = "desktop_module_missing_operators"; label = "desktop rust operator manifest module missing desktop-exposable operators" },
+    @{ name = "desktop_module_stale_operators"; label = "desktop rust operator manifest module has stale operators" },
+    @{ name = "desktop_module_metadata_drift"; label = "desktop rust operator manifest module metadata drift" },
+    @{ name = "renderer_module_drift"; label = "renderer rust operator manifest module drift" },
+    @{ name = "invalid_palette_sections"; label = "rust operator palette sections invalid" },
+    @{ name = "missing_palette_section_domains"; label = "rust operator palette policy missing domains" },
+    @{ name = "stale_pinned_operators"; label = "rust operator palette pinned order has stale operators" },
+    @{ name = "duplicate_pinned_operators"; label = "rust operator palette pinned order has duplicate operators" },
+    @{ name = "missing_presentation_operators"; label = "rust operator presentations missing desktop-exposable operators" },
+    @{ name = "stale_presentation_operators"; label = "rust operator presentations have stale operators" },
+    @{ name = "invalid_presentation_entries"; label = "rust operator presentations have invalid entries" },
+    @{ name = "missing_published_in_catalog"; label = "defaults catalog missing published Rust operators" },
+    @{ name = "missing_published_in_routing"; label = "desktop rust routing missing published Rust operators" },
+    @{ name = "missing_desktop_exposable_in_catalog"; label = "desktop defaults catalog missing desktop-exposable Rust operators" },
+    @{ name = "missing_desktop_exposable_in_routing"; label = "desktop rust routing missing desktop-exposable Rust operators" },
+    @{ name = "missing_catalog_group_entries"; label = "desktop defaults catalog missing Rust operator groups" },
+    @{ name = "missing_catalog_policy_section_entries"; label = "desktop defaults catalog missing Rust operator policy sections" },
+    @{ name = "missing_catalog_policy_source_entries"; label = "desktop defaults catalog missing Rust operator policy sources" },
+    @{ name = "stale_rust_routing"; label = "desktop rust routing exposes operators outside manifest desktop exposure" },
+    @{ name = "stale_catalog_operators"; label = "desktop defaults catalog exposes Rust operators outside manifest desktop exposure" },
+    @{ name = "required_published_missing"; label = "required published Rust operators missing from catalog truth" }
+  )) {
+    $values = @(Get-StringArrayProperty $drift $entry.name)
+    if ($values.Count -gt 0) {
+      $issues += "operator_catalog_sync $($entry.label): $($values -join ', ')"
+    }
+  }
+
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+
+  return @($issues | Sort-Object -Unique)
+}
+function Get-ReleaseReadyBoundaryIssues([string]$Name, $Item) {
+  if ($Name -eq "workflow_contract_sync") {
+    return @(Get-WorkflowContractReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "governance_control_plane_boundary") {
+    return @(Get-GovernanceControlPlaneBoundaryReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "governance_store_schema_versions") {
+    return @(Get-GovernanceStoreSchemaVersionReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "local_workflow_store_schema_versions") {
+    return @(Get-LocalWorkflowStoreSchemaVersionReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "template_pack_contract_sync") {
+    return @(Get-TemplatePackContractReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "local_template_storage_contract_sync") {
+    return @(Get-LocalTemplateStorageContractReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "offline_template_catalog_sync") {
+    return @(Get-OfflineTemplateCatalogReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "node_config_schema_coverage") {
+    return @(Get-NodeConfigReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "local_node_catalog_policy") {
+    return @(Get-LocalNodeCatalogReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "operator_catalog_sync") {
+    return @(Get-OperatorCatalogReleaseReadyIssues $Item)
+  }
+  return @()
+}
+function Get-ScorecardBoundary($Payload, [string]$Name) {
+  $boundaries = Get-OptionalObjectProperty $Payload "boundaries"
+  return Get-OptionalObjectProperty $boundaries $Name
+}
+function Get-ScorecardFrontendItem($Payload, [string]$Name) {
+  $frontend = Get-OptionalObjectProperty $Payload "frontend"
+  return Get-OptionalObjectProperty $frontend $Name
+}
+function New-MergedBoundarySummary([string]$Name, $Item, [string]$Profile, [string]$GeneratedAt, [int]$StaleAfterHours) {
+  $ts = Parse-ScorecardTimestamp $GeneratedAt
+  $ageHours = if ($ts) { [math]::Round(((Get-Date) - $ts).TotalHours, 3) } else { $null }
+  $fresh = if ($null -eq $ageHours) { $false } else { $ageHours -le $StaleAfterHours }
+  return [ordered]@{
+    name = $Name
+    status = Get-OptionalPropertyValue $Item "status"
+    reason = Get-OptionalPropertyValue $Item "reason"
+    source_profile = $Profile
+    source_generated_at = $GeneratedAt
+    age_hours = $ageHours
+    stale_after_hours = $StaleAfterHours
+    fresh = $fresh
+    evidence_path = Get-OptionalPropertyValue $Item "evidence_path"
+    details = Get-OptionalObjectProperty $Item "details"
+  }
+}
+function Select-MergedBoundarySummary([string]$Name, [object[]]$ProfileCards, [scriptblock]$Selector, [int]$StaleAfterHours) {
+  $candidates = @()
+  foreach ($card in $ProfileCards) {
+    $payload = $card.payload
+    if ($null -eq $payload) { continue }
+    $item = & $Selector $payload
+    if ($null -eq $item) { continue }
+    $status = [string]($item.status)
+    if ([string]::IsNullOrWhiteSpace($status)) { continue }
+    $generatedAt = Resolve-ScorecardItemGeneratedAt -Payload $payload -Item $item
+    $sortTs = Parse-ScorecardTimestamp $generatedAt
+    $candidates += [pscustomobject]@{
+      profile = $card.profile
+      item = $item
+      generated_at = $generatedAt
+      sort_ts = if ($sortTs) { $sortTs } else { [datetime]::MinValue }
+    }
+  }
+  if ($candidates.Count -eq 0) {
+    return [ordered]@{
+      name = $Name
+      status = "missing"
+      reason = "no scorecard coverage available"
+      source_profile = ""
+      source_generated_at = ""
+      age_hours = $null
+      stale_after_hours = $StaleAfterHours
+      fresh = $false
+      evidence_path = ""
+    }
+  }
+  $nonSkipped = @($candidates | Where-Object { [string]$_.item.status -notin @("skipped", "missing", "unreadable") } | Sort-Object sort_ts -Descending)
+  $selected = if ($nonSkipped.Count -gt 0) { $nonSkipped[0] } else { (@($candidates | Sort-Object sort_ts -Descending))[0] }
+  return New-MergedBoundarySummary -Name $Name -Item $selected.item -Profile ([string]$selected.profile) -GeneratedAt ([string]$selected.generated_at) -StaleAfterHours $StaleAfterHours
+}
+function Write-ArchitectureReleaseReadyScorecard([string]$Directory, [string]$Stamp) {
+  $profileOrder = @("default", "quick", "full", "compatibility")
+  $profileCards = foreach ($profile in $profileOrder) {
+    $path = Join-Path $Directory ("architecture_scorecard_{0}_latest.json" -f $profile)
+    $payload = Read-ArchitectureScorecardPayload $path
+    [ordered]@{
+      profile = $profile
+      path = $path
+      payload = $payload
+    }
+  }
+  $staleAfterHours = 72
+  $profiles = [ordered]@{}
+  foreach ($entry in $profileCards) {
+    $payload = $entry.payload
+    $profiles[$entry.profile] = [ordered]@{
+      path = $entry.path
+      exists = ($null -ne $payload)
+      generated_at = if ($payload) { [string]($payload.generated_at) } else { "" }
+      overall_status = if ($payload) { [string]($payload.overall_status) } else { "missing" }
+    }
+  }
+
+  $boundaries = [ordered]@{
+    workflow_contract_sync = Select-MergedBoundarySummary -Name "workflow_contract_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "workflow_contract_sync" } -StaleAfterHours $staleAfterHours
+    governance_control_plane_boundary = Select-MergedBoundarySummary -Name "governance_control_plane_boundary" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "governance_control_plane_boundary" } -StaleAfterHours $staleAfterHours
+    governance_store_schema_versions = Select-MergedBoundarySummary -Name "governance_store_schema_versions" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "governance_store_schema_versions" } -StaleAfterHours $staleAfterHours
+    local_workflow_store_schema_versions = Select-MergedBoundarySummary -Name "local_workflow_store_schema_versions" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "local_workflow_store_schema_versions" } -StaleAfterHours $staleAfterHours
+    template_pack_contract_sync = Select-MergedBoundarySummary -Name "template_pack_contract_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "template_pack_contract_sync" } -StaleAfterHours $staleAfterHours
+    local_template_storage_contract_sync = Select-MergedBoundarySummary -Name "local_template_storage_contract_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "local_template_storage_contract_sync" } -StaleAfterHours $staleAfterHours
+    offline_template_catalog_sync = Select-MergedBoundarySummary -Name "offline_template_catalog_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "offline_template_catalog_sync" } -StaleAfterHours $staleAfterHours
+    node_config_schema_coverage = Select-MergedBoundarySummary -Name "node_config_schema_coverage" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "node_config_schema_coverage" } -StaleAfterHours $staleAfterHours
+    local_node_catalog_policy = Select-MergedBoundarySummary -Name "local_node_catalog_policy" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "local_node_catalog_policy" } -StaleAfterHours $staleAfterHours
+    operator_catalog_sync = Select-MergedBoundarySummary -Name "operator_catalog_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "operator_catalog_sync" } -StaleAfterHours $staleAfterHours
+    fallback_governance = Select-MergedBoundarySummary -Name "fallback_governance" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "fallback_governance" } -StaleAfterHours $staleAfterHours
+    frontend_convergence = Select-MergedBoundarySummary -Name "frontend_convergence" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "frontend_convergence" } -StaleAfterHours $staleAfterHours
+    frontend_primary_verification = Select-MergedBoundarySummary -Name "frontend_primary_verification" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardFrontendItem $payload "primary" } -StaleAfterHours $staleAfterHours
+    frontend_compatibility_verification = Select-MergedBoundarySummary -Name "frontend_compatibility_verification" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardFrontendItem $payload "compatibility" } -StaleAfterHours $staleAfterHours
+  }
+
+  $issues = @()
+  foreach ($entry in $boundaries.GetEnumerator()) {
+    $name = [string]$entry.Key
+    $item = $entry.Value
+    $status = [string]($item.status)
+    $boundaryIssues = @(Get-ReleaseReadyBoundaryIssues -Name $name -Item $item)
+    if ($status -eq "failed") {
+      if ($boundaryIssues.Count -gt 0) {
+        $issues += $boundaryIssues
+      } else {
+        $issues += "$name failed"
+      }
+    } elseif ($status -in @("missing", "skipped", "unreadable")) {
+      $issues += "$name lacks release-ready coverage"
+    } elseif ($boundaryIssues.Count -gt 0) {
+      $issues += $boundaryIssues
+    }
+    if (-not $item.fresh) {
+      $issues += "$name is stale or missing freshness data"
+    }
+  }
+
+  $overall = if ($issues.Count -gt 0) { "incomplete" } else { "passed" }
+  $payload = [ordered]@{
+    generated_at = (Get-Date).ToString("s")
+    profile = "release_ready"
+    source_script = "ops/scripts/ci_check.ps1"
+    stale_after_hours = $staleAfterHours
+    overall_status = $overall
+    profiles = $profiles
+    boundaries = $boundaries
+    issues = @($issues | Sort-Object -Unique)
+  }
+
+  $jsonLatestPath = Join-Path $Directory "architecture_scorecard_release_ready_latest.json"
+  $mdLatestPath = Join-Path $Directory "architecture_scorecard_release_ready_latest.md"
+  $jsonSnapshotPath = Join-Path $Directory ("architecture_scorecard_release_ready_{0}.json" -f $Stamp)
+  $mdSnapshotPath = Join-Path $Directory ("architecture_scorecard_release_ready_{0}.md" -f $Stamp)
+  $json = ($payload | ConvertTo-Json -Depth 10)
+  Set-Content -Path $jsonLatestPath -Value $json -Encoding UTF8
+  Set-Content -Path $jsonSnapshotPath -Value $json -Encoding UTF8
+
+  $lines = @()
+  $lines += "# Architecture Scorecard (Release Ready)"
+  $lines += ""
+  $lines += "- generated_at: $($payload.generated_at)"
+  $lines += "- overall_status: $($payload.overall_status)"
+  $lines += "- stale_after_hours: $($payload.stale_after_hours)"
+  $lines += ""
+  $lines += "| Boundary | Status | Profile | Fresh | Reason |"
+  $lines += "|---|---|---|---|---|"
+  foreach ($entry in $payload.boundaries.GetEnumerator()) {
+    $item = $entry.Value
+    $reason = [string]($item.reason)
+    if ([string]::IsNullOrWhiteSpace($reason)) { $reason = [string]($item.evidence_path) }
+    $safeReason = $reason -replace "\|", "\|"
+    $lines += "| $($entry.Key) | $([string]($item.status)) | $([string]($item.source_profile)) | $([string]($item.fresh)) | $safeReason |"
+  }
+  if (@($payload.issues).Count -gt 0) {
+    $lines += ""
+    $lines += "## Issues"
+    foreach ($issue in $payload.issues) {
+      $lines += "- $issue"
+    }
+  }
+  $md = $lines -join [Environment]::NewLine
+  Set-Content -Path $mdLatestPath -Value $md -Encoding UTF8
+  Set-Content -Path $mdSnapshotPath -Value $md -Encoding UTF8
+
+  return [ordered]@{
+    json_latest = $jsonLatestPath
+    json_snapshot = $jsonSnapshotPath
+    md_latest = $mdLatestPath
+    md_snapshot = $mdSnapshotPath
   }
 }
 function WithMavenJvmFlags([scriptblock]$Action) {
@@ -210,6 +1727,18 @@ $asyncBenchTrendScript = Join-Path $PSScriptRoot "check_async_bench_trend.ps1"
 $rustTransformBenchGateScript = Join-Path $PSScriptRoot "check_rust_transform_bench_gate.ps1"
 $rustNewOpsBenchGateScript = Join-Path $PSScriptRoot "check_rust_new_ops_bench_gate.ps1"
 $openApiSdkSyncScript = Join-Path $PSScriptRoot "check_openapi_sdk_sync.ps1"
+$frontendConvergenceScript = Join-Path $PSScriptRoot "check_frontend_convergence.ps1"
+$workflowContractSyncScript = Join-Path $PSScriptRoot "check_workflow_contract_sync.ps1"
+$governanceControlPlaneBoundaryScript = Join-Path $PSScriptRoot "check_governance_control_plane_boundary.ps1"
+$governanceStoreSchemaVersionScript = Join-Path $PSScriptRoot "check_governance_store_schema_versions.ps1"
+$localWorkflowStoreSchemaVersionScript = Join-Path $PSScriptRoot "check_local_workflow_store_schema_versions.ps1"
+$templatePackContractSyncScript = Join-Path $PSScriptRoot "check_template_pack_contract_sync.ps1"
+$localTemplateStorageContractSyncScript = Join-Path $PSScriptRoot "check_local_template_storage_contract_sync.ps1"
+$offlineTemplateCatalogSyncScript = Join-Path $PSScriptRoot "check_offline_template_catalog_sync.ps1"
+$nodeConfigSchemaCoverageScript = Join-Path $PSScriptRoot "check_node_config_schema_coverage.ps1"
+$localNodeCatalogPolicyScript = Join-Path $PSScriptRoot "check_local_node_catalog_policy.ps1"
+$operatorCatalogSyncScript = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
+$fallbackGovernanceScript = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
 $secretScanScript = Join-Path $PSScriptRoot "secret_scan.ps1"
 $contractRustApiScript = Join-Path $PSScriptRoot "contract_test_rust_api.ps1"
 $chaosTaskStoreScript = Join-Path $PSScriptRoot "chaos_task_store.ps1"
@@ -218,6 +1747,135 @@ $nativeWinuiSmokeScript = Join-Path $PSScriptRoot "check_native_winui_smoke.ps1"
 $cleanupScript = Join-Path $PSScriptRoot "clean_workspace_artifacts.ps1"
 $restartServicesScript = Join-Path $PSScriptRoot "restart_services.ps1"
 $accelServiceState = $null
+$frontendVerificationDir = Join-Path $root "ops\logs\frontend_verification"
+$frontendPrimaryEvidenceLatestPath = Join-Path $frontendVerificationDir "frontend_primary_verification_latest.json"
+$frontendCompatibilityEvidenceLatestPath = Join-Path $frontendVerificationDir "frontend_compatibility_verification_latest.json"
+$architectureScorecardDir = Join-Path $root "ops\logs\architecture"
+$architectureScorecardLatestJsonPath = Join-Path $architectureScorecardDir "architecture_scorecard_latest.json"
+$architectureScorecardLatestMdPath = Join-Path $architectureScorecardDir "architecture_scorecard_latest.md"
+$architectureScorecardReleaseReadyLatestJsonPath = Join-Path $architectureScorecardDir "architecture_scorecard_release_ready_latest.json"
+$architectureScorecardReleaseReadyLatestMdPath = Join-Path $architectureScorecardDir "architecture_scorecard_release_ready_latest.md"
+$frontendVerificationStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$normalizedCiProfile = if ([string]::IsNullOrWhiteSpace($CiProfile)) { "default" } else { $CiProfile.Trim().ToLowerInvariant() }
+$workflowContractSyncCheckState = New-FrontendCheckState $(if ($SkipWorkflowContractSync) { "skipped" } else { "pending" }) $(if ($SkipWorkflowContractSync) { "skipped by SkipWorkflowContractSync" } else { "awaiting workflow contract sync gate" })
+$governanceControlPlaneBoundaryCheckState = New-FrontendCheckState $(if ($SkipGovernanceControlPlaneBoundary) { "skipped" } else { "pending" }) $(if ($SkipGovernanceControlPlaneBoundary) { "skipped by SkipGovernanceControlPlaneBoundary" } else { "awaiting governance control plane boundary gate" })
+$governanceStoreSchemaVersionCheckState = New-FrontendCheckState $(if ($SkipGovernanceStoreSchemaVersions) { "skipped" } else { "pending" }) $(if ($SkipGovernanceStoreSchemaVersions) { "skipped by SkipGovernanceStoreSchemaVersions" } else { "awaiting governance store schema version gate" })
+$localWorkflowStoreSchemaVersionCheckState = New-FrontendCheckState $(if ($SkipLocalWorkflowStoreSchemaVersions) { "skipped" } else { "pending" }) $(if ($SkipLocalWorkflowStoreSchemaVersions) { "skipped by SkipLocalWorkflowStoreSchemaVersions" } else { "awaiting local workflow store schema version gate" })
+$templatePackContractSyncCheckState = New-FrontendCheckState $(if ($SkipTemplatePackContractSync) { "skipped" } else { "pending" }) $(if ($SkipTemplatePackContractSync) { "skipped by SkipTemplatePackContractSync" } else { "awaiting template pack contract sync gate" })
+$localTemplateStorageContractSyncCheckState = New-FrontendCheckState $(if ($SkipLocalTemplateStorageContractSync) { "skipped" } else { "pending" }) $(if ($SkipLocalTemplateStorageContractSync) { "skipped by SkipLocalTemplateStorageContractSync" } else { "awaiting local template storage contract sync gate" })
+$offlineTemplateCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOfflineTemplateCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOfflineTemplateCatalogSync) { "skipped by SkipOfflineTemplateCatalogSync" } else { "awaiting offline template catalog sync gate" })
+$nodeConfigSchemaCoverageCheckState = New-FrontendCheckState $(if ($SkipNodeConfigSchemaCoverage) { "skipped" } else { "pending" }) $(if ($SkipNodeConfigSchemaCoverage) { "skipped by SkipNodeConfigSchemaCoverage" } else { "awaiting node config schema coverage gate" })
+$localNodeCatalogPolicyCheckState = New-FrontendCheckState $(if ($SkipLocalNodeCatalogPolicy) { "skipped" } else { "pending" }) $(if ($SkipLocalNodeCatalogPolicy) { "skipped by SkipLocalNodeCatalogPolicy" } else { "awaiting local node catalog policy gate" })
+$operatorCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOperatorCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOperatorCatalogSync) { "skipped by SkipOperatorCatalogSync" } else { "awaiting operator catalog sync gate" })
+$fallbackGovernanceCheckState = New-FrontendCheckState $(if ($SkipFallbackGovernance) { "skipped" } else { "pending" }) $(if ($SkipFallbackGovernance) { "skipped by SkipFallbackGovernance" } else { "awaiting fallback governance gate" })
+$frontendConvergenceCheckState = New-FrontendCheckState $(if ($SkipFrontendConvergence) { "skipped" } else { "pending" }) $(if ($SkipFrontendConvergence) { "skipped by SkipFrontendConvergence" } else { "awaiting frontend convergence gate" })
+$frontendPrimarySmokeCheckState = New-FrontendCheckState $(if ($SkipNativeWinuiSmoke) { "skipped" } else { "pending" }) $(if ($SkipNativeWinuiSmoke) { "skipped by SkipNativeWinuiSmoke" } else { "awaiting native winui smoke" })
+$frontendCompatibilityPackagedCheckState = New-FrontendCheckState $(if ($SkipDesktopPackageTests) { "skipped" } else { "pending" }) $(if ($SkipDesktopPackageTests) { "moved out of current ci profile or skipped explicitly" } else { "awaiting Electron compatibility packaged startup check" })
+$frontendCompatibilityLitePackagedCheckState = New-FrontendCheckState $(if ($SkipDesktopPackageTests) { "skipped" } else { "pending" }) $(if ($SkipDesktopPackageTests) { "moved out of current ci profile or skipped explicitly" } else { "awaiting Electron compatibility lite packaged startup check" })
+$frontendPrimaryEvidencePaths = $null
+$frontendCompatibilityEvidencePaths = $null
+$architectureScorecardPaths = $null
+$architectureReleaseReadyScorecardPaths = $null
+
+function Publish-FrontendVerificationEvidence() {
+  $primaryPayload = [ordered]@{
+    generated_at = (Get-Date).ToString("s")
+    profile = $normalizedCiProfile
+    source_script = "ops/scripts/ci_check.ps1"
+    frontend_role = "primary"
+    frontend = "winui"
+    overall_status = Resolve-FrontendEvidenceOverall @($frontendConvergenceCheckState, $frontendPrimarySmokeCheckState)
+    checks = [ordered]@{
+      frontend_convergence = $frontendConvergenceCheckState
+      native_winui_smoke = $frontendPrimarySmokeCheckState
+    }
+  }
+  $compatibilityPayload = [ordered]@{
+    generated_at = (Get-Date).ToString("s")
+    profile = $normalizedCiProfile
+    source_script = "ops/scripts/ci_check.ps1"
+    frontend_role = "compatibility"
+    frontend = "electron"
+    overall_status = Resolve-FrontendEvidenceOverall @($frontendConvergenceCheckState, $frontendCompatibilityPackagedCheckState, $frontendCompatibilityLitePackagedCheckState)
+    checks = [ordered]@{
+      frontend_convergence = $frontendConvergenceCheckState
+      electron_packaged_startup = $frontendCompatibilityPackagedCheckState
+      electron_lite_packaged_startup = $frontendCompatibilityLitePackagedCheckState
+    }
+  }
+  $script:frontendPrimaryEvidencePaths = Write-FrontendEvidenceSnapshot -Name "frontend_primary_verification" -Payload $primaryPayload -Directory $frontendVerificationDir -Stamp $frontendVerificationStamp
+  $script:frontendCompatibilityEvidencePaths = Write-FrontendEvidenceSnapshot -Name "frontend_compatibility_verification" -Payload $compatibilityPayload -Directory $frontendVerificationDir -Stamp $frontendVerificationStamp
+  Publish-ArchitectureScorecard
+}
+
+function Publish-ArchitectureScorecard() {
+  $primarySummary = [ordered]@{
+    status = Resolve-FrontendEvidenceOverall @($frontendConvergenceCheckState, $frontendPrimarySmokeCheckState)
+    reason = "primary frontend verification summary"
+    evidence_path = $frontendPrimaryEvidenceLatestPath
+    generated_at = (Get-Date).ToString("s")
+    profile = $normalizedCiProfile
+    checks = [ordered]@{
+      frontend_convergence = $frontendConvergenceCheckState
+      native_winui_smoke = $frontendPrimarySmokeCheckState
+    }
+  }
+  $compatibilitySummary = [ordered]@{
+    status = Resolve-FrontendEvidenceOverall @($frontendConvergenceCheckState, $frontendCompatibilityPackagedCheckState, $frontendCompatibilityLitePackagedCheckState)
+    reason = "compatibility frontend verification summary"
+    evidence_path = $frontendCompatibilityEvidenceLatestPath
+    generated_at = (Get-Date).ToString("s")
+    profile = $normalizedCiProfile
+    checks = [ordered]@{
+      frontend_convergence = $frontendConvergenceCheckState
+      electron_packaged_startup = $frontendCompatibilityPackagedCheckState
+      electron_lite_packaged_startup = $frontendCompatibilityLitePackagedCheckState
+    }
+  }
+  $payload = [ordered]@{
+    generated_at = (Get-Date).ToString("s")
+    profile = $normalizedCiProfile
+    source_script = "ops/scripts/ci_check.ps1"
+    overall_status = Resolve-ArchitectureScorecardOverall @(
+      $workflowContractSyncCheckState,
+      $governanceControlPlaneBoundaryCheckState,
+      $governanceStoreSchemaVersionCheckState,
+      $localWorkflowStoreSchemaVersionCheckState,
+      $templatePackContractSyncCheckState,
+      $localTemplateStorageContractSyncCheckState,
+      $offlineTemplateCatalogSyncCheckState,
+      $nodeConfigSchemaCoverageCheckState,
+      $localNodeCatalogPolicyCheckState,
+      $operatorCatalogSyncCheckState,
+      $fallbackGovernanceCheckState,
+      $frontendConvergenceCheckState,
+      [ordered]@{ status = $primarySummary.status },
+      [ordered]@{ status = $compatibilitySummary.status }
+    )
+    boundaries = [ordered]@{
+      workflow_contract_sync = $workflowContractSyncCheckState
+      governance_control_plane_boundary = $governanceControlPlaneBoundaryCheckState
+      governance_store_schema_versions = $governanceStoreSchemaVersionCheckState
+      local_workflow_store_schema_versions = $localWorkflowStoreSchemaVersionCheckState
+      template_pack_contract_sync = $templatePackContractSyncCheckState
+      local_template_storage_contract_sync = $localTemplateStorageContractSyncCheckState
+      offline_template_catalog_sync = $offlineTemplateCatalogSyncCheckState
+      node_config_schema_coverage = $nodeConfigSchemaCoverageCheckState
+      local_node_catalog_policy = $localNodeCatalogPolicyCheckState
+      operator_catalog_sync = $operatorCatalogSyncCheckState
+      fallback_governance = $fallbackGovernanceCheckState
+      frontend_convergence = $frontendConvergenceCheckState
+    }
+    frontend = [ordered]@{
+      primary = $primarySummary
+      compatibility = $compatibilitySummary
+    }
+  }
+  $script:architectureScorecardPaths = Write-ArchitectureScorecardSnapshot -Payload $payload -Directory $architectureScorecardDir -Stamp $frontendVerificationStamp -ProfileLabel $normalizedCiProfile
+  $script:architectureReleaseReadyScorecardPaths = Write-ArchitectureReleaseReadyScorecard -Directory $architectureScorecardDir -Stamp $frontendVerificationStamp
+}
+
+Publish-FrontendVerificationEvidence
 
 if (-not $SkipToolChecks) {
   if (Test-Path $toolsScript) {
@@ -273,6 +1931,387 @@ if (-not $SkipOpenApiSdkSync) {
   Ok "openapi/sdk sync checks passed"
 } else {
   Warn "skip openapi/sdk sync checks"
+}
+
+if (-not $SkipFrontendConvergence) {
+  if (-not (Test-Path $frontendConvergenceScript)) {
+    Set-FrontendCheckState $frontendConvergenceCheckState "failed" "frontend convergence script missing"
+    Publish-FrontendVerificationEvidence
+    throw "frontend convergence script not found: $frontendConvergenceScript"
+  }
+  Info "running frontend convergence checks"
+  powershell -ExecutionPolicy Bypass -File $frontendConvergenceScript
+  if ($LASTEXITCODE -ne 0) {
+    Set-FrontendCheckState $frontendConvergenceCheckState "failed" "frontend convergence checks failed"
+    Publish-FrontendVerificationEvidence
+    throw "frontend convergence checks failed"
+  }
+  Set-FrontendCheckState $frontendConvergenceCheckState "passed" "frontend convergence checks passed"
+  Publish-FrontendVerificationEvidence
+  Ok "frontend convergence checks passed"
+} else {
+  Set-FrontendCheckState $frontendConvergenceCheckState "skipped" "skipped by SkipFrontendConvergence"
+  Publish-FrontendVerificationEvidence
+  Warn "skip frontend convergence checks"
+}
+
+if (-not $SkipWorkflowContractSync) {
+  if (-not (Test-Path $workflowContractSyncScript)) {
+    Set-FrontendCheckState $workflowContractSyncCheckState "failed" "workflow contract sync script missing"
+    Publish-ArchitectureScorecard
+    throw "workflow contract sync script not found: $workflowContractSyncScript"
+  }
+  Info "running workflow contract sync checks"
+  $workflowContractSyncOutput = powershell -ExecutionPolicy Bypass -File $workflowContractSyncScript 2>&1
+  $workflowContractSummary = Parse-JsonLineFromOutput $workflowContractSyncOutput
+  $workflowContractDetails = New-WorkflowContractSyncDetails $workflowContractSummary
+  if ($workflowContractDetails) {
+    $workflowContractSyncCheckState.details = $workflowContractDetails
+  }
+  if ($null -ne $workflowContractSyncOutput) {
+    $workflowContractSyncOutput | ForEach-Object { $_ }
+  }
+  $workflowContractSyncExitCode = $LASTEXITCODE
+  if ($workflowContractSyncExitCode -ne 0) {
+    Set-FrontendCheckState $workflowContractSyncCheckState "failed" (Get-WorkflowContractSyncReason -Summary $workflowContractSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "workflow contract sync checks failed"
+  }
+  if ($workflowContractSummary) {
+    Set-FrontendCheckState $workflowContractSyncCheckState "passed" (Get-WorkflowContractSyncReason -Summary $workflowContractSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $workflowContractSyncCheckState "passed" "workflow contract sync checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "workflow contract sync checks passed"
+} else {
+  Set-FrontendCheckState $workflowContractSyncCheckState "skipped" "skipped by SkipWorkflowContractSync"
+  Publish-ArchitectureScorecard
+  Warn "skip workflow contract sync checks"
+}
+
+if (-not $SkipGovernanceControlPlaneBoundary) {
+  if (-not (Test-Path $governanceControlPlaneBoundaryScript)) {
+    Set-FrontendCheckState $governanceControlPlaneBoundaryCheckState "failed" "governance control plane boundary script missing"
+    Publish-ArchitectureScorecard
+    throw "governance control plane boundary script not found: $governanceControlPlaneBoundaryScript"
+  }
+  Info "running governance control plane boundary checks"
+  $governanceControlPlaneBoundaryOutput = powershell -ExecutionPolicy Bypass -File $governanceControlPlaneBoundaryScript 2>&1
+  $governanceControlPlaneBoundarySummary = Parse-JsonLineFromOutput $governanceControlPlaneBoundaryOutput
+  $governanceControlPlaneBoundaryDetails = New-GovernanceControlPlaneBoundaryDetails $governanceControlPlaneBoundarySummary
+  if ($governanceControlPlaneBoundaryDetails) {
+    $governanceControlPlaneBoundaryCheckState.details = $governanceControlPlaneBoundaryDetails
+  }
+  if ($null -ne $governanceControlPlaneBoundaryOutput) {
+    $governanceControlPlaneBoundaryOutput | ForEach-Object { $_ }
+  }
+  $governanceControlPlaneBoundaryExitCode = $LASTEXITCODE
+  if ($governanceControlPlaneBoundaryExitCode -ne 0) {
+    Set-FrontendCheckState $governanceControlPlaneBoundaryCheckState "failed" (Get-GovernanceControlPlaneBoundaryReason -Summary $governanceControlPlaneBoundarySummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "governance control plane boundary checks failed"
+  }
+  if ($governanceControlPlaneBoundarySummary) {
+    Set-FrontendCheckState $governanceControlPlaneBoundaryCheckState "passed" (Get-GovernanceControlPlaneBoundaryReason -Summary $governanceControlPlaneBoundarySummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $governanceControlPlaneBoundaryCheckState "passed" "governance control plane boundary checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "governance control plane boundary checks passed"
+} else {
+  Set-FrontendCheckState $governanceControlPlaneBoundaryCheckState "skipped" "skipped by SkipGovernanceControlPlaneBoundary"
+  Publish-ArchitectureScorecard
+  Warn "skip governance control plane boundary checks"
+}
+
+if (-not $SkipGovernanceStoreSchemaVersions) {
+  if (-not (Test-Path $governanceStoreSchemaVersionScript)) {
+    Set-FrontendCheckState $governanceStoreSchemaVersionCheckState "failed" "governance store schema version script missing"
+    Publish-ArchitectureScorecard
+    throw "governance store schema version script not found: $governanceStoreSchemaVersionScript"
+  }
+  Info "running governance store schema version checks"
+  $governanceStoreSchemaVersionOutput = powershell -ExecutionPolicy Bypass -File $governanceStoreSchemaVersionScript 2>&1
+  $governanceStoreSchemaVersionSummary = Parse-JsonLineFromOutput $governanceStoreSchemaVersionOutput
+  $governanceStoreSchemaVersionDetails = New-GovernanceStoreSchemaVersionDetails $governanceStoreSchemaVersionSummary
+  if ($governanceStoreSchemaVersionDetails) {
+    $governanceStoreSchemaVersionCheckState.details = $governanceStoreSchemaVersionDetails
+  }
+  if ($null -ne $governanceStoreSchemaVersionOutput) {
+    $governanceStoreSchemaVersionOutput | ForEach-Object { $_ }
+  }
+  $governanceStoreSchemaVersionExitCode = $LASTEXITCODE
+  if ($governanceStoreSchemaVersionExitCode -ne 0) {
+    Set-FrontendCheckState $governanceStoreSchemaVersionCheckState "failed" (Get-GovernanceStoreSchemaVersionReason -Summary $governanceStoreSchemaVersionSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "governance store schema version checks failed"
+  }
+  if ($governanceStoreSchemaVersionSummary) {
+    Set-FrontendCheckState $governanceStoreSchemaVersionCheckState "passed" (Get-GovernanceStoreSchemaVersionReason -Summary $governanceStoreSchemaVersionSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $governanceStoreSchemaVersionCheckState "passed" "governance store schema version checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "governance store schema version checks passed"
+} else {
+  Set-FrontendCheckState $governanceStoreSchemaVersionCheckState "skipped" "skipped by SkipGovernanceStoreSchemaVersions"
+  Publish-ArchitectureScorecard
+  Warn "skip governance store schema version checks"
+}
+
+if (-not $SkipLocalWorkflowStoreSchemaVersions) {
+  if (-not (Test-Path $localWorkflowStoreSchemaVersionScript)) {
+    Set-FrontendCheckState $localWorkflowStoreSchemaVersionCheckState "failed" "local workflow store schema version script missing"
+    Publish-ArchitectureScorecard
+    throw "local workflow store schema version script not found: $localWorkflowStoreSchemaVersionScript"
+  }
+  Info "running local workflow store schema version checks"
+  $localWorkflowStoreSchemaVersionOutput = powershell -ExecutionPolicy Bypass -File $localWorkflowStoreSchemaVersionScript 2>&1
+  $localWorkflowStoreSchemaVersionSummary = Parse-JsonLineFromOutput $localWorkflowStoreSchemaVersionOutput
+  $localWorkflowStoreSchemaVersionDetails = New-LocalWorkflowStoreSchemaVersionDetails $localWorkflowStoreSchemaVersionSummary
+  if ($localWorkflowStoreSchemaVersionDetails) {
+    $localWorkflowStoreSchemaVersionCheckState.details = $localWorkflowStoreSchemaVersionDetails
+  }
+  if ($null -ne $localWorkflowStoreSchemaVersionOutput) {
+    $localWorkflowStoreSchemaVersionOutput | ForEach-Object { $_ }
+  }
+  $localWorkflowStoreSchemaVersionExitCode = $LASTEXITCODE
+  if ($localWorkflowStoreSchemaVersionExitCode -ne 0) {
+    Set-FrontendCheckState $localWorkflowStoreSchemaVersionCheckState "failed" (Get-LocalWorkflowStoreSchemaVersionReason -Summary $localWorkflowStoreSchemaVersionSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "local workflow store schema version checks failed"
+  }
+  if ($localWorkflowStoreSchemaVersionSummary) {
+    Set-FrontendCheckState $localWorkflowStoreSchemaVersionCheckState "passed" (Get-LocalWorkflowStoreSchemaVersionReason -Summary $localWorkflowStoreSchemaVersionSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $localWorkflowStoreSchemaVersionCheckState "passed" "local workflow store schema version checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "local workflow store schema version checks passed"
+} else {
+  Set-FrontendCheckState $localWorkflowStoreSchemaVersionCheckState "skipped" "skipped by SkipLocalWorkflowStoreSchemaVersions"
+  Publish-ArchitectureScorecard
+  Warn "skip local workflow store schema version checks"
+}
+
+if (-not $SkipTemplatePackContractSync) {
+  if (-not (Test-Path $templatePackContractSyncScript)) {
+    Set-FrontendCheckState $templatePackContractSyncCheckState "failed" "template pack contract sync script missing"
+    Publish-ArchitectureScorecard
+    throw "template pack contract sync script not found: $templatePackContractSyncScript"
+  }
+  Info "running template pack contract sync checks"
+  $templatePackContractSyncOutput = powershell -ExecutionPolicy Bypass -File $templatePackContractSyncScript 2>&1
+  $templatePackContractSummary = Parse-JsonLineFromOutput $templatePackContractSyncOutput
+  $templatePackContractDetails = New-TemplatePackContractDetails $templatePackContractSummary
+  if ($templatePackContractDetails) {
+    $templatePackContractSyncCheckState.details = $templatePackContractDetails
+  }
+  if ($null -ne $templatePackContractSyncOutput) {
+    $templatePackContractSyncOutput | ForEach-Object { $_ }
+  }
+  $templatePackContractSyncExitCode = $LASTEXITCODE
+  if ($templatePackContractSyncExitCode -ne 0) {
+    Set-FrontendCheckState $templatePackContractSyncCheckState "failed" (Get-TemplatePackContractReason -Summary $templatePackContractSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "template pack contract sync checks failed"
+  }
+  if ($templatePackContractSummary) {
+    Set-FrontendCheckState $templatePackContractSyncCheckState "passed" (Get-TemplatePackContractReason -Summary $templatePackContractSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $templatePackContractSyncCheckState "passed" "template pack contract sync checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "template pack contract sync checks passed"
+} else {
+  Set-FrontendCheckState $templatePackContractSyncCheckState "skipped" "skipped by SkipTemplatePackContractSync"
+  Publish-ArchitectureScorecard
+  Warn "skip template pack contract sync checks"
+}
+
+if (-not $SkipLocalTemplateStorageContractSync) {
+  if (-not (Test-Path $localTemplateStorageContractSyncScript)) {
+    Set-FrontendCheckState $localTemplateStorageContractSyncCheckState "failed" "local template storage contract sync script missing"
+    Publish-ArchitectureScorecard
+    throw "local template storage contract sync script not found: $localTemplateStorageContractSyncScript"
+  }
+  Info "running local template storage contract sync checks"
+  $localTemplateStorageContractSyncOutput = powershell -ExecutionPolicy Bypass -File $localTemplateStorageContractSyncScript 2>&1
+  $localTemplateStorageContractSummary = Parse-JsonLineFromOutput $localTemplateStorageContractSyncOutput
+  $localTemplateStorageContractDetails = New-LocalTemplateStorageContractDetails $localTemplateStorageContractSummary
+  if ($localTemplateStorageContractDetails) {
+    $localTemplateStorageContractSyncCheckState.details = $localTemplateStorageContractDetails
+  }
+  if ($null -ne $localTemplateStorageContractSyncOutput) {
+    $localTemplateStorageContractSyncOutput | ForEach-Object { $_ }
+  }
+  $localTemplateStorageContractSyncExitCode = $LASTEXITCODE
+  if ($localTemplateStorageContractSyncExitCode -ne 0) {
+    Set-FrontendCheckState $localTemplateStorageContractSyncCheckState "failed" (Get-LocalTemplateStorageContractReason -Summary $localTemplateStorageContractSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "local template storage contract sync checks failed"
+  }
+  if ($localTemplateStorageContractSummary) {
+    Set-FrontendCheckState $localTemplateStorageContractSyncCheckState "passed" (Get-LocalTemplateStorageContractReason -Summary $localTemplateStorageContractSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $localTemplateStorageContractSyncCheckState "passed" "local template storage contract sync checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "local template storage contract sync checks passed"
+} else {
+  Set-FrontendCheckState $localTemplateStorageContractSyncCheckState "skipped" "skipped by SkipLocalTemplateStorageContractSync"
+  Publish-ArchitectureScorecard
+  Warn "skip local template storage contract sync checks"
+}
+
+if (-not $SkipOfflineTemplateCatalogSync) {
+  if (-not (Test-Path $offlineTemplateCatalogSyncScript)) {
+    Set-FrontendCheckState $offlineTemplateCatalogSyncCheckState "failed" "offline template catalog sync script missing"
+    Publish-ArchitectureScorecard
+    throw "offline template catalog sync script not found: $offlineTemplateCatalogSyncScript"
+  }
+  Info "running offline template catalog sync checks"
+  $offlineTemplateCatalogSyncOutput = powershell -ExecutionPolicy Bypass -File $offlineTemplateCatalogSyncScript 2>&1
+  $offlineTemplateCatalogSummary = Parse-JsonLineFromOutput $offlineTemplateCatalogSyncOutput
+  $offlineTemplateCatalogDetails = New-OfflineTemplateCatalogDetails $offlineTemplateCatalogSummary
+  if ($offlineTemplateCatalogDetails) {
+    $offlineTemplateCatalogSyncCheckState.details = $offlineTemplateCatalogDetails
+  }
+  if ($null -ne $offlineTemplateCatalogSyncOutput) {
+    $offlineTemplateCatalogSyncOutput | ForEach-Object { $_ }
+  }
+  $offlineTemplateCatalogSyncExitCode = $LASTEXITCODE
+  if ($offlineTemplateCatalogSyncExitCode -ne 0) {
+    Set-FrontendCheckState $offlineTemplateCatalogSyncCheckState "failed" (Get-OfflineTemplateCatalogReason -Summary $offlineTemplateCatalogSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "offline template catalog sync checks failed"
+  }
+  if ($offlineTemplateCatalogSummary) {
+    Set-FrontendCheckState $offlineTemplateCatalogSyncCheckState "passed" (Get-OfflineTemplateCatalogReason -Summary $offlineTemplateCatalogSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $offlineTemplateCatalogSyncCheckState "passed" "offline template catalog sync checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "offline template catalog sync checks passed"
+} else {
+  Set-FrontendCheckState $offlineTemplateCatalogSyncCheckState "skipped" "skipped by SkipOfflineTemplateCatalogSync"
+  Publish-ArchitectureScorecard
+  Warn "skip offline template catalog sync checks"
+}
+
+if (-not $SkipNodeConfigSchemaCoverage) {
+  if (-not (Test-Path $nodeConfigSchemaCoverageScript)) {
+    Set-FrontendCheckState $nodeConfigSchemaCoverageCheckState "failed" "node config schema coverage script missing"
+    Publish-ArchitectureScorecard
+    throw "node config schema coverage script not found: $nodeConfigSchemaCoverageScript"
+  }
+  Info "running node config schema coverage checks"
+  $nodeConfigSchemaCoverageOutput = powershell -ExecutionPolicy Bypass -File $nodeConfigSchemaCoverageScript 2>&1
+  $nodeConfigSummary = Parse-JsonLineFromOutput $nodeConfigSchemaCoverageOutput
+  $nodeConfigDetails = New-NodeConfigSchemaCoverageDetails $nodeConfigSummary
+  if ($nodeConfigDetails) {
+    $nodeConfigSchemaCoverageCheckState.details = $nodeConfigDetails
+  }
+  if ($LASTEXITCODE -ne 0) {
+    Set-FrontendCheckState $nodeConfigSchemaCoverageCheckState "failed" (Get-NodeConfigSchemaCoverageReason -Summary $nodeConfigSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "node config schema coverage checks failed"
+  }
+  if ($nodeConfigSummary) {
+    Set-FrontendCheckState $nodeConfigSchemaCoverageCheckState "passed" (Get-NodeConfigSchemaCoverageReason -Summary $nodeConfigSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $nodeConfigSchemaCoverageCheckState "passed" "node config schema coverage checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "node config schema coverage checks passed"
+} else {
+  Set-FrontendCheckState $nodeConfigSchemaCoverageCheckState "skipped" "skipped by SkipNodeConfigSchemaCoverage"
+  Publish-ArchitectureScorecard
+  Warn "skip node config schema coverage checks"
+}
+
+if (-not $SkipLocalNodeCatalogPolicy) {
+  if (-not (Test-Path $localNodeCatalogPolicyScript)) {
+    Set-FrontendCheckState $localNodeCatalogPolicyCheckState "failed" "local node catalog policy script missing"
+    Publish-ArchitectureScorecard
+    throw "local node catalog policy script not found: $localNodeCatalogPolicyScript"
+  }
+  Info "running local node catalog policy checks"
+  $localNodeCatalogPolicyOutput = powershell -ExecutionPolicy Bypass -File $localNodeCatalogPolicyScript 2>&1
+  $localNodeCatalogPolicySummary = Parse-JsonLineFromOutput $localNodeCatalogPolicyOutput
+  if ($localNodeCatalogPolicySummary) {
+    $localNodeCatalogPolicyCheckState.details = New-LocalNodeCatalogPolicyDetails $localNodeCatalogPolicySummary
+  }
+  if ($LASTEXITCODE -ne 0) {
+    Set-FrontendCheckState $localNodeCatalogPolicyCheckState "failed" (Get-LocalNodeCatalogPolicyReason -Summary $localNodeCatalogPolicySummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "local node catalog policy checks failed"
+  }
+  if ($localNodeCatalogPolicySummary) {
+    Set-FrontendCheckState $localNodeCatalogPolicyCheckState "passed" (Get-LocalNodeCatalogPolicyReason -Summary $localNodeCatalogPolicySummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $localNodeCatalogPolicyCheckState "passed" "local node catalog policy checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "local node catalog policy checks passed"
+} else {
+  Set-FrontendCheckState $localNodeCatalogPolicyCheckState "skipped" "skipped by SkipLocalNodeCatalogPolicy"
+  Publish-ArchitectureScorecard
+  Warn "skip local node catalog policy checks"
+}
+
+if (-not $SkipOperatorCatalogSync) {
+  if (-not (Test-Path $operatorCatalogSyncScript)) {
+    Set-FrontendCheckState $operatorCatalogSyncCheckState "failed" "operator catalog sync script missing"
+    Publish-ArchitectureScorecard
+    throw "operator catalog sync script not found: $operatorCatalogSyncScript"
+  }
+  Info "running operator catalog sync checks"
+  $operatorCatalogSyncOutput = powershell -ExecutionPolicy Bypass -File $operatorCatalogSyncScript 2>&1
+  $operatorCatalogSummary = Parse-JsonLineFromOutput $operatorCatalogSyncOutput
+  $operatorCatalogDetails = New-OperatorCatalogSyncDetails $operatorCatalogSummary
+  if ($operatorCatalogDetails) {
+    $operatorCatalogSyncCheckState.details = $operatorCatalogDetails
+  }
+  if ($LASTEXITCODE -ne 0) {
+    Set-FrontendCheckState $operatorCatalogSyncCheckState "failed" (Get-OperatorCatalogSyncReason -Summary $operatorCatalogSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "operator catalog sync checks failed"
+  }
+  if ($operatorCatalogSummary) {
+    Set-FrontendCheckState $operatorCatalogSyncCheckState "passed" (Get-OperatorCatalogSyncReason -Summary $operatorCatalogSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $operatorCatalogSyncCheckState "passed" "operator catalog sync checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "operator catalog sync checks passed"
+} else {
+  Set-FrontendCheckState $operatorCatalogSyncCheckState "skipped" "skipped by SkipOperatorCatalogSync"
+  Publish-ArchitectureScorecard
+  Warn "skip operator catalog sync checks"
+}
+
+if (-not $SkipFallbackGovernance) {
+  if (-not (Test-Path $fallbackGovernanceScript)) {
+    Set-FrontendCheckState $fallbackGovernanceCheckState "failed" "fallback governance script missing"
+    Publish-ArchitectureScorecard
+    throw "fallback governance script not found: $fallbackGovernanceScript"
+  }
+  Info "running fallback governance checks"
+  powershell -ExecutionPolicy Bypass -File $fallbackGovernanceScript
+  if ($LASTEXITCODE -ne 0) {
+    Set-FrontendCheckState $fallbackGovernanceCheckState "failed" "fallback governance checks failed"
+    Publish-ArchitectureScorecard
+    throw "fallback governance checks failed"
+  }
+  Set-FrontendCheckState $fallbackGovernanceCheckState "passed" "fallback governance checks passed"
+  Publish-ArchitectureScorecard
+  Ok "fallback governance checks passed"
+} else {
+  Set-FrontendCheckState $fallbackGovernanceCheckState "skipped" "skipped by SkipFallbackGovernance"
+  Publish-ArchitectureScorecard
+  Warn "skip fallback governance checks"
 }
 
 if (-not $SkipSecretScan) {
@@ -619,36 +2658,79 @@ if (-not $SkipDesktopUiTests) {
   Warn "skip desktop workflow UI tests"
 }
 
+if (-not $SkipNativeWinuiSmoke) {
+  if (-not (Test-Path $nativeWinuiSmokeScript)) {
+    Set-FrontendCheckState $frontendPrimarySmokeCheckState "failed" "native winui smoke script missing"
+    Publish-FrontendVerificationEvidence
+    throw "native winui smoke script not found: $nativeWinuiSmokeScript"
+  }
+  $isCi = Test-IsCiEnvironment
+  if ($isCi) {
+    Set-FrontendCheckState $frontendPrimarySmokeCheckState "skipped" "skipped in CI environment"
+    Publish-FrontendVerificationEvidence
+    Warn "skip native winui primary frontend smoke in CI environment"
+  } else {
+    Info "running native winui primary frontend smoke check"
+    powershell -ExecutionPolicy Bypass -File $nativeWinuiSmokeScript -Root $root
+    if ($LASTEXITCODE -ne 0) {
+      Set-FrontendCheckState $frontendPrimarySmokeCheckState "failed" "native winui primary frontend smoke check failed"
+      Publish-FrontendVerificationEvidence
+      throw "native winui primary frontend smoke check failed"
+    }
+    Set-FrontendCheckState $frontendPrimarySmokeCheckState "passed" "native winui primary frontend smoke check passed"
+    Publish-FrontendVerificationEvidence
+    Ok "native winui primary frontend smoke check passed"
+  }
+} else {
+  Set-FrontendCheckState $frontendPrimarySmokeCheckState "skipped" "skipped by SkipNativeWinuiSmoke"
+  Publish-FrontendVerificationEvidence
+  Warn "skip native winui primary frontend smoke check"
+}
+
 if (-not $SkipDesktopPackageTests) {
   if (-not (Test-Path $desktopPkgCheckScript)) {
+    Set-FrontendCheckState $frontendCompatibilityPackagedCheckState "failed" "desktop packaged startup check script missing"
+    Publish-FrontendVerificationEvidence
     throw "desktop packaged startup check script not found: $desktopPkgCheckScript"
   }
   if (-not (Test-Path $desktopLitePkgCheckScript)) {
+    Set-FrontendCheckState $frontendCompatibilityLitePackagedCheckState "failed" "desktop lite packaged startup check script missing"
+    Publish-FrontendVerificationEvidence
     throw "desktop lite packaged startup check script not found: $desktopLitePkgCheckScript"
   }
-  Info "running desktop packaged startup check"
+  Info "running Electron compatibility packaged startup check"
   powershell -ExecutionPolicy Bypass -File $desktopPkgCheckScript -DesktopDir $desktopDir
   if ($LASTEXITCODE -ne 0) {
-    throw "desktop packaged startup check failed"
+    Set-FrontendCheckState $frontendCompatibilityPackagedCheckState "failed" "Electron compatibility packaged startup check failed"
+    Publish-FrontendVerificationEvidence
+    throw "Electron compatibility packaged startup check failed"
   }
-  Ok "desktop packaged startup check passed"
+  Set-FrontendCheckState $frontendCompatibilityPackagedCheckState "passed" "Electron compatibility packaged startup check passed"
+  Publish-FrontendVerificationEvidence
+  Ok "Electron compatibility packaged startup check passed"
 
-  Info "running desktop lite packaged startup check"
+  Info "running Electron compatibility lite packaged startup check"
   powershell -ExecutionPolicy Bypass -File $desktopLitePkgCheckScript -DesktopDir $desktopDir
   if ($LASTEXITCODE -ne 0) {
-    throw "desktop lite packaged startup check failed"
+    Set-FrontendCheckState $frontendCompatibilityLitePackagedCheckState "failed" "Electron compatibility lite packaged startup check failed"
+    Publish-FrontendVerificationEvidence
+    throw "Electron compatibility lite packaged startup check failed"
   }
-  Ok "desktop lite packaged startup check passed"
+  Set-FrontendCheckState $frontendCompatibilityLitePackagedCheckState "passed" "Electron compatibility lite packaged startup check passed"
+  Publish-FrontendVerificationEvidence
+  Ok "Electron compatibility lite packaged startup check passed"
 } else {
-  Warn "skip desktop packaged startup check"
+  Set-FrontendCheckState $frontendCompatibilityPackagedCheckState "skipped" "moved out of current ci profile or skipped explicitly"
+  Set-FrontendCheckState $frontendCompatibilityLitePackagedCheckState "skipped" "moved out of current ci profile or skipped explicitly"
+  Publish-FrontendVerificationEvidence
+  Warn "skip Electron compatibility packaged startup checks"
 }
 
 if (-not $SkipSmoke) {
   if (-not (Test-Path $smokeScript)) {
     throw "smoke script not found: $smokeScript"
   }
-  $isCi = [string]::Equals($env:CI, "true", [System.StringComparison]::OrdinalIgnoreCase) -or `
-    [string]::Equals($env:GITHUB_ACTIONS, "true", [System.StringComparison]::OrdinalIgnoreCase)
+  $isCi = Test-IsCiEnvironment
   $bootstrapTimeoutSeconds = if ($isCi) { 600 } else { 90 }
   $runSmokeChecks = $true
   if (Test-Path $restartServicesScript) {
@@ -885,26 +2967,6 @@ if (-not $SkipRustNewOpsBenchGate) {
   Warn "skip rust new-ops benchmark gate"
 }
 
-if (-not $SkipNativeWinuiSmoke) {
-  if (-not (Test-Path $nativeWinuiSmokeScript)) {
-    throw "native winui smoke script not found: $nativeWinuiSmokeScript"
-  }
-  $isCi = [string]::Equals($env:CI, "true", [System.StringComparison]::OrdinalIgnoreCase) -or `
-    [string]::Equals($env:GITHUB_ACTIONS, "true", [System.StringComparison]::OrdinalIgnoreCase)
-  if ($isCi) {
-    Warn "skip native winui smoke in CI environment"
-  } else {
-    Info "running native winui smoke check"
-    powershell -ExecutionPolicy Bypass -File $nativeWinuiSmokeScript -Root $root
-    if ($LASTEXITCODE -ne 0) {
-      throw "native winui smoke check failed"
-    }
-    Ok "native winui smoke check passed"
-  }
-} else {
-  Warn "skip native winui smoke check"
-}
-
 Stop-AccelRustService $accelServiceState
 
 if (-not $SkipPostCleanup) {
@@ -922,3 +2984,17 @@ if (-not $SkipPostCleanup) {
 
 Write-Host ""
 Ok "ci check finished"
+if ($frontendPrimaryEvidencePaths) {
+  Info ("frontend primary verification evidence: " + $frontendPrimaryEvidenceLatestPath)
+}
+if ($frontendCompatibilityEvidencePaths) {
+  Info ("frontend compatibility verification evidence: " + $frontendCompatibilityEvidenceLatestPath)
+}
+if ($architectureScorecardPaths) {
+  Info ("architecture scorecard json: " + $architectureScorecardLatestJsonPath)
+  Info ("architecture scorecard md: " + $architectureScorecardLatestMdPath)
+}
+if ($architectureReleaseReadyScorecardPaths) {
+  Info ("architecture release-ready scorecard json: " + $architectureScorecardReleaseReadyLatestJsonPath)
+  Info ("architecture release-ready scorecard md: " + $architectureScorecardReleaseReadyLatestMdPath)
+}

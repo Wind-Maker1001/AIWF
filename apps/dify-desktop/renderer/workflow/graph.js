@@ -1,9 +1,17 @@
-﻿export function validateGraph(graph) {
+import { validateWorkflowTopLevel } from "./workflow-contract.js";
+import { findUnknownWorkflowNodeTypes } from "./node-catalog-contract.js";
+
+export function validateGraph(graph) {
   const errors = [];
   const warnings = [];
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph?.edges) ? graph.edges : [];
-  if (nodes.length === 0) errors.push("流程没有节点");
+  const contract = validateWorkflowTopLevel(graph, { requireNonEmptyNodes: true });
+  errors.push(...contract.errors);
+  const unknownNodeTypes = findUnknownWorkflowNodeTypes(graph);
+  if (unknownNodeTypes.length > 0) {
+    errors.push(`workflow contains unregistered node types: ${unknownNodeTypes.join(", ")}`);
+  }
 
   const idSet = new Set();
   const inDegree = new Map();

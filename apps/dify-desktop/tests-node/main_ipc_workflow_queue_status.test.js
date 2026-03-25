@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { registerIpcHandlers } = require("../main_ipc");
+const { governanceBoundaryResponseFromEntries } = require("./governance_test_support");
 
 function createIpcMain() {
   const handlers = new Map();
@@ -19,6 +20,109 @@ function createIpcMain() {
 function createCtx(overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "aiwf-workflow-queue-"));
   const ipcMain = createIpcMain();
+  const remote = {
+    sandboxRules: {
+      whitelist_codes: [],
+      whitelist_node_types: [],
+      whitelist_keys: [],
+      mute_until_by_key: {},
+    },
+    sandboxAutoFixState: {
+      violation_events: [],
+      forced_isolation_mode: "",
+      forced_until: "",
+      last_actions: [],
+      green_streak: 0,
+    },
+    manualReviews: [],
+  };
+  const prevFetch = global.fetch;
+  global.fetch = async (url, init = {}) => {
+    const method = String(init.method || "GET").toUpperCase();
+    const target = String(url);
+    if (method === "GET" && target.endsWith("/governance/meta/control-plane")) {
+      return governanceBoundaryResponseFromEntries([
+        {
+          capability: "workflow_sandbox_rules",
+          route_prefix: "/governance/workflow-sandbox/rules",
+          owned_route_prefixes: ["/governance/workflow-sandbox/rules", "/governance/workflow-sandbox/rule-versions"],
+        },
+        {
+          capability: "workflow_sandbox_autofix",
+          route_prefix: "/governance/workflow-sandbox/autofix-state",
+          owned_route_prefixes: ["/governance/workflow-sandbox/autofix-state", "/governance/workflow-sandbox/autofix-actions"],
+        },
+        {
+          capability: "manual_reviews",
+          route_prefix: "/governance/manual-reviews",
+          owned_route_prefixes: ["/governance/manual-reviews"],
+        },
+        {
+          capability: "workflow_run_audit",
+          route_prefix: "/governance/workflow-runs",
+          owned_route_prefixes: ["/governance/workflow-runs", "/governance/workflow-audit-events"],
+        },
+      ]);
+    }
+    if (method === "GET" && target.endsWith("/governance/workflow-sandbox/rules")) {
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true, rules: remote.sandboxRules });
+        },
+      };
+    }
+    if (method === "GET" && target.endsWith("/governance/workflow-sandbox/autofix-state")) {
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true, state: remote.sandboxAutoFixState });
+        },
+      };
+    }
+    if (method === "PUT" && target.endsWith("/governance/workflow-sandbox/autofix-state")) {
+      remote.sandboxAutoFixState = JSON.parse(String(init.body || "{}"));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true, state: remote.sandboxAutoFixState });
+        },
+      };
+    }
+    if (method === "POST" && target.endsWith("/governance/manual-reviews/enqueue")) {
+      const body = JSON.parse(String(init.body || "{}"));
+      remote.manualReviews = Array.isArray(body.items) ? body.items : [];
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true, items: remote.manualReviews });
+        },
+      };
+    }
+    if (method === "PUT" && target.includes("/governance/workflow-runs/")) {
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true, item: {} });
+        },
+      };
+    }
+    if (method === "POST" && target.endsWith("/governance/workflow-audit-events")) {
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ ok: true, item: {} });
+        },
+      };
+    }
+    throw new Error(`unexpected fetch: ${method} ${target}`);
+  };
   const ctx = {
     app: {
       isPackaged: false,
@@ -58,7 +162,16 @@ function createCtx(overrides = {}) {
     ...overrides,
   };
   registerIpcHandlers(ctx);
-  return { ipcMain };
+  return {
+    ipcMain,
+    restore() {
+      if (typeof prevFetch === "undefined") {
+        delete global.fetch;
+      } else {
+        global.fetch = prevFetch;
+      }
+    },
+  };
 }
 
 async function waitForQueueStatus(listHandler, taskId, expectedStatus) {
@@ -74,7 +187,7 @@ async function waitForQueueStatus(listHandler, taskId, expectedStatus) {
 }
 
 test("workflow queue preserves pending_review terminal status", async () => {
-  const { ipcMain } = createCtx({
+  const { ipcMain, restore } = createCtx({
     runMinimalWorkflow: async () => ({
       ok: false,
       run_id: "run_review_1",
@@ -82,51 +195,59 @@ test("workflow queue preserves pending_review terminal status", async () => {
       pending_reviews: [{ review_key: "gate_a", status: "pending" }],
     }),
   });
-  const enqueue = ipcMain.handlers.get("aiwf:enqueueWorkflowTask");
-  const listQueue = ipcMain.handlers.get("aiwf:listWorkflowQueue");
-  assert.equal(typeof enqueue, "function");
-  assert.equal(typeof listQueue, "function");
+  try {
+    const enqueue = ipcMain.handlers.get("aiwf:enqueueWorkflowTask");
+    const listQueue = ipcMain.handlers.get("aiwf:listWorkflowQueue");
+    assert.equal(typeof enqueue, "function");
+    assert.equal(typeof listQueue, "function");
 
-  const enqueued = await enqueue({}, {
-    task_id: "task_review_1",
-    label: "review workflow",
-    payload: { workflow: { workflow_id: "wf_1", nodes: [], edges: [] } },
-    cfg: {},
-    priority: 100,
-  });
-  assert.equal(enqueued.ok, true);
+    const enqueued = await enqueue({}, {
+      task_id: "task_review_1",
+      label: "review workflow",
+      payload: { workflow: { workflow_id: "wf_1", nodes: [], edges: [] } },
+      cfg: {},
+      priority: 100,
+    });
+    assert.equal(enqueued.ok, true);
 
-  const item = await waitForQueueStatus(listQueue, "task_review_1", "pending_review");
-  assert.equal(String(item.run_id || ""), "run_review_1");
-  assert.equal(String(item.result?.status || ""), "pending_review");
+    const item = await waitForQueueStatus(listQueue, "task_review_1", "pending_review");
+    assert.equal(String(item.run_id || ""), "run_review_1");
+    assert.equal(String(item.result?.status || ""), "pending_review");
+  } finally {
+    restore();
+  }
 });
 
 test("workflow queue normalizes successful terminal status to done", async () => {
-  const { ipcMain } = createCtx({
+  const { ipcMain, restore } = createCtx({
     runMinimalWorkflow: async () => ({
       ok: true,
       run_id: "run_pass_1",
       status: "passed",
     }),
   });
-  const enqueue = ipcMain.handlers.get("aiwf:enqueueWorkflowTask");
-  const listQueue = ipcMain.handlers.get("aiwf:listWorkflowQueue");
+  try {
+    const enqueue = ipcMain.handlers.get("aiwf:enqueueWorkflowTask");
+    const listQueue = ipcMain.handlers.get("aiwf:listWorkflowQueue");
 
-  const enqueued = await enqueue({}, {
-    task_id: "task_pass_1",
-    label: "pass workflow",
-    payload: { workflow: { workflow_id: "wf_2", nodes: [], edges: [] } },
-    cfg: {},
-    priority: 100,
-  });
-  assert.equal(enqueued.ok, true);
+    const enqueued = await enqueue({}, {
+      task_id: "task_pass_1",
+      label: "pass workflow",
+      payload: { workflow: { workflow_id: "wf_2", nodes: [], edges: [] } },
+      cfg: {},
+      priority: 100,
+    });
+    assert.equal(enqueued.ok, true);
 
-  const item = await waitForQueueStatus(listQueue, "task_pass_1", "done");
-  assert.equal(String(item.result?.status || ""), "passed");
+    const item = await waitForQueueStatus(listQueue, "task_pass_1", "done");
+    assert.equal(String(item.result?.status || ""), "passed");
+  } finally {
+    restore();
+  }
 });
 
 test("workflow queue cancels queued task but rejects terminal task cancellation", async () => {
-  const { ipcMain } = createCtx({
+  const { ipcMain, restore } = createCtx({
     runMinimalWorkflow: async () => ({
       ok: false,
       run_id: "run_review_2",
@@ -134,45 +255,49 @@ test("workflow queue cancels queued task but rejects terminal task cancellation"
       pending_reviews: [{ review_key: "gate_b", status: "pending" }],
     }),
   });
-  const enqueue = ipcMain.handlers.get("aiwf:enqueueWorkflowTask");
-  const listQueue = ipcMain.handlers.get("aiwf:listWorkflowQueue");
-  const cancel = ipcMain.handlers.get("aiwf:cancelWorkflowTask");
-  const setControl = ipcMain.handlers.get("aiwf:setWorkflowQueueControl");
+  try {
+    const enqueue = ipcMain.handlers.get("aiwf:enqueueWorkflowTask");
+    const listQueue = ipcMain.handlers.get("aiwf:listWorkflowQueue");
+    const cancel = ipcMain.handlers.get("aiwf:cancelWorkflowTask");
+    const setControl = ipcMain.handlers.get("aiwf:setWorkflowQueueControl");
 
-  const paused = await setControl({}, { paused: true });
-  assert.equal(paused.ok, true);
+    const paused = await setControl({}, { paused: true });
+    assert.equal(paused.ok, true);
 
-  const queued = await enqueue({}, {
-    task_id: "task_queue_1",
-    label: "queued workflow",
-    payload: { workflow: { workflow_id: "wf_queue", nodes: [], edges: [] } },
-    cfg: { chiplet_isolation_enabled: false },
-    priority: 100,
-  });
-  assert.equal(queued.ok, true);
+    const queued = await enqueue({}, {
+      task_id: "task_queue_1",
+      label: "queued workflow",
+      payload: { workflow: { workflow_id: "wf_queue", nodes: [], edges: [] } },
+      cfg: { chiplet_isolation_enabled: false },
+      priority: 100,
+    });
+    assert.equal(queued.ok, true);
 
-  const canceled = await cancel({}, { task_id: "task_queue_1" });
-  assert.equal(canceled.ok, true);
-  const canceledItem = await waitForQueueStatus(listQueue, "task_queue_1", "canceled");
-  assert.equal(String(canceledItem.status || ""), "canceled");
+    const canceled = await cancel({}, { task_id: "task_queue_1" });
+    assert.equal(canceled.ok, true);
+    const canceledItem = await waitForQueueStatus(listQueue, "task_queue_1", "canceled");
+    assert.equal(String(canceledItem.status || ""), "canceled");
 
-  const resumed = await setControl({}, { paused: false });
-  assert.equal(resumed.ok, true);
+    const resumed = await setControl({}, { paused: false });
+    assert.equal(resumed.ok, true);
 
-  const enqueuedReview = await enqueue({}, {
-    task_id: "task_review_2",
-    label: "review workflow 2",
-    payload: { workflow: { workflow_id: "wf_3", nodes: [], edges: [] } },
-    cfg: {},
-    priority: 100,
-  });
-  assert.equal(enqueuedReview.ok, true);
-  const terminalItem = await waitForQueueStatus(listQueue, "task_review_2", "pending_review");
-  assert.equal(String(terminalItem.status || ""), "pending_review");
+    const enqueuedReview = await enqueue({}, {
+      task_id: "task_review_2",
+      label: "review workflow 2",
+      payload: { workflow: { workflow_id: "wf_3", nodes: [], edges: [] } },
+      cfg: {},
+      priority: 100,
+    });
+    assert.equal(enqueuedReview.ok, true);
+    const terminalItem = await waitForQueueStatus(listQueue, "task_review_2", "pending_review");
+    assert.equal(String(terminalItem.status || ""), "pending_review");
 
-  const rejected = await cancel({}, { task_id: "task_review_2" });
-  assert.equal(rejected.ok, false);
-  assert.match(String(rejected.error || ""), /not cancellable/i);
-  const afterReject = await waitForQueueStatus(listQueue, "task_review_2", "pending_review");
-  assert.equal(String(afterReject.status || ""), "pending_review");
+    const rejected = await cancel({}, { task_id: "task_review_2" });
+    assert.equal(rejected.ok, false);
+    assert.match(String(rejected.error || ""), /not cancellable/i);
+    const afterReject = await waitForQueueStatus(listQueue, "task_review_2", "pending_review");
+    assert.equal(String(afterReject.status || ""), "pending_review");
+  } finally {
+    restore();
+  }
 });

@@ -255,14 +255,16 @@ $("btnDifyWizard").onclick=async()=>{
     setStatus("Dify 连接向导失败: "+e,false);
   }
 };
-$("btnWorkflow").onclick=async()=>{
-  try{
-    switchShellTab("workflow", { focusWorkflow: true });
-    setStatus("已切换到 Workflow Studio", true);
-  }catch(e){
-    setStatus("打开 Workflow Studio 失败: "+e, false);
-  }
-};
+if ($("btnWorkflow")) {
+  $("btnWorkflow").onclick=async()=>{
+    try{
+      switchShellTab("workflow", { focusWorkflow: true });
+      setStatus("已切换到 Legacy Workflow Studio", true);
+    }catch(e){
+      setStatus("打开 Legacy Workflow Studio 失败: "+e, false);
+    }
+  };
+}
 $("btnRouteDiag").onclick=async()=>{ await refreshRouteDiagnostics(); };
 $("btnSelfCheck").onclick=async()=>{ await refreshStartupSelfCheck(false); };
 $("btnGateUnit").onclick=async()=>{ await runGateScript("test:unit"); };

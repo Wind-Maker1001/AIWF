@@ -1,16 +1,30 @@
-﻿# AIWF Offline Delivery (Minimal Bundle)
+# AIWF Electron Compatibility Offline Delivery (Minimal Bundle)
+
+This document exists for the secondary Electron compatibility frontend.
+
+WinUI is the primary frontend. Use this path only when you explicitly need the Electron compatibility shell and its legacy installer/portable artifacts.
 
 ## Goal
 
-Build a minimal package that can be copied to another Windows machine and installed directly.
+Build a minimal Electron compatibility package that can be copied to another Windows machine and installed directly.
 
 ## 1. Build Desktop Exe
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -BuildWin -BuildInstaller
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_electron_compatibility.ps1 -Version "<version>"
 ```
 
+Compatibility release audit:
+
+- `release\release_gate_audit_<version>.json`
+- includes `frontend_verification.primary` and `frontend_verification.compatibility`
+- includes `architecture_scorecard`
+- references the latest `ops\logs\frontend_verification\frontend_primary_verification_latest.json` and `frontend_compatibility_verification_latest.json`
+- references `ops\logs\architecture\architecture_scorecard_release_ready_latest.json` and `architecture_scorecard_release_ready_latest.md`
+- release is now blocked unless `architecture_scorecard_release_ready_latest.json` reports `overall_status = passed`
+
 Output example:
+
 - `apps\dify-desktop\dist\AIWF Dify Desktop <version>.exe`
 - `apps\dify-desktop\dist\AIWF Dify Desktop Setup <version>.exe`
 
@@ -25,51 +39,73 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\package_offline_bundle.ps
 ```
 
 Bundle output:
+
 - `release\offline_bundle_<version>_installer\AIWF_Offline_Bundle`
 - `release\offline_bundle_<version>_portable\AIWF_Offline_Bundle`
 
 Bundle content:
-- desktop `.exe`（按 `PackageType`）
+
+- desktop `.exe` by `PackageType`
 - optional `.blockmap`
 - `README.txt`
 - `SHA256SUMS.txt`
 - `manifest.json`
 - `RELEASE_NOTES.md`
 - docs (`quickstart_desktop_offline.md`, `dify_desktop_app.md`, this file)
+- `contracts/desktop/`
+- `contracts/workflow/`
+- `contracts/rust/`
+- `contracts/governance/`
+- `contracts/desktop/template_pack_artifact.schema.json`
+- `contracts/desktop/local_template_storage.schema.json`
+- `contracts/desktop/office_theme_catalog.schema.json`
+- `contracts/desktop/office_layout_catalog.schema.json`
+- `contracts/desktop/cleaning_template_registry.schema.json`
+- `contracts/desktop/offline_template_catalog_pack_manifest.schema.json`
+- `contracts/workflow/workflow.schema.json`
+- `contracts/workflow/render_contract.schema.json`
+- `contracts/workflow/minimal_workflow.v1.json`
+- `contracts/rust/operators_manifest.v1.json`
+- `contracts/rust/operators_manifest.schema.json`
+- `contracts/governance/governance_capabilities.v1.json`
 
-Generate a single zip for copy:
+Generate a zip for copying:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\zip_offline_bundle.ps1
-# or pin version explicitly
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\zip_offline_bundle.ps1 -Version "<version>" -PackageType installer
 ```
 
-## 3. Validate Docs Links (Optional)
+## 3. Validate Docs Links
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_docs_links.ps1 -IncludeReadme
 ```
 
-## 4. Copy to Target Machine
+Recommended before a compatibility release:
 
-Copy the whole folder:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Compatibility
+```
+
+## 4. Copy To Target Machine
+
+Copy:
+
 - `release\offline_bundle_<version>_installer\AIWF_Offline_Bundle`
 
-On target machine:
-1. Run desktop exe.
-2. Launch app.
+On the target machine:
+
+1. Run the desktop exe.
+2. Launch the app.
 3. Keep `离线本地模式`.
-4. Drag raw files into queue and click `开始生成`.
+4. Drag raw files into the queue and click `开始生成`.
 
 ## 5. Notes
 
+- This path is compatibility-only, not the main desktop release path.
 - Offline mode does not require local SQL/Java/Rust/Python services.
-- OCR on images is enabled by default in Desktop GUI.
-- If bundle includes `tools/` (from `-IncludeBundledTools`), app will优先使用内置 `tesseract/pdftoppm`。
-- If runtime dependency is missing, app will auto-fallback and show warning.
-- Default output root follows the desktop config:
-  - `E:\Desktop_Real\AIWF` when `E:\Desktop_Real` exists
-  - otherwise `Desktop\AIWF_Builds`
-- Task artifacts are written under `<output_root>\<job_id>\artifacts`.
-- If the user changes `输出目录` in the desktop app, that custom path becomes the new artifact root.
+- OCR on images is enabled by default in the Electron GUI.
+- If bundle includes `tools/`, the app will prefer bundled `tesseract/pdftoppm`.
+- If runtime dependency is missing, the app will auto-fallback and show a warning.

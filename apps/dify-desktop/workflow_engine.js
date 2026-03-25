@@ -101,7 +101,9 @@ function createWorkflowChipletRegistry(config = {}) {
 }
 
 async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeCache = null }) {
-  const graph = normalizeWorkflow(payload);
+  const normalizedWorkflow = normalizeWorkflow(payload);
+  const graph = normalizedWorkflow.graph;
+  const workflowContract = normalizedWorkflow.contract;
   const governance = mergeGovernanceProfile(payload, config);
   const actorRole = String(payload?.actor_role || payload?.actor?.role || "owner");
   const validation = validateGraph(graph);
@@ -113,6 +115,8 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       status: "invalid_graph",
       error: validation.errors.join("; "),
       node_runs: graph.nodes.map(makeNodeRun),
+      workflow: graph,
+      workflow_contract: workflowContract,
     };
   }
   const authz = authorizeGraph(graph, actorRole, governance);
@@ -128,6 +132,8 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
         authorization: authz,
       },
       node_runs: graph.nodes.map(makeNodeRun),
+      workflow: graph,
+      workflow_contract: workflowContract,
     };
   }
 
@@ -208,6 +214,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       template_validation: templateValidation,
       pending_reviews: ctx.manualReviewRequests || [],
       workflow: graph,
+      workflow_contract: workflowContract,
       diagnostics: buildWorkflowDiagnostics(orderedNodeRuns),
       governance: {
         actor_role: actorRole,
@@ -240,6 +247,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       node_outputs: ctx.nodeOutputs || {},
       pending_reviews: ctx.manualReviewRequests || [],
       workflow: graph,
+      workflow_contract: workflowContract,
       governance: {
         actor_role: actorRole,
         authorization: authz,

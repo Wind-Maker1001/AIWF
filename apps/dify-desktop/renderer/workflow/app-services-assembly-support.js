@@ -28,6 +28,7 @@ function buildCoreServicesContext(ctx = {}) {
     setSelectedEdge: (edge) => state.setSelectedEdge?.(edge),
     getCfgViewMode: () => state.getCfgViewMode?.() ?? "form",
     setCfgViewMode: (mode) => state.setCfgViewMode?.(mode),
+    nodeCatalog: staticConfig.nodeCatalog,
     nodeFormSchemas: staticConfig.nodeFormSchemas,
     edgeHintsByNodeType: staticConfig.edgeHintsByNodeType,
     sandboxDedupWindowSec: () => coreServicesRef.current?.sandboxDedupWindowSec?.() ?? 0,

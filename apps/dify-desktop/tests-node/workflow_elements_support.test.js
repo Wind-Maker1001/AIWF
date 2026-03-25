@@ -19,7 +19,9 @@ test("workflow elements compose selectors from grouped helpers", async () => {
   const els = getWorkflowElements(getById);
   assert.equal(els.templateSelect.id, "templateSelect");
   assert.equal(els.canvasWrap.id, "canvasWrap");
+  assert.equal(els.nodeTypePolicyHint.id, "nodeTypePolicyHint");
   assert.equal(els.edgeWhenText.id, "edgeWhenText");
+  assert.equal(els.selectedNodePolicyInfo.id, "selectedNodePolicyInfo");
   assert.equal(els.compareRunA.id, "compareRunA");
   assert.ok(calls.includes("qualityGateRunIdFilter"));
   assert.ok(calls.includes("btnAdd"));

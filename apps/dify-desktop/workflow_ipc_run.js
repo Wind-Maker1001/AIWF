@@ -13,9 +13,12 @@ function registerWorkflowRunIpc(ctx, deps) {
     appendRunHistory,
     extractSandboxViolations,
     appendAudit,
-    historySupport,
+    getRun,
+    enqueueReviews,
     reportSupport,
     sandboxSupport,
+    sandboxRuleStore,
+    sandboxAutoFixStore,
   } = deps;
 
   ipcMain.handle("aiwf:openWorkflowStudio", async () => {
@@ -25,7 +28,12 @@ function registerWorkflowRunIpc(ctx, deps) {
 
   ipcMain.handle("aiwf:runWorkflow", async (_evt, payload, cfg) => {
     const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });
-    const effectivePayload = reportSupport.applyQualityRuleSetToPayload(sandboxSupport.applySandboxAutoFixPayload(payload || {}));
+    const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
+    if (!rulesOut?.ok) return rulesOut;
+    const effectivePayload = await reportSupport.applyQualityRuleSetToPayload(
+      await sandboxAutoFixStore.applyPayload(payload || {}, merged),
+      merged
+    );
     const out = sandboxSupport.attachQualityGate(await runMinimalWorkflow({
       payload: effectivePayload,
       config: merged,
@@ -34,15 +42,17 @@ function registerWorkflowRunIpc(ctx, deps) {
     }), effectivePayload || {});
     appendDiagnostics(out);
     appendRunHistory(out, effectivePayload, merged);
-    extractSandboxViolations(out).forEach((item) => sandboxSupport.appendSandboxViolationAudit(item, effectivePayload || {}));
-    sandboxSupport.maybeApplySandboxAutoFix(out, effectivePayload || {});
+    extractSandboxViolations(out).forEach((item) => sandboxSupport.appendSandboxViolationAudit(item, effectivePayload || {}, rulesOut.rules || {}));
+    await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
     appendAudit("run_workflow", {
       run_id: String(out?.run_id || ""),
       workflow_id: String(out?.workflow_id || ""),
       ok: !!out?.ok,
       status: String(out?.status || ""),
     });
-    if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) historySupport.enqueueReviews(out.pending_reviews);
+    if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
+      await enqueueReviews(out.pending_reviews, merged);
+    }
     return out;
   });
 
@@ -50,7 +60,8 @@ function registerWorkflowRunIpc(ctx, deps) {
     try {
       const runId = String(req?.run_id || "").trim();
       const nodeId = String(req?.node_id || "").trim();
-      const found = historySupport.findRunById(runId);
+      const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });
+      const found = await getRun(runId, merged);
       if (!found) return { ok: false, error: `run not found: ${runId}` };
       const basePayload = found.payload && typeof found.payload === "object" ? found.payload : {};
       const replayPayload = {
@@ -64,19 +75,26 @@ function registerWorkflowRunIpc(ctx, deps) {
           outputs: found?.result?.node_outputs || {},
         },
       };
-      const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(found.config || {}), ...(cfg || {}) });
-      const effectivePayload = reportSupport.applyQualityRuleSetToPayload(sandboxSupport.applySandboxAutoFixPayload(replayPayload));
+      const replayMerged = normalizeWorkflowConfig({ ...loadConfig(), ...(found.config || {}), ...(cfg || {}) });
+      const rulesOut = await sandboxRuleStore.getRuntimeRules(replayMerged);
+      if (!rulesOut?.ok) return rulesOut;
+      const effectivePayload = await reportSupport.applyQualityRuleSetToPayload(
+        await sandboxAutoFixStore.applyPayload(replayPayload, replayMerged),
+        replayMerged
+      );
       const out = sandboxSupport.attachQualityGate(await runMinimalWorkflow({
         payload: effectivePayload,
-        config: merged,
-        outputRoot: resolveOutputRoot(merged),
+        config: replayMerged,
+        outputRoot: resolveOutputRoot(replayMerged),
         nodeCache: createNodeCacheApi(),
       }), effectivePayload || {});
       appendDiagnostics(out);
-      appendRunHistory(out, effectivePayload, merged);
-      extractSandboxViolations(out).forEach((item) => sandboxSupport.appendSandboxViolationAudit(item, effectivePayload || {}));
-      sandboxSupport.maybeApplySandboxAutoFix(out, effectivePayload || {});
-      if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) historySupport.enqueueReviews(out.pending_reviews);
+      appendRunHistory(out, effectivePayload, replayMerged);
+      extractSandboxViolations(out).forEach((item) => sandboxSupport.appendSandboxViolationAudit(item, effectivePayload || {}, rulesOut.rules || {}));
+      await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, replayMerged);
+      if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
+        await enqueueReviews(out.pending_reviews, replayMerged);
+      }
       return { ok: true, replay_of: runId, resumed_from: nodeId || null, result: out };
     } catch (error) {
       return { ok: false, error: String(error) };

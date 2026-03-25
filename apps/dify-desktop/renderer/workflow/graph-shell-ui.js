@@ -9,14 +9,15 @@ function createWorkflowGraphShellUi(els, deps = {}) {
     setSelectedEdge = () => {},
     renderAll = () => {},
     setStatus = () => {},
-    getResetWorkflowName = () => "自由编排流程",
+    getResetWorkflowName = () => "鑷敱缂栨帓娴佺▼",
     renderMigrationReport = () => {},
   } = deps;
 
   function applyRestoredWorkflowGraph(graph) {
-    store.importGraph(graph || {});
+    const imported = store.importGraph(graph || {});
     setSelectedEdge(null);
     renderAll();
+    return imported;
   }
 
   function resetWorkflow() {

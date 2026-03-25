@@ -37,9 +37,9 @@ function setupWorkflowDebugApi(win, deps = {}) {
         return canvas.getSelectedIds();
       },
       setGraph: (graph) => {
-        store.importGraph(graph || {});
+        const imported = store.importGraph(graph || {});
         renderAll();
-        return store.exportGraph();
+        return imported.graph;
       },
     });
     return true;

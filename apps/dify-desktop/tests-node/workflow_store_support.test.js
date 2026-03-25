@@ -12,6 +12,7 @@ test("workflow store support derives next ids and normalizes imported graphs", a
   const {
     nextNodeIdFromNodes,
     normalizeImportedGraph,
+    normalizeImportedGraphWithContract,
     wouldGraphCreateCycle,
   } = await loadStoreSupportModule();
 
@@ -20,14 +21,23 @@ test("workflow store support derives next ids and normalizes imported graphs", a
   const graph = normalizeImportedGraph({
     workflow_id: "w1",
     name: "demo",
-    nodes: [{ id: "n1", type: "load_rows_v2" }, { type: "aggregate_rows_v2" }],
+    nodes: [{ id: "n1", type: "load_rows_v2" }, { id: "n2", type: "aggregate_rows_v2" }],
     edges: [{ from: "n1", to: "n2" }, { from: "n2", to: "n2" }, { from: "x", to: "n1" }],
   });
   assert.equal(graph.workflow_id, "w1");
+  assert.equal(graph.version, "1.0.0");
   assert.equal(graph.nodes.length, 2);
   assert.equal(graph.edges.length, 1);
   assert.equal(graph.edges[0].from, "n1");
   assert.equal(graph.edges[0].to, "n2");
+
+  const imported = normalizeImportedGraphWithContract({
+    workflow_id: "w_migrate",
+    nodes: [{ id: "n1", type: "ingest_files" }],
+    edges: [],
+  });
+  assert.equal(imported.graph.version, "1.0.0");
+  assert.equal(imported.contract.migrated, true);
 
   assert.equal(
     wouldGraphCreateCycle(
@@ -37,5 +47,21 @@ test("workflow store support derives next ids and normalizes imported graphs", a
       "n1"
     ),
     true
+  );
+});
+
+test("workflow store support rejects unregistered node types on import", async () => {
+  const {
+    normalizeImportedGraphWithContract,
+  } = await loadStoreSupportModule();
+
+  assert.throws(
+    () => normalizeImportedGraphWithContract({
+      workflow_id: "wf_unknown_type",
+      version: "1.0.0",
+      nodes: [{ id: "n1", type: "unknown_future_node" }],
+      edges: [],
+    }),
+    /unregistered node types in import/i,
   );
 });

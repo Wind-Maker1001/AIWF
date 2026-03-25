@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "aiwf/contracts/desktop/office_layout_catalog.schema.json",
+  "title": "AIWF Office Layout Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "layouts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "office_layout_catalog.v1"
+    },
+    "layouts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  }
+}

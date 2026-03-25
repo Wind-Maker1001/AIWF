@@ -1,3 +1,10 @@
+const WORKFLOW_TASK_QUEUE_SCHEMA_VERSION = "workflow_task_queue_store.v1";
+const WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION = "workflow_queue_control.v1";
+const WORKFLOW_NODE_CACHE_SCHEMA_VERSION = "workflow_node_cache_store.v1";
+const WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION = "workflow_node_cache_metrics.v1";
+const TEMPLATE_MARKETPLACE_SCHEMA_VERSION = "template_marketplace_store.v1";
+const TEMPLATE_PACK_ENTRY_SCHEMA_VERSION = "template_pack_entry.v1";
+
 function createWorkflowIpcStateSupport(ctx) {
   const {
     app,
@@ -23,18 +30,6 @@ function createWorkflowIpcStateSupport(ctx) {
     return path.join(workflowStoreDir(), "run_history.jsonl");
   }
 
-  function reviewQueuePath() {
-    return path.join(workflowStoreDir(), "manual_review_queue.json");
-  }
-
-  function reviewHistoryPath() {
-    return path.join(workflowStoreDir(), "manual_review_history.jsonl");
-  }
-
-  function workflowVersionsPath() {
-    return path.join(workflowStoreDir(), "workflow_versions.jsonl");
-  }
-
   function workflowQueuePath() {
     return path.join(workflowStoreDir(), "workflow_task_queue.json");
   }
@@ -51,40 +46,12 @@ function createWorkflowIpcStateSupport(ctx) {
     return path.join(workflowStoreDir(), "workflow_node_cache_metrics.json");
   }
 
-  function workflowAppsPath() {
-    return path.join(workflowStoreDir(), "workflow_apps.json");
-  }
-
   function templateMarketplacePath() {
     return path.join(workflowStoreDir(), "template_marketplace.json");
   }
 
-  function qualityRuleCenterPath() {
-    return path.join(workflowStoreDir(), "quality_rule_center.json");
-  }
-
-  function runBaselinePath() {
-    return path.join(workflowStoreDir(), "workflow_run_baselines.json");
-  }
-
   function workflowAuditPath() {
     return path.join(workflowStoreDir(), "workflow_audit.jsonl");
-  }
-
-  function sandboxAlertStatePath() {
-    return path.join(workflowStoreDir(), "workflow_sandbox_alert_state.json");
-  }
-
-  function sandboxAlertRulesPath() {
-    return path.join(workflowStoreDir(), "workflow_sandbox_alert_rules.json");
-  }
-
-  function sandboxAlertRuleVersionsPath() {
-    return path.join(workflowStoreDir(), "workflow_sandbox_alert_rule_versions.jsonl");
-  }
-
-  function sandboxAutoFixStatePath() {
-    return path.join(workflowStoreDir(), "workflow_sandbox_autofix_state.json");
   }
 
   function readJsonFile(filePath, fallback) {
@@ -102,8 +69,35 @@ function createWorkflowIpcStateSupport(ctx) {
     fs.writeFileSync(filePath, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
   }
 
+  function normalizeVersionedJsonContainer(raw, schemaVersion, fallback, normalizePayload) {
+    const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const normalized = typeof normalizePayload === "function"
+      ? normalizePayload(source)
+      : { ...(fallback && typeof fallback === "object" ? fallback : {}), ...source };
+    return {
+      ...normalized,
+      schema_version: schemaVersion,
+    };
+  }
+
   function deepClone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function normalizeTemplatePackItem(item, index = 0) {
+    const source = item && typeof item === "object" ? item : {};
+    const templates = Array.isArray(source.templates) ? deepClone(source.templates) : [];
+    const id = String(source.id || `pack_${index + 1}`).trim() || `pack_${index + 1}`;
+    return {
+      ...source,
+      schema_version: TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
+      id,
+      name: String(source.name || id).trim() || id,
+      version: String(source.version || "v1").trim() || "v1",
+      source: String(source.source || "unknown").trim() || "unknown",
+      templates,
+      created_at: String(source.created_at || new Date().toISOString()),
+    };
   }
 
   function resolveOutputRoot(cfg = null) {
@@ -217,38 +211,23 @@ function createWorkflowIpcStateSupport(ctx) {
     return out;
   }
 
-  function appendWorkflowVersion(item) {
-    try {
-      fs.appendFileSync(workflowVersionsPath(), `${JSON.stringify(item)}\n`, "utf8");
-    } catch {}
-  }
-
-  function listWorkflowVersions(limit = 200, workflowName = "") {
-    const filePath = workflowVersionsPath();
-    if (!fs.existsSync(filePath)) return [];
-    const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter((line) => line.trim());
-    const all = lines
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean)
-      .reverse();
-    const key = String(workflowName || "").trim();
-    const filtered = key ? all.filter((item) => String(item.workflow_name || "") === key) : all;
-    return filtered.slice(0, Math.max(1, Math.min(2000, Number(limit || 200))));
-  }
-
   function loadWorkflowQueue() {
-    const obj = readJsonFile(workflowQueuePath(), { items: [] });
+    const obj = normalizeVersionedJsonContainer(
+      readJsonFile(workflowQueuePath(), { items: [] }),
+      WORKFLOW_TASK_QUEUE_SCHEMA_VERSION,
+      { items: [] },
+      (source) => ({
+        items: Array.isArray(source?.items) ? source.items : (Array.isArray(source) ? source : []),
+      })
+    );
     return Array.isArray(obj?.items) ? obj.items : [];
   }
 
   function saveWorkflowQueue(items) {
-    writeJsonFile(workflowQueuePath(), { items: Array.isArray(items) ? items : [] });
+    writeJsonFile(workflowQueuePath(), {
+      schema_version: WORKFLOW_TASK_QUEUE_SCHEMA_VERSION,
+      items: Array.isArray(items) ? items : [],
+    });
   }
 
   function defaultQueueControl() {
@@ -274,15 +253,32 @@ function createWorkflowIpcStateSupport(ctx) {
   }
 
   function loadQueueControl() {
-    return normalizeQueueControl(readJsonFile(workflowQueueControlPath(), defaultQueueControl()));
+    const container = normalizeVersionedJsonContainer(
+      readJsonFile(workflowQueueControlPath(), defaultQueueControl()),
+      WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION,
+      defaultQueueControl(),
+      (source) => normalizeQueueControl(source)
+    );
+    return normalizeQueueControl(container);
   }
 
   function saveQueueControl(control) {
-    writeJsonFile(workflowQueueControlPath(), normalizeQueueControl(control));
+    writeJsonFile(workflowQueueControlPath(), {
+      schema_version: WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION,
+      ...normalizeQueueControl(control),
+    });
   }
 
   function loadNodeCacheStore() {
-    const obj = readJsonFile(nodeCachePath(), { items: {}, order: [] });
+    const obj = normalizeVersionedJsonContainer(
+      readJsonFile(nodeCachePath(), { items: {}, order: [] }),
+      WORKFLOW_NODE_CACHE_SCHEMA_VERSION,
+      { items: {}, order: [] },
+      (source) => ({
+        items: source && typeof source.items === "object" && !Array.isArray(source.items) ? source.items : {},
+        order: Array.isArray(source?.order) ? source.order.map((item) => String(item || "")) : [],
+      })
+    );
     const items = obj && typeof obj.items === "object" && !Array.isArray(obj.items) ? obj.items : {};
     const order = Array.isArray(obj?.order) ? obj.order.map((item) => String(item || "")) : [];
     return { items, order };
@@ -297,11 +293,26 @@ function createWorkflowIpcStateSupport(ctx) {
       const key = order.shift();
       if (key) delete items[key];
     }
-    writeJsonFile(nodeCachePath(), { items, order });
+    writeJsonFile(nodeCachePath(), {
+      schema_version: WORKFLOW_NODE_CACHE_SCHEMA_VERSION,
+      items,
+      order,
+    });
   }
 
   function loadNodeCacheMetrics() {
-    const metrics = readJsonFile(nodeCacheMetricsPath(), {});
+    const metrics = normalizeVersionedJsonContainer(
+      readJsonFile(nodeCacheMetricsPath(), {}),
+      WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION,
+      {},
+      (source) => ({
+        hits: Number(source?.hits || 0),
+        misses: Number(source?.misses || 0),
+        sets: Number(source?.sets || 0),
+        last_reset_at: String(source?.last_reset_at || ""),
+        updated_at: String(source?.updated_at || ""),
+      })
+    );
     return {
       hits: Number(metrics?.hits || 0),
       misses: Number(metrics?.misses || 0),
@@ -313,6 +324,7 @@ function createWorkflowIpcStateSupport(ctx) {
 
   function saveNodeCacheMetrics(metrics) {
     writeJsonFile(nodeCacheMetricsPath(), {
+      schema_version: WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION,
       hits: Number(metrics?.hits || 0),
       misses: Number(metrics?.misses || 0),
       sets: Number(metrics?.sets || 0),
@@ -388,42 +400,24 @@ function createWorkflowIpcStateSupport(ctx) {
     });
   }
 
-  function listWorkflowApps(limit = 200) {
-    const obj = readJsonFile(workflowAppsPath(), { items: [] });
-    const items = Array.isArray(obj?.items) ? obj.items : [];
-    return items.slice(0, Math.max(1, Math.min(2000, Number(limit || 200))));
-  }
-
-  function saveWorkflowApps(items) {
-    writeJsonFile(workflowAppsPath(), { items: Array.isArray(items) ? items : [] });
-  }
-
   function listTemplateMarketplace(limit = 500) {
-    const obj = readJsonFile(templateMarketplacePath(), { items: [] });
+    const obj = normalizeVersionedJsonContainer(
+      readJsonFile(templateMarketplacePath(), { items: [] }),
+      TEMPLATE_MARKETPLACE_SCHEMA_VERSION,
+      { items: [] },
+      (source) => ({
+        items: Array.isArray(source?.items) ? source.items.map(normalizeTemplatePackItem) : [],
+      })
+    );
     const items = Array.isArray(obj?.items) ? obj.items : [];
     return items.slice(0, Math.max(1, Math.min(5000, Number(limit || 500))));
   }
 
   function saveTemplateMarketplace(items) {
-    writeJsonFile(templateMarketplacePath(), { items: Array.isArray(items) ? items : [] });
-  }
-
-  function listQualityRuleCenter() {
-    const obj = readJsonFile(qualityRuleCenterPath(), { sets: [] });
-    return Array.isArray(obj?.sets) ? obj.sets : [];
-  }
-
-  function saveQualityRuleCenter(sets) {
-    writeJsonFile(qualityRuleCenterPath(), { sets: Array.isArray(sets) ? sets : [] });
-  }
-
-  function listRunBaselines() {
-    const obj = readJsonFile(runBaselinePath(), { items: [] });
-    return Array.isArray(obj?.items) ? obj.items : [];
-  }
-
-  function saveRunBaselines(items) {
-    writeJsonFile(runBaselinePath(), { items: Array.isArray(items) ? items : [] });
+    writeJsonFile(templateMarketplacePath(), {
+      schema_version: TEMPLATE_MARKETPLACE_SCHEMA_VERSION,
+      items: Array.isArray(items) ? items.map(normalizeTemplatePackItem) : [],
+    });
   }
 
   function appendAudit(action, detail) {
@@ -441,7 +435,6 @@ function createWorkflowIpcStateSupport(ctx) {
     appendAudit,
     appendDiagnostics,
     appendRunHistory,
-    appendWorkflowVersion,
     cacheStats,
     clearNodeCache,
     createNodeCacheApi,
@@ -451,11 +444,7 @@ function createWorkflowIpcStateSupport(ctx) {
     extractSandboxViolations,
     isMockIoAllowed,
     isPathWithin,
-    listQualityRuleCenter,
-    listRunBaselines,
     listTemplateMarketplace,
-    listWorkflowApps,
-    listWorkflowVersions,
     loadQueueControl,
     loadWorkflowQueue,
     mockIoRoots,
@@ -464,35 +453,28 @@ function createWorkflowIpcStateSupport(ctx) {
     normalizeAbsPath,
     normalizeQueueControl,
     normalizeWorkflowConfig,
-    qualityRuleCenterPath,
     readJsonFile,
     resolveMockFilePath,
     resolveOutputRoot,
-    reviewHistoryPath,
-    reviewQueuePath,
-    runBaselinePath,
     runHistoryPath,
-    sandboxAlertRuleVersionsPath,
-    sandboxAlertRulesPath,
-    sandboxAlertStatePath,
-    sandboxAutoFixStatePath,
-    saveQualityRuleCenter,
     saveQueueControl,
-    saveRunBaselines,
     saveTemplateMarketplace,
-    saveWorkflowApps,
     saveWorkflowQueue,
     templateMarketplacePath,
-    workflowAppsPath,
     workflowAuditPath,
     workflowQueueControlPath,
     workflowQueuePath,
     workflowStoreDir,
-    workflowVersionsPath,
     writeJsonFile,
   };
 }
 
 module.exports = {
+  TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
+  TEMPLATE_MARKETPLACE_SCHEMA_VERSION,
+  WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION,
+  WORKFLOW_NODE_CACHE_SCHEMA_VERSION,
+  WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION,
+  WORKFLOW_TASK_QUEUE_SCHEMA_VERSION,
   createWorkflowIpcStateSupport,
 };

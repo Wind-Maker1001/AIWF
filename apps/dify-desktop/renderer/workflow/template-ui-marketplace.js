@@ -1,3 +1,9 @@
+import {
+  LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+  parseLocalTemplateStorageText,
+  stringifyLocalTemplateStorage,
+} from "./template-storage-contract.js";
+
 function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
   const {
     templateStorageKey = "aiwf.workflow.templates.v1",
@@ -15,8 +21,14 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     try {
       const raw = window.localStorage.getItem(templateStorageKey);
       if (!raw) return [];
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr : [];
+      const normalized = parseLocalTemplateStorageText(raw, {
+        allowStorageSchemaMigration: true,
+        allowEntrySchemaMigration: true,
+      });
+      if (normalized.migrated) {
+        window.localStorage.setItem(templateStorageKey, JSON.stringify(normalized));
+      }
+      return Array.isArray(normalized.items) ? normalized.items : [];
     } catch {
       return [];
     }
@@ -24,7 +36,13 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
 
   function saveLocalTemplates(items) {
     try {
-      window.localStorage.setItem(templateStorageKey, JSON.stringify(Array.isArray(items) ? items : []));
+      window.localStorage.setItem(templateStorageKey, stringifyLocalTemplateStorage({
+        schema_version: "local_template_storage.v1",
+        items: Array.isArray(items) ? items : [],
+      }, {
+        allowStorageSchemaMigration: false,
+        allowEntrySchemaMigration: true,
+      }));
     } catch {}
   }
 
@@ -56,6 +74,7 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     const custom = loadLocalTemplates();
     const id = `custom_${Date.now()}`;
     custom.push({
+      schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
       id,
       name,
       graph: graphPayload(),

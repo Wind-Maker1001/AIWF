@@ -6,17 +6,18 @@ function createWorkflowSandboxSupport(deps) {
     nowIso,
     appendAudit,
     extractSandboxViolations,
-    sandboxAlertRuleVersionsPath,
-    sandboxAlertRulesPath,
-    sandboxAlertStatePath,
-    sandboxAutoFixStatePath,
-    workflowAuditPath,
     listRunHistory,
+    listRunRecords = null,
     queueState,
     defaultQueueControl,
     saveQueueControl,
     enqueueReviews,
+    persistSandboxAutoFixState = async () => ({ ok: true }),
   } = deps;
+
+  const sandboxAlertState = {
+    last_by_key: {},
+  };
 
   function sandboxAlertCode(v) {
     const text = String(v?.error || "");
@@ -45,89 +46,8 @@ function createWorkflowSandboxSupport(deps) {
     };
   }
 
-  function loadSandboxAlertRules() {
-    return normalizeSandboxAlertRules(readJsonFile(sandboxAlertRulesPath(), {
-      whitelist_codes: [],
-      whitelist_node_types: [],
-      whitelist_keys: [],
-      mute_until_by_key: {},
-    }));
-  }
-
-  function saveSandboxAlertRules(rules) {
-    writeJsonFile(sandboxAlertRulesPath(), normalizeSandboxAlertRules(rules));
-  }
-
-  function appendSandboxRuleVersion(rules, meta = {}) {
-    try {
-      const item = {
-        version_id: `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
-        ts: nowIso(),
-        rules: normalizeSandboxAlertRules(rules),
-        meta: meta && typeof meta === "object" ? meta : {},
-      };
-      fs.appendFileSync(sandboxAlertRuleVersionsPath(), `${JSON.stringify(item)}\n`, "utf8");
-      return item;
-    } catch {
-      return null;
-    }
-  }
-
-  function listSandboxRuleVersions(limit = 200) {
-    const filePath = sandboxAlertRuleVersionsPath();
-    if (!fs.existsSync(filePath)) return [];
-    const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter((item) => item.trim());
-    return lines
-      .map((item) => {
-        try { return JSON.parse(item); } catch { return null; }
-      })
-      .filter(Boolean)
-      .reverse()
-      .slice(0, Math.max(1, Math.min(2000, Number(limit || 200))));
-  }
-
-  function compareSandboxRuleVersions(versionA, versionB) {
-    const items = listSandboxRuleVersions(5000);
-    const a = items.find((item) => String(item.version_id || "") === String(versionA || ""));
-    const b = items.find((item) => String(item.version_id || "") === String(versionB || ""));
-    if (!a || !b) return { ok: false, error: "rule version not found" };
-    const rulesA = normalizeSandboxAlertRules(a.rules || {});
-    const rulesB = normalizeSandboxAlertRules(b.rules || {});
-    const diffList = (key) => {
-      const setA = new Set(Array.isArray(rulesA[key]) ? rulesA[key] : []);
-      const setB = new Set(Array.isArray(rulesB[key]) ? rulesB[key] : []);
-      return {
-        added: Array.from(setB).filter((item) => !setA.has(item)),
-        removed: Array.from(setA).filter((item) => !setB.has(item)),
-      };
-    };
-    const muteA = rulesA.mute_until_by_key && typeof rulesA.mute_until_by_key === "object" ? rulesA.mute_until_by_key : {};
-    const muteB = rulesB.mute_until_by_key && typeof rulesB.mute_until_by_key === "object" ? rulesB.mute_until_by_key : {};
-    const muteKeys = Array.from(new Set([...Object.keys(muteA), ...Object.keys(muteB)])).sort();
-    const muteChanged = muteKeys
-      .filter((key) => String(muteA[key] || "") !== String(muteB[key] || ""))
-      .map((key) => ({ key, from: String(muteA[key] || ""), to: String(muteB[key] || "") }));
-    return {
-      ok: true,
-      summary: {
-        version_a: String(versionA || ""),
-        version_b: String(versionB || ""),
-      },
-      whitelist_codes: diffList("whitelist_codes"),
-      whitelist_node_types: diffList("whitelist_node_types"),
-      whitelist_keys: diffList("whitelist_keys"),
-      mute_changed: muteChanged,
-    };
-  }
-
-  function loadSandboxAutoFixState() {
-    const obj = readJsonFile(sandboxAutoFixStatePath(), {
-      violation_events: [],
-      forced_isolation_mode: "",
-      forced_until: "",
-      last_actions: [],
-      green_streak: 0,
-    });
+  function normalizeSandboxAutoFixState(state) {
+    const obj = state && typeof state === "object" ? state : {};
     return {
       violation_events: Array.isArray(obj?.violation_events) ? obj.violation_events : [],
       forced_isolation_mode: String(obj?.forced_isolation_mode || ""),
@@ -137,20 +57,11 @@ function createWorkflowSandboxSupport(deps) {
     };
   }
 
-  function saveSandboxAutoFixState(state) {
-    writeJsonFile(sandboxAutoFixStatePath(), {
-      violation_events: Array.isArray(state?.violation_events) ? state.violation_events.slice(-5000) : [],
-      forced_isolation_mode: String(state?.forced_isolation_mode || ""),
-      forced_until: String(state?.forced_until || ""),
-      last_actions: Array.isArray(state?.last_actions) ? state.last_actions.slice(-200) : [],
-      green_streak: Number.isFinite(Number(state?.green_streak)) ? Math.max(0, Math.floor(Number(state.green_streak))) : 0,
-      updated_at: nowIso(),
-    });
-  }
-
-  function applySandboxAutoFixPayload(payload) {
+  function applySandboxAutoFixPayload(payload, stateOverride = null) {
     const base = payload && typeof payload === "object" ? { ...payload } : {};
-    const state = loadSandboxAutoFixState();
+    const state = stateOverride && typeof stateOverride === "object"
+      ? normalizeSandboxAutoFixState(stateOverride)
+      : normalizeSandboxAutoFixState({});
     const until = Date.parse(String(state.forced_until || ""));
     if (state.forced_isolation_mode && Number.isFinite(until) && Date.now() < until) {
       base.chiplet_isolation_enabled = true;
@@ -196,7 +107,7 @@ function createWorkflowSandboxSupport(deps) {
     }
   }
 
-  async function maybeApplySandboxAutoFix(run, payload = {}) {
+  async function maybeApplySandboxAutoFix(run, payload = {}, options = null) {
     const req = payload && typeof payload === "object" ? payload : {};
     if (req.sandbox_autofix_enabled === false) return { triggered: false, actions: [] };
     const violations = extractSandboxViolations(run);
@@ -213,8 +124,10 @@ function createWorkflowSandboxSupport(deps) {
     const doPause = req?.sandbox_autofix_pause_queue !== false;
     const doReview = req?.sandbox_autofix_require_review !== false;
     const doForce = req?.sandbox_autofix_force_isolation !== false;
-    const state = loadSandboxAutoFixState();
-    state.green_streak = Number.isFinite(Number(state.green_streak)) ? Math.max(0, Math.floor(Number(state.green_streak))) : 0;
+    const override = options && typeof options === "object" ? options : {};
+    const state = override.state && typeof override.state === "object"
+      ? normalizeSandboxAutoFixState(override.state)
+      : normalizeSandboxAutoFixState({});
     const fresh = Array.isArray(state.violation_events)
       ? state.violation_events.filter((item) => Number.isFinite(Number(item?.ts_ms || 0)) && now - Number(item.ts_ms || 0) <= windowSec * 1000)
       : [];
@@ -311,7 +224,19 @@ function createWorkflowSandboxSupport(deps) {
         });
       }
     }
-    saveSandboxAutoFixState(state);
+    if (typeof override.persistState === "function") {
+      try {
+        await override.persistState(state, payload);
+      } catch (error) {
+        appendAudit("sandbox_autofix_mirror_failed", { error: String(error) });
+      }
+    } else {
+      try {
+        await persistSandboxAutoFixState(state, payload);
+      } catch (error) {
+        appendAudit("sandbox_autofix_mirror_failed", { error: String(error) });
+      }
+    }
     return {
       triggered: actions.length > 0,
       actions,
@@ -361,32 +286,17 @@ function createWorkflowSandboxSupport(deps) {
     return Number.isFinite(fromEnv) && fromEnv >= 0 ? Math.floor(fromEnv) : 600;
   }
 
-  function loadSandboxAlertState() {
-    const obj = readJsonFile(sandboxAlertStatePath(), { last_by_key: {} });
-    const lastByKey = obj?.last_by_key && typeof obj.last_by_key === "object" ? obj.last_by_key : {};
-    return { last_by_key: lastByKey };
-  }
-
-  function saveSandboxAlertState(state) {
-    writeJsonFile(sandboxAlertStatePath(), {
-      last_by_key: state?.last_by_key && typeof state.last_by_key === "object" ? state.last_by_key : {},
-      updated_at: nowIso(),
-    });
-  }
-
-  function appendSandboxViolationAudit(v, payload = null) {
-    const rules = loadSandboxAlertRules();
+  function appendSandboxViolationAudit(v, payload = null, rulesOverride = null) {
+    const rules = normalizeSandboxAlertRules(rulesOverride || {});
     const reason = sandboxSuppressionReason(v, rules, Date.now());
     if (reason) return false;
     const winSec = sandboxAlertDedupWindowSec(payload);
     const key = `${String(v?.node_type || "")}::${String(v?.node_id || "")}::${sandboxAlertCode(v)}`;
     if (winSec > 0) {
-      const state = loadSandboxAlertState();
       const now = Date.now();
-      const prev = Number(state?.last_by_key?.[key] || 0);
+      const prev = Number(sandboxAlertState.last_by_key[key] || 0);
       if (Number.isFinite(prev) && now - prev < winSec * 1000) return false;
-      state.last_by_key[key] = now;
-      saveSandboxAlertState(state);
+      sandboxAlertState.last_by_key[key] = now;
     }
     appendAudit("sandbox_violation", v);
     return true;
@@ -473,10 +383,9 @@ function createWorkflowSandboxSupport(deps) {
   }
 
   function listQualityGateReports(limit = 200, filter = {}) {
-    const runs = listRunHistory(limit);
     const runIdLike = String(filter?.run_id || "").trim().toLowerCase();
     const statusFilter = String(filter?.status || "").trim().toLowerCase();
-    return runs
+    const mapItems = (runs) => (runs || [])
       .map((run) => ({
         ts: String(run?.ts || ""),
         run_id: String(run?.run_id || ""),
@@ -495,6 +404,17 @@ function createWorkflowSandboxSupport(deps) {
         if (statusFilter === "pass" || statusFilter === "passed") return passed;
         return true;
       });
+    if (typeof listRunRecords !== "function") {
+      return {
+        ok: true,
+        items: mapItems(listRunHistory(limit)),
+      };
+    }
+    return Promise.resolve(listRunRecords(limit)).then((out) => {
+      if (Array.isArray(out)) return { ok: true, items: mapItems(out) };
+      if (out && typeof out === "object" && out.ok === false) return out;
+      return { ok: true, items: mapItems(Array.isArray(out?.items) ? out.items : []) };
+    });
   }
 
   function attachQualityGate(run, payload = {}) {
@@ -510,25 +430,9 @@ function createWorkflowSandboxSupport(deps) {
     return output;
   }
 
-  function listAudit(limit = 200, action = "") {
-    const filePath = workflowAuditPath();
-    if (!fs.existsSync(filePath)) return [];
-    const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter((item) => item.trim());
-    const actionKey = String(action || "").trim();
-    const all = lines
-      .slice(Math.max(0, lines.length - Math.max(1, Math.min(5000, Number(limit || 200)))))
-      .map((item) => {
-        try { return JSON.parse(item); } catch { return null; }
-      })
-      .filter(Boolean)
-      .reverse();
-    return actionKey ? all.filter((item) => String(item.action || "") === actionKey) : all;
-  }
-
-  function sandboxAlerts(limit = 400, thresholds = null, dedupWindowSec = 0) {
-    const runs = listRunHistory(limit);
+  function buildSandboxAlertsFromRuns(runs, thresholds = null, dedupWindowSec = 0, rulesOverride = null) {
     const items = [];
-    runs.forEach((run) => {
+    (runs || []).forEach((run) => {
       const result = run?.result || {};
       extractSandboxViolations(result).forEach((violation) => {
         items.push({
@@ -537,7 +441,7 @@ function createWorkflowSandboxSupport(deps) {
         });
       });
     });
-    const rules = loadSandboxAlertRules();
+    const rules = normalizeSandboxAlertRules(rulesOverride || {});
     const filtered = [];
     let suppressedWhitelist = 0;
     let suppressedMuted = 0;
@@ -584,22 +488,27 @@ function createWorkflowSandboxSupport(deps) {
     };
   }
 
+  function sandboxAlerts(limit = 400, thresholds = null, dedupWindowSec = 0, rulesOverride = null) {
+    if (typeof listRunRecords !== "function") {
+      return Promise.resolve(buildSandboxAlertsFromRuns(listRunHistory(limit), thresholds, dedupWindowSec, rulesOverride));
+    }
+    return Promise.resolve(listRunRecords(limit)).then((out) => {
+      if (Array.isArray(out)) return buildSandboxAlertsFromRuns(out, thresholds, dedupWindowSec, rulesOverride);
+      if (out && typeof out === "object" && out.ok === false) return out;
+      return buildSandboxAlertsFromRuns(Array.isArray(out?.items) ? out.items : [], thresholds, dedupWindowSec, rulesOverride);
+    });
+  }
+
   return {
     applySandboxAutoFixPayload,
-    appendSandboxRuleVersion,
     appendSandboxViolationAudit,
     attachQualityGate,
-    compareSandboxRuleVersions,
-    listAudit,
     listQualityGateReports,
-    listSandboxRuleVersions,
-    loadSandboxAlertRules,
-    loadSandboxAutoFixState,
+    normalizeSandboxAutoFixState,
     maybeApplySandboxAutoFix,
     normalizeSandboxAlertRules,
     sandboxAlertDedupWindowSec,
     sandboxAlerts,
-    saveSandboxAlertRules,
   };
 }
 

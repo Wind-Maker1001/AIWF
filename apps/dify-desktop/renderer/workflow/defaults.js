@@ -1,5 +1,6 @@
 import { NODE_CATALOG } from "./defaults-catalog.js";
 import { NODE_CONFIG_TEMPLATES } from "./defaults-templates.js";
+import { WORKFLOW_SCHEMA_VERSION } from "./workflow-contract.js";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -14,7 +15,8 @@ function defaultNodeConfig(type) {
 function defaultWorkflowGraph() {
   return {
     workflow_id: "standard_pipeline_v1",
-    name: "标准数据流水线 v1",
+    version: WORKFLOW_SCHEMA_VERSION,
+    name: "鏍囧噯鏁版嵁娴佹按绾?v1",
     nodes: [
       { id: "n1", type: "ingest_files", x: 40, y: 80, config: defaultNodeConfig("ingest_files") },
       { id: "n2", type: "clean_md", x: 300, y: 80, config: defaultNodeConfig("clean_md") },

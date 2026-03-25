@@ -1,6 +1,7 @@
 function getWorkflowEditorElements($) {
   return {
     selectedNodeInfo: $("selectedNodeInfo"),
+    selectedNodePolicyInfo: $("selectedNodePolicyInfo"),
     selectedEdgeInfo: $("selectedEdgeInfo"),
     edgeWhenKind: $("edgeWhenKind"),
     edgeWhenBoolWrap: $("edgeWhenBoolWrap"),

@@ -22,6 +22,7 @@ function bindWorkflowTemplateToolbarActions(ctx = {}) {
     saveQualityRuleSetFromGraph = () => {},
     removeQualityRuleSetCurrent = () => {},
     renderPalette = () => {},
+    renderNodeTypePolicyHint = () => {},
     applyDeepSeekDefaults = () => {},
     refreshOfflineBoundaryHint = () => {},
   } = ctx;
@@ -45,6 +46,8 @@ function bindWorkflowTemplateToolbarActions(ctx = {}) {
   bindIfPresent(els.btnQualityRuleSetRemove, "click", removeQualityRuleSetCurrent);
   bindIfPresent(els.paletteMode, "change", renderPalette);
   bindIfPresent(els.paletteSearch, "input", renderPalette);
+  bindIfPresent(els.nodeType, "input", renderNodeTypePolicyHint);
+  bindIfPresent(els.nodeType, "change", renderNodeTypePolicyHint);
   bindIfPresent(els.btnUseDeepSeek, "click", applyDeepSeekDefaults);
   bindIfPresent(els.aiEndpoint, "input", refreshOfflineBoundaryHint);
 }

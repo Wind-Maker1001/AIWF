@@ -97,6 +97,23 @@ pub(super) fn infer_io_contract(operator: &str) -> bool {
     )
 }
 
+pub(super) fn infer_desktop_hidden(operator: &str) -> bool {
+    matches!(
+        operator,
+        "aggregate_pushdown_v1"
+            | "aggregate_rows_v1"
+            | "compute_metrics"
+            | "entity_extract_v1"
+            | "join_rows_v1"
+            | "normalize_schema_v1"
+            | "plugin_exec_v1"
+            | "quality_check_v1"
+            | "rules_package_get_v1"
+            | "rules_package_publish_v1"
+            | "text_preprocess_v2"
+    )
+}
+
 pub(super) fn infer_domain_catalog(operator: &str) -> Option<(&'static str, &'static str)> {
     match operator {
         "cleaning" | "compute_metrics" => Some(("transform", "cleaning_runtime")),

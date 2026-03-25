@@ -30,21 +30,28 @@ test("workflow toolbar support rerenders compare result filters with fallback", 
   const compareOnlyChanged = createEventTarget();
   const compareOnlyStatusChanged = createEventTarget();
   const compareMinDelta = createEventTarget();
+  const nodeType = createEventTarget();
 
   bindWorkflowTemplateToolbarActions({
     els: {
       compareOnlyChanged,
       compareOnlyStatusChanged,
       compareMinDelta,
+      nodeType,
     },
     renderCompareResult: (out) => calls.push(out),
+    renderNodeTypePolicyHint: () => calls.push("nodeTypePolicy"),
     getLastCompareResult: () => ({ ok: true, summary: { changed_nodes: 2 } }),
   });
 
   compareOnlyChanged.handlers.change();
   compareOnlyStatusChanged.handlers.change();
   compareMinDelta.handlers.change();
+  nodeType.handlers.input();
+  nodeType.handlers.change();
 
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 5);
   assert.deepEqual(calls[0], { ok: true, summary: { changed_nodes: 2 } });
+  assert.equal(calls[3], "nodeTypePolicy");
+  assert.equal(calls[4], "nodeTypePolicy");
 });

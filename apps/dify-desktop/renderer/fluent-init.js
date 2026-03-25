@@ -31,12 +31,14 @@ document.addEventListener("DOMContentLoaded", () => {
   updateInputMode();
   const search = new URLSearchParams(location.search || "");
   const embeddedMode = search.get("embedded") === "1";
+  const compatAdminMode = search.get("legacyAdmin") === "1";
   const savedDevMode = (() => {
     try { return localStorage.getItem("aiwf_dev_mode") === "1"; } catch { return false; }
   })();
   const devMode = search.get("devtools") === "1" || savedDevMode || navigator.webdriver === true || /playwright/i.test(navigator.userAgent || "");
   body.classList.toggle("dev-mode", devMode);
   body.classList.toggle("embedded-mode", embeddedMode);
+  body.classList.toggle("compat-admin-mode", compatAdminMode);
 
   const badge = document.querySelector(".hero div");
   if (badge) {

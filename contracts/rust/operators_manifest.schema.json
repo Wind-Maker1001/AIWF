@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiwf.local/contracts/rust/operators_manifest.schema.json",
+  "title": "AIWF Rust Operators Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "authority",
+    "owner",
+    "source_inputs",
+    "operators",
+    "summary"
+  ],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "authority": {
+      "type": "string",
+      "const": "rust_operator_catalog"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_inputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "operators": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/operator"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    }
+  },
+  "$defs": {
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "streaming",
+        "cache",
+        "checkpoint",
+        "io_contract"
+      ],
+      "properties": {
+        "streaming": { "type": "boolean" },
+        "cache": { "type": "boolean" },
+        "checkpoint": { "type": "boolean" },
+        "io_contract": { "type": "boolean" }
+      }
+    },
+    "operator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator",
+        "version",
+        "domain",
+        "source_module",
+        "published",
+        "workflow_exposable",
+        "desktop_exposable",
+        "direct_http_only",
+        "internal_only",
+        "capabilities"
+      ],
+      "properties": {
+        "operator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_module": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published": { "type": "boolean" },
+        "workflow_exposable": { "type": "boolean" },
+        "desktop_exposable": { "type": "boolean" },
+        "direct_http_only": { "type": "boolean" },
+        "internal_only": { "type": "boolean" },
+        "capabilities": {
+          "$ref": "#/$defs/capabilities"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "known_operator_count",
+        "published_operator_count",
+        "workflow_exposable_count",
+        "desktop_exposable_count",
+        "direct_http_only_count",
+        "internal_only_count"
+      ],
+      "properties": {
+        "known_operator_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "published_operator_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workflow_exposable_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "desktop_exposable_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "direct_http_only_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "internal_only_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

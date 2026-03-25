@@ -1,5 +1,10 @@
 const fs = require("fs");
 const path = require("path");
+const {
+  normalizeCleaningTemplateRegistry,
+  normalizeOfficeLayoutCatalog,
+  normalizeOfficeThemeCatalog,
+} = require("./offline_template_catalog_contract");
 
 function loadDesktopThemes() {
   const defaults = {
@@ -19,7 +24,10 @@ function loadDesktopThemes() {
   try {
     if (!fs.existsSync(filePath)) return defaults;
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    if (parsed && typeof parsed === "object") return { ...defaults, ...parsed };
+    const normalized = normalizeOfficeThemeCatalog(parsed, { allowLegacyMap: true });
+    if (normalized && normalized.themes && typeof normalized.themes === "object") {
+      return { ...defaults, ...normalized.themes };
+    }
   } catch {}
   return defaults;
 }
@@ -72,7 +80,10 @@ function loadDesktopLayouts() {
   try {
     if (!fs.existsSync(filePath)) return defaults;
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    if (parsed && typeof parsed === "object") return { ...defaults, ...parsed };
+    const normalized = normalizeOfficeLayoutCatalog(parsed, { allowLegacyMap: true });
+    if (normalized && normalized.layouts && typeof normalized.layouts === "object") {
+      return { ...defaults, ...normalized.layouts };
+    }
   } catch {}
   return defaults;
 }
@@ -136,7 +147,8 @@ function loadCleaningTemplates() {
     if (fs.existsSync(registryPath)) {
       const raw = String(fs.readFileSync(registryPath, "utf8") || "").replace(/^\uFEFF/, "");
       const registry = JSON.parse(raw);
-      const items = Array.isArray(registry?.templates) ? registry.templates : [];
+      const normalizedRegistry = normalizeCleaningTemplateRegistry(registry, { allowLegacyRegistry: true });
+      const items = Array.isArray(normalizedRegistry?.templates) ? normalizedRegistry.templates : [];
       items.forEach((item) => add(normalizeTemplateEntry(item, templatesDir)));
     }
   } catch {}

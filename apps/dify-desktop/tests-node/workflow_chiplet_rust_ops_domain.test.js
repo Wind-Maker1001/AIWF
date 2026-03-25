@@ -2,6 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { WorkflowChipletRegistry } = require("../workflow_chiplets/registry");
 const { registerRustOpsDomainChiplets } = require("../workflow_chiplets/domains/rust_ops_domain");
+const {
+  DESKTOP_RUST_OPERATOR_TYPES,
+  assertDesktopRustOperator,
+} = require("../workflow_chiplets/domains/rust_operator_manifest.generated");
 
 test("rust ops domain registers representative operators", () => {
   const registry = new WorkflowChipletRegistry();
@@ -18,6 +22,14 @@ test("rust ops domain registers representative operators", () => {
   assert.equal(registry.has("transform_rows_v3"), true);
   assert.equal(registry.has("plugin_operator_v1"), true);
   assert.equal(registry.has("explain_plan_v2"), true);
+  assert.deepEqual([...registry.list()].sort(), [...DESKTOP_RUST_OPERATOR_TYPES]);
+});
+
+test("desktop rust operator manifest excludes hidden workflow-only operators", () => {
+  assert.throws(
+    () => assertDesktopRustOperator("aggregate_pushdown_v1"),
+    /desktop rust operator not manifest-authorized/i,
+  );
 });
 
 test("rust ops returns fallback result when rust is optional and operator call fails", async () => {

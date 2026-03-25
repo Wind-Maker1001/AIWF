@@ -3,8 +3,7 @@ function createWorkflowHistorySupport(deps) {
     fs,
     diagnosticsLogPath,
     runHistoryPath,
-    reviewQueuePath,
-    reviewHistoryPath,
+    listRunRecords = null,
   } = deps;
 
   function readDiagnostics(limit = 50) {
@@ -80,8 +79,20 @@ function createWorkflowHistorySupport(deps) {
       .reverse();
   }
 
-  function buildPerfDashboard(limit = 200) {
-    const runs = listRunHistory(limit);
+  async function loadRunRecords(limit = 200) {
+    if (typeof listRunRecords === "function") {
+      const out = await listRunRecords(limit);
+      if (Array.isArray(out)) return { ok: true, items: out };
+      if (out && typeof out === "object" && out.ok === false) return out;
+      return { ok: true, items: Array.isArray(out?.items) ? out.items : [] };
+    }
+    return { ok: true, items: listRunHistory(limit) };
+  }
+
+  async function buildPerfDashboard(limit = 200) {
+    const listed = await loadRunRecords(limit);
+    if (!listed?.ok) return listed;
+    const runs = Array.isArray(listed.items) ? listed.items : [];
     const byChiplet = {};
     runs.forEach((item) => {
       const nodes = Array.isArray(item?.result?.node_runs) ? item.result.node_runs : [];
@@ -109,6 +120,7 @@ function createWorkflowHistorySupport(deps) {
       const calls = Number(item.calls || 0);
       const retries = Math.max(0, Number(item.attempts_total || 0) - calls);
       return {
+        ok: true,
         chiplet: item.chiplet,
         calls,
         failed: Number(item.failed || 0),
@@ -179,86 +191,13 @@ function createWorkflowHistorySupport(deps) {
     };
   }
 
-  function loadReviewQueue() {
-    try {
-      if (!fs.existsSync(reviewQueuePath())) return [];
-      const parsed = JSON.parse(fs.readFileSync(reviewQueuePath(), "utf8"));
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function saveReviewQueue(items) {
-    fs.writeFileSync(reviewQueuePath(), `${JSON.stringify(items || [], null, 2)}\n`, "utf8");
-  }
-
-  function enqueueReviews(items = []) {
-    const incoming = Array.isArray(items) ? items : [];
-    if (!incoming.length) return;
-    const queue = loadReviewQueue();
-    const byKey = new Map();
-    queue.forEach((item) => byKey.set(`${String(item.run_id || "")}::${String(item.review_key || item.node_id || "")}`, item));
-    incoming.forEach((item) => {
-      const key = `${String(item.run_id || "")}::${String(item.review_key || item.node_id || "")}`;
-      byKey.set(key, item);
-    });
-    saveReviewQueue(Array.from(byKey.values()));
-  }
-
-  function appendReviewHistory(item) {
-    try {
-      fs.appendFileSync(reviewHistoryPath(), `${JSON.stringify(item)}\n`, "utf8");
-    } catch {}
-  }
-
-  function listReviewHistory(limit = 200) {
-    const filePath = reviewHistoryPath();
-    if (!fs.existsSync(filePath)) return [];
-    const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter((item) => item.trim());
-    return lines
-      .slice(Math.max(0, lines.length - Math.max(1, Math.min(5000, Number(limit || 200)))))
-      .map((item) => {
-        try {
-          return JSON.parse(item);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean)
-      .reverse();
-  }
-
-  function filterReviewHistory(items, filter) {
-    const safeFilter = filter && typeof filter === "object" ? filter : {};
-    const runId = String(safeFilter.run_id || "").trim();
-    const reviewer = String(safeFilter.reviewer || "").trim().toLowerCase();
-    const status = String(safeFilter.status || "").trim().toLowerCase();
-    const dateFrom = String(safeFilter.date_from || "").trim();
-    const dateTo = String(safeFilter.date_to || "").trim();
-    return (items || []).filter((item) => {
-      if (runId && String(item.run_id || "") !== runId) return false;
-      if (reviewer && !String(item.reviewer || "").toLowerCase().includes(reviewer)) return false;
-      if (status && String(item.status || "").toLowerCase() !== status) return false;
-      if (dateFrom && String(item.decided_at || "") < dateFrom) return false;
-      if (dateTo && String(item.decided_at || "") > dateTo) return false;
-      return true;
-    });
-  }
-
   return {
-    appendReviewHistory,
     buildPerfDashboard,
     failureSummary,
-    filterReviewHistory,
     findRunById,
-    listReviewHistory,
     listRunHistory,
-    loadReviewQueue,
     readDiagnostics,
     runTimeline,
-    saveReviewQueue,
-    enqueueReviews,
   };
 }
 
@@ -268,7 +207,7 @@ function registerWorkflowHistoryIpc(ctx, deps) {
     readDiagnostics,
     buildPerfDashboard,
     listRunHistory,
-    findRunById,
+    getRun,
     runTimeline,
     failureSummary,
   } = deps;
@@ -282,19 +221,19 @@ function registerWorkflowHistoryIpc(ctx, deps) {
   ipcMain.handle("aiwf:getWorkflowPerfDashboard", async (_evt, opts) => {
     const limit = Number(opts?.limit || 200);
     const safe = Number.isFinite(limit) ? Math.max(1, Math.min(2000, Math.floor(limit))) : 200;
-    return buildPerfDashboard(safe);
+    return await buildPerfDashboard(safe);
   });
 
   ipcMain.handle("aiwf:listWorkflowRuns", async (_evt, opts) => {
     const limit = Number(opts?.limit || 50);
     const safe = Number.isFinite(limit) ? Math.max(1, Math.min(500, Math.floor(limit))) : 50;
-    return { ok: true, items: listRunHistory(safe) };
+    return await listRunHistory(safe);
   });
 
   ipcMain.handle("aiwf:getWorkflowLineage", async (_evt, req) => {
     try {
       const runId = String(req?.run_id || "").trim();
-      const hit = findRunById(runId);
+      const hit = await getRun(runId);
       if (!hit) return { ok: false, error: "run not found" };
       const lineage = hit?.result?.lineage && typeof hit.result.lineage === "object" ? hit.result.lineage : {};
       return { ok: true, run_id: runId, lineage };
@@ -304,12 +243,12 @@ function registerWorkflowHistoryIpc(ctx, deps) {
   });
 
   ipcMain.handle("aiwf:getWorkflowRunTimeline", async (_evt, req) => {
-    return runTimeline(String(req?.run_id || "").trim());
+    return await runTimeline(String(req?.run_id || "").trim());
   });
 
   ipcMain.handle("aiwf:getWorkflowFailureSummary", async (_evt, req) => {
     const limit = Number(req?.limit || 400);
-    return failureSummary(limit);
+    return await failureSummary(limit);
   });
 }
 

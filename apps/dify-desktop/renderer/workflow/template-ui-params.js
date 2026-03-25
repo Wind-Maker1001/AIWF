@@ -1,4 +1,5 @@
 import { validateTemplateParams, applyTemplateVars } from "./template-utils.js";
+import { combineWorkflowMigrationReports } from "./workflow-contract.js";
 import {
   collectTemplateParamsFromFormElement,
   mergeTemplateParamsWithSchema,
@@ -94,7 +95,7 @@ function createWorkflowTemplateParamSupport(els, deps = {}) {
       return;
     }
     const graph = applyTemplateVars(item.graph, params);
-    store.importGraph(graph);
+    const imported = store.importGraph(graph);
     clearSelectedEdge();
     els.workflowName.value = store.state.graph.name || String(item.name || "模板流程");
     if (item.governance && typeof item.governance === "object" && els.publishRequirePreflight) {
@@ -105,7 +106,7 @@ function createWorkflowTemplateParamSupport(els, deps = {}) {
       syncRunParamsFormFromJson();
     }
     renderAll();
-    renderMigrationReport({ migrated: false });
+    renderMigrationReport(combineWorkflowMigrationReports({ migrated: false, notes: [] }, imported?.contract));
     setStatus(`已应用模板: ${item.name || id}`, true);
   }
 

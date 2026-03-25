@@ -66,12 +66,6 @@ export const NODE_CONFIG_TEMPLATES_CORE_ANALYTICS = {
     score_field: "score",
     threshold: 0.8,
   },
-  evidence_conflict_v1: {
-    rows: [],
-    claim_field: "claim",
-    stance_field: "stance",
-    source_field: "source",
-  },
   template_bind_v1: {
     template_text: "",
     data: {},

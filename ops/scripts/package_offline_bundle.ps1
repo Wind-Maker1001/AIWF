@@ -7,6 +7,15 @@
   [switch]$CollectBundledTools,
   [switch]$CleanOldReleases,
   [switch]$SkipOpenApiSdkSyncGate,
+  [switch]$SkipWorkflowContractSyncGate,
+  [switch]$SkipGovernanceControlPlaneBoundaryGate,
+  [switch]$SkipOperatorCatalogSyncGate,
+  [switch]$SkipFallbackGovernanceGate,
+  [switch]$SkipGovernanceStoreSchemaVersionsGate,
+  [switch]$SkipLocalWorkflowStoreSchemaVersionsGate,
+  [switch]$SkipTemplatePackContractSyncGate,
+  [switch]$SkipLocalTemplateStorageContractSyncGate,
+  [switch]$SkipOfflineTemplateCatalogSyncGate,
   [bool]$RequireChineseOcr = $true,
   [string]$ReleaseChannel = "stable"
 )
@@ -16,12 +25,53 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
+. (Join-Path $PSScriptRoot "governance_capability_export_support.ps1")
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $openApiSdkSyncGate = Join-Path $PSScriptRoot "check_openapi_sdk_sync.ps1"
+$workflowContractSyncGate = Join-Path $PSScriptRoot "check_workflow_contract_sync.ps1"
+$governanceCapabilityExportScript = Join-Path $PSScriptRoot "export_governance_capabilities.ps1"
+$governanceControlPlaneBoundaryGate = Join-Path $PSScriptRoot "check_governance_control_plane_boundary.ps1"
+$operatorCatalogSyncGate = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
+$fallbackGovernanceGate = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
+$governanceStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_governance_store_schema_versions.ps1"
+$localWorkflowStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_local_workflow_store_schema_versions.ps1"
+$templatePackContractSyncGate = Join-Path $PSScriptRoot "check_template_pack_contract_sync.ps1"
+$localTemplateStorageContractSyncGate = Join-Path $PSScriptRoot "check_local_template_storage_contract_sync.ps1"
+$offlineTemplateCatalogSyncGate = Join-Path $PSScriptRoot "check_offline_template_catalog_sync.ps1"
 $openApiSdkSyncGateStatus = "skipped"
 $openApiSdkSyncGateCheckedAt = ""
 $openApiSdkSyncGateError = ""
+$workflowContractSyncGateStatus = "skipped"
+$workflowContractSyncGateCheckedAt = ""
+$workflowContractSyncGateError = ""
+$governanceCapabilityExportStatus = "skipped"
+$governanceCapabilityExportCheckedAt = ""
+$governanceCapabilityExportError = ""
+$governanceControlPlaneBoundaryGateStatus = "skipped"
+$governanceControlPlaneBoundaryGateCheckedAt = ""
+$governanceControlPlaneBoundaryGateError = ""
+$operatorCatalogSyncGateStatus = "skipped"
+$operatorCatalogSyncGateCheckedAt = ""
+$operatorCatalogSyncGateError = ""
+$fallbackGovernanceGateStatus = "skipped"
+$fallbackGovernanceGateCheckedAt = ""
+$fallbackGovernanceGateError = ""
+$governanceStoreSchemaVersionsGateStatus = "skipped"
+$governanceStoreSchemaVersionsGateCheckedAt = ""
+$governanceStoreSchemaVersionsGateError = ""
+$localWorkflowStoreSchemaVersionsGateStatus = "skipped"
+$localWorkflowStoreSchemaVersionsGateCheckedAt = ""
+$localWorkflowStoreSchemaVersionsGateError = ""
+$templatePackContractSyncGateStatus = "skipped"
+$templatePackContractSyncGateCheckedAt = ""
+$templatePackContractSyncGateError = ""
+$localTemplateStorageContractSyncGateStatus = "skipped"
+$localTemplateStorageContractSyncGateCheckedAt = ""
+$localTemplateStorageContractSyncGateError = ""
+$offlineTemplateCatalogSyncGateStatus = "skipped"
+$offlineTemplateCatalogSyncGateCheckedAt = ""
+$offlineTemplateCatalogSyncGateError = ""
 $distDir = Join-Path $root "apps\dify-desktop\dist"
 $exePattern = if ($PackageType -eq "installer") { "AIWF Dify Desktop Setup *.exe" } else { "AIWF Dify Desktop *.exe" }
 $exe = Get-ChildItem $distDir -File -Filter $exePattern |
@@ -64,8 +114,174 @@ if (-not $SkipOpenApiSdkSyncGate) {
   Write-Host "[WARN] skip openapi/sdk sync package gate" -ForegroundColor Yellow
 }
 
+if (-not $SkipWorkflowContractSyncGate) {
+  if (-not (Test-Path $workflowContractSyncGate)) { throw "workflow contract sync gate script missing: $workflowContractSyncGate" }
+  Info "running workflow contract sync package gate"
+  powershell -ExecutionPolicy Bypass -File $workflowContractSyncGate
+  $workflowContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $workflowContractSyncGateStatus = "failed"
+    $workflowContractSyncGateError = "check_workflow_contract_sync.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by workflow contract sync gate"
+  }
+  $workflowContractSyncGateStatus = "passed"
+  Ok "workflow contract sync package gate passed"
+} else {
+  $workflowContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip workflow contract sync package gate" -ForegroundColor Yellow
+}
+
+$governanceCapabilityExportResult = Invoke-GovernanceCapabilityExportStep -ScriptPath $governanceCapabilityExportScript -FailureScope "package"
+$governanceCapabilityExportCheckedAt = [string]$governanceCapabilityExportResult.checked_at
+if (-not $governanceCapabilityExportResult.ok) {
+  $governanceCapabilityExportStatus = "failed"
+  $governanceCapabilityExportError = [string]$governanceCapabilityExportResult.error
+  throw [string]$governanceCapabilityExportResult.failure_message
+}
+$governanceCapabilityExportStatus = "passed"
+
+if (-not $SkipGovernanceControlPlaneBoundaryGate) {
+  if (-not (Test-Path $governanceControlPlaneBoundaryGate)) { throw "governance control plane boundary gate script missing: $governanceControlPlaneBoundaryGate" }
+  Info "running governance control plane boundary package gate"
+  powershell -ExecutionPolicy Bypass -File $governanceControlPlaneBoundaryGate
+  $governanceControlPlaneBoundaryGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $governanceControlPlaneBoundaryGateStatus = "failed"
+    $governanceControlPlaneBoundaryGateError = "check_governance_control_plane_boundary.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by governance control plane boundary gate"
+  }
+  $governanceControlPlaneBoundaryGateStatus = "passed"
+  Ok "governance control plane boundary package gate passed"
+} else {
+  $governanceControlPlaneBoundaryGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip governance control plane boundary package gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipOperatorCatalogSyncGate) {
+  if (-not (Test-Path $operatorCatalogSyncGate)) { throw "operator catalog sync gate script missing: $operatorCatalogSyncGate" }
+  Info "running operator catalog sync package gate"
+  powershell -ExecutionPolicy Bypass -File $operatorCatalogSyncGate
+  $operatorCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $operatorCatalogSyncGateStatus = "failed"
+    $operatorCatalogSyncGateError = "check_operator_catalog_sync.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by operator catalog sync gate"
+  }
+  $operatorCatalogSyncGateStatus = "passed"
+  Ok "operator catalog sync package gate passed"
+} else {
+  $operatorCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip operator catalog sync package gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipFallbackGovernanceGate) {
+  if (-not (Test-Path $fallbackGovernanceGate)) { throw "fallback governance gate script missing: $fallbackGovernanceGate" }
+  Info "running fallback governance package gate"
+  powershell -ExecutionPolicy Bypass -File $fallbackGovernanceGate
+  $fallbackGovernanceGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $fallbackGovernanceGateStatus = "failed"
+    $fallbackGovernanceGateError = "check_fallback_governance.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by fallback governance gate"
+  }
+  $fallbackGovernanceGateStatus = "passed"
+  Ok "fallback governance package gate passed"
+} else {
+  $fallbackGovernanceGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip fallback governance package gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipGovernanceStoreSchemaVersionsGate) {
+  if (-not (Test-Path $governanceStoreSchemaVersionsGate)) { throw "governance store schema version gate script missing: $governanceStoreSchemaVersionsGate" }
+  Info "running governance store schema version package gate"
+  powershell -ExecutionPolicy Bypass -File $governanceStoreSchemaVersionsGate
+  $governanceStoreSchemaVersionsGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $governanceStoreSchemaVersionsGateStatus = "failed"
+    $governanceStoreSchemaVersionsGateError = "check_governance_store_schema_versions.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by governance store schema version gate"
+  }
+  $governanceStoreSchemaVersionsGateStatus = "passed"
+  Ok "governance store schema version package gate passed"
+} else {
+  $governanceStoreSchemaVersionsGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip governance store schema version package gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipLocalWorkflowStoreSchemaVersionsGate) {
+  if (-not (Test-Path $localWorkflowStoreSchemaVersionsGate)) { throw "local workflow store schema version gate script missing: $localWorkflowStoreSchemaVersionsGate" }
+  Info "running local workflow store schema version package gate"
+  powershell -ExecutionPolicy Bypass -File $localWorkflowStoreSchemaVersionsGate
+  $localWorkflowStoreSchemaVersionsGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $localWorkflowStoreSchemaVersionsGateStatus = "failed"
+    $localWorkflowStoreSchemaVersionsGateError = "check_local_workflow_store_schema_versions.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by local workflow store schema version gate"
+  }
+  $localWorkflowStoreSchemaVersionsGateStatus = "passed"
+  Ok "local workflow store schema version package gate passed"
+} else {
+  $localWorkflowStoreSchemaVersionsGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip local workflow store schema version package gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipTemplatePackContractSyncGate) {
+  if (-not (Test-Path $templatePackContractSyncGate)) { throw "template pack contract sync gate script missing: $templatePackContractSyncGate" }
+  Info "running template pack contract package gate"
+  powershell -ExecutionPolicy Bypass -File $templatePackContractSyncGate
+  $templatePackContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $templatePackContractSyncGateStatus = "failed"
+    $templatePackContractSyncGateError = "check_template_pack_contract_sync.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by template pack contract gate"
+  }
+  $templatePackContractSyncGateStatus = "passed"
+  Ok "template pack contract package gate passed"
+} else {
+  $templatePackContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip template pack contract package gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipLocalTemplateStorageContractSyncGate) {
+  if (-not (Test-Path $localTemplateStorageContractSyncGate)) { throw "local template storage contract gate script missing: $localTemplateStorageContractSyncGate" }
+  Info "running local template storage contract package gate"
+  powershell -ExecutionPolicy Bypass -File $localTemplateStorageContractSyncGate
+  $localTemplateStorageContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $localTemplateStorageContractSyncGateStatus = "failed"
+    $localTemplateStorageContractSyncGateError = "check_local_template_storage_contract_sync.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by local template storage contract gate"
+  }
+  $localTemplateStorageContractSyncGateStatus = "passed"
+  Ok "local template storage contract package gate passed"
+} else {
+  $localTemplateStorageContractSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip local template storage contract package gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipOfflineTemplateCatalogSyncGate) {
+  if (-not (Test-Path $offlineTemplateCatalogSyncGate)) { throw "offline template catalog sync gate script missing: $offlineTemplateCatalogSyncGate" }
+  Info "running offline template catalog package gate"
+  powershell -ExecutionPolicy Bypass -File $offlineTemplateCatalogSyncGate
+  $offlineTemplateCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
+  if ($LASTEXITCODE -ne 0) {
+    $offlineTemplateCatalogSyncGateStatus = "failed"
+    $offlineTemplateCatalogSyncGateError = "check_offline_template_catalog_sync.ps1 exit code $LASTEXITCODE"
+    throw "package blocked by offline template catalog gate"
+  }
+  $offlineTemplateCatalogSyncGateStatus = "passed"
+  Ok "offline template catalog package gate passed"
+} else {
+  $offlineTemplateCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip offline template catalog package gate" -ForegroundColor Yellow
+}
+
 $bundleRoot = Join-Path $OutDir "AIWF_Offline_Bundle"
 $docsOut = Join-Path $bundleRoot "docs"
+$contractsOut = Join-Path $bundleRoot "contracts\desktop"
+$workflowContractsOut = Join-Path $bundleRoot "contracts\workflow"
+$rustContractsOut = Join-Path $bundleRoot "contracts\rust"
+$governanceContractsOut = Join-Path $bundleRoot "contracts\governance"
 if ($CleanOldReleases) {
   $releaseRoot = Join-Path $root "release"
   if (Test-Path $releaseRoot) {
@@ -80,6 +296,10 @@ if (Test-Path $bundleRoot) {
   Remove-Item $bundleRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Path $docsOut -Force | Out-Null
+New-Item -ItemType Directory -Path $contractsOut -Force | Out-Null
+New-Item -ItemType Directory -Path $workflowContractsOut -Force | Out-Null
+New-Item -ItemType Directory -Path $rustContractsOut -Force | Out-Null
+New-Item -ItemType Directory -Path $governanceContractsOut -Force | Out-Null
 
 Info "copy desktop exe"
 Copy-Item $exe.FullName (Join-Path $bundleRoot $exe.Name)
@@ -99,6 +319,56 @@ foreach ($d in $docList) {
   $src = Join-Path $root $d
   if (Test-Path $src) {
     Copy-Item $src (Join-Path $docsOut (Split-Path $src -Leaf))
+  }
+}
+
+$desktopContractSchemas = @(
+  "contracts\desktop\template_pack_artifact.schema.json",
+  "contracts\desktop\local_template_storage.schema.json",
+  "contracts\desktop\office_theme_catalog.schema.json",
+  "contracts\desktop\office_layout_catalog.schema.json",
+  "contracts\desktop\cleaning_template_registry.schema.json",
+  "contracts\desktop\offline_template_catalog_pack_manifest.schema.json"
+)
+foreach ($schemaRel in $desktopContractSchemas) {
+  $src = Join-Path $root $schemaRel
+  if (Test-Path $src) {
+    Copy-Item $src (Join-Path $contractsOut (Split-Path $src -Leaf))
+  }
+}
+
+$workflowContractFiles = @(
+  "contracts\workflow\workflow.schema.json",
+  "contracts\workflow\render_contract.schema.json",
+  "contracts\workflow\minimal_workflow.v1.json"
+)
+foreach ($contractRel in $workflowContractFiles) {
+  $src = Join-Path $root $contractRel
+  if (Test-Path $src) {
+    Copy-Item $src (Join-Path $workflowContractsOut (Split-Path $src -Leaf))
+  }
+}
+
+$rustContractFiles = @(
+  "contracts\rust\operators_manifest.v1.json",
+  "contracts\rust\operators_manifest.schema.json",
+  "contracts\rust\operators_extension_v1.schema.json",
+  "contracts\rust\transform_rows_v2.schema.json"
+)
+foreach ($contractRel in $rustContractFiles) {
+  $src = Join-Path $root $contractRel
+  if (Test-Path $src) {
+    Copy-Item $src (Join-Path $rustContractsOut (Split-Path $src -Leaf))
+  }
+}
+
+$governanceContractFiles = @(
+  "contracts\governance\governance_capabilities.v1.json"
+)
+foreach ($contractRel in $governanceContractFiles) {
+  $src = Join-Path $root $contractRel
+  if (Test-Path $src) {
+    Copy-Item $src (Join-Path $governanceContractsOut (Split-Path $src -Leaf))
   }
 }
 
@@ -134,6 +404,10 @@ $lines = @(
   "- 包类型: $PackageType",
   "- 发布通道: $ReleaseChannel",
   "- 文档目录: docs/",
+  "- 契约目录: contracts/desktop/",
+  "- 工作流契约目录: contracts/workflow/",
+  "- Rust 契约目录: contracts/rust/",
+  "- Governance 契约目录: contracts/governance/",
   "- 版本目录: $(Split-Path $OutDir -Leaf)",
   "",
   "## 安装与使用",
@@ -161,12 +435,76 @@ $manifest = [ordered]@{
   exe = $exe.Name
   generated_at = (Get-Date).ToString("s")
   docs = @((Get-ChildItem $docsOut -File | ForEach-Object { $_.Name }))
+  contract_schemas = @((Get-ChildItem $contractsOut -File | ForEach-Object { ("contracts/desktop/" + $_.Name) }))
+  workflow_contracts = @((Get-ChildItem $workflowContractsOut -File | ForEach-Object { ("contracts/workflow/" + $_.Name) }))
+  rust_contracts = @((Get-ChildItem $rustContractsOut -File | ForEach-Object { ("contracts/rust/" + $_.Name) }))
+  governance_contracts = @((Get-ChildItem $governanceContractsOut -File | ForEach-Object { ("contracts/governance/" + $_.Name) }))
   gates = [ordered]@{
     openapi_sdk_sync = [ordered]@{
       status = $openApiSdkSyncGateStatus
       checked_at = $openApiSdkSyncGateCheckedAt
       script = "ops/scripts/check_openapi_sdk_sync.ps1"
       error = $openApiSdkSyncGateError
+    }
+    workflow_contract_sync = [ordered]@{
+      status = $workflowContractSyncGateStatus
+      checked_at = $workflowContractSyncGateCheckedAt
+      script = "ops/scripts/check_workflow_contract_sync.ps1"
+      error = $workflowContractSyncGateError
+    }
+    governance_capability_export = [ordered]@{
+      status = $governanceCapabilityExportStatus
+      checked_at = $governanceCapabilityExportCheckedAt
+      script = "ops/scripts/export_governance_capabilities.ps1"
+      error = $governanceCapabilityExportError
+    }
+    governance_control_plane_boundary = [ordered]@{
+      status = $governanceControlPlaneBoundaryGateStatus
+      checked_at = $governanceControlPlaneBoundaryGateCheckedAt
+      script = "ops/scripts/check_governance_control_plane_boundary.ps1"
+      error = $governanceControlPlaneBoundaryGateError
+    }
+    operator_catalog_sync = [ordered]@{
+      status = $operatorCatalogSyncGateStatus
+      checked_at = $operatorCatalogSyncGateCheckedAt
+      script = "ops/scripts/check_operator_catalog_sync.ps1"
+      error = $operatorCatalogSyncGateError
+    }
+    fallback_governance = [ordered]@{
+      status = $fallbackGovernanceGateStatus
+      checked_at = $fallbackGovernanceGateCheckedAt
+      script = "ops/scripts/check_fallback_governance.ps1"
+      error = $fallbackGovernanceGateError
+    }
+    governance_store_schema_versions = [ordered]@{
+      status = $governanceStoreSchemaVersionsGateStatus
+      checked_at = $governanceStoreSchemaVersionsGateCheckedAt
+      script = "ops/scripts/check_governance_store_schema_versions.ps1"
+      error = $governanceStoreSchemaVersionsGateError
+    }
+    local_workflow_store_schema_versions = [ordered]@{
+      status = $localWorkflowStoreSchemaVersionsGateStatus
+      checked_at = $localWorkflowStoreSchemaVersionsGateCheckedAt
+      script = "ops/scripts/check_local_workflow_store_schema_versions.ps1"
+      error = $localWorkflowStoreSchemaVersionsGateError
+    }
+    template_pack_contract_sync = [ordered]@{
+      status = $templatePackContractSyncGateStatus
+      checked_at = $templatePackContractSyncGateCheckedAt
+      script = "ops/scripts/check_template_pack_contract_sync.ps1"
+      error = $templatePackContractSyncGateError
+    }
+    local_template_storage_contract_sync = [ordered]@{
+      status = $localTemplateStorageContractSyncGateStatus
+      checked_at = $localTemplateStorageContractSyncGateCheckedAt
+      script = "ops/scripts/check_local_template_storage_contract_sync.ps1"
+      error = $localTemplateStorageContractSyncGateError
+    }
+    offline_template_catalog_sync = [ordered]@{
+      status = $offlineTemplateCatalogSyncGateStatus
+      checked_at = $offlineTemplateCatalogSyncGateCheckedAt
+      script = "ops/scripts/check_offline_template_catalog_sync.ps1"
+      error = $offlineTemplateCatalogSyncGateError
     }
   }
 }

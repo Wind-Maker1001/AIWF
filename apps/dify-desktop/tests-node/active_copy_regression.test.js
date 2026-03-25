@@ -14,7 +14,7 @@ test("home entry copy stays readable in key desktop files", () => {
   const homeRuntime = readRepoFile("apps/dify-desktop/renderer/home-runtime.js");
   const homeGate = readRepoFile("apps/dify-desktop/renderer/home-gate.js");
 
-  assert.match(homeApp, /已切换到 Workflow Studio/);
+  assert.match(homeApp, /已切换到 Legacy Workflow Studio/);
   assert.match(homeApp, /预检通过，可以开始生成/);
   assert.match(homeRuntime, /编码检测：队列为空/);
   assert.match(homeRuntime, /OCR 运行时：未安装 Tesseract/);

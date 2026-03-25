@@ -23,7 +23,8 @@ function registerWorkflowSandboxIoIpc(ctx, deps) {
         ? Math.max(0, Math.floor(Number(req?.dedup_window_sec)))
         : sandboxAlertDedupWindowSec(req || {});
       const format = String(req?.format || "md").trim().toLowerCase() === "json" ? "json" : "md";
-      const data = sandboxAlerts(limit, thresholds, dedupWindowSec);
+      const data = await sandboxAlerts(limit, thresholds, dedupWindowSec);
+      if (!data?.ok) return data;
       const allowMockIo = isMockIoAllowed();
       let filePath = "";
       if (req?.mock && req?.path && allowMockIo) {

@@ -54,15 +54,11 @@ test("save/load config keeps cleaning template", async () => {
   await electronApp.close();
 });
 
-test("workflow tab switches inside same window and loads iframe", async () => {
+test("legacy workflow studio is not exposed as a default in-window tab", async () => {
   const { electronApp, page } = await openMain();
-  await expect(page.locator("#tabWorkflow")).toBeVisible();
-  await page.click("#tabWorkflow");
-  await expect(page.locator("#workflowShellPane")).toBeVisible();
-  await expect(page.locator("#homeShellPane")).toBeHidden();
-  await expect(page.locator("#workflowEmbedFrame")).toHaveAttribute("src", /workflow\.html\?embedded=1/);
-  await page.click("#tabHome");
-  await expect(page.locator("#homeShellPane")).toBeVisible();
+  await expect(page.locator("#tabWorkflow")).toHaveCount(0);
+  await expect(page.locator("#btnWorkflow")).toHaveCount(0);
+  await expect(page.locator("#workflowShellPane")).toHaveCount(0);
   await electronApp.close();
 });
 

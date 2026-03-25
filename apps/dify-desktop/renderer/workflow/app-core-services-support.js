@@ -33,6 +33,7 @@ function buildConfigUiDeps(ctx = {}) {
   const {
     store,
     canvas,
+    nodeCatalog = [],
     nodeFormSchemas = {},
     edgeHintsByNodeType = {},
     setStatus = () => {},
@@ -47,6 +48,7 @@ function buildConfigUiDeps(ctx = {}) {
   return {
     store,
     canvas,
+    nodeCatalog,
     nodeFormSchemas,
     edgeHintsByNodeType,
     setStatus,

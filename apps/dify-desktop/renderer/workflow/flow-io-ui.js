@@ -3,6 +3,10 @@ import {
   saveWorkflowName,
   stringifyWorkflowGraph,
 } from "./flow-io-support.js";
+import {
+  assertWorkflowContract,
+  combineWorkflowMigrationReports,
+} from "./workflow-contract.js";
 
 function createWorkflowFlowIoUi(els, deps = {}) {
   const {
@@ -18,22 +22,23 @@ function createWorkflowFlowIoUi(els, deps = {}) {
   function exportJson() {
     const json = stringifyWorkflowGraph(graphPayload());
     if (els.log) els.log.textContent = json;
-    setStatus("已导出流程 JSON 到右侧日志区", true);
+    setStatus("宸插鍑烘祦绋?JSON 鍒板彸渚ф棩蹇楀尯", true);
   }
 
   async function saveFlow() {
     try {
       const graph = graphPayload();
+      assertWorkflowContract(graph, { requireNonEmptyNodes: true });
       const name = saveWorkflowName(els.workflowName?.value || "");
       const out = await window.aiwfDesktop.saveWorkflow(graph, name);
       if (out?.ok) {
-        setStatus(`流程已保存: ${out.path}`, true);
+        setStatus(`娴佺▼宸蹭繚瀛? ${out.path}`, true);
         await refreshVersions();
       } else if (!out?.canceled) {
-        setStatus(`保存失败: ${out?.error || "unknown"}`, false);
+        setStatus(`淇濆瓨澶辫触: ${out?.error || "unknown"}`, false);
       }
     } catch (e) {
-      setStatus(`保存失败: ${e}`, false);
+      setStatus(`淇濆瓨澶辫触: ${e}`, false);
     }
   }
 
@@ -41,16 +46,17 @@ function createWorkflowFlowIoUi(els, deps = {}) {
     try {
       const out = await window.aiwfDesktop.loadWorkflow();
       if (!out?.ok) {
-        if (!out?.canceled) setStatus(`加载失败: ${out?.error || "unknown"}`, false);
+        if (!out?.canceled) setStatus(`鍔犺浇澶辫触: ${out?.error || "unknown"}`, false);
         return;
       }
       const migrated = migrateLoadedWorkflowGraph(out.graph || {});
-      applyLoadedWorkflowGraph(migrated.graph || {});
-      if (els.workflowName) els.workflowName.value = getLoadedWorkflowName() || "自定义流程";
-      renderMigrationReport(migrated);
-      setStatus(loadWorkflowStatusMessage(out.path, migrated), true);
+      const applied = applyLoadedWorkflowGraph(migrated.graph || {});
+      const migrationReport = combineWorkflowMigrationReports(migrated, applied?.contract);
+      if (els.workflowName) els.workflowName.value = getLoadedWorkflowName() || "Custom Workflow";
+      renderMigrationReport(migrationReport);
+      setStatus(loadWorkflowStatusMessage(out.path, migrationReport), true);
     } catch (e) {
-      setStatus(`加载失败: ${e}`, false);
+      setStatus(`鍔犺浇澶辫触: ${e}`, false);
     }
   }
 

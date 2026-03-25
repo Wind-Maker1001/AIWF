@@ -9,6 +9,7 @@ function createConfigSupport({ app, fs, path }) {
     return {
       mode: "offline_local",
       baseUrl: "http://127.0.0.1:18080",
+      glueUrl: "http://127.0.0.1:18081",
       apiKey: "",
       enableOfflineFallback: true,
       fallbackPolicy: "smart",
@@ -62,6 +63,7 @@ function createConfigSupport({ app, fs, path }) {
       if (!cfg || typeof cfg !== "object") return defaultCfg();
       if (typeof cfg.enableOfflineFallback === "undefined") cfg.enableOfflineFallback = true;
       if (!cfg.fallbackPolicy) cfg.fallbackPolicy = "smart";
+      if (!cfg.glueUrl) cfg.glueUrl = "http://127.0.0.1:18081";
       if (!cfg.outputRoot) cfg.outputRoot = defaultCfg().outputRoot;
       return cfg;
     } catch {

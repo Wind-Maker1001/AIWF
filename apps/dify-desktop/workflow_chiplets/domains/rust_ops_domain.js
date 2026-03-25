@@ -1,3 +1,8 @@
+﻿const {
+  DESKTOP_RUST_OPERATOR_TYPES,
+  assertDesktopRustOperator,
+} = require("./rust_operator_manifest.generated");
+
 function registerRustOpsDomainChiplets(registry, deps, helpers) {
   const { runIsolatedTask } = deps;
   const {
@@ -6,6 +11,8 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
     resolveIsolationLevel,
     resolveSandboxLimits,
   } = helpers;
+  const registeredTypes = [];
+  const registerChiplet = registry.register.bind(registry);
 
   function isTruthy(v) {
     const s = String(v || "").trim().toLowerCase();
@@ -124,27 +131,58 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
     };
   }
 
-  registry.register(
+  function registerManifestRustChiplet(type, operatorPathOrChiplet, defaults = {}, priority = 85) {
+    assertDesktopRustOperator(type);
+    registeredTypes.push(type);
+    if (typeof operatorPathOrChiplet === "string") {
+      registerChiplet(type, makeRustNodeChiplet(type, operatorPathOrChiplet, defaults, priority));
+      return;
+    }
+    registerChiplet(type, operatorPathOrChiplet);
+  }
+
+  function assertRegistrationSurface() {
+    const actual = Array.from(new Set(registeredTypes)).sort();
+    const missing = DESKTOP_RUST_OPERATOR_TYPES.filter((type) => !actual.includes(type));
+    const stale = actual.filter((type) => !DESKTOP_RUST_OPERATOR_TYPES.includes(type));
+    if (missing.length > 0 || stale.length > 0) {
+      const fragments = [];
+      if (missing.length > 0) {
+        fragments.push(`missing manifest-authorized rust operators: ${missing.join(", ")}`);
+      }
+      if (stale.length > 0) {
+        fragments.push(`registered rust operators outside manifest: ${stale.join(", ")}`);
+      }
+      throw new Error(fragments.join("; "));
+    }
+  }
+
+  registerManifestRustChiplet(
     "transform_rows_v3",
-    makeRustNodeChiplet("transform_rows_v3", "/operators/transform_rows_v3", {
+    "/operators/transform_rows_v3",
+    {
       rows: [],
       rules: {},
       computed_fields_v3: [],
-    }, 89),
+    },
+    89,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "join_rows_v2",
-    makeRustNodeChiplet("join_rows_v2", "/operators/join_rows_v2", {
+    "/operators/join_rows_v2",
+    {
       left_rows: [],
       right_rows: [],
       left_on: ["id"],
       right_on: ["id"],
       join_type: "inner",
-    }, 88),
+    },
+    88,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "join_rows_v3",
-    makeRustNodeChiplet("join_rows_v3", "/operators/join_rows_v3", {
+    "/operators/join_rows_v3",
+    {
       left_rows: [],
       right_rows: [],
       left_on: ["id"],
@@ -152,11 +190,13 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       join_type: "inner",
       strategy: "auto",
       chunk_size: 50000,
-    }, 87),
+    },
+    87,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "join_rows_v4",
-    makeRustNodeChiplet("join_rows_v4", "/operators/join_rows_v4", {
+    "/operators/join_rows_v4",
+    {
       left_rows: [],
       right_rows: [],
       left_on: ["id"],
@@ -165,59 +205,72 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       strategy: "auto",
       chunk_size: 50000,
       enable_bloom: true,
-    }, 86),
+    },
+    86,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "aggregate_rows_v2",
-    makeRustNodeChiplet("aggregate_rows_v2", "/operators/aggregate_rows_v2", {
+    "/operators/aggregate_rows_v2",
+    {
       rows: [],
       group_by: [],
       aggregates: [{ op: "count", as: "row_count" }],
-    }, 85),
+    },
+    85,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "aggregate_rows_v3",
-    makeRustNodeChiplet("aggregate_rows_v3", "/operators/aggregate_rows_v3", {
+    "/operators/aggregate_rows_v3",
+    {
       rows: [],
       group_by: [],
       aggregates: [{ op: "count", as: "row_count" }],
       approx_sample_size: 1024,
-    }, 84),
+    },
+    84,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "aggregate_rows_v4",
-    makeRustNodeChiplet("aggregate_rows_v4", "/operators/aggregate_rows_v4", {
+    "/operators/aggregate_rows_v4",
+    {
       rows: [],
       group_by: [],
       aggregates: [{ op: "count", as: "row_count" }],
       approx_sample_size: 1024,
       verify_exact: false,
       parallel_workers: 1,
-    }, 83),
+    },
+    83,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "quality_check_v2",
-    makeRustNodeChiplet("quality_check_v2", "/operators/quality_check_v2", {
+    "/operators/quality_check_v2",
+    {
       rows: [],
       rules: {},
-    }, 82),
+    },
+    82,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "quality_check_v3",
-    makeRustNodeChiplet("quality_check_v3", "/operators/quality_check_v3", {
+    "/operators/quality_check_v3",
+    {
       rows: [],
       rules: {},
-    }, 81),
+    },
+    81,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "quality_check_v4",
-    makeRustNodeChiplet("quality_check_v4", "/operators/quality_check_v4", {
+    "/operators/quality_check_v4",
+    {
       rows: [],
       rules: {},
       rules_dsl: "",
-    }, 80),
+    },
+    80,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "plugin_registry_v1",
     makeRustNodeChiplet("plugin_registry_v1", "/operators/plugin_registry_v1", {
       op: "list",
@@ -225,7 +278,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       manifest: {},
     }, 79),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "window_rows_v1",
     makeRustNodeChiplet("window_rows_v1", "/operators/window_rows_v1", {
       rows: [],
@@ -234,7 +287,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       functions: [{ op: "row_number", as: "row_no" }],
     }, 79),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "optimizer_v1",
     makeRustNodeChiplet("optimizer_v1", "/operators/optimizer_v1", {
       rows: [],
@@ -242,7 +295,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       prefer_arrow: true,
     }, 78),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "load_rows_v2",
     makeRustNodeChiplet("load_rows_v2", "/operators/load_rows_v2", {
       source_type: "csv",
@@ -250,7 +303,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       limit: 10000,
     }, 77),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "load_rows_v3",
     makeRustNodeChiplet("load_rows_v3", "/operators/load_rows_v3", {
       source_type: "csv",
@@ -260,7 +313,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       retry_backoff_ms: 150,
     }, 76),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "schema_registry_v1_register",
     makeRustNodeChiplet("schema_registry_v1_register", "/operators/schema_registry_v1/register", {
       name: "default_schema",
@@ -268,14 +321,14 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       schema: {},
     }, 80),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "schema_registry_v1_get",
     makeRustNodeChiplet("schema_registry_v1_get", "/operators/schema_registry_v1/get", {
       name: "default_schema",
       version: "v1",
     }, 79),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "schema_registry_v1_infer",
     makeRustNodeChiplet("schema_registry_v1_infer", "/operators/schema_registry_v1/infer", {
       name: "default_schema",
@@ -283,7 +336,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       rows: [],
     }, 78),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "schema_registry_v2_check_compat",
     makeRustNodeChiplet("schema_registry_v2_check_compat", "/operators/schema_registry_v2/check_compat", {
       name: "default_schema",
@@ -292,7 +345,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       mode: "backward",
     }, 77),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "schema_registry_v2_suggest_migration",
     makeRustNodeChiplet("schema_registry_v2_suggest_migration", "/operators/schema_registry_v2/suggest_migration", {
       name: "default_schema",
@@ -300,7 +353,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       to_version: "v2",
     }, 76),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "udf_wasm_v1",
     makeRustNodeChiplet("udf_wasm_v1", "/operators/udf_wasm_v1/apply", {
       rows: [],
@@ -309,7 +362,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       op: "identity",
     }, 75),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "udf_wasm_v2",
     makeRustNodeChiplet("udf_wasm_v2", "/operators/udf_wasm_v2/apply", {
       rows: [],
@@ -321,7 +374,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       allowed_ops: ["identity", "double", "negate", "trim", "upper"],
     }, 74),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "time_series_v1",
     makeRustNodeChiplet("time_series_v1", "/operators/time_series_v1", {
       rows: [],
@@ -331,7 +384,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       window: 3,
     }, 73),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "stats_v1",
     makeRustNodeChiplet("stats_v1", "/operators/stats_v1", {
       rows: [],
@@ -339,7 +392,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       y_field: "y",
     }, 72),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "entity_linking_v1",
     makeRustNodeChiplet("entity_linking_v1", "/operators/entity_linking_v1", {
       rows: [],
@@ -347,34 +400,34 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       id_field: "entity_id",
     }, 72),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "table_reconstruct_v1",
     makeRustNodeChiplet("table_reconstruct_v1", "/operators/table_reconstruct_v1", {
       lines: [],
       delimiter: "\\s{2,}|\\t",
     }, 71),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "feature_store_v1_upsert",
     makeRustNodeChiplet("feature_store_v1_upsert", "/operators/feature_store_v1/upsert", {
       key_field: "id",
       rows: [],
     }, 70),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "feature_store_v1_get",
     makeRustNodeChiplet("feature_store_v1_get", "/operators/feature_store_v1/get", {
       key: "",
     }, 69),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "lineage_v2",
     makeRustNodeChiplet("lineage_v2", "/operators/lineage_v2", {
       rules: {},
       computed_fields_v3: [],
     }, 68),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "lineage_v3",
     makeRustNodeChiplet("lineage_v3", "/operators/lineage_v3", {
       rules: {},
@@ -383,7 +436,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       rows: [],
     }, 67),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "rule_simulator_v1",
     makeRustNodeChiplet("rule_simulator_v1", "/operators/rule_simulator_v1", {
       rows: [],
@@ -391,14 +444,14 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       candidate_rules: {},
     }, 67),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "constraint_solver_v1",
     makeRustNodeChiplet("constraint_solver_v1", "/operators/constraint_solver_v1", {
       rows: [],
       constraints: [],
     }, 66),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "chart_data_prep_v1",
     makeRustNodeChiplet("chart_data_prep_v1", "/operators/chart_data_prep_v1", {
       rows: [],
@@ -408,7 +461,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       top_n: 100,
     }, 65),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "diff_audit_v1",
     makeRustNodeChiplet("diff_audit_v1", "/operators/diff_audit_v1", {
       left_rows: [],
@@ -416,7 +469,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       keys: ["id"],
     }, 64),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "vector_index_v1_build",
     makeRustNodeChiplet("vector_index_v1_build", "/operators/vector_index_v1/build", {
       rows: [],
@@ -424,14 +477,14 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       text_field: "text",
     }, 63),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "vector_index_v1_search",
     makeRustNodeChiplet("vector_index_v1_search", "/operators/vector_index_v1/search", {
       query: "",
       top_k: 5,
     }, 62),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "evidence_rank_v1",
     makeRustNodeChiplet("evidence_rank_v1", "/operators/evidence_rank_v1", {
       rows: [],
@@ -441,7 +494,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       consistency_field: "consistency",
     }, 61),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "fact_crosscheck_v1",
     makeRustNodeChiplet("fact_crosscheck_v1", "/operators/fact_crosscheck_v1", {
       rows: [],
@@ -449,7 +502,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       source_field: "source",
     }, 60),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "timeseries_forecast_v1",
     makeRustNodeChiplet("timeseries_forecast_v1", "/operators/timeseries_forecast_v1", {
       rows: [],
@@ -459,13 +512,13 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       method: "naive_drift",
     }, 59),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "finance_ratio_v1",
     makeRustNodeChiplet("finance_ratio_v1", "/operators/finance_ratio_v1", {
       rows: [],
     }, 58),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "anomaly_explain_v1",
     makeRustNodeChiplet("anomaly_explain_v1", "/operators/anomaly_explain_v1", {
       rows: [],
@@ -473,69 +526,21 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       threshold: 0.8,
     }, 57),
   );
-  registry.register("evidence_conflict_v1", {
-    id: "chiplet.evidence_conflict_v1",
-    priority: 56,
-    timeout_ms: 60000,
-    retries: 0,
-    async run(_ctx, node) {
-      const cfg = node?.config && typeof node.config === "object" ? node.config : {};
-      const rows = Array.isArray(cfg.rows) ? cfg.rows : [];
-      const claimField = String(cfg.claim_field || "claim");
-      const stanceField = String(cfg.stance_field || "stance");
-      const sourceField = String(cfg.source_field || "source");
-      const byClaim = new Map();
-      rows.forEach((r) => {
-        const claim = String(r?.[claimField] || "").trim().toLowerCase();
-        if (!claim) return;
-        const stance = String(r?.[stanceField] || "").trim().toLowerCase();
-        const source = String(r?.[sourceField] || "").trim();
-        if (!byClaim.has(claim)) byClaim.set(claim, { support: 0, oppose: 0, neutral: 0, sources: new Set() });
-        const it = byClaim.get(claim);
-        if (/(support|赞成|支持|yes|true|pro)/i.test(stance)) it.support += 1;
-        else if (/(oppose|反对|质疑|no|false|con)/i.test(stance)) it.oppose += 1;
-        else it.neutral += 1;
-        if (source) it.sources.add(source);
-      });
-      const conflicts = [];
-      for (const [claim, v] of byClaim.entries()) {
-        if (v.support > 0 && v.oppose > 0) {
-          conflicts.push({
-            claim,
-            support: v.support,
-            oppose: v.oppose,
-            neutral: v.neutral,
-            source_count: v.sources.size,
-            conflict_score: Number((Math.min(v.support, v.oppose) / Math.max(1, v.support + v.oppose)).toFixed(4)),
-          });
-        }
-      }
-      conflicts.sort((a, b) => b.conflict_score - a.conflict_score);
-      return {
-        ok: true,
-        status: "done",
-        operator: "evidence_conflict_v1",
-        conflict_count: conflicts.length,
-        total_claims: byClaim.size,
-        conflicts,
-      };
-    },
-  });
-  registry.register(
+  registerManifestRustChiplet(
     "template_bind_v1",
     makeRustNodeChiplet("template_bind_v1", "/operators/template_bind_v1", {
       template_text: "",
       data: {},
     }, 56),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "provenance_sign_v1",
     makeRustNodeChiplet("provenance_sign_v1", "/operators/provenance_sign_v1", {
       payload: {},
       prev_hash: "",
     }, 55),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "stream_state_v1_save",
     makeRustNodeChiplet("stream_state_v1_save", "/operators/stream_state_v1/save", {
       stream_key: "default",
@@ -543,13 +548,13 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       offset: 0,
     }, 54),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "stream_state_v1_load",
     makeRustNodeChiplet("stream_state_v1_load", "/operators/stream_state_v1/load", {
       stream_key: "default",
     }, 53),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "stream_state_v2",
     makeRustNodeChiplet("stream_state_v2", "/operators/stream_state_v2", {
       op: "save",
@@ -563,7 +568,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       max_late_ms: null,
     }, 52),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "parquet_io_v2",
     makeRustNodeChiplet("parquet_io_v2", "/operators/parquet_io_v2", {
       op: "inspect",
@@ -576,14 +581,14 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       recursive: true,
     }, 51),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "query_lang_v1",
     makeRustNodeChiplet("query_lang_v1", "/operators/query_lang_v1", {
       rows: [],
       query: "limit 100",
     }, 50),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "columnar_eval_v1",
     makeRustNodeChiplet("columnar_eval_v1", "/operators/columnar_eval_v1", {
       rows: [],
@@ -592,7 +597,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       limit: 10000,
     }, 50),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "stream_window_v1",
     makeRustNodeChiplet("stream_window_v1", "/operators/stream_window_v1", {
       stream_key: "default_stream",
@@ -605,7 +610,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       trigger: "on_watermark",
     }, 49),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "stream_window_v2",
     makeRustNodeChiplet("stream_window_v2", "/operators/stream_window_v2", {
       stream_key: "default_stream",
@@ -623,7 +628,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       emit_late_side: true,
     }, 49),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "sketch_v1",
     makeRustNodeChiplet("sketch_v1", "/operators/sketch_v1", {
       op: "create",
@@ -635,7 +640,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       merge_state: {},
     }, 49),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "runtime_stats_v1",
     makeRustNodeChiplet("runtime_stats_v1", "/operators/runtime_stats_v1", {
       op: "summary",
@@ -647,13 +652,13 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       rows_out: 0,
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "capabilities_v1",
     makeRustNodeChiplet("capabilities_v1", "/operators/capabilities_v1", {
       include_ops: [],
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "io_contract_v1",
     makeRustNodeChiplet("io_contract_v1", "/operators/io_contract_v1/validate", {
       operator: "transform_rows_v3",
@@ -661,7 +666,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       strict: false,
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "failure_policy_v1",
     makeRustNodeChiplet("failure_policy_v1", "/operators/failure_policy_v1", {
       operator: "",
@@ -671,7 +676,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       max_retries: 2,
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "incremental_plan_v1",
     makeRustNodeChiplet("incremental_plan_v1", "/operators/incremental_plan_v1", {
       operator: "transform_rows_v2",
@@ -679,14 +684,14 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       checkpoint_key: "",
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "tenant_isolation_v1",
     makeRustNodeChiplet("tenant_isolation_v1", "/operators/tenant_isolation_v1", {
       op: "get",
       tenant_id: "default",
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "operator_policy_v1",
     makeRustNodeChiplet("operator_policy_v1", "/operators/operator_policy_v1", {
       op: "get",
@@ -695,7 +700,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       deny: [],
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "optimizer_adaptive_v2",
     makeRustNodeChiplet("optimizer_adaptive_v2", "/operators/optimizer_adaptive_v2", {
       operator: "transform_rows_v3",
@@ -703,7 +708,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       prefer_arrow: false,
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "vector_index_v2_build",
     makeRustNodeChiplet("vector_index_v2_build", "/operators/vector_index_v2/build", {
       shard: "default",
@@ -714,7 +719,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       replace: false,
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "vector_index_v2_search",
     makeRustNodeChiplet("vector_index_v2_search", "/operators/vector_index_v2/search", {
       query: "",
@@ -725,7 +730,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       rerank_meta_weight: 0,
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "vector_index_v2_eval",
     makeRustNodeChiplet("vector_index_v2_eval", "/operators/vector_index_v2/eval", {
       run_id: "",
@@ -734,7 +739,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       cases: [],
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "stream_reliability_v1",
     makeRustNodeChiplet("stream_reliability_v1", "/operators/stream_reliability_v1", {
       op: "stats",
@@ -745,7 +750,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       checkpoint: 0,
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "lineage_provenance_v1",
     makeRustNodeChiplet("lineage_provenance_v1", "/operators/lineage_provenance_v1", {
       rules: {},
@@ -756,48 +761,58 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       prev_hash: "",
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "contract_regression_v1",
     makeRustNodeChiplet("contract_regression_v1", "/operators/contract_regression_v1", {
       operators: [],
     }, 48),
   );
-  registry.register(
+  registerManifestRustChiplet(
     "perf_baseline_v1",
-    makeRustNodeChiplet("perf_baseline_v1", "/operators/perf_baseline_v1", {
+    "/operators/perf_baseline_v1",
+    {
       op: "get",
       operator: "transform_rows_v3",
       p95_ms: 500,
       max_p95_ms: 500,
-    }, 48),
+    },
+    48,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "plugin_operator_v1",
-    makeRustNodeChiplet("plugin_operator_v1", "/operators/plugin_operator_v1", {
+    "/operators/plugin_operator_v1",
+    {
       plugin: "",
       op: "run",
       payload: {},
-    }, 48),
+    },
+    48,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "explain_plan_v1",
-    makeRustNodeChiplet("explain_plan_v1", "/operators/explain_plan_v1", {
+    "/operators/explain_plan_v1",
+    {
       steps: [],
       rows: [],
-    }, 49),
+    },
+    49,
   );
-  registry.register(
+  registerManifestRustChiplet(
     "explain_plan_v2",
-    makeRustNodeChiplet("explain_plan_v2", "/operators/explain_plan_v2", {
+    "/operators/explain_plan_v2",
+    {
       steps: [],
       rows: [],
       actual_stats: [],
       persist_feedback: true,
       include_runtime_stats: false,
-    }, 49),
+    },
+    49,
   );
+  assertRegistrationSurface();
 }
 
 module.exports = {
   registerRustOpsDomainChiplets,
 };
+

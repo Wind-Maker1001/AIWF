@@ -1,6 +1,10 @@
 ﻿function createWindowSupport({ app, BrowserWindow, Menu, shell, path, loadConfig }) {
   function createWorkflowWindow(options = {}) {
     const debugApi = !!options.debugApi;
+    const legacyAdmin = !!options.legacyAdmin;
+    const query = {};
+    if (debugApi) query.debug = "1";
+    if (legacyAdmin) query.legacyAdmin = "1";
     const win = new BrowserWindow({
       width: 1560,
       height: 980,
@@ -14,7 +18,7 @@
       },
     });
     win.loadFile(path.join(__dirname, "renderer", "workflow.html"), {
-      query: debugApi ? { debug: "1" } : undefined,
+      query: Object.keys(query).length > 0 ? query : undefined,
     });
   }
 
@@ -22,7 +26,8 @@
     const tpl = [{
       label: "帮助",
       submenu: [
-        { label: "打开 Workflow Studio", click: () => createWorkflowWindow() },
+        { label: "打开 Legacy Workflow Studio", click: () => createWorkflowWindow() },
+        { label: "打开 Legacy Workflow 管理面", click: () => createWorkflowWindow({ legacyAdmin: true }) },
         { label: "打开配置目录", click: () => shell.openPath(app.getPath("userData")) },
         { label: "打开输出目录", click: () => shell.openPath((() => { try { const cfg = typeof loadConfig === "function" ? loadConfig() : null; const fromCfg = String(cfg?.outputRoot || "").trim(); if (fromCfg) return fromCfg; } catch {} return path.join(app.getPath("desktop"), "AIWF_Builds"); })()) },
       ],
@@ -59,9 +64,10 @@
 
   function bootFromArgv(argv = []) {
     const args = argv.map((x) => String(x || "").toLowerCase());
-    const openWorkflowOnly = args.includes("--workflow") || args.includes("/workflow");
+    const openWorkflowAdmin = args.includes("--workflow-admin") || args.includes("/workflow-admin");
+    const openWorkflowOnly = args.includes("--workflow") || args.includes("/workflow") || openWorkflowAdmin;
     const debugWorkflowApi = shouldEnableWorkflowDebugApi(args);
-    if (openWorkflowOnly) createWorkflowWindow({ debugApi: debugWorkflowApi });
+    if (openWorkflowOnly) createWorkflowWindow({ debugApi: debugWorkflowApi, legacyAdmin: openWorkflowAdmin });
     else createWindow();
     if (String(process.env.AIWF_RELEASE || "").trim() === "1") {
       // Release self-check: explicitly record debug API hard-disable status.
@@ -79,4 +85,3 @@
 }
 
 module.exports = { createWindowSupport };
-

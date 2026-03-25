@@ -227,6 +227,13 @@
 3. `D:\AIWF\apps\dify-desktop\renderer\workflow\support-ui-sandbox.js`
 4. `D:\AIWF\apps\dify-desktop\renderer\workflow\static-config.js`（谨慎）
 
+## 补充约束（2026-03-24）
+
+- `renderer/workflow/palette-ui.js` 中的 `nodeType` 输入不再允许作为 catalog truth 之外的自由逃逸口。已注册类型可以展示 policy ownership，未注册类型必须在 authoring 阶段禁用添加。
+- `renderer/workflow/preflight-ui.js` 对 `unknown_node_type` 必须输出显式的 contract guidance，而不是把这类问题继续折叠进 generic graph error。
+- 这两类逻辑属于前端 authoring / guidance responsibility，所以应留在 frontend；但它们依赖的节点目录 truth、ownership truth 与 operator truth 仍然必须来自后端 / contract / manifest，而不是前端私有定义。
+- `renderer/workflow/template-storage-contract.js` 现在是前端自定义模板 localStorage 的唯一 contract helper。`template-ui-marketplace.js` 不应再直接把裸数组写回 localStorage，而必须通过 versioned envelope / entry contract 读写。
+
 ## 结论
 
 从现在开始，workflow 前端应优先遵守：

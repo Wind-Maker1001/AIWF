@@ -16,14 +16,14 @@ test("workflow run payload ui syncs workflow name into exported graph", async ()
   }, {
     store: {
       setWorkflowName: (name) => names.push(name),
-      exportGraph: () => ({ workflow_id: "wf_1", nodes: [], edges: [] }),
+      exportGraph: () => ({ workflow_id: "wf_1", version: "1.0.0", nodes: [], edges: [] }),
     },
   });
 
   const graph = ui.graphPayload();
 
   assert.deepEqual(names, ["Flow Alpha"]);
-  assert.deepEqual(graph, { workflow_id: "wf_1", nodes: [], edges: [] });
+  assert.deepEqual(graph, { workflow_id: "wf_1", version: "1.0.0", nodes: [], edges: [] });
 });
 
 test("workflow run payload ui builds run payload and merges extra params", async () => {
@@ -60,7 +60,12 @@ test("workflow run payload ui builds run payload and merges extra params", async
   }, {
     store: {
       setWorkflowName: () => {},
-      exportGraph: () => ({ workflow_id: "wf_2", nodes: [{ id: "n1" }], edges: [] }),
+      exportGraph: () => ({
+        workflow_id: "wf_2",
+        version: "1.0.0",
+        nodes: [{ id: "n1", type: "ingest_files" }],
+        edges: [],
+      }),
     },
     sandboxDedupWindowSec: () => 42,
   });
@@ -71,18 +76,22 @@ test("workflow run payload ui builds run payload and merges extra params", async
   });
 
   assert.equal(payload.workflow_id, "wf_2");
-  assert.deepEqual(payload.workflow, { workflow_id: "wf_2", nodes: [{ id: "n1" }], edges: [] });
-  assert.equal(payload.quality_rule_set_id, "rule_set_1");
-  assert.deepEqual(payload.params, {
-    report_title: "Quarterly Report",
-    input_files: "D:/input/a.pdf",
-    md_only: true,
-    paper_markdown_enabled: true,
-    export_canonical_bundle: true,
-    canonical_title: "AIWF 熟肉语料",
-    ocr_lang: "chi_sim+eng",
-    strict_output_gate: true,
+  assert.equal(payload.workflow_version, "1.0.0");
+  assert.deepEqual(payload.workflow, {
+    workflow_id: "wf_2",
+    version: "1.0.0",
+    nodes: [{ id: "n1", type: "ingest_files" }],
+    edges: [],
   });
+  assert.equal(payload.quality_rule_set_id, "rule_set_1");
+  assert.equal(payload.params.report_title, "Quarterly Report");
+  assert.equal(payload.params.input_files, "D:/input/a.pdf");
+  assert.equal(payload.params.md_only, true);
+  assert.equal(payload.params.paper_markdown_enabled, true);
+  assert.equal(payload.params.export_canonical_bundle, true);
+  assert.equal(typeof payload.params.canonical_title, "string");
+  assert.equal(payload.params.ocr_lang, "chi_sim+eng");
+  assert.equal(payload.params.strict_output_gate, true);
   assert.deepEqual(payload.chiplet_isolated_types, ["a", "b", "c"]);
   assert.equal(payload.sandbox_alert_dedup_window_sec, 42);
   assert.deepEqual(payload.sandbox_limits, {

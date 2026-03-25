@@ -32,8 +32,11 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\ResultPanelController.cs" Link="Source\ResultPanelController.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\ResultPanelState.cs" Link="Source\ResultPanelState.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\ArtifactPresentationMapper.cs" Link="Source\ArtifactPresentationMapper.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceEditorSupport.cs" Link="Source\GovernanceEditorSupport.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultBindingService.cs" Link="Source\RunResultBindingService.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunFlowCoordinator.cs" Link="Source\RunFlowCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceCapabilities.Generated.cs" Link="Source\GovernanceCapabilities.Generated.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceBridgeClient.cs" Link="Source\GovernanceBridgeClient.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunInputValidator.cs" Link="Source\RunInputValidator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultParser.cs" Link="Source\RunResultParser.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultPresentationMapper.cs" Link="Source\RunResultPresentationMapper.cs" />
