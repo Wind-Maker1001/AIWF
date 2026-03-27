@@ -1,4 +1,9 @@
-const { assertWorkflowContract } = require("./workflow_contract");
+const {
+  assertWorkflowContract,
+  NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+  WORKFLOW_CONTRACT_AUTHORITY,
+} = require("./workflow_contract");
+const { workflowStoreRemoteErrorResult } = require("./workflow_store_remote_error");
 
 function registerWorkflowQueueAppsIpc(ctx, deps) {
   const {
@@ -36,6 +41,61 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
   function queueConcurrency() {
     const n = Number(process.env.AIWF_WORKFLOW_QUEUE_CONCURRENCY || 2);
     return Number.isFinite(n) ? Math.max(1, Math.min(8, Math.floor(n))) : 2;
+  }
+
+  function workflowContractFailure(error) {
+    const details = error && typeof error === "object" && error.details && typeof error.details === "object"
+      ? error.details
+      : {};
+    return {
+      ok: false,
+      error: String(error?.message || error || "workflow contract invalid"),
+      error_code: String(error?.code || "workflow_contract_invalid"),
+      graph_contract: String(details.graph_contract || WORKFLOW_CONTRACT_AUTHORITY),
+      error_item_contract: String(details.error_item_contract || NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY),
+      error_items: Array.isArray(details.error_items) ? details.error_items : [],
+    };
+  }
+
+  function normalizeWorkflowStoreError(error) {
+    return workflowStoreRemoteErrorResult(error);
+  }
+
+  function applyPendingReviewEnqueueResult(out, enqueueOut) {
+    if (!enqueueOut?.ok) {
+      const reviewEnqueue = {
+        ok: false,
+        error: String(enqueueOut?.error || "manual review enqueue failed"),
+        error_code: String(enqueueOut?.error_code || "manual_review_enqueue_failed"),
+        error_item_contract: String(enqueueOut?.error_item_contract || ""),
+        graph_contract: String(enqueueOut?.graph_contract || ""),
+        error_items: Array.isArray(enqueueOut?.error_items) ? enqueueOut.error_items : [],
+      };
+      return {
+        ...(out && typeof out === "object" ? out : {}),
+        review_enqueue_failed: true,
+        review_enqueue: reviewEnqueue,
+      };
+    }
+    return out;
+  }
+
+  function normalizePendingReviews(items, out, payload = null) {
+    const workflow = payload?.workflow && typeof payload.workflow === "object" ? payload.workflow : {};
+    const fallbackRunId = String(out?.run_id || "").trim();
+    const fallbackWorkflowId = String(out?.workflow_id || workflow.workflow_id || "").trim();
+    return (Array.isArray(items) ? items : []).map((item) => {
+      const source = item && typeof item === "object" ? item : {};
+      const reviewKey = String(source.review_key || source.node_id || "").trim();
+      return {
+        ...source,
+        run_id: String(source.run_id || fallbackRunId).trim(),
+        workflow_id: String(source.workflow_id || fallbackWorkflowId).trim(),
+        node_id: String(source.node_id || reviewKey).trim(),
+        review_key: reviewKey,
+        status: String(source.status || "pending").trim().toLowerCase() || "pending",
+      };
+    });
   }
 
   function queueTerminalStatus(out) {
@@ -91,24 +151,24 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         const promise = (async () => {
           const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(next.cfg || {}) });
           const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
-          if (!rulesOut?.ok) throw new Error(String(rulesOut?.error || "sandbox rules unavailable"));
+          if (!rulesOut?.ok) throw rulesOut;
           const effectivePayload = await reportSupport.applyQualityRuleSetToPayload(
             await sandboxAutoFixStore.applyPayload(next.payload || {}, merged),
             merged
           );
-          const out = sandboxSupport.attachQualityGate(await runMinimalWorkflow({
+          let out = sandboxSupport.attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
             config: merged,
             outputRoot: resolveOutputRoot(merged),
             nodeCache: createNodeCacheApi(),
           }), effectivePayload || {});
+          if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
+            const enqueueOut = await enqueueReviews(normalizePendingReviews(out.pending_reviews, out, effectivePayload), merged);
+            out = applyPendingReviewEnqueueResult(out, enqueueOut);
+          }
           appendDiagnostics(out);
           appendRunHistory(out, effectivePayload, merged);
           extractSandboxViolations(out).forEach((item) => sandboxSupport.appendSandboxViolationAudit(item, effectivePayload || {}, rulesOut.rules || {}));
-          await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
-          if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
-            await enqueueReviews(out.pending_reviews, merged);
-          }
           const latest = loadWorkflowQueue();
           const index = latest.findIndex((item) => String(item.task_id || "") === itemId);
           if (index >= 0) {
@@ -118,14 +178,18 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
             latest[index].run_id = String(out?.run_id || "");
             saveWorkflowQueue(latest);
           }
+          if (out?.review_enqueue_failed) return;
+          await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
         })()
           .catch((error) => {
             const latest = loadWorkflowQueue();
             const index = latest.findIndex((item) => String(item.task_id || "") === itemId);
             if (index >= 0) {
+              const normalizedError = normalizeWorkflowStoreError(error);
               latest[index].status = "failed";
               latest[index].finished_at = nowIso();
-              latest[index].error = String(error);
+              latest[index].error = String(normalizedError?.error || error);
+              latest[index].result = normalizedError;
               saveWorkflowQueue(latest);
             }
           })
@@ -180,7 +244,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       drainQueue().catch(() => {});
       return { ok: true, task: item };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return normalizeWorkflowStoreError(error);
     }
   });
 
@@ -276,7 +340,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       });
       return { ok: true, graph: hit.graph, meta: hit };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return normalizeWorkflowStoreError(error);
     }
   });
 
@@ -311,7 +375,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     try {
       assertWorkflowContract(graph, { requireNonEmptyNodes: true });
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowContractFailure(error);
     }
     const out = await workflowAppRegistryStore.publishApp({
       app_id: String(req?.app_id || "").trim() || undefined,
@@ -353,18 +417,21 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         await sandboxAutoFixStore.applyPayload(mergedPayload, merged),
         merged
       );
-      const out = sandboxSupport.attachQualityGate(await runMinimalWorkflow({
+      let out = sandboxSupport.attachQualityGate(await runMinimalWorkflow({
         payload: effectivePayload,
         config: merged,
         outputRoot: resolveOutputRoot(merged),
         nodeCache: createNodeCacheApi(),
       }), effectivePayload || {});
+      if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
+        const enqueueOut = await enqueueReviews(normalizePendingReviews(out.pending_reviews, out, effectivePayload), merged);
+        out = applyPendingReviewEnqueueResult(out, enqueueOut);
+      }
       appendDiagnostics(out);
       appendRunHistory(out, effectivePayload, merged);
       extractSandboxViolations(out).forEach((violation) => sandboxSupport.appendSandboxViolationAudit(violation, effectivePayload || {}, rulesOut.rules || {}));
-      await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
-      if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
-        await enqueueReviews(out.pending_reviews, merged);
+      if (!out?.review_enqueue_failed) {
+        await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
       }
       appendAudit("workflow_run_app", {
         app_id: appId,
@@ -372,9 +439,22 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         ok: !!out?.ok,
         provider: String(item?.provider || ""),
       });
-      return { ok: true, app_id: appId, provider: String(item?.provider || ""), result: out };
+      return {
+        ok: !!out?.ok,
+        app_id: appId,
+        provider: String(item?.provider || ""),
+        result: out,
+        run_id: String(out?.run_id || ""),
+        status: String(out?.status || ""),
+        error: String(out?.error || ""),
+        error_code: String(out?.error_code || ""),
+        error_item_contract: String(out?.error_item_contract || ""),
+        error_items: Array.isArray(out?.error_items) ? out.error_items : [],
+        review_enqueue_failed: !!out?.review_enqueue_failed,
+        review_enqueue: out?.review_enqueue && typeof out.review_enqueue === "object" ? out.review_enqueue : null,
+      };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return normalizeWorkflowStoreError(error);
     }
   });
 }

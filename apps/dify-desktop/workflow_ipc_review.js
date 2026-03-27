@@ -8,6 +8,7 @@ function registerWorkflowReviewIpc(ctx, deps) {
     loadConfig,
     runMinimalWorkflow,
   } = ctx;
+  const { workflowStoreRemoteErrorResult } = require("./workflow_store_remote_error");
   const {
     isMockIoAllowed,
     resolveMockFilePath,
@@ -28,6 +29,43 @@ function registerWorkflowReviewIpc(ctx, deps) {
     sandboxAutoFixStore,
     workflowManualReviewStore,
   } = deps;
+
+  function applyPendingReviewEnqueueResult(out, enqueueOut) {
+    if (!enqueueOut?.ok) {
+      const reviewEnqueue = {
+        ok: false,
+        error: String(enqueueOut?.error || "manual review enqueue failed"),
+        error_code: String(enqueueOut?.error_code || "manual_review_enqueue_failed"),
+        error_item_contract: String(enqueueOut?.error_item_contract || ""),
+        graph_contract: String(enqueueOut?.graph_contract || ""),
+        error_items: Array.isArray(enqueueOut?.error_items) ? enqueueOut.error_items : [],
+      };
+      return {
+        ...(out && typeof out === "object" ? out : {}),
+        review_enqueue_failed: true,
+        review_enqueue: reviewEnqueue,
+      };
+    }
+    return out;
+  }
+
+  function normalizePendingReviews(items, out, payload = null) {
+    const workflow = payload?.workflow && typeof payload.workflow === "object" ? payload.workflow : {};
+    const fallbackRunId = String(out?.run_id || "").trim();
+    const fallbackWorkflowId = String(out?.workflow_id || workflow.workflow_id || "").trim();
+    return (Array.isArray(items) ? items : []).map((item) => {
+      const source = item && typeof item === "object" ? item : {};
+      const reviewKey = String(source.review_key || source.node_id || "").trim();
+      return {
+        ...source,
+        run_id: String(source.run_id || fallbackRunId).trim(),
+        workflow_id: String(source.workflow_id || fallbackWorkflowId).trim(),
+        node_id: String(source.node_id || reviewKey).trim(),
+        review_key: reviewKey,
+        status: String(source.status || "pending").trim().toLowerCase() || "pending",
+      };
+    });
+  }
 
   ipcMain.handle("aiwf:listManualReviews", async () => {
     return await workflowManualReviewStore.listQueue();
@@ -120,25 +158,45 @@ function registerWorkflowReviewIpc(ctx, deps) {
             await sandboxAutoFixStore.applyPayload(replayPayload, merged),
             merged
           );
-          const out = attachQualityGate(await runMinimalWorkflow({
+          let out = attachQualityGate(await runMinimalWorkflow({
             payload: effectivePayload,
             config: merged,
             outputRoot: resolveOutputRoot(merged),
             nodeCache: createNodeCacheApi(),
           }), effectivePayload || {});
+          if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
+            const enqueueOut = await enqueueReviews(normalizePendingReviews(out.pending_reviews, out, effectivePayload), merged);
+            out = applyPendingReviewEnqueueResult(out, enqueueOut);
+          }
           appendDiagnostics(out);
           appendRunHistory(out, effectivePayload, merged);
           extractSandboxViolations(out).forEach((item) => appendSandboxViolationAudit(item, effectivePayload || {}, rulesOut.rules || {}));
-          await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
-          if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
-            await enqueueReviews(out.pending_reviews, merged);
+          if (!out?.review_enqueue_failed) {
+            await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
           }
           resumed = out;
         }
       }
-      return { ok: true, provider: String(submitted?.provider || ""), item: hist, remaining: Number(submitted?.remaining || 0), resumed };
+      const resumeOk = !resumed || !!resumed?.ok;
+      return {
+        ok: resumeOk,
+        review_saved: true,
+        provider: String(submitted?.provider || ""),
+        item: hist,
+        remaining: Number(submitted?.remaining || 0),
+        resumed,
+        run_id: String(resumed?.run_id || ""),
+        status: String(resumed?.status || ""),
+        error: String(resumed?.error || ""),
+        error_code: String(resumed?.error_code || ""),
+        error_item_contract: String(resumed?.error_item_contract || ""),
+        graph_contract: String(resumed?.graph_contract || ""),
+        error_items: Array.isArray(resumed?.error_items) ? resumed.error_items : [],
+        review_enqueue_failed: !!resumed?.review_enqueue_failed,
+        review_enqueue: resumed?.review_enqueue && typeof resumed.review_enqueue === "object" ? resumed.review_enqueue : null,
+      };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   });
 }

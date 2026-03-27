@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const { registerIpcHandlers } = require("../main_ipc");
 const { governanceBoundaryResponseFromEntries } = require("./governance_test_support");
+const { createWorkflowStoreRemoteError } = require("../workflow_store_remote_error");
 
 function createIpcMain() {
   const handlers = new Map();
@@ -18,6 +19,7 @@ function createIpcMain() {
 }
 
 function createCtx(overrides = {}) {
+  const fetchImplOverride = typeof overrides.fetchImpl === "function" ? overrides.fetchImpl : null;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "aiwf-workflow-queue-"));
   const ipcMain = createIpcMain();
   const remote = {
@@ -37,7 +39,7 @@ function createCtx(overrides = {}) {
     manualReviews: [],
   };
   const prevFetch = global.fetch;
-  global.fetch = async (url, init = {}) => {
+  global.fetch = fetchImplOverride || (async (url, init = {}) => {
     const method = String(init.method || "GET").toUpperCase();
     const target = String(url);
     if (method === "GET" && target.endsWith("/governance/meta/control-plane")) {
@@ -122,7 +124,7 @@ function createCtx(overrides = {}) {
       };
     }
     throw new Error(`unexpected fetch: ${method} ${target}`);
-  };
+  });
   const ctx = {
     app: {
       isPackaged: false,
@@ -192,7 +194,16 @@ test("workflow queue preserves pending_review terminal status", async () => {
       ok: false,
       run_id: "run_review_1",
       status: "pending_review",
-      pending_reviews: [{ review_key: "gate_a", status: "pending" }],
+      pending_reviews: [{
+        run_id: "run_review_1",
+        workflow_id: "wf_1",
+        node_id: "n_review",
+        review_key: "gate_a",
+        reviewer: "reviewer",
+        comment: "",
+        created_at: "2026-03-25T00:00:00Z",
+        status: "pending",
+      }],
     }),
   });
   try {
@@ -252,7 +263,16 @@ test("workflow queue cancels queued task but rejects terminal task cancellation"
       ok: false,
       run_id: "run_review_2",
       status: "pending_review",
-      pending_reviews: [{ review_key: "gate_b", status: "pending" }],
+      pending_reviews: [{
+        run_id: "run_review_2",
+        workflow_id: "wf_3",
+        node_id: "n_review",
+        review_key: "gate_b",
+        reviewer: "reviewer",
+        comment: "",
+        created_at: "2026-03-25T00:00:00Z",
+        status: "pending",
+      }],
     }),
   });
   try {
@@ -297,6 +317,193 @@ test("workflow queue cancels queued task but rejects terminal task cancellation"
     assert.match(String(rejected.error || ""), /not cancellable/i);
     const afterReject = await waitForQueueStatus(listQueue, "task_review_2", "pending_review");
     assert.equal(String(afterReject.status || ""), "pending_review");
+  } finally {
+    restore();
+  }
+});
+
+test("workflow queue preserves structured failure payloads when background execution fails", async () => {
+  const { ipcMain, restore } = createCtx({
+    runMinimalWorkflow: async () => ({ ok: true, run_id: "unused", status: "done" }),
+    fetchImpl: async (url, init = {}) => {
+      const method = String(init.method || "GET").toUpperCase();
+      const target = String(url);
+      if (method === "GET" && target.endsWith("/governance/meta/control-plane")) {
+        return governanceBoundaryResponseFromEntries([
+          {
+            capability: "workflow_sandbox_rules",
+            route_prefix: "/governance/workflow-sandbox/rules",
+            owned_route_prefixes: ["/governance/workflow-sandbox/rules", "/governance/workflow-sandbox/rule-versions"],
+          },
+        ]);
+      }
+      if (method === "GET" && target.endsWith("/governance/workflow-sandbox/rules")) {
+        return {
+          ok: false,
+          status: 400,
+          async text() {
+            return JSON.stringify({
+              ok: false,
+              error: "workflow graph invalid: workflow contains unregistered node types: unknown_future_node",
+              error_code: "workflow_graph_invalid",
+              error_items: [{
+                path: "workflow.nodes",
+                code: "unknown_node_type",
+                message: "workflow contains unregistered node types: unknown_future_node",
+              }],
+            });
+          },
+        };
+      }
+      throw new Error(`unexpected fetch: ${method} ${target}`);
+    },
+  });
+  try {
+    const enqueue = ipcMain.handlers.get("aiwf:enqueueWorkflowTask");
+    const listQueue = ipcMain.handlers.get("aiwf:listWorkflowQueue");
+    assert.equal(typeof enqueue, "function");
+    assert.equal(typeof listQueue, "function");
+
+    const enqueued = await enqueue({}, {
+      task_id: "task_fail_structured",
+      label: "structured failure workflow",
+      payload: { workflow: { workflow_id: "wf_fail", version: "1.0.0", nodes: [], edges: [] } },
+      cfg: {},
+      priority: 100,
+    });
+    assert.equal(enqueued.ok, true);
+
+    const item = await waitForQueueStatus(listQueue, "task_fail_structured", "failed");
+    assert.equal(String(item.error || "").includes("unknown_future_node"), true);
+    assert.equal(item.result?.error_code, "workflow_graph_invalid");
+    assert.ok(Array.isArray(item.result?.error_items));
+    assert.ok(item.result.error_items.some((entry) => entry.path === "workflow.nodes" && entry.code === "unknown_node_type"));
+  } finally {
+    restore();
+  }
+});
+
+test("workflow queue preserves pending-review status when review enqueue fails", async () => {
+  const { ipcMain, restore } = createCtx({
+    runMinimalWorkflow: async () => ({
+      ok: false,
+      run_id: "run_pending_fail",
+      status: "pending_review",
+      pending_reviews: [{ review_key: "gate_fail", status: "pending" }],
+    }),
+    fetchImpl: async (url, init = {}) => {
+      const method = String(init.method || "GET").toUpperCase();
+      const target = String(url);
+      if (method === "GET" && target.endsWith("/governance/meta/control-plane")) {
+        return governanceBoundaryResponseFromEntries([
+          {
+            capability: "workflow_sandbox_rules",
+            route_prefix: "/governance/workflow-sandbox/rules",
+            owned_route_prefixes: ["/governance/workflow-sandbox/rules", "/governance/workflow-sandbox/rule-versions"],
+          },
+          {
+            capability: "workflow_sandbox_autofix",
+            route_prefix: "/governance/workflow-sandbox/autofix-state",
+            owned_route_prefixes: ["/governance/workflow-sandbox/autofix-state", "/governance/workflow-sandbox/autofix-actions"],
+          },
+          {
+            capability: "manual_reviews",
+            route_prefix: "/governance/manual-reviews",
+            owned_route_prefixes: ["/governance/manual-reviews"],
+          },
+        ]);
+      }
+      if (method === "GET" && target.endsWith("/governance/workflow-sandbox/rules")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({ ok: true, rules: { whitelist_codes: [], whitelist_node_types: [], whitelist_keys: [], mute_until_by_key: {} } });
+          },
+        };
+      }
+      if (method === "GET" && target.endsWith("/governance/workflow-sandbox/autofix-state")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({
+              ok: true,
+              state: {
+                violation_events: [],
+                forced_isolation_mode: "",
+                forced_until: "",
+                last_actions: [],
+                green_streak: 0,
+              },
+            });
+          },
+        };
+      }
+      if (method === "PUT" && target.endsWith("/governance/workflow-sandbox/autofix-state")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({ ok: true, state: {} });
+          },
+        };
+      }
+      if (method === "POST" && target.endsWith("/governance/manual-reviews/enqueue")) {
+        return {
+          ok: false,
+          status: 503,
+          async text() {
+            return JSON.stringify({
+              ok: false,
+              error: "manual review queue unavailable",
+              error_code: "manual_review_store_unavailable",
+              error_items: [{ path: "review_queue", code: "unavailable", message: "manual review queue unavailable" }],
+            });
+          },
+        };
+      }
+      if (method === "PUT" && target.includes("/governance/workflow-runs/")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({ ok: true, item: {} });
+          },
+        };
+      }
+      if (method === "POST" && target.endsWith("/governance/workflow-audit-events")) {
+        return {
+          ok: true,
+          status: 200,
+          async text() {
+            return JSON.stringify({ ok: true, item: {} });
+          },
+        };
+      }
+      throw new Error(`unexpected fetch: ${method} ${target}`);
+    },
+  });
+  try {
+    const enqueue = ipcMain.handlers.get("aiwf:enqueueWorkflowTask");
+    const listQueue = ipcMain.handlers.get("aiwf:listWorkflowQueue");
+    assert.equal(typeof enqueue, "function");
+    assert.equal(typeof listQueue, "function");
+
+    const enqueued = await enqueue({}, {
+      task_id: "task_pending_fail",
+      label: "pending review enqueue fail",
+      payload: { workflow: { workflow_id: "wf_pending_fail", version: "1.0.0", nodes: [], edges: [] } },
+      cfg: {},
+      priority: 100,
+    });
+    assert.equal(enqueued.ok, true);
+
+    const item = await waitForQueueStatus(listQueue, "task_pending_fail", "pending_review");
+    assert.equal(item.result?.status, "pending_review");
+    assert.equal(item.result?.review_enqueue_failed, true);
+    assert.equal(item.result?.review_enqueue?.error_code, "manual_review_store_unavailable");
+    assert.ok(item.result?.review_enqueue?.error_items.some((entry) => entry.path === "review_queue"));
   } finally {
     restore();
   }

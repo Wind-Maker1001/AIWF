@@ -203,6 +203,7 @@ function createWorkflowHistorySupport(deps) {
 
 function registerWorkflowHistoryIpc(ctx, deps) {
   const { ipcMain } = ctx;
+  const { workflowStoreRemoteErrorResult } = require("./workflow_store_remote_error");
   const {
     readDiagnostics,
     buildPerfDashboard,
@@ -238,7 +239,7 @@ function registerWorkflowHistoryIpc(ctx, deps) {
       const lineage = hit?.result?.lineage && typeof hit.result.lineage === "object" ? hit.result.lineage : {};
       return { ok: true, run_id: runId, lineage };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   });
 
