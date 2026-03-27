@@ -202,6 +202,7 @@ function registerWorkflowIpc(ctx) {
       saveRunBaseline: (item, cfg = null) => workflowRunBaselineStore.save(item, cfg),
       buildRunCompare: reportSupport.buildRunCompare,
       buildRunRegressionAgainstBaseline: reportSupport.buildRunRegressionAgainstBaseline,
+      buildPreflightReportEnvelope: reportSupport.buildPreflightReportEnvelope,
       renderCompareHtml: reportSupport.renderCompareHtml,
       renderCompareMarkdown: reportSupport.renderCompareMarkdown,
       renderPreflightMarkdown: reportSupport.renderPreflightMarkdown,

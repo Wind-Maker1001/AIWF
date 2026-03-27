@@ -5,6 +5,9 @@ function createWorkflowReportSupport(deps) {
     listRunBaselines = async () => ({ ok: true, items: [] }),
     qualityRuleSetSupport = { getQualityRuleSet: async () => null },
   } = deps;
+  const PREFLIGHT_REPORT_EXPORT_SCHEMA_VERSION = "workflow_preflight_report_export.v1";
+  const PREFLIGHT_REPORT_SCHEMA_VERSION = "workflow_preflight_report.v1";
+  const PREFLIGHT_REPORT_CONTRACT_AUTHORITY = "contracts/desktop/preflight_report_contract.v1.json";
 
   async function buildRunCompare(runA, runB, cfg = null) {
     const a = await getRun(runA, cfg);
@@ -12,16 +15,26 @@ function createWorkflowReportSupport(deps) {
     if (!a || !b) return { ok: false, error: "run not found" };
     const nodesA = Array.isArray(a?.result?.node_runs) ? a.result.node_runs : [];
     const nodesB = Array.isArray(b?.result?.node_runs) ? b.result.node_runs : [];
+    const mapA = new Map(nodesA.map((node) => [String(node.id || ""), node]));
     const mapB = new Map(nodesB.map((node) => [String(node.id || ""), node]));
-    const nodeDiff = nodesA.map((nodeA) => {
-      const nodeB = mapB.get(String(nodeA.id || ""));
-      const statusA = String(nodeA.status || "");
+    const nodeIds = [];
+    const seenNodeIds = new Set();
+    [...nodesA, ...nodesB].forEach((node) => {
+      const id = String(node?.id || "");
+      if (!id || seenNodeIds.has(id)) return;
+      seenNodeIds.add(id);
+      nodeIds.push(id);
+    });
+    const nodeDiff = nodeIds.map((nodeId) => {
+      const nodeA = mapA.get(nodeId);
+      const nodeB = mapB.get(nodeId);
+      const statusA = String(nodeA?.status || "");
       const statusB = String(nodeB?.status || "");
-      const secondsA = Number(nodeA.seconds || 0);
+      const secondsA = Number(nodeA?.seconds || 0);
       const secondsB = Number(nodeB?.seconds || 0);
       return {
-        id: nodeA.id,
-        type: nodeA.type,
+        id: nodeId,
+        type: String(nodeA?.type || nodeB?.type || ""),
         status_a: statusA,
         status_b: statusB,
         status_changed: statusA !== statusB,
@@ -100,6 +113,22 @@ function createWorkflowReportSupport(deps) {
     return `${lines.join("\n")}\n`;
   }
 
+  function buildPreflightReportEnvelope(report) {
+    const safeReport = report && typeof report === "object" ? deepClone(report) : {};
+    const issues = Array.isArray(safeReport.issues) ? safeReport.issues : [];
+    return {
+      schema_version: PREFLIGHT_REPORT_EXPORT_SCHEMA_VERSION,
+      authority: PREFLIGHT_REPORT_CONTRACT_AUTHORITY,
+      report: {
+        schema_version: PREFLIGHT_REPORT_SCHEMA_VERSION,
+        ok: !!safeReport.ok,
+        ts: String(safeReport.ts || ""),
+        risk: safeReport.risk && typeof safeReport.risk === "object" ? safeReport.risk : null,
+        issues,
+      },
+    };
+  }
+
   function renderTemplateAcceptanceMarkdown(report) {
     const safeReport = report && typeof report === "object" ? report : {};
     const before = safeReport.before && typeof safeReport.before === "object" ? safeReport.before : {};
@@ -162,8 +191,10 @@ function createWorkflowReportSupport(deps) {
     const compare = await buildRunCompare(baselineRunId, runId, cfg);
     if (!compare?.ok) return compare;
     const changed = Array.isArray(compare.node_diff) ? compare.node_diff.filter((item) => item.status_changed || Math.abs(Number(item.seconds_delta || 0)) > 0.001) : [];
-    const statusFlip = changed.filter((item) => item.status_changed);
-    const perfHot = changed.filter((item) => Number(item.seconds_delta || 0) > 0.5);
+    const hasStatusA = (item) => String(item?.status_a || "").trim() !== "";
+    const hasStatusB = (item) => String(item?.status_b || "").trim() !== "";
+    const statusFlip = changed.filter((item) => hasStatusA(item) && hasStatusB(item) && item.status_changed);
+    const perfHot = changed.filter((item) => hasStatusA(item) && hasStatusB(item) && Number(item.seconds_delta || 0) > 0.5);
     return {
       ok: true,
       baseline_id: String(baseline.baseline_id || ""),
@@ -185,6 +216,7 @@ function createWorkflowReportSupport(deps) {
     applyQualityRuleSetToPayload,
     buildRunCompare,
     buildRunRegressionAgainstBaseline,
+    buildPreflightReportEnvelope,
     renderCompareHtml,
     renderCompareMarkdown,
     renderPreflightMarkdown,
@@ -200,6 +232,7 @@ function registerWorkflowReportIpc(ctx, deps) {
     fs,
     path,
   } = ctx;
+  const { workflowStoreRemoteErrorResult } = require("./workflow_store_remote_error");
   const {
     isMockIoAllowed,
     resolveMockFilePath,
@@ -210,6 +243,7 @@ function registerWorkflowReportIpc(ctx, deps) {
     saveRunBaseline,
     buildRunCompare,
     buildRunRegressionAgainstBaseline,
+    buildPreflightReportEnvelope,
     renderCompareHtml,
     renderCompareMarkdown,
     renderPreflightMarkdown,
@@ -220,7 +254,7 @@ function registerWorkflowReportIpc(ctx, deps) {
     try {
       return await buildRunCompare(String(req?.run_a || "").trim(), String(req?.run_b || "").trim(), {});
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   });
 
@@ -248,7 +282,7 @@ function registerWorkflowReportIpc(ctx, deps) {
       appendAudit("baseline_save", { baseline_id: baselineId, run_id: runId });
       return out;
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   });
 
@@ -256,7 +290,7 @@ function registerWorkflowReportIpc(ctx, deps) {
     try {
       return await buildRunRegressionAgainstBaseline(String(req?.run_id || "").trim(), String(req?.baseline_id || "").trim(), {});
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   });
 
@@ -288,7 +322,7 @@ function registerWorkflowReportIpc(ctx, deps) {
       fs.writeFileSync(filePath, format === "html" ? renderCompareHtml(output) : renderCompareMarkdown(output), "utf8");
       return { ok: true, path: filePath, format };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   });
 
@@ -314,7 +348,13 @@ function registerWorkflowReportIpc(ctx, deps) {
         filePath = pick.filePath;
       }
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, format === "json" ? `${JSON.stringify(report, null, 2)}\n` : renderPreflightMarkdown(report), "utf8");
+      fs.writeFileSync(
+        filePath,
+        format === "json"
+          ? `${JSON.stringify(buildPreflightReportEnvelope(report), null, 2)}\n`
+          : renderPreflightMarkdown(report),
+        "utf8",
+      );
       appendAudit("preflight_export", {
         format,
         path: filePath,

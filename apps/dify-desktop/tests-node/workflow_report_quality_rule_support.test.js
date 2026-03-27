@@ -90,12 +90,73 @@ test("workflow report support compares runs via async run provider", async () =>
 
   const compare = await support.buildRunCompare("run_a", "run_b");
   assert.equal(compare.ok, true);
-  assert.equal(compare.summary.changed_nodes, 1);
-  assert.equal(compare.node_diff.length, 1);
+  assert.equal(compare.summary.changed_nodes, 2);
+  assert.equal(compare.node_diff.length, 2);
   assert.equal(compare.node_diff[0].status_changed, true);
+  assert.deepEqual(compare.node_diff[1], {
+    id: "n2",
+    type: "quality_check_v3",
+    status_a: "",
+    status_b: "failed",
+    status_changed: true,
+    seconds_a: 0,
+    seconds_b: 1,
+    seconds_delta: 1,
+  });
+
+  const baseline = await support.buildRunRegressionAgainstBaseline("run_b", "base_1");
+  assert.equal(baseline.ok, true);
+  assert.equal(baseline.regression.changed_nodes, 2);
+  assert.equal(baseline.regression.status_flip_nodes, 1);
+  assert.equal(baseline.regression.perf_hot_nodes, 1);
+});
+
+test("workflow report support includes nodes that only exist in run_b", async () => {
+  const runs = new Map([
+    ["run_a", {
+      run_id: "run_a",
+      result: {
+        ok: true,
+        status: "done",
+        node_runs: [{ id: "n1", type: "ingest_files", status: "done", seconds: 1.25 }],
+      },
+    }],
+    ["run_b", {
+      run_id: "run_b",
+      result: {
+        ok: true,
+        status: "done",
+        node_runs: [
+          { id: "n1", type: "ingest_files", status: "done", seconds: 1.25 },
+          { id: "n_extra", type: "ai_refine", status: "done", seconds: 0.5 },
+        ],
+      },
+    }],
+  ]);
+  const support = createWorkflowReportSupport({
+    deepClone: (value) => JSON.parse(JSON.stringify(value)),
+    getRun: async (runId) => runs.get(runId) || null,
+    listRunBaselines: async () => ({ items: [{ baseline_id: "base_1", name: "Base", run_id: "run_a" }] }),
+  });
+
+  const compare = await support.buildRunCompare("run_a", "run_b");
+  assert.equal(compare.ok, true);
+  assert.equal(compare.summary.changed_nodes, 1);
+  assert.equal(compare.node_diff.length, 2);
+  assert.deepEqual(compare.node_diff[1], {
+    id: "n_extra",
+    type: "ai_refine",
+    status_a: "",
+    status_b: "done",
+    status_changed: true,
+    seconds_a: 0,
+    seconds_b: 0.5,
+    seconds_delta: 0.5,
+  });
 
   const baseline = await support.buildRunRegressionAgainstBaseline("run_b", "base_1");
   assert.equal(baseline.ok, true);
   assert.equal(baseline.regression.changed_nodes, 1);
-  assert.equal(baseline.regression.status_flip_nodes, 1);
+  assert.equal(baseline.regression.status_flip_nodes, 0);
+  assert.equal(baseline.regression.perf_hot_nodes, 0);
 });

@@ -1,0 +1,22 @@
+{
+  "schema_version": "workflow_preflight_report_export.v1",
+  "authority": "contracts/desktop/preflight_report_contract.v1.json",
+  "owner": "architecture",
+  "report": {
+    "schema_version": "workflow_preflight_report.v1",
+    "fields": [
+      "ok",
+      "issues",
+      "risk",
+      "ts"
+    ]
+  },
+  "issue_shape": {
+    "level": "error or warning",
+    "kind": "graph / graph_contract / unknown_node_type / io_contract / rust",
+    "message": "human-readable detail",
+    "error_code": "stable error code when available",
+    "error_path": "workflow path when available",
+    "error_contract": "error code contract when available"
+  }
+}

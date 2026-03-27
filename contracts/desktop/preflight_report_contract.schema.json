@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiwf.local/contracts/desktop/preflight_report_contract.schema.json",
+  "title": "AIWF Workflow Preflight Report Export Contract",
+  "type": "object",
+  "required": ["schema_version", "authority", "report"],
+  "properties": {
+    "schema_version": {
+      "const": "workflow_preflight_report_export.v1"
+    },
+    "authority": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string"
+    },
+    "report": {
+      "type": "object",
+      "required": ["schema_version", "ok", "issues", "risk", "ts"],
+      "properties": {
+        "schema_version": {
+          "const": "workflow_preflight_report.v1"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "issues": {
+          "type": "array"
+        },
+        "risk": {
+          "type": ["object", "null"]
+        },
+        "ts": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "issue_shape": {
+      "type": "object",
+      "properties": {
+        "level": { "type": "string" },
+        "kind": { "type": "string" },
+        "message": { "type": "string" },
+        "error_code": { "type": "string" },
+        "error_path": { "type": "string" },
+        "error_contract": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
