@@ -1,0 +1,1182 @@
+{
+  "schema_version": "node_config_contract_fixtures.v1",
+  "authority": "contracts/desktop/node_config_contracts.v1.json",
+  "owner": "architecture",
+  "required_node_types": [
+    "ingest_files",
+    "clean_md",
+    "ds_refine",
+    "load_rows_v2",
+    "quality_check_v2",
+    "lineage_v2",
+    "manual_review",
+    "ai_refine",
+    "ai_strategy_v1",
+    "ai_audit",
+    "join_rows_v2",
+    "join_rows_v3",
+    "join_rows_v4",
+    "aggregate_rows_v2",
+    "aggregate_rows_v3",
+    "aggregate_rows_v4",
+    "window_rows_v1",
+    "sql_chart_v1",
+    "load_rows_v3",
+    "quality_check_v3",
+    "quality_check_v4",
+    "office_slot_fill_v1",
+    "optimizer_v1",
+    "parquet_io_v2",
+    "plugin_registry_v1",
+    "transform_rows_v3",
+    "lineage_v3",
+    "rule_simulator_v1",
+    "constraint_solver_v1",
+    "udf_wasm_v2"
+  ],
+  "nodes": [
+    {
+      "type": "load_rows_v3",
+      "valid_cases": [
+        {
+          "id": "load_rows_v3_valid_connector_options",
+          "config": {
+            "source_type": "csv",
+            "source": "demo.csv",
+            "query": "select * from data",
+            "limit": 100,
+            "max_retries": 1,
+            "retry_backoff_ms": 100,
+            "resume_token": "resume_1",
+            "connector_options": {
+              "mode": "local"
+            }
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "load_rows_v3_invalid_connector_options",
+          "config": {
+            "source_type": "csv",
+            "source": "demo.csv",
+            "limit": 100,
+            "connector_options": []
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.connector_options must be an object"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.connector_options",
+              "code": "type_object"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quality_check_v3",
+      "valid_cases": [
+        {
+          "id": "quality_check_v3_valid_rules",
+          "config": {
+            "rows": [],
+            "rules": {
+              "required_columns": [
+                "amount"
+              ]
+            }
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "quality_check_v3_invalid_required_columns_item",
+          "config": {
+            "rows": [],
+            "rules": {
+              "required_columns": [
+                1
+              ]
+            }
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.rules.required_columns[0] must be a string"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.rules.required_columns[0]",
+              "code": "type_string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quality_check_v4",
+      "valid_cases": [
+        {
+          "id": "quality_check_v4_valid_rules_dsl",
+          "config": {
+            "rows": [],
+            "rules": {},
+            "rules_dsl": "require amount"
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "quality_check_v4_invalid_rules_shape",
+          "config": {
+            "rows": [],
+            "rules": []
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.rules must be an object"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.rules",
+              "code": "type_object"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "office_slot_fill_v1",
+      "valid_cases": [
+        {
+          "id": "office_slot_fill_v1_valid_title_slot",
+          "config": {
+            "template_kind": "pptx",
+            "template_version": "v1",
+            "required_slots": [
+              "title"
+            ],
+            "slots": {
+              "title": "Demo"
+            },
+            "chart_source_node": "sql_chart_v1"
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "office_slot_fill_v1_invalid_template_kind",
+          "config": {
+            "template_kind": "pdf",
+            "template_version": "v1",
+            "required_slots": [
+              "title"
+            ],
+            "slots": {
+              "title": "Demo"
+            },
+            "chart_source_node": "sql_chart_v1"
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.template_kind must be one of: docx, pptx, xlsx"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.template_kind",
+              "code": "enum_not_allowed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "optimizer_v1",
+      "valid_cases": [
+        {
+          "id": "optimizer_v1_valid_hints",
+          "config": {
+            "rows": [
+              {}
+            ],
+            "row_count_hint": 1000,
+            "prefer_arrow": true,
+            "join_hint": {
+              "mode": "hash"
+            },
+            "aggregate_hint": {
+              "mode": "exact"
+            }
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "optimizer_v1_invalid_rows_item",
+          "config": {
+            "rows": [
+              1
+            ],
+            "join_hint": {},
+            "aggregate_hint": {}
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.rows[0] must be an object"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.rows[0]",
+              "code": "type_object"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "parquet_io_v2",
+      "valid_cases": [
+        {
+          "id": "parquet_io_v2_valid_read_predicate",
+          "config": {
+            "op": "read",
+            "path": "demo.parquet",
+            "rows": [],
+            "parquet_mode": "typed",
+            "limit": 100,
+            "columns": [
+              "id"
+            ],
+            "predicate_field": "id",
+            "predicate_eq": 2,
+            "compression": "snappy",
+            "recursive": true,
+            "schema_mode": "additive"
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "parquet_io_v2_invalid_paired_predicate",
+          "config": {
+            "op": "read",
+            "path": "demo.parquet",
+            "predicate_eq": 1
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.predicate_field is required when workflow.nodes[0].config.predicate_eq is provided"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.predicate_field",
+              "code": "paired_required"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "plugin_registry_v1",
+      "valid_cases": [
+        {
+          "id": "plugin_registry_v1_valid_upsert_manifest",
+          "config": {
+            "op": "upsert",
+            "plugin": "demo",
+            "manifest": {
+              "name": "demo",
+              "version": "v1",
+              "api_version": "v1",
+              "command": "demo.exe",
+              "capabilities": [
+                "run"
+              ]
+            }
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "plugin_registry_v1_invalid_register_missing_command",
+          "config": {
+            "op": "register",
+            "plugin": "demo",
+            "manifest": {}
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.manifest.command is required when workflow.nodes[0].config.op is register"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.manifest.command",
+              "code": "conditional_required"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "transform_rows_v3",
+      "valid_cases": [
+        {
+          "id": "transform_rows_v3_valid_computed_field",
+          "config": {
+            "rows": [],
+            "rules": {},
+            "computed_fields_v3": [
+              {
+                "as": "amount_double",
+                "expr": "amount * 2"
+              }
+            ]
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "transform_rows_v3_invalid_missing_target_field",
+          "config": {
+            "rows": [],
+            "rules": {},
+            "computed_fields_v3": [
+              {
+                "expr": "a + b"
+              }
+            ]
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.computed_fields_v3[0] requires one of as/name/field"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.computed_fields_v3[0]",
+              "code": "missing_one_of"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "lineage_v3",
+      "valid_cases": [
+        {
+          "id": "lineage_v3_valid_workflow_steps",
+          "config": {
+            "rules": {},
+            "computed_fields_v3": [
+              {
+                "as": "x2",
+                "expr": "x * 2"
+              }
+            ],
+            "workflow_steps": [
+              {
+                "id": "s1",
+                "depends_on": [
+                  "s0"
+                ],
+                "operator": "transform_rows_v3"
+              }
+            ],
+            "rows": []
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "lineage_v3_invalid_missing_step_id",
+          "config": {
+            "rules": {},
+            "computed_fields_v3": [],
+            "workflow_steps": [
+              {
+                "id": "",
+                "depends_on": [
+                  "s1"
+                ]
+              }
+            ],
+            "rows": []
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.workflow_steps[0].id is required"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.workflow_steps[0].id",
+              "code": "required"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "rule_simulator_v1",
+      "valid_cases": [
+        {
+          "id": "rule_simulator_v1_valid_rules",
+          "config": {
+            "rows": [],
+            "rules": {},
+            "candidate_rules": {}
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "rule_simulator_v1_invalid_rules_shape",
+          "config": {
+            "rows": [],
+            "rules": [],
+            "candidate_rules": {}
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.rules must be an object"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.rules",
+              "code": "type_object"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "constraint_solver_v1",
+      "valid_cases": [
+        {
+          "id": "constraint_solver_v1_valid_constraints",
+          "config": {
+            "rows": [],
+            "constraints": [
+              {
+                "kind": "non_negative",
+                "field": "amount"
+              },
+              {
+                "kind": "sum_equals",
+                "left": [
+                  "a",
+                  "b"
+                ],
+                "right": "total",
+                "tolerance": 0
+              }
+            ]
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "constraint_solver_v1_invalid_missing_sum_target",
+          "config": {
+            "rows": [],
+            "constraints": [
+              {
+                "kind": "sum_equals",
+                "left": [
+                  "a"
+                ],
+                "right": "",
+                "tolerance": 0
+              }
+            ]
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.constraints[0].right must not be empty"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.constraints[0].right",
+              "code": "string_empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "udf_wasm_v2",
+      "valid_cases": [
+        {
+          "id": "udf_wasm_v2_valid_allowed_op",
+          "config": {
+            "rows": [
+              {
+                "name": "Alice"
+              }
+            ],
+            "field": "name",
+            "output_field": "name_upper",
+            "op": "upper",
+            "wasm_base64": "",
+            "max_output_bytes": 1000000,
+            "signed_token": "token",
+            "allowed_ops": [
+              "identity",
+              "upper"
+            ]
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "udf_wasm_v2_invalid_op_not_allowed",
+          "config": {
+            "rows": [],
+            "op": "trim",
+            "signed_token": "token",
+            "allowed_ops": [
+              "upper"
+            ]
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.op must be included in workflow.nodes[0].config.allowed_ops when both are provided"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.op",
+              "code": "membership_required"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "manual_review",
+      "valid_cases": [
+        {
+          "id": "manual_review_valid_review_key",
+          "config": {
+            "review_key": "gate_a",
+            "default_approve": false
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "manual_review_invalid_review_key_empty",
+          "config": {
+            "review_key": ""
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.review_key must not be empty"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.review_key",
+              "code": "string_empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ai_refine",
+      "valid_cases": [
+        {
+          "id": "ai_refine_valid_flags",
+          "config": {
+            "reuse_existing": true,
+            "allow_ai_on_data": false
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "ai_refine_invalid_reuse_existing_type",
+          "config": {
+            "reuse_existing": "yes"
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.reuse_existing must be a boolean"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.reuse_existing",
+              "code": "type_boolean"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ai_strategy_v1",
+      "valid_cases": [
+        {
+          "id": "ai_strategy_v1_valid_provider",
+          "config": {
+            "providers": [
+              {
+                "name": "primary",
+                "endpoint": "https://example.invalid",
+                "model": "demo"
+              }
+            ],
+            "allow_ai_on_data": false
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "ai_strategy_v1_invalid_missing_identity",
+          "config": {
+            "providers": [
+              {}
+            ],
+            "allow_ai_on_data": false
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.providers[0] requires one of name/model/endpoint"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.providers[0]",
+              "code": "missing_one_of"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ai_audit",
+      "valid_cases": [
+        {
+          "id": "ai_audit_valid_limits",
+          "config": {
+            "numeric_lock": true,
+            "citation_required": true,
+            "recalc_verify": true,
+            "max_new_numbers": 0,
+            "max_metric_delta": 0
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "ai_audit_invalid_max_new_numbers",
+          "config": {
+            "max_new_numbers": -1
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.max_new_numbers must be >= 0"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.max_new_numbers",
+              "code": "min_value"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "join_rows_v2",
+      "valid_cases": [
+        {
+          "id": "join_rows_v2_valid_keys",
+          "config": {
+            "left_rows": [],
+            "right_rows": [],
+            "left_on": ["id"],
+            "right_on": ["id"],
+            "join_type": "inner"
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "join_rows_v2_invalid_left_on_empty_item",
+          "config": {
+            "left_rows": [],
+            "right_rows": [],
+            "left_on": [""],
+            "right_on": ["id"]
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.left_on[0] must not be empty"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.left_on[0]",
+              "code": "string_empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "join_rows_v3",
+      "valid_cases": [
+        {
+          "id": "join_rows_v3_valid_strategy",
+          "config": {
+            "left_rows": [],
+            "right_rows": [],
+            "left_on": ["id"],
+            "right_on": ["id"],
+            "join_type": "inner",
+            "strategy": "auto",
+            "chunk_size": 1000
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "join_rows_v3_invalid_join_type",
+          "config": {
+            "left_rows": [],
+            "right_rows": [],
+            "left_on": ["id"],
+            "right_on": ["id"],
+            "join_type": "outer",
+            "strategy": "merge",
+            "chunk_size": 1000
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.join_type must be one of: inner, left, right, full, semi, anti"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.join_type",
+              "code": "enum_not_allowed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "join_rows_v4",
+      "valid_cases": [
+        {
+          "id": "join_rows_v4_valid_bloom",
+          "config": {
+            "left_rows": [],
+            "right_rows": [],
+            "left_on": ["id"],
+            "right_on": ["id"],
+            "join_type": "left",
+            "strategy": "hash",
+            "chunk_size": 2000,
+            "enable_bloom": true
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "join_rows_v4_invalid_left_rows_type",
+          "config": {
+            "left_rows": {},
+            "chunk_size": 0,
+            "enable_bloom": "yes"
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.left_rows must be an array"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.left_rows",
+              "code": "type_array"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "aggregate_rows_v2",
+      "valid_cases": [
+        {
+          "id": "aggregate_rows_v2_valid_aggregates",
+          "config": {
+            "rows": [],
+            "group_by": ["region"],
+            "aggregates": [
+              {
+                "op": "count",
+                "as": "row_count"
+              }
+            ]
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "aggregate_rows_v2_invalid_missing_op",
+          "config": {
+            "rows": [],
+            "group_by": ["region"],
+            "aggregates": [
+              {
+                "op": "",
+                "as": "row_count"
+              }
+            ]
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.aggregates[0].op is required"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.aggregates[0].op",
+              "code": "required"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "aggregate_rows_v3",
+      "valid_cases": [
+        {
+          "id": "aggregate_rows_v3_valid_sample_size",
+          "config": {
+            "rows": [],
+            "group_by": ["region"],
+            "aggregates": [
+              {
+                "op": "count",
+                "as": "row_count"
+              }
+            ],
+            "approx_sample_size": 1024
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "aggregate_rows_v3_invalid_sample_size",
+          "config": {
+            "rows": [],
+            "group_by": ["region"],
+            "aggregates": [
+              {
+                "op": "count",
+                "as": "row_count"
+              }
+            ],
+            "approx_sample_size": 0
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.approx_sample_size must be >= 1"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.approx_sample_size",
+              "code": "min_value"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "aggregate_rows_v4",
+      "valid_cases": [
+        {
+          "id": "aggregate_rows_v4_valid_parallel_workers",
+          "config": {
+            "rows": [],
+            "group_by": ["region"],
+            "aggregates": [
+              {
+                "op": "count",
+                "as": "row_count"
+              }
+            ],
+            "approx_sample_size": 1024,
+            "verify_exact": false,
+            "parallel_workers": 1
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "aggregate_rows_v4_invalid_parallel_workers",
+          "config": {
+            "rows": [],
+            "group_by": ["region"],
+            "aggregates": [
+              {
+                "op": "count",
+                "as": "row_count"
+              }
+            ],
+            "approx_sample_size": 1024,
+            "verify_exact": false,
+            "parallel_workers": 0
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.parallel_workers must be >= 1"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.parallel_workers",
+              "code": "min_value"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "window_rows_v1",
+      "valid_cases": [
+        {
+          "id": "window_rows_v1_valid_functions",
+          "config": {
+            "rows": [],
+            "partition_by": ["region"],
+            "order_by": "time",
+            "functions": [
+              {
+                "op": "row_number",
+                "as": "row_no"
+              }
+            ]
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "window_rows_v1_invalid_order_by_empty",
+          "config": {
+            "rows": [],
+            "partition_by": ["region"],
+            "order_by": "",
+            "functions": {}
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.order_by must not be empty"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.order_by",
+              "code": "string_empty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "sql_chart_v1",
+      "valid_cases": [
+        {
+          "id": "sql_chart_v1_valid_rows",
+          "config": {
+            "rows": [],
+            "chart_type": "bar",
+            "category_field": "category",
+            "value_field": "value",
+            "series_field": "series",
+            "top_n": 5
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "sql_chart_v1_invalid_rows_type",
+          "config": {
+            "rows": {},
+            "top_n": 0
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.rows must be an array"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.rows",
+              "code": "type_array"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ingest_files",
+      "valid_cases": [
+        {
+          "id": "ingest_files_valid_input_map",
+          "config": {
+            "input_map": {
+              "pdf": [
+                "a.pdf"
+              ]
+            }
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "ingest_files_invalid_input_map_type",
+          "config": {
+            "input_map": []
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.input_map must be an object"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.input_map",
+              "code": "type_object"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "clean_md",
+      "valid_cases": [
+        {
+          "id": "clean_md_valid_flags",
+          "config": {
+            "export_canonical_bundle": true,
+            "canonical_title": "Demo"
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "clean_md_invalid_export_bundle_type",
+          "config": {
+            "export_canonical_bundle": "yes"
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.export_canonical_bundle must be a boolean"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.export_canonical_bundle",
+              "code": "type_boolean"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ds_refine",
+      "valid_cases": [
+        {
+          "id": "ds_refine_valid_flags",
+          "config": {
+            "reuse_existing": true,
+            "allow_ai_on_data": false
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "ds_refine_invalid_reuse_existing_type",
+          "config": {
+            "reuse_existing": "yes"
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.reuse_existing must be a boolean"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.reuse_existing",
+              "code": "type_boolean"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "load_rows_v2",
+      "valid_cases": [
+        {
+          "id": "load_rows_v2_valid_source_type",
+          "config": {
+            "source_type": "csv",
+            "source": "demo.csv",
+            "query": "select * from data",
+            "limit": 10
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "load_rows_v2_invalid_source_type",
+          "config": {
+            "source_type": "xml",
+            "source": "demo.xml",
+            "limit": 10
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.source_type must be one of: jsonl, csv, sqlite, sqlserver, parquet, txt, pdf, docx, xlsx, image"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.source_type",
+              "code": "enum_not_allowed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "quality_check_v2",
+      "valid_cases": [
+        {
+          "id": "quality_check_v2_valid_rules",
+          "config": {
+            "rows": [],
+            "rules": {}
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "quality_check_v2_invalid_rules_shape",
+          "config": {
+            "rows": [],
+            "rules": []
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.rules must be an object"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.rules",
+              "code": "type_object"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "lineage_v2",
+      "valid_cases": [
+        {
+          "id": "lineage_v2_valid_computed_fields",
+          "config": {
+            "rules": {},
+            "computed_fields_v3": [
+              {
+                "as": "x2",
+                "expr": "x * 2"
+              }
+            ]
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "lineage_v2_invalid_computed_fields_shape",
+          "config": {
+            "rules": {},
+            "computed_fields_v3": [
+              {
+                "expr": "x * 2"
+              }
+            ]
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.computed_fields_v3[0] requires one of as/name/field"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.computed_fields_v3[0]",
+              "code": "missing_one_of"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

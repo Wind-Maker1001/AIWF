@@ -30,6 +30,7 @@ param(
   [switch]$SkipLocalTemplateStorageContractSync,
   [switch]$SkipOfflineTemplateCatalogSync,
   [switch]$SkipNodeConfigSchemaCoverage,
+  [switch]$SkipNodeConfigRuntimeParity,
   [switch]$SkipLocalNodeCatalogPolicy,
   [switch]$SkipOperatorCatalogSync,
   [switch]$SkipFallbackGovernance,
@@ -176,6 +177,7 @@ function Get-ArchitectureScorecardMarkdownLines($Payload) {
     @{ name = "local_template_storage_contract_sync"; item = $Payload.boundaries.local_template_storage_contract_sync },
     @{ name = "offline_template_catalog_sync"; item = $Payload.boundaries.offline_template_catalog_sync },
     @{ name = "node_config_schema_coverage"; item = $Payload.boundaries.node_config_schema_coverage },
+    @{ name = "node_config_runtime_parity"; item = $Payload.boundaries.node_config_runtime_parity },
     @{ name = "local_node_catalog_policy"; item = $Payload.boundaries.local_node_catalog_policy },
     @{ name = "operator_catalog_sync"; item = $Payload.boundaries.operator_catalog_sync },
     @{ name = "fallback_governance"; item = $Payload.boundaries.fallback_governance },
@@ -1016,6 +1018,9 @@ function New-NodeConfigSchemaCoverageDetails($Summary) {
     contract_path = Get-OptionalPropertyValue $Summary "contractPath"
     contract_cjs_path = Get-OptionalPropertyValue $Summary "contractCjsPath"
     contract_esm_path = Get-OptionalPropertyValue $Summary "contractEsmPath"
+    contract_authority = [string]($Summary.contractAuthority)
+    contract_schema_version = [string]($Summary.contractSchemaVersion)
+    contract_validator_kind_count = [int]($Summary.contractValidatorKindCount)
     target_count = [int]($Summary.targetCount)
     covered_count = [int]($Summary.coveredCount)
     minimum_nested_shape_constrained = [int]($Summary.minimumNestedShapeConstrained)
@@ -1024,6 +1029,11 @@ function New-NodeConfigSchemaCoverageDetails($Summary) {
     required_nested_node_types = @(Get-StringArrayProperty $Summary "requiredNestedNodeTypes")
     required_nested_satisfied = @(Get-StringArrayProperty $Summary "requiredNestedSatisfied")
     required_nested_missing = @(Get-StringArrayProperty $Summary "requiredNestedMissing")
+    python_runtime_contract_authority = [string]($Summary.pythonRuntimeContractAuthority)
+    python_runtime_schema_version = [string]($Summary.pythonRuntimeSchemaVersion)
+    python_runtime_covered_count = [int]($Summary.pythonRuntimeCoveredCount)
+    python_runtime_supported_validator_kind_count = [int]($Summary.pythonRuntimeSupportedValidatorKindCount)
+    python_runtime_supported_validator_kinds = @(Get-StringArrayProperty $Summary "pythonRuntimeSupportedValidatorKinds")
     quality_counts = [ordered]@{
       typed = [int]($qualityCounts.typed)
       enum_constrained = [int]($qualityCounts.enum_constrained)
@@ -1041,6 +1051,11 @@ function New-NodeConfigSchemaCoverageDetails($Summary) {
       contract_module_type_drift = @(Get-StringArrayProperty $drift "contractModuleTypeDrift")
       contract_module_quality_drift = @(Get-StringArrayProperty $drift "contractModuleQualityDrift")
       required_nested_types_missing_from_contract = @(Get-StringArrayProperty $drift "requiredNestedTypesMissingFromContract")
+      python_runtime_authority_drift = @(Get-StringArrayProperty $drift "pythonRuntimeAuthorityDrift")
+      python_runtime_schema_version_drift = @(Get-StringArrayProperty $drift "pythonRuntimeSchemaVersionDrift")
+      python_runtime_missing_types = @(Get-StringArrayProperty $drift "pythonRuntimeMissingTypes")
+      python_runtime_stale_types = @(Get-StringArrayProperty $drift "pythonRuntimeStaleTypes")
+      python_runtime_missing_validator_kinds = @(Get-StringArrayProperty $drift "pythonRuntimeMissingValidatorKinds")
     }
     issues = @(Get-StringArrayProperty $Summary "issues")
   }
@@ -1055,13 +1070,15 @@ function Get-NodeConfigSchemaCoverageReason($Summary, [string]$Status) {
   $typed = [int]($details.quality_counts.typed)
   $enumConstrained = [int]($details.quality_counts.enum_constrained)
   $nested = [int]($details.quality_counts.nested_shape_constrained)
-  $base = "node config schema coverage checks {0} ({1}/{2}; typed={3}; enum_constrained={4}; nested_shape_constrained={5}; contract=node_config_contracts.v1.json; generated=workflow_node_config_contract.generated.js)" -f `
+  $pythonRuntimeCovered = [int]($details.python_runtime_covered_count)
+  $base = "node config schema coverage checks {0} ({1}/{2}; typed={3}; enum_constrained={4}; nested_shape_constrained={5}; python_runtime={6}/{2}; contract=node_config_contracts.v1.json; generated=workflow_node_config_contract.generated.js)" -f `
     $(if ($Status -eq "failed") { "failed" } else { "passed" }),
     [int]$details.covered_count,
     [int]$details.target_count,
     $typed,
     $enumConstrained,
-    $nested
+    $nested,
+    $pythonRuntimeCovered
 
   if ($Status -ne "failed") {
     return $base
@@ -1121,11 +1138,132 @@ function Get-NodeConfigReleaseReadyIssues($Item) {
     @{ name = "quality_drift"; label = "CJS/ESM quality tier drift" },
     @{ name = "contract_module_type_drift"; label = "contract module type drift" },
     @{ name = "contract_module_quality_drift"; label = "contract module quality drift" },
-    @{ name = "required_nested_types_missing_from_contract"; label = "required nested contract types missing" }
+    @{ name = "required_nested_types_missing_from_contract"; label = "required nested contract types missing" },
+    @{ name = "python_runtime_authority_drift"; label = "python runtime authority drift" },
+    @{ name = "python_runtime_schema_version_drift"; label = "python runtime schema version drift" },
+    @{ name = "python_runtime_missing_types"; label = "python runtime missing contract types" },
+    @{ name = "python_runtime_stale_types"; label = "python runtime stale contract types" },
+    @{ name = "python_runtime_missing_validator_kinds"; label = "python runtime missing validator kinds" }
   )) {
     $values = @(Get-StringArrayProperty $drift $entry.name)
     if ($values.Count -gt 0) {
       $issues += "node_config_schema_coverage $($entry.label): $($values -join ', ')"
+    }
+  }
+
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+
+  return @($issues | Sort-Object -Unique)
+}
+function New-NodeConfigRuntimeParityDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $drift = Get-OptionalObjectProperty $Summary "drift"
+  return [ordered]@{
+    fixture_path = Get-OptionalPropertyValue $Summary "fixturePath"
+    fixture_schema_path = Get-OptionalPropertyValue $Summary "fixtureSchemaPath"
+    error_contract_path = Get-OptionalPropertyValue $Summary "errorContractPath"
+    error_contract_schema_path = Get-OptionalPropertyValue $Summary "errorContractSchemaPath"
+    contract_path = Get-OptionalPropertyValue $Summary "contractPath"
+    fixture_type_count = [int]($Summary.fixtureTypeCount)
+    declared_error_code_count = [int]($Summary.declaredErrorCodeCount)
+    valid_case_count = [int]($Summary.validCaseCount)
+    invalid_case_count = [int]($Summary.invalidCaseCount)
+    case_count = [int]($Summary.caseCount)
+    required_parity_node_types = @(Get-StringArrayProperty $Summary "requiredParityNodeTypes")
+    drift = [ordered]@{
+      missing_required_fixture_types = @(Get-StringArrayProperty $drift "missingRequiredFixtureTypes")
+      fixture_types_missing_from_contract = @(Get-StringArrayProperty $drift "fixtureTypesMissingFromContract")
+      fixture_undeclared_error_codes = @(Get-StringArrayProperty $drift "fixtureUndeclaredErrorCodes")
+      js_undeclared_error_codes = @(Get-StringArrayProperty $drift "jsUndeclaredErrorCodes")
+      python_undeclared_error_codes = @(Get-StringArrayProperty $drift "pythonUndeclaredErrorCodes")
+      declared_missing_in_js = @(Get-StringArrayProperty $drift "declaredMissingInJs")
+      declared_missing_in_python = @(Get-StringArrayProperty $drift "declaredMissingInPython")
+      missing_js_cases = @(Get-StringArrayProperty $drift "missingJsCases")
+      missing_python_cases = @(Get-StringArrayProperty $drift "missingPythonCases")
+      js_expectation_failures = @(Get-StringArrayProperty $drift "jsExpectationFailures")
+      python_expectation_failures = @(Get-StringArrayProperty $drift "pythonExpectationFailures")
+      runtime_status_drift = @(Get-StringArrayProperty $drift "runtimeStatusDrift")
+      runtime_error_item_drift = @(Get-StringArrayProperty $drift "runtimeErrorItemDrift")
+      runtime_error_drift = @(Get-StringArrayProperty $drift "runtimeErrorDrift")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-NodeConfigRuntimeParityReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "node config runtime parity checks failed" }
+    return "node config runtime parity checks passed"
+  }
+
+  $details = New-NodeConfigRuntimeParityDetails $Summary
+  $base = "node config runtime parity checks {0} (fixtures={1}; cases={2}; valid={3}; invalid={4}; error_contract=node_config_validation_errors.v1.json; error_schema=node_config_validation_errors.schema.json)" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [int]$details.fixture_type_count,
+    [int]$details.case_count,
+    [int]$details.valid_case_count,
+    [int]$details.invalid_case_count
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  $drift = Get-OptionalObjectProperty $details "drift"
+  foreach ($entry in @(
+    @{ name = "missing_required_fixture_types"; label = "missing required fixture types" },
+    @{ name = "fixture_types_missing_from_contract"; label = "fixture types missing from contract" },
+    @{ name = "fixture_undeclared_error_codes"; label = "fixture undeclared error codes" },
+    @{ name = "js_undeclared_error_codes"; label = "js undeclared error codes" },
+    @{ name = "python_undeclared_error_codes"; label = "python undeclared error codes" },
+    @{ name = "declared_missing_in_js"; label = "declared codes missing in js runtime" },
+    @{ name = "declared_missing_in_python"; label = "declared codes missing in python runtime" },
+    @{ name = "missing_js_cases"; label = "js case coverage gap" },
+    @{ name = "missing_python_cases"; label = "python case coverage gap" },
+    @{ name = "js_expectation_failures"; label = "js expectation failures" },
+    @{ name = "python_expectation_failures"; label = "python expectation failures" },
+    @{ name = "runtime_status_drift"; label = "runtime status drift" },
+    @{ name = "runtime_error_item_drift"; label = "structured error drift" },
+    @{ name = "runtime_error_drift"; label = "runtime error drift" }
+  )) {
+    $values = @(Get-StringArrayProperty $drift $entry.name)
+    if ($values.Count -gt 0) {
+      $fragments += "$($entry.label): $($values -join ', ')"
+    }
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-NodeConfigRuntimeParityReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  $drift = Get-OptionalObjectProperty $details "drift"
+  foreach ($entry in @(
+    @{ name = "missing_required_fixture_types"; label = "missing required fixture types" },
+    @{ name = "fixture_types_missing_from_contract"; label = "fixture types missing from contract" },
+    @{ name = "fixture_undeclared_error_codes"; label = "fixture undeclared error codes" },
+    @{ name = "js_undeclared_error_codes"; label = "js undeclared error codes" },
+    @{ name = "python_undeclared_error_codes"; label = "python undeclared error codes" },
+    @{ name = "declared_missing_in_js"; label = "declared codes missing in js runtime" },
+    @{ name = "declared_missing_in_python"; label = "declared codes missing in python runtime" },
+    @{ name = "missing_js_cases"; label = "js runtime missing cases" },
+    @{ name = "missing_python_cases"; label = "python runtime missing cases" },
+    @{ name = "js_expectation_failures"; label = "js expectation failures" },
+    @{ name = "python_expectation_failures"; label = "python expectation failures" },
+    @{ name = "runtime_status_drift"; label = "runtime status drift" },
+    @{ name = "runtime_error_item_drift"; label = "structured error drift" }
+  )) {
+    $values = @(Get-StringArrayProperty $drift $entry.name)
+    if ($values.Count -gt 0) {
+      $issues += "node_config_runtime_parity $($entry.label): $($values -join ', ')"
     }
   }
 
@@ -1411,6 +1549,9 @@ function Get-ReleaseReadyBoundaryIssues([string]$Name, $Item) {
   if ($Name -eq "node_config_schema_coverage") {
     return @(Get-NodeConfigReleaseReadyIssues $Item)
   }
+  if ($Name -eq "node_config_runtime_parity") {
+    return @(Get-NodeConfigRuntimeParityReleaseReadyIssues $Item)
+  }
   if ($Name -eq "local_node_catalog_policy") {
     return @(Get-LocalNodeCatalogReleaseReadyIssues $Item)
   }
@@ -1511,6 +1652,7 @@ function Write-ArchitectureReleaseReadyScorecard([string]$Directory, [string]$St
     local_template_storage_contract_sync = Select-MergedBoundarySummary -Name "local_template_storage_contract_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "local_template_storage_contract_sync" } -StaleAfterHours $staleAfterHours
     offline_template_catalog_sync = Select-MergedBoundarySummary -Name "offline_template_catalog_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "offline_template_catalog_sync" } -StaleAfterHours $staleAfterHours
     node_config_schema_coverage = Select-MergedBoundarySummary -Name "node_config_schema_coverage" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "node_config_schema_coverage" } -StaleAfterHours $staleAfterHours
+    node_config_runtime_parity = Select-MergedBoundarySummary -Name "node_config_runtime_parity" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "node_config_runtime_parity" } -StaleAfterHours $staleAfterHours
     local_node_catalog_policy = Select-MergedBoundarySummary -Name "local_node_catalog_policy" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "local_node_catalog_policy" } -StaleAfterHours $staleAfterHours
     operator_catalog_sync = Select-MergedBoundarySummary -Name "operator_catalog_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "operator_catalog_sync" } -StaleAfterHours $staleAfterHours
     fallback_governance = Select-MergedBoundarySummary -Name "fallback_governance" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "fallback_governance" } -StaleAfterHours $staleAfterHours
@@ -1736,6 +1878,7 @@ $templatePackContractSyncScript = Join-Path $PSScriptRoot "check_template_pack_c
 $localTemplateStorageContractSyncScript = Join-Path $PSScriptRoot "check_local_template_storage_contract_sync.ps1"
 $offlineTemplateCatalogSyncScript = Join-Path $PSScriptRoot "check_offline_template_catalog_sync.ps1"
 $nodeConfigSchemaCoverageScript = Join-Path $PSScriptRoot "check_node_config_schema_coverage.ps1"
+$nodeConfigRuntimeParityScript = Join-Path $PSScriptRoot "check_node_config_runtime_parity.ps1"
 $localNodeCatalogPolicyScript = Join-Path $PSScriptRoot "check_local_node_catalog_policy.ps1"
 $operatorCatalogSyncScript = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
 $fallbackGovernanceScript = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
@@ -1765,6 +1908,7 @@ $templatePackContractSyncCheckState = New-FrontendCheckState $(if ($SkipTemplate
 $localTemplateStorageContractSyncCheckState = New-FrontendCheckState $(if ($SkipLocalTemplateStorageContractSync) { "skipped" } else { "pending" }) $(if ($SkipLocalTemplateStorageContractSync) { "skipped by SkipLocalTemplateStorageContractSync" } else { "awaiting local template storage contract sync gate" })
 $offlineTemplateCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOfflineTemplateCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOfflineTemplateCatalogSync) { "skipped by SkipOfflineTemplateCatalogSync" } else { "awaiting offline template catalog sync gate" })
 $nodeConfigSchemaCoverageCheckState = New-FrontendCheckState $(if ($SkipNodeConfigSchemaCoverage) { "skipped" } else { "pending" }) $(if ($SkipNodeConfigSchemaCoverage) { "skipped by SkipNodeConfigSchemaCoverage" } else { "awaiting node config schema coverage gate" })
+$nodeConfigRuntimeParityCheckState = New-FrontendCheckState $(if ($SkipNodeConfigRuntimeParity) { "skipped" } else { "pending" }) $(if ($SkipNodeConfigRuntimeParity) { "skipped by SkipNodeConfigRuntimeParity" } else { "awaiting node config runtime parity gate" })
 $localNodeCatalogPolicyCheckState = New-FrontendCheckState $(if ($SkipLocalNodeCatalogPolicy) { "skipped" } else { "pending" }) $(if ($SkipLocalNodeCatalogPolicy) { "skipped by SkipLocalNodeCatalogPolicy" } else { "awaiting local node catalog policy gate" })
 $operatorCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOperatorCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOperatorCatalogSync) { "skipped by SkipOperatorCatalogSync" } else { "awaiting operator catalog sync gate" })
 $fallbackGovernanceCheckState = New-FrontendCheckState $(if ($SkipFallbackGovernance) { "skipped" } else { "pending" }) $(if ($SkipFallbackGovernance) { "skipped by SkipFallbackGovernance" } else { "awaiting fallback governance gate" })
@@ -1845,6 +1989,7 @@ function Publish-ArchitectureScorecard() {
       $localTemplateStorageContractSyncCheckState,
       $offlineTemplateCatalogSyncCheckState,
       $nodeConfigSchemaCoverageCheckState,
+      $nodeConfigRuntimeParityCheckState,
       $localNodeCatalogPolicyCheckState,
       $operatorCatalogSyncCheckState,
       $fallbackGovernanceCheckState,
@@ -1861,6 +2006,7 @@ function Publish-ArchitectureScorecard() {
       local_template_storage_contract_sync = $localTemplateStorageContractSyncCheckState
       offline_template_catalog_sync = $offlineTemplateCatalogSyncCheckState
       node_config_schema_coverage = $nodeConfigSchemaCoverageCheckState
+      node_config_runtime_parity = $nodeConfigRuntimeParityCheckState
       local_node_catalog_policy = $localNodeCatalogPolicyCheckState
       operator_catalog_sync = $operatorCatalogSyncCheckState
       fallback_governance = $fallbackGovernanceCheckState
@@ -2229,6 +2375,40 @@ if (-not $SkipNodeConfigSchemaCoverage) {
   Set-FrontendCheckState $nodeConfigSchemaCoverageCheckState "skipped" "skipped by SkipNodeConfigSchemaCoverage"
   Publish-ArchitectureScorecard
   Warn "skip node config schema coverage checks"
+}
+
+if (-not $SkipNodeConfigRuntimeParity) {
+  if (-not (Test-Path $nodeConfigRuntimeParityScript)) {
+    Set-FrontendCheckState $nodeConfigRuntimeParityCheckState "failed" "node config runtime parity script missing"
+    Publish-ArchitectureScorecard
+    throw "node config runtime parity script not found: $nodeConfigRuntimeParityScript"
+  }
+  Info "running node config runtime parity checks"
+  $nodeConfigRuntimeParityOutput = powershell -ExecutionPolicy Bypass -File $nodeConfigRuntimeParityScript 2>&1
+  $nodeConfigRuntimeParitySummary = Parse-JsonLineFromOutput $nodeConfigRuntimeParityOutput
+  $nodeConfigRuntimeParityDetails = New-NodeConfigRuntimeParityDetails $nodeConfigRuntimeParitySummary
+  if ($nodeConfigRuntimeParityDetails) {
+    $nodeConfigRuntimeParityCheckState.details = $nodeConfigRuntimeParityDetails
+  }
+  if ($nodeConfigRuntimeParityOutput) {
+    $nodeConfigRuntimeParityOutput | ForEach-Object { $_ }
+  }
+  if ($LASTEXITCODE -ne 0) {
+    Set-FrontendCheckState $nodeConfigRuntimeParityCheckState "failed" (Get-NodeConfigRuntimeParityReason -Summary $nodeConfigRuntimeParitySummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "node config runtime parity checks failed"
+  }
+  if ($nodeConfigRuntimeParitySummary) {
+    Set-FrontendCheckState $nodeConfigRuntimeParityCheckState "passed" (Get-NodeConfigRuntimeParityReason -Summary $nodeConfigRuntimeParitySummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $nodeConfigRuntimeParityCheckState "passed" "node config runtime parity checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "node config runtime parity checks passed"
+} else {
+  Set-FrontendCheckState $nodeConfigRuntimeParityCheckState "skipped" "skipped by SkipNodeConfigRuntimeParity"
+  Publish-ArchitectureScorecard
+  Warn "skip node config runtime parity checks"
 }
 
 if (-not $SkipLocalNodeCatalogPolicy) {

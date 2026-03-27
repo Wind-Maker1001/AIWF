@@ -1,5 +1,6 @@
 ﻿import os
 import json
+import re
 import time
 import traceback
 import logging
@@ -99,6 +100,10 @@ from aiwf.governance_surface import (
     build_governance_control_plane_boundary,
     list_governance_surface_entries,
 )
+from aiwf.node_config_contract_runtime import (
+    NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+    build_validation_error_items,
+)
 
 
 logging.basicConfig(
@@ -117,6 +122,88 @@ class Settings(BaseModel):
 
 settings = Settings()
 runtime_catalog = get_runtime_catalog()
+
+WORKFLOW_GRAPH_CONTRACT_AUTHORITY = "contracts/workflow/workflow.schema.json"
+WORKFLOW_GRAPH_ERROR_CODE = "workflow_graph_invalid"
+GOVERNANCE_VALIDATION_ERROR_CODE = "governance_validation_invalid"
+
+
+def _normalize_workflow_graph_error_messages(message: str) -> list[str]:
+    text = str(message or "").strip()
+    if not text:
+        return []
+
+    node_config_prefixes = (
+        "workflow app graph node config invalid: ",
+        "workflow version graph node config invalid: ",
+    )
+    for prefix in node_config_prefixes:
+        if text.startswith(prefix):
+            tail = text[len(prefix):].strip()
+            return [item.strip() for item in tail.split(";") if item.strip()]
+
+    replacements = [
+        (re.compile(r"^workflow (?:app|version) graph must be an object$"), "workflow must be an object"),
+        (re.compile(r"^workflow (?:app|version) graph requires workflow_id$"), "workflow.workflow_id is required"),
+        (re.compile(r"^workflow (?:app|version) graph requires version$"), "workflow.version is required"),
+        (re.compile(r"^workflow (?:app|version) graph requires nodes array$"), "workflow.nodes must be an array"),
+        (re.compile(r"^workflow (?:app|version) graph requires edges array$"), "workflow.edges must be an array"),
+        (re.compile(r"^workflow (?:app|version) graph contains unregistered node types: (.+)$"), lambda m: f"workflow contains unregistered node types: {m.group(1)}"),
+        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] must be an object$"), lambda m: f"workflow.nodes[{m.group(1)}] must be an object"),
+        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] requires id$"), lambda m: f"workflow.nodes[{m.group(1)}].id is required"),
+        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] requires type$"), lambda m: f"workflow.nodes[{m.group(1)}].type is required"),
+        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] must be an object$"), lambda m: f"workflow.edges[{m.group(1)}] must be an object"),
+        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] requires from$"), lambda m: f"workflow.edges[{m.group(1)}].from is required"),
+        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] requires to$"), lambda m: f"workflow.edges[{m.group(1)}].to is required"),
+    ]
+    for pattern, replacement in replacements:
+        match = pattern.match(text)
+        if not match:
+            continue
+        if callable(replacement):
+            return [str(replacement(match))]
+        return [str(replacement)]
+
+    return [text]
+
+
+def _workflow_graph_error_response(provider: str, scope: str, exc: ValueError) -> JSONResponse:
+    normalized_errors = _normalize_workflow_graph_error_messages(str(exc))
+    return JSONResponse(
+        status_code=400,
+        content={
+            "ok": False,
+            "provider": provider,
+            "error": str(exc),
+            "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+            "error_scope": scope,
+            "graph_contract": WORKFLOW_GRAPH_CONTRACT_AUTHORITY,
+            "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+            "error_items": build_validation_error_items(normalized_errors),
+        },
+    )
+
+
+def _governance_validation_error_response(
+    provider: str,
+    scope: str,
+    exc: ValueError,
+    *,
+    normalized_errors: Optional[list[str]] = None,
+) -> JSONResponse:
+    items = normalized_errors if normalized_errors is not None else [str(exc)]
+    return JSONResponse(
+        status_code=400,
+        content={
+            "ok": False,
+            "provider": provider,
+            "error": str(exc),
+            "error_code": GOVERNANCE_VALIDATION_ERROR_CODE,
+            "error_scope": scope,
+            "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+            "error_items": build_validation_error_items(items),
+        },
+    )
 
 
 def _debug_errors_enabled() -> bool:
@@ -413,7 +500,12 @@ def get_governance_quality_rule_set(set_id: str):
     try:
         item = get_quality_rule_set(set_id)
     except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
+        return _governance_validation_error_response(
+            QUALITY_RULE_SET_OWNER,
+            "quality_rule_set",
+            exc,
+            normalized_errors=[f"set.id {str(exc).replace('quality rule set id ', '')}"],
+        )
     if item is None:
         return JSONResponse(
             status_code=404,
@@ -429,7 +521,12 @@ def put_governance_quality_rule_set(set_id: str, req: QualityRuleSetUpsertReq):
     try:
         item = save_quality_rule_set(payload)
     except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
+        return _governance_validation_error_response(
+            QUALITY_RULE_SET_OWNER,
+            "quality_rule_set",
+            exc,
+            normalized_errors=[f"set.id {str(exc).replace('quality rule set id ', '')}"],
+        )
     return {"ok": True, "provider": QUALITY_RULE_SET_OWNER, "set": item}
 
 
@@ -438,7 +535,12 @@ def delete_governance_quality_rule_set(set_id: str):
     try:
         removed = remove_quality_rule_set(set_id)
     except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
+        return _governance_validation_error_response(
+            QUALITY_RULE_SET_OWNER,
+            "quality_rule_set",
+            exc,
+            normalized_errors=[f"set.id {str(exc).replace('quality rule set id ', '')}"],
+        )
     if not removed:
         return JSONResponse(
             status_code=404,
@@ -555,7 +657,7 @@ def put_governance_workflow_app(app_id: str, req: WorkflowAppUpsertReq):
     try:
         item = save_workflow_app(payload)
     except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
+        return _workflow_graph_error_response(WORKFLOW_APP_OWNER, "workflow_app", exc)
     return {"ok": True, "provider": WORKFLOW_APP_OWNER, "item": item}
 
 
@@ -590,7 +692,7 @@ def put_governance_workflow_version(version_id: str, req: WorkflowVersionUpsertR
     try:
         item = save_workflow_version(payload)
     except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
+        return _workflow_graph_error_response(WORKFLOW_VERSION_OWNER, "workflow_version", exc)
     return {"ok": True, "provider": WORKFLOW_VERSION_OWNER, "item": item}
 
 

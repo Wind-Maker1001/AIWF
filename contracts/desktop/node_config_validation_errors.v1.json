@@ -1,0 +1,117 @@
+{
+  "schema_version": "node_config_validation_errors.v1",
+  "authority": "contracts/desktop/node_config_validation_errors.v1.json",
+  "owner": "architecture",
+  "error_item_shape": {
+    "path": "validation target path",
+    "code": "stable validation error code",
+    "message": "human-readable detail"
+  },
+  "codes": [
+    {
+      "code": "array_min_items",
+      "category": "shape",
+      "description": "array is present but violates a minimum item count rule"
+    },
+    {
+      "code": "conditional_required",
+      "category": "dependency",
+      "description": "field becomes required when another field matches a conditional value"
+    },
+    {
+      "code": "empty_key",
+      "category": "shape",
+      "description": "object key is empty where non-empty keys are required"
+    },
+    {
+      "code": "enum_not_allowed",
+      "category": "enum",
+      "description": "value is outside the declared enum surface"
+    },
+    {
+      "code": "json_not_compatible",
+      "category": "json",
+      "description": "value is not representable as JSON-compatible data"
+    },
+    {
+      "code": "membership_required",
+      "category": "dependency",
+      "description": "value must appear in another declared allow-list when both are present"
+    },
+    {
+      "code": "min_value",
+      "category": "numeric",
+      "description": "numeric value is below the declared minimum"
+    },
+    {
+      "code": "missing_one_of",
+      "category": "shape",
+      "description": "one of a set of fields is required to identify a structured item"
+    },
+    {
+      "code": "paired_required",
+      "category": "dependency",
+      "description": "one field requires another companion field to be present"
+    },
+    {
+      "code": "required",
+      "category": "presence",
+      "description": "required field is missing"
+    },
+    {
+      "code": "string_empty",
+      "category": "string",
+      "description": "string field is present but empty"
+    },
+    {
+      "code": "type_array",
+      "category": "type",
+      "description": "value must be an array"
+    },
+    {
+      "code": "type_boolean",
+      "category": "type",
+      "description": "value must be a boolean"
+    },
+    {
+      "code": "type_integer",
+      "category": "type",
+      "description": "value must be an integer"
+    },
+    {
+      "code": "type_number",
+      "category": "type",
+      "description": "value must be a number"
+    },
+    {
+      "code": "type_object",
+      "category": "type",
+      "description": "value must be an object"
+    },
+    {
+      "code": "type_string",
+      "category": "type",
+      "description": "value must be a string"
+    },
+    {
+      "code": "undefined_not_allowed",
+      "category": "presence",
+      "description": "value is undefined where explicit value presence is required"
+    },
+    {
+      "code": "unknown_node_type",
+      "category": "catalog",
+      "description": "workflow references a node type that is not registered in the desktop node catalog"
+    },
+    {
+      "code": "unsupported_validator_kind",
+      "category": "contract",
+      "description": "runtime encountered a validator kind it does not implement"
+    },
+    {
+      "code": "validation_error",
+      "category": "fallback",
+      "description": "fallback code when a message does not match a more specific classifier"
+    }
+  ]
+}

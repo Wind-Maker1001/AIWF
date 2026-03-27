@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiwf.local/contracts/desktop/node_config_contract_fixtures.schema.json",
+  "title": "AIWF Node Config Contract Fixtures",
+  "type": "object",
+  "required": ["schema_version", "authority", "required_node_types", "nodes"],
+  "properties": {
+    "schema_version": {
+      "const": "node_config_contract_fixtures.v1"
+    },
+    "authority": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string"
+    },
+    "required_node_types": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/nodeFixture"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "caseBase": {
+      "type": "object",
+      "required": ["id", "config"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config": {
+          "type": "object"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "validCase": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/caseBase"
+        }
+      ]
+    },
+    "invalidCase": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/caseBase"
+        },
+        {
+          "type": "object",
+          "required": ["expected_error_contains", "expected_error_items"],
+          "properties": {
+            "expected_error_contains": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "expected_error_items": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["path", "code"],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nodeFixture": {
+      "type": "object",
+      "required": ["type", "valid_cases", "invalid_cases"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "valid_cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/validCase"
+          }
+        },
+        "invalid_cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/invalidCase"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

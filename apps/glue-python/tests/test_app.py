@@ -228,7 +228,13 @@ class AppRouteTests(unittest.TestCase):
                     json={"set": {"rules": {}}},
                 )
                 self.assertEqual(resp.status_code, 400)
-                self.assertFalse(resp.json()["ok"])
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "governance_validation_invalid")
+                self.assertEqual(payload["error_scope"], "quality_rule_set")
+                self.assertEqual(payload["error_item_contract"], "contracts/desktop/node_config_validation_errors.v1.json")
+                self.assertTrue(any(item["path"] == "set.id" for item in payload["error_items"]))
 
     def test_workflow_sandbox_rule_routes_store_backend_owned_rules_and_versions(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -356,7 +362,72 @@ class AppRouteTests(unittest.TestCase):
                     },
                 )
                 self.assertEqual(resp.status_code, 400)
-                self.assertFalse(resp.json()["ok"])
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_app")
+                self.assertEqual(payload["graph_contract"], "contracts/workflow/workflow.schema.json")
+                self.assertEqual(payload["error_item_contract"], "contracts/desktop/node_config_validation_errors.v1.json")
+                self.assertTrue(any(item["path"] == "workflow.version" and item["code"] == "required" for item in payload["error_items"]))
+
+    def test_workflow_app_routes_accept_node_config_semantics_owned_by_desktop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.put(
+                    "/governance/workflow-apps/bad_app_contract",
+                    json={
+                        "app": {
+                            "name": "Bad App Contract",
+                            "graph": {
+                                "workflow_id": "wf_bad_app_contract",
+                                "version": "workflow.v1",
+                                "nodes": [
+                                    {
+                                        "id": "n1",
+                                        "type": "plugin_registry_v1",
+                                        "config": {
+                                            "op": "register",
+                                            "manifest": {"command": ""},
+                                        },
+                                    }
+                                ],
+                                "edges": [],
+                            },
+                        }
+                    },
+                )
+                self.assertEqual(resp.status_code, 200)
+                payload = resp.json()
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["item"]["owner"], "glue-python")
+                self.assertEqual(payload["item"]["graph"]["nodes"][0]["type"], "plugin_registry_v1")
+                self.assertEqual(payload["item"]["graph"]["nodes"][0]["config"]["manifest"]["command"], "")
+
+    def test_workflow_app_routes_reject_unregistered_node_types(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.put(
+                    "/governance/workflow-apps/bad_app_unknown_type",
+                    json={
+                        "app": {
+                            "name": "Bad Unknown Type",
+                            "graph": {
+                                "workflow_id": "wf_bad_unknown_type",
+                                "version": "workflow.v1",
+                                "nodes": [{"id": "n1", "type": "unknown_future_node"}],
+                                "edges": [],
+                            },
+                        }
+                    },
+                )
+                self.assertEqual(resp.status_code, 400)
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_app")
+                self.assertTrue(any(item["path"] == "workflow.nodes" and item["code"] == "unknown_node_type" for item in payload["error_items"]))
 
     def test_workflow_version_routes_store_and_compare_backend_owned_snapshots(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -418,7 +489,71 @@ class AppRouteTests(unittest.TestCase):
                     json={"version": {"graph": {"workflow_id": "wf_only"}}},
                 )
                 self.assertEqual(resp.status_code, 400)
-                self.assertFalse(resp.json()["ok"])
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_version")
+                self.assertEqual(payload["graph_contract"], "contracts/workflow/workflow.schema.json")
+                self.assertEqual(payload["error_item_contract"], "contracts/desktop/node_config_validation_errors.v1.json")
+                self.assertTrue(any(item["path"] == "workflow.version" and item["code"] == "required" for item in payload["error_items"]))
+
+    def test_workflow_version_routes_reject_unregistered_node_types(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.put(
+                    "/governance/workflow-versions/ver_bad_unknown_type",
+                    json={
+                        "version": {
+                            "graph": {
+                                "workflow_id": "wf_bad_unknown_type",
+                                "version": "workflow.v1",
+                                "nodes": [{"id": "n1", "type": "unknown_future_node"}],
+                                "edges": [],
+                            }
+                        }
+                    },
+                )
+                self.assertEqual(resp.status_code, 400)
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_version")
+                self.assertTrue(any(item["path"] == "workflow.nodes" and item["code"] == "unknown_node_type" for item in payload["error_items"]))
+
+    def test_workflow_version_routes_accept_node_config_semantics_owned_by_desktop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                resp = self.client.put(
+                    "/governance/workflow-versions/ver_bad_contract",
+                    json={
+                        "version": {
+                            "graph": {
+                                "workflow_id": "wf_bad_version_contract",
+                                "version": "workflow.v1",
+                                "nodes": [
+                                    {
+                                        "id": "n1",
+                                        "type": "parquet_io_v2",
+                                        "config": {
+                                            "op": "read",
+                                            "path": "demo.parquet",
+                                            "predicate_eq": 1,
+                                        },
+                                    }
+                                ],
+                                "edges": [],
+                            }
+                        }
+                    },
+                )
+                self.assertEqual(resp.status_code, 200)
+                payload = resp.json()
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["item"]["owner"], "glue-python")
+                self.assertEqual(payload["item"]["graph"]["nodes"][0]["type"], "parquet_io_v2")
+                self.assertEqual(payload["item"]["graph"]["nodes"][0]["config"]["predicate_eq"], 1)
 
     def test_manual_review_routes_enqueue_list_submit_and_history(self):
         with tempfile.TemporaryDirectory() as tmp:

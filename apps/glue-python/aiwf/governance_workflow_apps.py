@@ -6,6 +6,9 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from aiwf.node_config_contract_runtime import (
+    find_unknown_workflow_node_types,
+)
 from aiwf.paths import resolve_bus_root
 
 
@@ -61,6 +64,23 @@ def validate_workflow_graph(graph: Any) -> Dict[str, Any]:
         raise ValueError("workflow app graph requires nodes array")
     if not isinstance(edges, list):
         raise ValueError("workflow app graph requires edges array")
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            raise ValueError(f"workflow app graph nodes[{index}] must be an object")
+        if not str(node.get("id") or "").strip():
+            raise ValueError(f"workflow app graph nodes[{index}] requires id")
+        if not str(node.get("type") or "").strip():
+            raise ValueError(f"workflow app graph nodes[{index}] requires type")
+    for index, edge in enumerate(edges):
+        if not isinstance(edge, dict):
+            raise ValueError(f"workflow app graph edges[{index}] must be an object")
+        if not str(edge.get("from") or "").strip():
+            raise ValueError(f"workflow app graph edges[{index}] requires from")
+        if not str(edge.get("to") or "").strip():
+            raise ValueError(f"workflow app graph edges[{index}] requires to")
+    unknown_node_types = find_unknown_workflow_node_types(graph)
+    if unknown_node_types:
+        raise ValueError("workflow app graph contains unregistered node types: " + ", ".join(unknown_node_types))
     return _clone(graph)
 
 
