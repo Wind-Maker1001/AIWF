@@ -1,13 +1,96 @@
 ﻿const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const http = require('http');
 const { test, expect, _electron: electron } = require('@playwright/test');
 
-async function openWorkflow() {
+async function openWorkflow(options = {}) {
   const appDir = path.resolve(__dirname, '..');
-  const electronApp = await electron.launch({ args: [appDir, '--workflow', '--workflow-debug-api'] });
+  const args = [appDir, '--workflow', '--workflow-debug-api'];
+  if (options.admin) args.push('--workflow-admin');
+  const envOverrides = options.env && typeof options.env === 'object' ? options.env : {};
+  const previousEnv = new Map();
+  Object.entries(envOverrides).forEach(([key, value]) => {
+    previousEnv.set(key, Object.prototype.hasOwnProperty.call(process.env, key) ? process.env[key] : undefined);
+    process.env[key] = String(value);
+  });
+  const electronApp = await electron.launch({
+    args,
+    env: { ...process.env, ...envOverrides },
+  });
+  previousEnv.forEach((value, key) => {
+    if (typeof value === 'undefined') delete process.env[key];
+    else process.env[key] = value;
+  });
   const page = await electronApp.firstWindow();
   return { electronApp, page };
+}
+
+function governanceJson(res, status, payload) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(payload));
+}
+
+async function withGovernanceMock(runItems, fn) {
+  const items = Array.isArray(runItems) ? runItems : [];
+  const versions = [];
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    if (req.method === 'GET' && url.pathname === '/governance/meta/control-plane') {
+      governanceJson(res, 200, {
+        ok: true,
+        boundary: {
+          governance_surfaces: [
+            {
+              capability: 'workflow_run_audit',
+              route_prefix: '/governance/workflow-runs',
+              owned_route_prefixes: ['/governance/workflow-runs', '/governance/workflow-audit-events'],
+            },
+            {
+              capability: 'workflow_versions',
+              route_prefix: '/governance/workflow-versions',
+              owned_route_prefixes: ['/governance/workflow-versions'],
+            },
+          ],
+        },
+      });
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/governance/workflow-runs') {
+      governanceJson(res, 200, { ok: true, items });
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/governance/workflow-versions') {
+      governanceJson(res, 200, { ok: true, items: versions });
+      return;
+    }
+    if (req.method === 'PUT' && url.pathname.startsWith('/governance/workflow-versions/')) {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += String(chunk || '');
+      });
+      req.on('end', () => {
+        const payload = body ? JSON.parse(body) : {};
+        const version = payload?.version && typeof payload.version === 'object' ? payload.version : {};
+        const id = decodeURIComponent(url.pathname.split('/').pop() || '');
+        const item = { ...version, version_id: String(version.version_id || id) };
+        const index = versions.findIndex((entry) => String(entry?.version_id || '') === item.version_id);
+        if (index >= 0) versions[index] = item;
+        else versions.unshift(item);
+        governanceJson(res, 200, { ok: true, item });
+      });
+      return;
+    }
+    governanceJson(res, 404, { ok: false, error: `mock route not found: ${req.method} ${url.pathname}` });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  try {
+    return await fn(baseUrl);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 }
 
 test('workflow studio renders baseline graph', async () => {
@@ -399,26 +482,35 @@ test('minimap element exists and has size', async () => {
 });
 
 test('save/load workflow via mock dialog path', async () => {
-  const { electronApp, page } = await openWorkflow();
-  const fp = path.join(os.tmpdir(), `aiwf_workflow_${Date.now()}.json`);
-  const saved = await page.evaluate(async (filePath) => {
-    const g = {
-      workflow_id: 't1',
-      name: '测试流',
-      nodes: [{ id: 'n1', type: 'ingest_files', x: 1, y: 2 }],
-      edges: [],
-    };
-    return await window.aiwfDesktop.saveWorkflow(g, 't1', { mock: true, path: filePath });
-  }, fp);
-  expect(saved && saved.ok).toBeTruthy();
-  expect(fs.existsSync(fp)).toBeTruthy();
+  await withGovernanceMock([], async (glueUrl) => {
+    const { electronApp, page } = await openWorkflow({
+      env: { AIWF_GLUE_URL: glueUrl },
+    });
+    await page.evaluate(async (nextGlueUrl) => {
+      const cfg = await window.aiwfDesktop.getConfig();
+      await window.aiwfDesktop.saveConfig({ ...cfg, glueUrl: nextGlueUrl });
+    }, glueUrl);
+    const fp = path.join(os.tmpdir(), `aiwf_workflow_${Date.now()}.json`);
+    const saved = await page.evaluate(async (filePath) => {
+      const g = {
+        workflow_id: 't1',
+        version: '1.0.0',
+        name: '测试流',
+        nodes: [{ id: 'n1', type: 'ingest_files', x: 1, y: 2 }],
+        edges: [],
+      };
+      return await window.aiwfDesktop.saveWorkflow(g, 't1', { mock: true, path: filePath });
+    }, fp);
+    expect(saved && saved.ok).toBeTruthy();
+    expect(fs.existsSync(fp)).toBeTruthy();
 
-  const loaded = await page.evaluate(async (filePath) => {
-    return await window.aiwfDesktop.loadWorkflow({ mock: true, path: filePath });
-  }, fp);
-  expect(loaded && loaded.ok).toBeTruthy();
-  expect(loaded.graph && loaded.graph.workflow_id).toBe('t1');
-  await electronApp.close();
+    const loaded = await page.evaluate(async (filePath) => {
+      return await window.aiwfDesktop.loadWorkflow({ mock: true, path: filePath });
+    }, fp);
+    expect(loaded && loaded.ok).toBeTruthy();
+    expect(loaded.graph && loaded.graph.workflow_id).toBe('t1');
+    await electronApp.close();
+  });
 });
 
 test('marquee selection selects multiple nodes', async () => {
@@ -536,12 +628,27 @@ test('router replay cases stay within per-case fallback bounds', async () => {
   const casesPath = path.join(__dirname, 'fixtures', 'route_replay_cases.json');
   const raw = fs.readFileSync(casesPath, 'utf8').replace(/^\uFEFF/, '');
   const cases = JSON.parse(raw);
+  const legacyNodeTypeAliases = {
+    office_output: 'office_slot_fill_v1',
+    publish: 'manual_review',
+  };
   for (const item of cases) {
     const stat = await page.evaluate(async (payload) => {
       window.__aiwfDebug.setGraph(payload.graph);
       await new Promise((r) => setTimeout(r, 100));
       return window.__aiwfDebug.routeStats();
-    }, item);
+    }, {
+      ...item,
+      graph: {
+        ...(item.graph || {}),
+        nodes: Array.isArray(item?.graph?.nodes)
+          ? item.graph.nodes.map((node) => ({
+              ...node,
+              type: legacyNodeTypeAliases[node?.type] || node?.type,
+            }))
+          : [],
+      },
+    });
     expect(stat.solved).toBeGreaterThan(0);
     expect(stat.fallback_ratio).toBeLessThan(item.max_fallback_ratio);
   }
@@ -549,76 +656,139 @@ test('router replay cases stay within per-case fallback bounds', async () => {
 });
 
 test('quality gate filters and export format persist after reload', async () => {
-  const { electronApp, page } = await openWorkflow();
-  await expect(page.locator('#qualityGateRunIdFilter')).toBeVisible();
+  await withGovernanceMock([{
+    ts: '2026-03-25T09:00:00Z',
+    run_id: 'run_gate_blocked',
+    workflow_id: 'wf_gate',
+    result: {
+      ok: false,
+      status: 'quality_blocked',
+      quality_gate: { blocked: true, passed: false, issues: ['missing_amount'] },
+    },
+  }], async (glueUrl) => {
+    const { electronApp, page } = await openWorkflow({
+      admin: true,
+      env: { AIWF_GLUE_URL: glueUrl },
+    });
+    await page.evaluate(async (nextGlueUrl) => {
+      const cfg = await window.aiwfDesktop.getConfig();
+      await window.aiwfDesktop.saveConfig({ ...cfg, glueUrl: nextGlueUrl });
+    }, glueUrl);
+    await expect(page.locator('#qualityGateRunIdFilter')).toBeVisible();
 
-  await page.fill('#qualityGateRunIdFilter', 'run_abc_123');
-  await page.selectOption('#qualityGateStatusFilter', 'blocked');
-  await page.selectOption('#qualityGateExportFormat', 'json');
+    await page.fill('#qualityGateRunIdFilter', 'run_abc_123');
+    await page.selectOption('#qualityGateStatusFilter', 'blocked');
+    await page.selectOption('#qualityGateExportFormat', 'json');
 
-  await page.reload();
-  await expect(page.locator('h2')).toHaveText(/Workflow Studio/);
-  await expect(page.locator('#qualityGateRunIdFilter')).toHaveValue('run_abc_123');
-  await expect(page.locator('#qualityGateStatusFilter')).toHaveValue('blocked');
-  await expect(page.locator('#qualityGateExportFormat')).toHaveValue('json');
+    await page.reload();
+    await expect(page.locator('h2')).toHaveText(/Workflow Studio/);
+    await expect(page.locator('#qualityGateRunIdFilter')).toHaveValue('run_abc_123');
+    await expect(page.locator('#qualityGateStatusFilter')).toHaveValue('blocked');
+    await expect(page.locator('#qualityGateExportFormat')).toHaveValue('json');
 
-  await electronApp.close();
+    await electronApp.close();
+  });
 });
 
 test('quality gate export writes json and md reports via mock path', async () => {
-  const { electronApp, page } = await openWorkflow();
-  const fpJson = path.join(os.tmpdir(), `aiwf_quality_gate_${Date.now()}.json`);
-  const fpMd = path.join(os.tmpdir(), `aiwf_quality_gate_${Date.now()}.md`);
-
-  const out = await page.evaluate(async ({ jsonPath, mdPath }) => {
-    const r1 = await window.aiwfDesktop.exportWorkflowQualityGateReports({
-      mock: true,
-      path: jsonPath,
-      format: 'json',
-      limit: 100,
-      filter: { run_id: '', status: 'all' },
+  await withGovernanceMock([{
+    ts: '2026-03-25T09:00:00Z',
+    run_id: 'run_gate_blocked',
+    workflow_id: 'wf_gate',
+    result: {
+      ok: false,
+      status: 'quality_blocked',
+      quality_gate: { blocked: true, passed: false, issues: ['missing_amount'] },
+    },
+  }, {
+    ts: '2026-03-25T09:05:00Z',
+    run_id: 'run_gate_pass',
+    workflow_id: 'wf_gate',
+    result: {
+      ok: true,
+      status: 'done',
+      quality_gate: { blocked: false, passed: true, issues: [] },
+    },
+  }], async (glueUrl) => {
+    const { electronApp, page } = await openWorkflow({
+      admin: true,
+      env: { AIWF_GLUE_URL: glueUrl },
     });
-    const r2 = await window.aiwfDesktop.exportWorkflowQualityGateReports({
-      mock: true,
-      path: mdPath,
-      format: 'md',
-      limit: 100,
-      filter: { run_id: '', status: 'all' },
-    });
-    return { r1, r2 };
-  }, { jsonPath: fpJson, mdPath: fpMd });
+    await page.evaluate(async (nextGlueUrl) => {
+      const cfg = await window.aiwfDesktop.getConfig();
+      await window.aiwfDesktop.saveConfig({ ...cfg, glueUrl: nextGlueUrl });
+    }, glueUrl);
+    const fpJson = path.join(os.tmpdir(), `aiwf_quality_gate_${Date.now()}.json`);
+    const fpMd = path.join(os.tmpdir(), `aiwf_quality_gate_${Date.now()}.md`);
 
-  expect(out?.r1?.ok).toBeTruthy();
-  expect(out?.r2?.ok).toBeTruthy();
-  expect(fs.existsSync(fpJson)).toBeTruthy();
-  expect(fs.existsSync(fpMd)).toBeTruthy();
+    const out = await page.evaluate(async ({ jsonPath, mdPath }) => {
+      const r1 = await window.aiwfDesktop.exportWorkflowQualityGateReports({
+        mock: true,
+        path: jsonPath,
+        format: 'json',
+        limit: 100,
+        filter: { run_id: '', status: 'all' },
+      });
+      const r2 = await window.aiwfDesktop.exportWorkflowQualityGateReports({
+        mock: true,
+        path: mdPath,
+        format: 'md',
+        limit: 100,
+        filter: { run_id: '', status: 'all' },
+      });
+      return { r1, r2 };
+    }, { jsonPath: fpJson, mdPath: fpMd });
 
-  const jsonText = fs.readFileSync(fpJson, 'utf8');
-  const jsonObj = JSON.parse(jsonText);
-  expect(typeof jsonObj?.exported_at).toBe('string');
-  expect(typeof jsonObj?.total).toBe('number');
-  expect(Array.isArray(jsonObj?.items)).toBeTruthy();
+    expect(out?.r1?.ok).toBeTruthy();
+    expect(out?.r2?.ok).toBeTruthy();
+    expect(fs.existsSync(fpJson)).toBeTruthy();
+    expect(fs.existsSync(fpMd)).toBeTruthy();
 
-  const mdText = fs.readFileSync(fpMd, 'utf8');
-  expect(mdText).toContain('# AIWF 质量门禁报告');
-  expect(mdText).toContain('| Run | 状态 | 问题 | 时间 |');
+    const jsonText = fs.readFileSync(fpJson, 'utf8');
+    const jsonObj = JSON.parse(jsonText);
+    expect(typeof jsonObj?.exported_at).toBe('string');
+    expect(typeof jsonObj?.total).toBe('number');
+    expect(Array.isArray(jsonObj?.items)).toBeTruthy();
 
-  await electronApp.close();
+    const mdText = fs.readFileSync(fpMd, 'utf8');
+    expect(mdText).toContain('# AIWF 质量门禁报告');
+    expect(mdText).toContain('| Run | 状态 | 问题 | 时间 |');
+
+    await electronApp.close();
+  });
 });
 
 test('quality gate export returns readable error on invalid target path', async () => {
-  const { electronApp, page } = await openWorkflow();
-  const badPath = os.tmpdir();
-  const out = await page.evaluate(async (p) => {
-    return await window.aiwfDesktop.exportWorkflowQualityGateReports({
-      mock: true,
-      path: p,
-      format: 'md',
-      limit: 50,
-      filter: { run_id: '', status: 'all' },
+  await withGovernanceMock([{
+    ts: '2026-03-25T09:00:00Z',
+    run_id: 'run_gate_blocked',
+    workflow_id: 'wf_gate',
+    result: {
+      ok: false,
+      status: 'quality_blocked',
+      quality_gate: { blocked: true, passed: false, issues: ['missing_amount'] },
+    },
+  }], async (glueUrl) => {
+    const { electronApp, page } = await openWorkflow({
+      admin: true,
+      env: { AIWF_GLUE_URL: glueUrl },
     });
-  }, badPath);
-  expect(out?.ok).toBeFalsy();
-  expect(String(out?.error || '')).not.toBe('');
-  await electronApp.close();
+    await page.evaluate(async (nextGlueUrl) => {
+      const cfg = await window.aiwfDesktop.getConfig();
+      await window.aiwfDesktop.saveConfig({ ...cfg, glueUrl: nextGlueUrl });
+    }, glueUrl);
+    const badPath = os.tmpdir();
+    const out = await page.evaluate(async (p) => {
+      return await window.aiwfDesktop.exportWorkflowQualityGateReports({
+        mock: true,
+        path: p,
+        format: 'md',
+        limit: 50,
+        filter: { run_id: '', status: 'all' },
+      });
+    }, badPath);
+    expect(out?.ok).toBeFalsy();
+    expect(String(out?.error || '')).not.toBe('');
+    await electronApp.close();
+  });
 });
