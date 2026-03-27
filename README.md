@@ -7,18 +7,19 @@ AIWF is a local-first workflow platform for turning raw files and tabular inputs
 - `apps/base-java`: control plane and orchestration APIs
 - `apps/glue-python`: flow runtime and preprocessing service
 - `apps/accel-rust`: operator runtime and HTTP operator endpoints
-- `apps/dify-desktop`: Electron desktop app with offline engine and Workflow Studio
-- `apps/dify-native-winui`: native WinUI bootstrap shell
+- `apps/dify-native-winui`: primary native WinUI desktop frontend
+- `apps/dify-desktop`: secondary Electron compatibility shell with offline engine and Workflow Studio
 - `ops/scripts`: startup, packaging, CI, smoke, and release scripts
 - `docs`: active guides, reference docs, and historical snapshots
 
 ## Start Here
 
-- Documentation index: [docs/quickstart.md](docs/quickstart.md)
+- Documentation hub: [docs/README.md](docs/README.md)
+- Quickstart: [docs/quickstart.md](docs/quickstart.md)
+- Native WinUI quickstart: [docs/quickstart_native_winui.md](docs/quickstart_native_winui.md)
 - Backend quickstart: [docs/quickstart_backend.md](docs/quickstart_backend.md)
-- Desktop offline quickstart: [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
 - Verification guide: [docs/verification.md](docs/verification.md)
-- Cleaning rules: [docs/cleaning_rules.md](docs/cleaning_rules.md)
+- Current architecture cognition review: [docs/architecture_cognition_review_20260328.md](docs/architecture_cognition_review_20260328.md)
 
 ## Common Commands
 
@@ -29,11 +30,26 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\db_migrate.ps1 -SqlPasswo
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\restart_services.ps1
 ```
 
-Desktop run or package:
+Frontend run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -BuildWin -BuildInstaller
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_native_winui.ps1 -Configuration Debug
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -BuildWin -Configuration Release -Version "<version>"
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -BuildInstaller -Configuration Release -Version "<version>" -CreateZip
+```
+
+Frontend release:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_frontend_productize.ps1 -Version "<version>" -Frontend WinUI -Configuration Release -CreateZip
+```
+
+Electron compatibility run or package:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_electron_compatibility.ps1 -Version "<version>"
 ```
 
 Local verification:
@@ -44,6 +60,12 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
 ```
 
 If your local machine does not have SQL connectivity ready yet, add `-SkipSqlConnectivityGate` for a reduced local check.
+
+## Compatibility Paths
+
+- Desktop offline quickstart: [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
+- Electron compatibility guide: [docs/dify_desktop_app.md](docs/dify_desktop_app.md)
+- Electron offline bundle delivery: [docs/offline_delivery_minimal.md](docs/offline_delivery_minimal.md)
 
 ## Key HTTP Endpoints
 
@@ -59,22 +81,22 @@ If your local machine does not have SQL connectivity ready yet, add `-SkipSqlCon
 
 ## Documentation Scope
 
-Active onboarding and operations docs:
+The canonical documentation entrypoint is [docs/README.md](docs/README.md).
+
+Recommended current reading order:
 
 - [docs/quickstart.md](docs/quickstart.md)
-- [docs/quickstart_backend.md](docs/quickstart_backend.md)
-- [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
 - [docs/verification.md](docs/verification.md)
-- [docs/project_review_20260313.md](docs/project_review_20260313.md)
+- [docs/architecture_cognition_review_20260328.md](docs/architecture_cognition_review_20260328.md)
+
+Compatibility-only docs remain in the repo, but are not the primary onboarding path:
+
+- [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
 - [docs/dify_desktop_app.md](docs/dify_desktop_app.md)
-- [docs/dify_local_integration.md](docs/dify_local_integration.md)
+- [docs/offline_delivery_minimal.md](docs/offline_delivery_minimal.md)
+- [docs/electron_compatibility_retirement_plan_20260321.md](docs/electron_compatibility_retirement_plan_20260321.md)
 
-Historical context docs still exist in the repository, but they are not the primary entrypoint:
-
-- `docs/archive/`
-- `docs/*handoff*.md`
-- `docs/*snapshot*.md`
-- `docs/release_notes_v1.*.md`
+Historical handoff and snapshot docs remain under [docs/archive/README.md](docs/archive/README.md).
 
 ## Notes
 
