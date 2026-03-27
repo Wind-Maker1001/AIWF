@@ -1,4 +1,5 @@
 const path = require("path");
+const { createWorkflowStoreRemoteError } = require("./workflow_store_remote_error");
 const {
   GOVERNANCE_CAPABILITY_SCHEMA_VERSION,
   GOVERNANCE_CAPABILITY_SOURCE_AUTHORITY,
@@ -115,6 +116,79 @@ function createGovernanceControlPlaneSupport(deps = {}) {
     fetchBoundary,
     resolveGlueUrl,
     resolveRoutePrefix,
+  };
+}
+
+function createGovernanceGlueStoreSupport(deps = {}) {
+  const {
+    loadConfig = () => ({}),
+    fetchImpl = typeof fetch === "function" ? fetch : null,
+    env = process.env,
+    defaultGlueUrl = GOVERNANCE_DEFAULT_GLUE_URL,
+    providerConfigKey = "",
+    providerEnvKey = "",
+    providerLabel = "workflow store",
+  } = deps;
+  const governance = createGovernanceControlPlaneSupport({ loadConfig, fetchImpl, env, defaultGlueUrl });
+
+  function mergedConfig(cfg = null) {
+    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
+  }
+
+  function normalizeProvider(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (raw === "glue_http") return "glue_http";
+    if (raw === "local_legacy") {
+      throw new Error(`${providerLabel} local_legacy provider has been retired; use glue_http`);
+    }
+    return "";
+  }
+
+  function resolveProvider(cfg = null) {
+    const merged = mergedConfig(cfg);
+    const explicit = normalizeProvider(
+      (providerConfigKey ? merged[providerConfigKey] : "")
+      || (providerEnvKey ? env[providerEnvKey] : "")
+    );
+    if (explicit) return explicit;
+    return "glue_http";
+  }
+
+  async function parseResponse(resp) {
+    const text = await resp.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { ok: false, error: text };
+    }
+  }
+
+  async function remoteRequest(method, route, body = null, cfg = null) {
+    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for glue provider");
+    const merged = mergedConfig(cfg);
+    const headers = { "Content-Type": "application/json" };
+    const apiKey = String(merged.apiKey || "").trim();
+    if (apiKey) headers["X-API-Key"] = apiKey;
+    const url = `${governance.resolveGlueUrl(merged)}${route}`;
+    const resp = await fetchImpl(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const payload = await parseResponse(resp);
+    if (!resp.ok || payload?.ok === false) {
+      throw createWorkflowStoreRemoteError(payload, `${providerLabel} ${method} failed: http ${resp.status}`);
+    }
+    return payload;
+  }
+
+  return {
+    governance,
+    mergedConfig,
+    remoteRequest,
+    resolveGlueUrl: governance.resolveGlueUrl,
+    resolveProvider,
   };
 }
 
@@ -309,6 +383,7 @@ module.exports = {
   evaluateSla,
   initAiBudgetState,
   createGovernanceControlPlaneSupport,
+  createGovernanceGlueStoreSupport,
   resolveGovernanceOwnedRoutePrefix,
   deepClone,
 };

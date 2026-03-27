@@ -1,7 +1,13 @@
 const GLUE_PROVIDER = "glue_http";
 const WORKFLOW_APP_SCHEMA_VERSION = "workflow_app_registry_entry.v1";
-const GLUE_DEFAULT_URL = "http://127.0.0.1:18081";
-const { createGovernanceControlPlaneSupport, GOVERNANCE_CAPABILITIES } = require("./workflow_governance");
+const {
+  createGovernanceGlueStoreSupport,
+  GOVERNANCE_CAPABILITIES,
+  GOVERNANCE_DEFAULT_GLUE_URL,
+} = require("./workflow_governance");
+const {
+  workflowStoreRemoteErrorResult,
+} = require("./workflow_store_remote_error");
 
 function createWorkflowAppRegistryStore(deps = {}) {
   const {
@@ -11,39 +17,23 @@ function createWorkflowAppRegistryStore(deps = {}) {
     validateWorkflowGraph = () => {},
     env = process.env,
   } = deps;
-  const governance = createGovernanceControlPlaneSupport({ loadConfig, fetchImpl, env, defaultGlueUrl: GLUE_DEFAULT_URL });
+  const {
+    governance,
+    resolveGlueUrl,
+    resolveProvider,
+    remoteRequest,
+  } = createGovernanceGlueStoreSupport({
+    loadConfig,
+    fetchImpl,
+    env,
+    defaultGlueUrl: GOVERNANCE_DEFAULT_GLUE_URL,
+    providerConfigKey: "workflowAppRegistryProvider",
+    providerEnvKey: "AIWF_WORKFLOW_APP_REGISTRY_PROVIDER",
+    providerLabel: "workflow app registry",
+  });
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
-  }
-
-  function mergedConfig(cfg = null) {
-    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
-  }
-
-  function normalizeProvider(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === GLUE_PROVIDER) return GLUE_PROVIDER;
-    if (raw === "local_legacy") throw new Error("workflow app registry local_legacy provider has been retired; use glue_http");
-    return "";
-  }
-
-  function resolveProvider(cfg = null) {
-    const merged = mergedConfig(cfg);
-    const explicit = normalizeProvider(merged.workflowAppRegistryProvider || env.AIWF_WORKFLOW_APP_REGISTRY_PROVIDER);
-    if (explicit) return explicit;
-    return GLUE_PROVIDER;
-  }
-
-  function resolveGlueUrl(cfg = null) {
-    return governance.resolveGlueUrl(cfg);
-  }
-
-  function headers(apiKey) {
-    const out = { "Content-Type": "application/json" };
-    const key = String(apiKey || "").trim();
-    if (key) out["X-API-Key"] = key;
-    return out;
   }
 
   function normalizeWorkflowApp(item, provider, existing = null) {
@@ -72,32 +62,6 @@ function createWorkflowAppRegistryStore(deps = {}) {
       created_at: String(source.created_at || current.created_at || nowIso()),
       updated_at: String(source.updated_at || nowIso()),
     };
-  }
-
-  async function parseResponse(resp) {
-    const text = await resp.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: false, error: text };
-    }
-  }
-
-  async function remoteRequest(method, route, body = null, cfg = null) {
-    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for glue provider");
-    const merged = mergedConfig(cfg);
-    const url = `${resolveGlueUrl(merged)}${route}`;
-    const resp = await fetchImpl(url, {
-      method,
-      headers: headers(merged.apiKey),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const payload = await parseResponse(resp);
-    if (!resp.ok || payload?.ok === false) {
-      throw new Error(String(payload?.error || `workflow app ${method} failed: http ${resp.status}`));
-    }
-    return payload;
   }
 
   async function remoteListApps(limit = 200, cfg = null) {
@@ -158,8 +122,12 @@ function createWorkflowAppRegistryStore(deps = {}) {
   }
 
   async function listApps(limit = 200, cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteListApps(limit, cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteListApps(limit, cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function getApp(appId, cfg = null) {
@@ -172,7 +140,7 @@ function createWorkflowAppRegistryStore(deps = {}) {
       _ = resolveProvider(cfg);
       return await remotePublishApp(req, cfg);
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 

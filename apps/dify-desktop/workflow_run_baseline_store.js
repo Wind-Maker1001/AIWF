@@ -1,6 +1,12 @@
 const GLUE_PROVIDER = "glue_http";
-const GLUE_DEFAULT_URL = "http://127.0.0.1:18081";
-const { createGovernanceControlPlaneSupport, GOVERNANCE_CAPABILITIES } = require("./workflow_governance");
+const {
+  createGovernanceGlueStoreSupport,
+  GOVERNANCE_CAPABILITIES,
+  GOVERNANCE_DEFAULT_GLUE_URL,
+} = require("./workflow_governance");
+const {
+  workflowStoreRemoteErrorResult,
+} = require("./workflow_store_remote_error");
 
 function createWorkflowRunBaselineStore(deps = {}) {
   const {
@@ -8,36 +14,20 @@ function createWorkflowRunBaselineStore(deps = {}) {
     fetchImpl = typeof fetch === "function" ? fetch : null,
     env = process.env,
   } = deps;
-  const governance = createGovernanceControlPlaneSupport({ loadConfig, fetchImpl, env, defaultGlueUrl: GLUE_DEFAULT_URL });
-
-  function mergedConfig(cfg = null) {
-    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
-  }
-
-  function normalizeProvider(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === GLUE_PROVIDER) return GLUE_PROVIDER;
-    if (raw === "local_legacy") throw new Error("workflow run baseline local_legacy provider has been retired; use glue_http");
-    return "";
-  }
-
-  function resolveProvider(cfg = null) {
-    const merged = mergedConfig(cfg);
-    const explicit = normalizeProvider(merged.runBaselineProvider || env.AIWF_RUN_BASELINE_PROVIDER);
-    if (explicit) return explicit;
-    return GLUE_PROVIDER;
-  }
-
-  function resolveGlueUrl(cfg = null) {
-    return governance.resolveGlueUrl(cfg);
-  }
-
-  function headers(apiKey) {
-    const out = { "Content-Type": "application/json" };
-    const key = String(apiKey || "").trim();
-    if (key) out["X-API-Key"] = key;
-    return out;
-  }
+  const {
+    governance,
+    resolveGlueUrl,
+    resolveProvider,
+    remoteRequest,
+  } = createGovernanceGlueStoreSupport({
+    loadConfig,
+    fetchImpl,
+    env,
+    defaultGlueUrl: GOVERNANCE_DEFAULT_GLUE_URL,
+    providerConfigKey: "runBaselineProvider",
+    providerEnvKey: "AIWF_RUN_BASELINE_PROVIDER",
+    providerLabel: "workflow run baseline",
+  });
 
   function normalizeBaseline(item, provider, existing = null) {
     const source = item && typeof item === "object" ? item : {};
@@ -62,32 +52,6 @@ function createWorkflowRunBaselineStore(deps = {}) {
       created_at: String(source.created_at || current.created_at || new Date().toISOString()),
       notes: String(source.notes || current.notes || "").trim(),
     };
-  }
-
-  async function parseResponse(resp) {
-    const text = await resp.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: false, error: text };
-    }
-  }
-
-  async function remoteRequest(method, route, body = null, cfg = null) {
-    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for glue provider");
-    const merged = mergedConfig(cfg);
-    const url = `${resolveGlueUrl(merged)}${route}`;
-    const resp = await fetchImpl(url, {
-      method,
-      headers: headers(merged.apiKey),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const payload = await parseResponse(resp);
-    if (!resp.ok || payload?.ok === false) {
-      throw new Error(String(payload?.error || `run baseline ${method} failed: http ${resp.status}`));
-    }
-    return payload;
   }
 
   async function remoteList(limit = 200, cfg = null) {
@@ -135,7 +99,7 @@ function createWorkflowRunBaselineStore(deps = {}) {
       _ = resolveProvider(cfg);
       return await remoteList(limit, cfg);
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 
@@ -144,7 +108,7 @@ function createWorkflowRunBaselineStore(deps = {}) {
       _ = resolveProvider(cfg);
       return await remoteSave(req, cfg);
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 

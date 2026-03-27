@@ -1,10 +1,13 @@
 const GLUE_PROVIDER = "glue_http";
-const GLUE_DEFAULT_URL = "http://127.0.0.1:18081";
 const {
-  createGovernanceControlPlaneSupport,
+  createGovernanceGlueStoreSupport,
   GOVERNANCE_CAPABILITIES,
   GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS,
+  GOVERNANCE_DEFAULT_GLUE_URL,
 } = require("./workflow_governance");
+const {
+  workflowStoreRemoteErrorResult,
+} = require("./workflow_store_remote_error");
 const WORKFLOW_SANDBOX_RULES_SCHEMA_VERSION = "workflow_sandbox_rules.v1";
 const WORKFLOW_SANDBOX_RULE_VERSION_SCHEMA_VERSION = "workflow_sandbox_rule_version.v1";
 const WORKFLOW_SANDBOX_RULE_COMPARE_SCHEMA_VERSION = "workflow_sandbox_rule_compare.v1";
@@ -16,38 +19,22 @@ function createWorkflowSandboxRuleStore(deps = {}) {
     fetchImpl = typeof fetch === "function" ? fetch : null,
     env = process.env,
   } = deps;
-  const governance = createGovernanceControlPlaneSupport({ loadConfig, fetchImpl, env, defaultGlueUrl: GLUE_DEFAULT_URL });
+  const {
+    governance,
+    resolveGlueUrl,
+    resolveProvider,
+    remoteRequest,
+  } = createGovernanceGlueStoreSupport({
+    loadConfig,
+    fetchImpl,
+    env,
+    defaultGlueUrl: GOVERNANCE_DEFAULT_GLUE_URL,
+    providerConfigKey: "workflowSandboxRuleProvider",
+    providerEnvKey: "AIWF_WORKFLOW_SANDBOX_RULE_PROVIDER",
+    providerLabel: "workflow sandbox rule",
+  });
 
   if (!sandboxSupport) throw new Error("sandboxSupport is required");
-
-  function mergedConfig(cfg = null) {
-    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
-  }
-
-  function normalizeProvider(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === GLUE_PROVIDER) return GLUE_PROVIDER;
-    if (raw === "local_legacy") throw new Error("workflow sandbox rule local_legacy provider has been retired; use glue_http");
-    return "";
-  }
-
-  function resolveProvider(cfg = null) {
-    const merged = mergedConfig(cfg);
-    const explicit = normalizeProvider(merged.workflowSandboxRuleProvider || env.AIWF_WORKFLOW_SANDBOX_RULE_PROVIDER);
-    if (explicit) return explicit;
-    return GLUE_PROVIDER;
-  }
-
-  function resolveGlueUrl(cfg = null) {
-    return governance.resolveGlueUrl(cfg);
-  }
-
-  function headers(apiKey) {
-    const out = { "Content-Type": "application/json" };
-    const key = String(apiKey || "").trim();
-    if (key) out["X-API-Key"] = key;
-    return out;
-  }
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -118,32 +105,6 @@ function createWorkflowSandboxRuleStore(deps = {}) {
     };
   }
 
-  async function parseResponse(resp) {
-    const text = await resp.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: false, error: text };
-    }
-  }
-
-  async function remoteRequest(method, route, body = null, cfg = null) {
-    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for glue provider");
-    const merged = mergedConfig(cfg);
-    const url = `${resolveGlueUrl(merged)}${route}`;
-    const resp = await fetchImpl(url, {
-      method,
-      headers: headers(merged.apiKey),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const payload = await parseResponse(resp);
-    if (!resp.ok || payload?.ok === false) {
-      throw new Error(String(payload?.error || `workflow sandbox rule ${method} failed: http ${resp.status}`));
-    }
-    return payload;
-  }
-
   async function remoteGetRules(cfg = null) {
     const routePrefix = await governance.resolveRoutePrefix(GOVERNANCE_CAPABILITIES.WORKFLOW_SANDBOX_RULES.capability, { cfg });
     const payload = await remoteRequest("GET", routePrefix, null, cfg);
@@ -212,8 +173,12 @@ function createWorkflowSandboxRuleStore(deps = {}) {
   }
 
   async function getRuntimeRules(cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteGetRules(cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteGetRules(cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function remoteMute(req, cfg = null) {
@@ -237,33 +202,57 @@ function createWorkflowSandboxRuleStore(deps = {}) {
   }
 
   async function getRules(cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteGetRules(cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteGetRules(cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function saveRules(req, cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteSaveRules(req, cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteSaveRules(req, cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function muteAlert(req, cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteMute(req, cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteMute(req, cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function listVersions(limit = 100, cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteListVersions(limit, cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteListVersions(limit, cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function compareVersions(versionA, versionB, cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteCompareVersions(versionA, versionB, cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteCompareVersions(versionA, versionB, cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function rollbackVersion(versionId, cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteRollback(versionId, cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteRollback(versionId, cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   return {

@@ -1,7 +1,13 @@
 const GLUE_PROVIDER = "glue_http";
 const QUALITY_RULE_SET_SCHEMA_VERSION = "quality_rule_set.v1";
-const GLUE_DEFAULT_URL = "http://127.0.0.1:18081";
-const { createGovernanceControlPlaneSupport, GOVERNANCE_CAPABILITIES } = require("./workflow_governance");
+const {
+  createGovernanceGlueStoreSupport,
+  GOVERNANCE_CAPABILITIES,
+  GOVERNANCE_DEFAULT_GLUE_URL,
+} = require("./workflow_governance");
+const {
+  workflowStoreRemoteErrorResult,
+} = require("./workflow_store_remote_error");
 
 function createWorkflowQualityRuleSetSupport(deps = {}) {
   const {
@@ -10,39 +16,23 @@ function createWorkflowQualityRuleSetSupport(deps = {}) {
     fetchImpl = typeof fetch === "function" ? fetch : null,
     env = process.env,
   } = deps;
-  const governance = createGovernanceControlPlaneSupport({ loadConfig, fetchImpl, env, defaultGlueUrl: GLUE_DEFAULT_URL });
+  const {
+    governance,
+    resolveGlueUrl,
+    resolveProvider,
+    remoteRequest,
+  } = createGovernanceGlueStoreSupport({
+    loadConfig,
+    fetchImpl,
+    env,
+    defaultGlueUrl: GOVERNANCE_DEFAULT_GLUE_URL,
+    providerConfigKey: "qualityRuleSetProvider",
+    providerEnvKey: "AIWF_QUALITY_RULE_SET_PROVIDER",
+    providerLabel: "workflow quality rule set",
+  });
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
-  }
-
-  function mergedConfig(cfg = null) {
-    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
-  }
-
-  function normalizeProvider(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === GLUE_PROVIDER) return GLUE_PROVIDER;
-    if (raw === "local_legacy") throw new Error("workflow quality rule set local_legacy provider has been retired; use glue_http");
-    return "";
-  }
-
-  function resolveProvider(cfg = null) {
-    const merged = mergedConfig(cfg);
-    const explicit = normalizeProvider(merged.qualityRuleSetProvider || env.AIWF_QUALITY_RULE_SET_PROVIDER);
-    if (explicit) return explicit;
-    return GLUE_PROVIDER;
-  }
-
-  function resolveGlueUrl(cfg = null) {
-    return governance.resolveGlueUrl(cfg);
-  }
-
-  function headers(apiKey) {
-    const out = { "Content-Type": "application/json" };
-    const key = String(apiKey || "").trim();
-    if (key) out["X-API-Key"] = key;
-    return out;
   }
 
   function normalizeQualityRuleSet(item, provider, existing = null) {
@@ -72,32 +62,6 @@ function createWorkflowQualityRuleSetSupport(deps = {}) {
       created_at: createdAt,
       updated_at: String(source.updated_at || nowIso()),
     };
-  }
-
-  async function parseResponse(resp) {
-    const text = await resp.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: false, error: text };
-    }
-  }
-
-  async function remoteRequest(method, route, body = null, cfg = null) {
-    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for glue provider");
-    const merged = mergedConfig(cfg);
-    const url = `${resolveGlueUrl(merged)}${route}`;
-    const resp = await fetchImpl(url, {
-      method,
-      headers: headers(merged.apiKey),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const payload = await parseResponse(resp);
-    if (!resp.ok || payload?.ok === false) {
-      throw new Error(String(payload?.error || `quality rule set ${method} failed: http ${resp.status}`));
-    }
-    return payload;
   }
 
   async function remoteListQualityRuleSets(cfg = null) {
@@ -155,9 +119,13 @@ function createWorkflowQualityRuleSetSupport(deps = {}) {
   }
 
   async function listQualityRuleSets(cfg = null) {
-    const provider = resolveProvider(cfg);
-    const sets = await remoteListQualityRuleSets(cfg);
-    return { ok: true, provider, sets };
+    try {
+      const provider = resolveProvider(cfg);
+      const sets = await remoteListQualityRuleSets(cfg);
+      return { ok: true, provider, sets };
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function getQualityRuleSet(setId, cfg = null) {
@@ -173,7 +141,7 @@ function createWorkflowQualityRuleSetSupport(deps = {}) {
       const item = await remoteSaveQualityRuleSet(set, cfg);
       return { ok: true, provider, set: item };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 
@@ -186,7 +154,7 @@ function createWorkflowQualityRuleSetSupport(deps = {}) {
       if (!removed) return { ok: false, error: `quality rule set not found: ${id}` };
       return { ok: true, provider, id };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 

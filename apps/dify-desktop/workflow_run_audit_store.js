@@ -1,10 +1,13 @@
 const GLUE_PROVIDER = "glue_http";
-const GLUE_DEFAULT_URL = "http://127.0.0.1:18081";
 const {
-  createGovernanceControlPlaneSupport,
+  createGovernanceGlueStoreSupport,
   GOVERNANCE_CAPABILITIES,
   GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS,
+  GOVERNANCE_DEFAULT_GLUE_URL,
 } = require("./workflow_governance");
+const {
+  workflowStoreRemoteErrorResult,
+} = require("./workflow_store_remote_error");
 const WORKFLOW_RUN_ENTRY_SCHEMA_VERSION = "workflow_run_entry.v1";
 const WORKFLOW_AUDIT_EVENT_SCHEMA_VERSION = "workflow_audit_event.v1";
 const WORKFLOW_RUN_TIMELINE_SCHEMA_VERSION = "workflow_run_timeline.v1";
@@ -19,36 +22,20 @@ function createWorkflowRunAuditStore(deps = {}) {
     fetchImpl = typeof fetch === "function" ? fetch : null,
     env = process.env,
   } = deps;
-  const governance = createGovernanceControlPlaneSupport({ loadConfig, fetchImpl, env, defaultGlueUrl: GLUE_DEFAULT_URL });
-
-  function mergedConfig(cfg = null) {
-    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
-  }
-
-  function normalizeProvider(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === GLUE_PROVIDER) return GLUE_PROVIDER;
-    if (raw === "local_legacy") throw new Error("workflow run audit local_legacy provider has been retired; use glue_http");
-    return "";
-  }
-
-  function resolveProvider(cfg = null) {
-    const merged = mergedConfig(cfg);
-    const explicit = normalizeProvider(merged.workflowRunAuditProvider || env.AIWF_WORKFLOW_RUN_AUDIT_PROVIDER);
-    if (explicit) return explicit;
-    return GLUE_PROVIDER;
-  }
-
-  function resolveGlueUrl(cfg = null) {
-    return governance.resolveGlueUrl(cfg);
-  }
-
-  function headers(apiKey) {
-    const out = { "Content-Type": "application/json" };
-    const key = String(apiKey || "").trim();
-    if (key) out["X-API-Key"] = key;
-    return out;
-  }
+  const {
+    governance,
+    resolveGlueUrl,
+    resolveProvider,
+    remoteRequest,
+  } = createGovernanceGlueStoreSupport({
+    loadConfig,
+    fetchImpl,
+    env,
+    defaultGlueUrl: GOVERNANCE_DEFAULT_GLUE_URL,
+    providerConfigKey: "workflowRunAuditProvider",
+    providerEnvKey: "AIWF_WORKFLOW_RUN_AUDIT_PROVIDER",
+    providerLabel: "workflow run audit",
+  });
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -115,32 +102,6 @@ function createWorkflowRunAuditStore(deps = {}) {
     };
   }
 
-  async function parseResponse(resp) {
-    const text = await resp.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: false, error: text };
-    }
-  }
-
-  async function remoteRequest(method, route, body = null, cfg = null) {
-    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for glue provider");
-    const merged = mergedConfig(cfg);
-    const url = `${resolveGlueUrl(merged)}${route}`;
-    const resp = await fetchImpl(url, {
-      method,
-      headers: headers(merged.apiKey),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const payload = await parseResponse(resp);
-    if (!resp.ok || payload?.ok === false) {
-      throw new Error(String(payload?.error || `workflow run audit ${method} failed: http ${resp.status}`));
-    }
-    return payload;
-  }
-
   async function mirrorRun(run, payload, config, cfg = null) {
     const provider = resolveProvider(cfg || config);
     if (provider !== GLUE_PROVIDER) return { ok: true, provider };
@@ -186,7 +147,7 @@ function createWorkflowRunAuditStore(deps = {}) {
       }
       return { ok: true, provider, items };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 
@@ -209,7 +170,7 @@ function createWorkflowRunAuditStore(deps = {}) {
       const payload = await remoteRequest("GET", `${routePrefix}/${encodeURIComponent(String(runId || "").trim())}/timeline`, null, cfg);
       return normalizeTimeline(payload);
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 
@@ -220,7 +181,7 @@ function createWorkflowRunAuditStore(deps = {}) {
       const payload = await remoteRequest("GET", `${routePrefix}/failure-summary?limit=${Math.max(1, Math.min(5000, Number(limit || 400)))}`, null, cfg);
       return normalizeFailureSummary(payload);
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 
@@ -245,7 +206,7 @@ function createWorkflowRunAuditStore(deps = {}) {
         items,
       };
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 

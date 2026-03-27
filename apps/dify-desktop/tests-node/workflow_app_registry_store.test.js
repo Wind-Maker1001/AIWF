@@ -115,3 +115,42 @@ test("workflow app registry store rejects retired local legacy provider", async 
   assert.equal(published.ok, false);
   assert.match(String(published.error || ""), /retired/i);
 });
+
+test("workflow app registry store preserves structured remote publish failure details", async () => {
+  const store = createWorkflowAppRegistryStore({
+    loadConfig: () => ({ mode: "base_api", glueUrl: "http://127.0.0.1:18081" }),
+    validateWorkflowGraph: () => {},
+    fetchImpl: async (url) => {
+      if (url.endsWith("/governance/meta/control-plane")) {
+        return governanceBoundaryResponse("workflow_apps", "/governance/workflow-apps");
+      }
+      return jsonResponse(400, {
+        ok: false,
+        error: "workflow app graph node config invalid: workflow.nodes[0].config.manifest.command is required when workflow.nodes[0].config.op is register",
+        error_code: "workflow_graph_invalid",
+        error_scope: "workflow_app",
+        error_item_contract: "contracts/desktop/node_config_validation_errors.v1.json",
+        error_items: [{
+          path: "workflow.nodes[0].config.manifest.command",
+          code: "conditional_required",
+          message: "workflow.nodes[0].config.manifest.command is required when workflow.nodes[0].config.op is register",
+        }],
+      });
+    },
+  });
+
+  const published = await store.publishApp({
+    app_id: "finance_app_remote",
+    name: "Finance Remote",
+    workflow_id: "wf_finance",
+    graph: makeGraph("Finance Remote"),
+    params_schema: {},
+    template_policy: {},
+  }, { mode: "base_api" });
+
+  assert.equal(published.ok, false);
+  assert.equal(published.error_code, "workflow_graph_invalid");
+  assert.equal(published.error_scope, "workflow_app");
+  assert.ok(Array.isArray(published.error_items));
+  assert.ok(published.error_items.some((item) => item.path === "workflow.nodes[0].config.manifest.command" && item.code === "conditional_required"));
+});

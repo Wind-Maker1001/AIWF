@@ -1,10 +1,13 @@
 const GLUE_PROVIDER = "glue_http";
-const GLUE_DEFAULT_URL = "http://127.0.0.1:18081";
 const {
-  createGovernanceControlPlaneSupport,
+  createGovernanceGlueStoreSupport,
   GOVERNANCE_CAPABILITIES,
   GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS,
+  GOVERNANCE_DEFAULT_GLUE_URL,
 } = require("./workflow_governance");
+const {
+  workflowStoreRemoteErrorResult,
+} = require("./workflow_store_remote_error");
 const WORKFLOW_SANDBOX_AUTOFIX_STATE_SCHEMA_VERSION = "workflow_sandbox_autofix_state.v1";
 const WORKFLOW_SANDBOX_AUTOFIX_ACTION_SCHEMA_VERSION = "workflow_sandbox_autofix_action.v1";
 
@@ -15,38 +18,22 @@ function createWorkflowSandboxAutoFixStore(deps = {}) {
     fetchImpl = typeof fetch === "function" ? fetch : null,
     env = process.env,
   } = deps;
-  const governance = createGovernanceControlPlaneSupport({ loadConfig, fetchImpl, env, defaultGlueUrl: GLUE_DEFAULT_URL });
+  const {
+    governance,
+    resolveGlueUrl,
+    resolveProvider,
+    remoteRequest,
+  } = createGovernanceGlueStoreSupport({
+    loadConfig,
+    fetchImpl,
+    env,
+    defaultGlueUrl: GOVERNANCE_DEFAULT_GLUE_URL,
+    providerConfigKey: "workflowSandboxAutoFixProvider",
+    providerEnvKey: "AIWF_WORKFLOW_SANDBOX_AUTOFIX_PROVIDER",
+    providerLabel: "workflow sandbox autofix",
+  });
 
   if (!sandboxSupport) throw new Error("sandboxSupport is required");
-
-  function mergedConfig(cfg = null) {
-    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
-  }
-
-  function normalizeProvider(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === GLUE_PROVIDER) return GLUE_PROVIDER;
-    if (raw === "local_legacy") throw new Error("workflow sandbox autofix local_legacy provider has been retired; use glue_http");
-    return "";
-  }
-
-  function resolveProvider(cfg = null) {
-    const merged = mergedConfig(cfg);
-    const explicit = normalizeProvider(merged.workflowSandboxAutoFixProvider || env.AIWF_WORKFLOW_SANDBOX_AUTOFIX_PROVIDER);
-    if (explicit) return explicit;
-    return GLUE_PROVIDER;
-  }
-
-  function resolveGlueUrl(cfg = null) {
-    return governance.resolveGlueUrl(cfg);
-  }
-
-  function headers(apiKey) {
-    const out = { "Content-Type": "application/json" };
-    const key = String(apiKey || "").trim();
-    if (key) out["X-API-Key"] = key;
-    return out;
-  }
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -79,32 +66,6 @@ function createWorkflowSandboxAutoFixStore(deps = {}) {
       run_id: String(source.run_id || "").trim(),
       node_id: String(source.node_id || "").trim(),
     };
-  }
-
-  async function parseResponse(resp) {
-    const text = await resp.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: false, error: text };
-    }
-  }
-
-  async function remoteRequest(method, route, body = null, cfg = null) {
-    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for glue provider");
-    const merged = mergedConfig(cfg);
-    const url = `${resolveGlueUrl(merged)}${route}`;
-    const resp = await fetchImpl(url, {
-      method,
-      headers: headers(merged.apiKey),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const payload = await parseResponse(resp);
-    if (!resp.ok || payload?.ok === false) {
-      throw new Error(String(payload?.error || `sandbox autofix ${method} failed: http ${resp.status}`));
-    }
-    return payload;
   }
 
   async function remoteGetState(cfg = null) {
@@ -149,14 +110,22 @@ function createWorkflowSandboxAutoFixStore(deps = {}) {
   }
 
   async function persistStateMirror(state, cfg = null) {
-    const provider = resolveProvider(cfg);
-    if (provider !== GLUE_PROVIDER) return { ok: true, provider };
-    return await remoteSaveState(state, cfg);
+    try {
+      const provider = resolveProvider(cfg);
+      if (provider !== GLUE_PROVIDER) return { ok: true, provider };
+      return await remoteSaveState(state, cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function getState(cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteGetState(cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteGetState(cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   async function applyPayload(payload = {}, cfg = null) {
@@ -176,8 +145,12 @@ function createWorkflowSandboxAutoFixStore(deps = {}) {
   }
 
   async function listActions(limit = 100, cfg = null) {
-    _ = resolveProvider(cfg);
-    return remoteListActions(limit, cfg);
+    try {
+      _ = resolveProvider(cfg);
+      return await remoteListActions(limit, cfg);
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   }
 
   return {

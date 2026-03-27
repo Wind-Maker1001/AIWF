@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   GLUE_PROVIDER,
+  compareVersionItems,
   createWorkflowVersionStore,
 } = require("../workflow_version_store");
 const {
@@ -123,4 +124,74 @@ test("workflow version store uses glue provider for backend-owned snapshots", as
 
   const compared = await store.compareVersions("ver_a", "ver_b", { mode: "base_api" });
   assert.equal(compared.summary.changed_nodes, 1);
+});
+
+test("workflow version store preserves structured remote record failure details", async () => {
+  const store = createWorkflowVersionStore({
+    loadConfig: () => ({ mode: "base_api", glueUrl: "http://127.0.0.1:18081" }),
+    fetchImpl: async (url) => {
+      if (url.endsWith("/governance/meta/control-plane")) {
+        return governanceBoundaryResponse("workflow_versions", "/governance/workflow-versions");
+      }
+      return jsonResponse(400, {
+        ok: false,
+        error: "workflow graph invalid: workflow contains unregistered node types: unknown_future_node",
+        error_code: "workflow_graph_invalid",
+        error_items: [{
+          path: "workflow.nodes",
+          code: "unknown_node_type",
+          message: "workflow contains unregistered node types: unknown_future_node",
+        }],
+      });
+    },
+  });
+
+  const saved = await store.recordVersion(makeVersion("ver_remote_fail", graphA()), { mode: "base_api" });
+
+  assert.equal(saved.ok, false);
+  assert.equal(saved.error_code, "workflow_graph_invalid");
+  assert.ok(Array.isArray(saved.error_items));
+  assert.ok(saved.error_items.some((item) => item.path === "workflow.nodes" && item.code === "unknown_node_type"));
+});
+
+test("workflow version compare helper detects nested config changes", () => {
+  const compared = compareVersionItems(
+    makeVersion("ver_a", {
+      workflow_id: "wf_finance",
+      version: "workflow.v1",
+      nodes: [{
+        id: "n1",
+        type: "plugin_registry_v1",
+        config: {
+          op: "register",
+          manifest: {
+            command: "alpha",
+            enabled: true,
+          },
+        },
+      }],
+      edges: [],
+    }),
+    makeVersion("ver_b", {
+      workflow_id: "wf_finance",
+      version: "workflow.v1",
+      nodes: [{
+        id: "n1",
+        type: "plugin_registry_v1",
+        config: {
+          op: "register",
+          manifest: {
+            command: "beta",
+            enabled: true,
+          },
+        },
+      }],
+      edges: [],
+    }),
+  );
+
+  assert.equal(compared.summary.changed_nodes, 1);
+  assert.equal(compared.node_diff.length, 1);
+  assert.equal(compared.node_diff[0].change, "updated");
+  assert.equal(compared.node_diff[0].config_changed, true);
 });

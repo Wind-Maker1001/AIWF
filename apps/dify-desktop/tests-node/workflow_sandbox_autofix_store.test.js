@@ -111,11 +111,10 @@ test("workflow sandbox autofix store rejects retired local legacy provider", asy
     },
   });
 
-  await assert.rejects(
-    () => store.getState({
-      mode: "offline_local",
-      workflowSandboxAutoFixProvider: "local_legacy",
-    }),
-    /retired/i
-  );
+  const out = await store.getState({
+    mode: "offline_local",
+    workflowSandboxAutoFixProvider: "local_legacy",
+  });
+  assert.equal(out.ok, false);
+  assert.match(String(out.error || ""), /retired/i);
 });

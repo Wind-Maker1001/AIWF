@@ -1,7 +1,13 @@
 const GLUE_PROVIDER = "glue_http";
 const WORKFLOW_VERSION_SCHEMA_VERSION = "workflow_version_snapshot.v1";
-const GLUE_DEFAULT_URL = "http://127.0.0.1:18081";
-const { createGovernanceControlPlaneSupport, GOVERNANCE_CAPABILITIES } = require("./workflow_governance");
+const {
+  createGovernanceGlueStoreSupport,
+  GOVERNANCE_CAPABILITIES,
+  GOVERNANCE_DEFAULT_GLUE_URL,
+} = require("./workflow_governance");
+const {
+  workflowStoreRemoteErrorResult,
+} = require("./workflow_store_remote_error");
 
 function createWorkflowVersionStore(deps = {}) {
   const {
@@ -9,39 +15,37 @@ function createWorkflowVersionStore(deps = {}) {
     fetchImpl = typeof fetch === "function" ? fetch : null,
     env = process.env,
   } = deps;
-  const governance = createGovernanceControlPlaneSupport({ loadConfig, fetchImpl, env, defaultGlueUrl: GLUE_DEFAULT_URL });
+  const {
+    governance,
+    resolveGlueUrl,
+    resolveProvider,
+    remoteRequest,
+  } = createGovernanceGlueStoreSupport({
+    loadConfig,
+    fetchImpl,
+    env,
+    defaultGlueUrl: GOVERNANCE_DEFAULT_GLUE_URL,
+    providerConfigKey: "workflowVersionProvider",
+    providerEnvKey: "AIWF_WORKFLOW_VERSION_PROVIDER",
+    providerLabel: "workflow version",
+  });
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
 
-  function mergedConfig(cfg = null) {
-    return { ...loadConfig(), ...(cfg && typeof cfg === "object" ? cfg : {}) };
+  function stableCloneForCompare(value) {
+    if (Array.isArray(value)) return value.map((item) => stableCloneForCompare(item));
+    if (!value || typeof value !== "object") return value;
+    const output = {};
+    Object.keys(value).sort().forEach((key) => {
+      output[key] = stableCloneForCompare(value[key]);
+    });
+    return output;
   }
 
-  function normalizeProvider(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    if (raw === GLUE_PROVIDER) return GLUE_PROVIDER;
-    if (raw === "local_legacy") throw new Error("workflow version local_legacy provider has been retired; use glue_http");
-    return "";
-  }
-
-  function resolveProvider(cfg = null) {
-    const merged = mergedConfig(cfg);
-    const explicit = normalizeProvider(merged.workflowVersionProvider || env.AIWF_WORKFLOW_VERSION_PROVIDER);
-    if (explicit) return explicit;
-    return GLUE_PROVIDER;
-  }
-
-  function resolveGlueUrl(cfg = null) {
-    return governance.resolveGlueUrl(cfg);
-  }
-
-  function headers(apiKey) {
-    const out = { "Content-Type": "application/json" };
-    const key = String(apiKey || "").trim();
-    if (key) out["X-API-Key"] = key;
-    return out;
+  function stableStringifyForCompare(value) {
+    return JSON.stringify(stableCloneForCompare(value));
   }
 
   function normalizeVersionItem(item, provider, existing = null) {
@@ -89,8 +93,8 @@ function createWorkflowVersionStore(deps = {}) {
       if (!nodeA) return { id, change: "added", type_a: "", type_b: String(nodeB?.type || "") };
       if (!nodeB) return { id, change: "removed", type_a: String(nodeA?.type || ""), type_b: "" };
       const typeChanged = String(nodeA?.type || "") !== String(nodeB?.type || "");
-      const configChanged = JSON.stringify(nodeA?.config || {}, Object.keys(nodeA?.config || {}).sort())
-        !== JSON.stringify(nodeB?.config || {}, Object.keys(nodeB?.config || {}).sort());
+      const configChanged = stableStringifyForCompare(nodeA?.config || {})
+        !== stableStringifyForCompare(nodeB?.config || {});
       return {
         id,
         change: typeChanged || configChanged ? "updated" : "same",
@@ -123,32 +127,6 @@ function createWorkflowVersionStore(deps = {}) {
       added_edges: addedEdges,
       removed_edges: removedEdges,
     };
-  }
-
-  async function parseResponse(resp) {
-    const text = await resp.text();
-    if (!text) return {};
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { ok: false, error: text };
-    }
-  }
-
-  async function remoteRequest(method, route, body = null, cfg = null) {
-    if (typeof fetchImpl !== "function") throw new Error("fetch is not available for glue provider");
-    const merged = mergedConfig(cfg);
-    const url = `${resolveGlueUrl(merged)}${route}`;
-    const resp = await fetchImpl(url, {
-      method,
-      headers: headers(merged.apiKey),
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    const payload = await parseResponse(resp);
-    if (!resp.ok || payload?.ok === false) {
-      throw new Error(String(payload?.error || `workflow version ${method} failed: http ${resp.status}`));
-    }
-    return payload;
   }
 
   async function remoteListVersions(limit = 200, workflowName = "", cfg = null) {
@@ -222,7 +200,7 @@ function createWorkflowVersionStore(deps = {}) {
       _ = resolveProvider(cfg);
       return await remoteRecordVersion(item, cfg);
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 
@@ -231,7 +209,7 @@ function createWorkflowVersionStore(deps = {}) {
       _ = resolveProvider(cfg);
       return await remoteListVersions(limit, workflowName, cfg);
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 
@@ -245,11 +223,12 @@ function createWorkflowVersionStore(deps = {}) {
       _ = resolveProvider(cfg);
       return await remoteCompareVersions(versionA, versionB, cfg);
     } catch (error) {
-      return { ok: false, error: String(error) };
+      return workflowStoreRemoteErrorResult(error);
     }
   }
 
   return {
+    compareVersionItems,
     compareVersions,
     getVersion,
     listVersions,
@@ -262,5 +241,9 @@ function createWorkflowVersionStore(deps = {}) {
 module.exports = {
   GLUE_PROVIDER,
   WORKFLOW_VERSION_SCHEMA_VERSION,
+  compareVersionItems: (itemA, itemB) => {
+    const store = createWorkflowVersionStore({});
+    return store.compareVersionItems(itemA, itemB);
+  },
   createWorkflowVersionStore,
 };

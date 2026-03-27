@@ -122,3 +122,34 @@ test("workflow quality rule store rejects retired local legacy provider", async 
   assert.equal(saved.ok, false);
   assert.match(String(saved.error || ""), /retired/i);
 });
+
+test("workflow quality rule store preserves structured remote failure details", async () => {
+  const support = createWorkflowQualityRuleSetSupport({
+    loadConfig: () => ({ mode: "base_api", glueUrl: "http://127.0.0.1:18081" }),
+    fetchImpl: async (url) => {
+      if (url.endsWith("/governance/meta/control-plane")) {
+        return governanceBoundaryResponse("quality_rule_sets", "/governance/quality-rule-sets");
+      }
+      return jsonResponse(400, {
+        ok: false,
+        error: "quality rule set id must match ^[a-z0-9][a-z0-9_-]{1,79}$",
+        error_code: "governance_validation_invalid",
+        error_scope: "quality_rule_set",
+        error_item_contract: "contracts/desktop/node_config_validation_errors.v1.json",
+        error_items: [{
+          path: "set.id",
+          code: "validation_error",
+          message: "set.id must match ^[a-z0-9][a-z0-9_-]{1,79}$",
+        }],
+      });
+    },
+  });
+
+  const listed = await support.listQualityRuleSets({ mode: "base_api" });
+
+  assert.equal(listed.ok, false);
+  assert.equal(listed.error_code, "governance_validation_invalid");
+  assert.equal(listed.error_scope, "quality_rule_set");
+  assert.ok(Array.isArray(listed.error_items));
+  assert.ok(listed.error_items.some((item) => item.path === "set.id"));
+});

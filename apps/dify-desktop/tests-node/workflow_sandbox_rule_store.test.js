@@ -154,11 +154,10 @@ test("workflow sandbox rule store rejects retired local legacy provider", async 
     sandboxSupport,
   });
 
-  await assert.rejects(
-    () => store.getRules({
-      mode: "offline_local",
-      workflowSandboxRuleProvider: "local_legacy",
-    }),
-    /retired/i
-  );
+  const out = await store.getRules({
+    mode: "offline_local",
+    workflowSandboxRuleProvider: "local_legacy",
+  });
+  assert.equal(out.ok, false);
+  assert.match(String(out.error || ""), /retired/i);
 });
