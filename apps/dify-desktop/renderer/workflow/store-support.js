@@ -35,7 +35,7 @@ function normalizeImportedGraph(graph) {
 }
 
 function normalizeImportedGraphWithContract(graph) {
-  const contract = normalizeWorkflowContract(graph, { allowVersionMigration: true });
+  const contract = normalizeWorkflowContract(graph, { allowVersionMigration: true, skipNodeCatalogValidation: true });
   if (!contract.ok) throw createWorkflowContractError(contract.errors);
   assertRegisteredWorkflowNodeTypes(contract.graph, { stage: "import" });
 

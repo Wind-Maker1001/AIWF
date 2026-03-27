@@ -1,9 +1,11 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 function normalizeTimelineRunId(value) {
   return String(value || "").trim();
 }
 
 function timelineStatusMessage(out) {
-  return out?.ok ? "时间线刷新完成" : `时间线刷新失败: ${out?.error || "unknown"}`;
+  return out?.ok ? "时间线刷新完成" : `时间线刷新失败: ${formatAiwfError(out)}`;
 }
 
 function failureSummaryRequestPayload(limit = 500) {

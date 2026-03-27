@@ -146,3 +146,148 @@ test("workflow panels ui routes quality_blocked runs to quality gate instead of 
     assert.equal(statuses.length, 1);
   });
 });
+
+test("workflow panels ui formats structured replay failure in run history", async () => {
+  const { createWorkflowPanelsUi } = await loadPanelsUiModule();
+  await withFakeDocument(async () => {
+    const runHistoryRows = new FakeElement("tbody");
+    const statuses = [];
+    const prevWindow = global.window;
+    global.window = {
+      aiwfDesktop: {
+        replayWorkflowRun: async () => ({
+          ok: false,
+          error: "workflow contract invalid: workflow.version is required",
+          error_items: [{ path: "workflow.version", code: "required", message: "workflow.version is required" }],
+        }),
+      },
+    };
+    try {
+      const ui = createWorkflowPanelsUi({ runHistoryRows, log: { textContent: "" } }, {
+        setStatus: (text, ok) => statuses.push({ text, ok }),
+      });
+      ui.renderRunHistoryRows([
+        { run_id: "run_failed", status: "failed", result: { node_runs: [{ id: "n1", type: "ingest_files", status: "failed" }] } },
+      ]);
+      const row = runHistoryRows.children[0];
+      const retryFailedBtn = row.children[2].children[3];
+      await retryFailedBtn.onclick();
+    } finally {
+      if (typeof prevWindow === "undefined") delete global.window;
+      else global.window = prevWindow;
+    }
+    assert.deepEqual(statuses, [
+      { text: "失败节点重试失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。", ok: false },
+    ]);
+  });
+});
+
+test("workflow panels ui formats structured review failure", async () => {
+  const { createWorkflowPanelsUi } = await loadPanelsUiModule();
+  await withFakeDocument(async () => {
+    const reviewRows = new FakeElement("tbody");
+    const statuses = [];
+    const prevWindow = global.window;
+    const prevPrompt = global.prompt;
+    global.prompt = () => "";
+    global.window = {
+      aiwfDesktop: {
+        submitManualReview: async () => ({
+          ok: false,
+          error: "workflow contract invalid: workflow.version is required",
+          error_items: [{ path: "workflow.version", code: "required", message: "workflow.version is required" }],
+        }),
+      },
+    };
+    try {
+      const ui = createWorkflowPanelsUi({ reviewRows, log: { textContent: "" } }, {
+        setStatus: (text, ok) => statuses.push({ text, ok }),
+      });
+      ui.renderReviewRows([
+        { run_id: "run_review", review_key: "gate_a", status: "pending", reviewer: "reviewer" },
+      ]);
+      const row = reviewRows.children[0];
+      const approveBtn = row.children[2].children[0];
+      await approveBtn.onclick();
+    } finally {
+      if (typeof prevWindow === "undefined") delete global.window;
+      else global.window = prevWindow;
+      if (typeof prevPrompt === "undefined") delete global.prompt;
+      else global.prompt = prevPrompt;
+    }
+    assert.deepEqual(statuses, [
+      { text: "审核失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。", ok: false },
+    ]);
+  });
+});
+
+test("workflow panels ui formats structured sandbox failure", async () => {
+  const { createWorkflowPanelsUi } = await loadPanelsUiModule();
+  await withFakeDocument(async () => {
+    const sandboxRows = new FakeElement("tbody");
+    const statuses = [];
+    const prevWindow = global.window;
+    global.window = {
+      aiwfDesktop: {
+        muteWorkflowSandboxAlert: async () => ({
+          ok: false,
+          error_code: "workflow_load_invalid_json",
+          error: "Unexpected token",
+        }),
+      },
+    };
+    try {
+      const ui = createWorkflowPanelsUi({ sandboxRows }, {
+        setStatus: (text, ok) => statuses.push({ text, ok }),
+      });
+      ui.renderSandboxRows({
+        by_node: [{ node_type: "clean_md", node_id: "n1", count: 1, last_run_id: "run_1" }],
+        health: {},
+      });
+      const row = sandboxRows.children[0];
+      const muteBtn = row.children[3].children[0];
+      await muteBtn.onclick();
+    } finally {
+      if (typeof prevWindow === "undefined") delete global.window;
+      else global.window = prevWindow;
+    }
+    assert.deepEqual(statuses, [
+      { text: "静默失败: [workflow_load_invalid_json] 无法解析流程 JSON，请检查文件是否损坏或格式不正确。", ok: false },
+    ]);
+  });
+});
+
+test("workflow panels ui formats structured queue failure", async () => {
+  const { createWorkflowPanelsUi } = await loadPanelsUiModule();
+  await withFakeDocument(async () => {
+    const queueRows = new FakeElement("tbody");
+    const statuses = [];
+    const prevWindow = global.window;
+    global.window = {
+      aiwfDesktop: {
+        cancelWorkflowTask: async () => ({
+          ok: false,
+          error: "workflow contract invalid: workflow.version is required",
+          error_items: [{ path: "workflow.version", code: "required", message: "workflow.version is required" }],
+        }),
+      },
+    };
+    try {
+      const ui = createWorkflowPanelsUi({ queueRows }, {
+        setStatus: (text, ok) => statuses.push({ text, ok }),
+      });
+      ui.renderQueueRows([
+        { task_id: "task_1", label: "demo", status: "queued" },
+      ]);
+      const row = queueRows.children[0];
+      const cancelBtn = row.children[2].children[0];
+      await cancelBtn.onclick();
+    } finally {
+      if (typeof prevWindow === "undefined") delete global.window;
+      else global.window = prevWindow;
+    }
+    assert.deepEqual(statuses, [
+      { text: "取消失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。", ok: false },
+    ]);
+  });
+});

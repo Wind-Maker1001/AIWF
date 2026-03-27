@@ -45,6 +45,9 @@ function createWorkflowPreflightUi(els, deps = {}) {
     const level = String(issue.level || "warning").trim().toLowerCase();
     const nodeId = String(issue.node_id || "").trim();
     const originalMessage = String(issue.message || "").trim();
+    const errorCode = String(issue.error_code || "").trim();
+    const errorPath = String(issue.error_path || "").trim();
+    const errorContract = String(issue.error_contract || "").trim();
     const contractBoundary = String(issue.contract_boundary || "").trim();
     const resolutionHint = String(issue.resolution_hint || "").trim();
     const actionTextFromIssue = String(issue.action_text || "").trim();
@@ -53,6 +56,7 @@ function createWorkflowPreflightUi(els, deps = {}) {
         level,
         kind,
         nodeId,
+        displayType: errorCode || kind,
         message: [
           "发现未注册节点类型。",
           "该节点不在当前桌面节点目录内，主路径已禁止导入、添加和运行。",
@@ -63,10 +67,26 @@ function createWorkflowPreflightUi(els, deps = {}) {
         actionText: nodeId ? (actionTextFromIssue || "定位节点") : "同步目录或替换节点类型",
       };
     }
+    if (kind === "graph_contract") {
+      return {
+        level,
+        kind,
+        nodeId,
+        displayType: errorCode || kind,
+        message: [
+          originalMessage,
+          errorPath ? `路径: ${errorPath}.` : "",
+          errorContract ? `契约: ${errorContract}.` : "",
+          resolutionHint ? `处理方式: ${resolutionHint}.` : "",
+        ].filter(Boolean).join(" "),
+        actionText: nodeId ? (actionTextFromIssue || "定位节点") : "-",
+      };
+    }
     return {
       level,
       kind,
       nodeId,
+      displayType: errorCode || kind,
       message: originalMessage,
       actionText: nodeId ? (actionTextFromIssue || "定位节点") : "-",
     };
@@ -102,7 +122,7 @@ function createWorkflowPreflightUi(els, deps = {}) {
       const tdAct = createElement("td");
       tdLevel.textContent = normalized.level === "error" ? "错误" : "警告";
       tdLevel.style.color = normalized.level === "error" ? "#b42318" : "#7a4a00";
-      tdType.textContent = normalized.kind || "";
+      tdType.textContent = normalized.displayType || normalized.kind || "";
       tdMsg.textContent = normalized.message || "";
       if (normalized.nodeId) {
         const btn = createElement("button");

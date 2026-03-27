@@ -1,3 +1,5 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 function createWorkflowSupportReviewHistory(els, deps = {}) {
   const { setStatus = () => {} } = deps;
 
@@ -54,12 +56,12 @@ function createWorkflowSupportReviewHistory(els, deps = {}) {
         filter: reviewHistoryFilterPayload(),
       });
       if (!out?.ok) {
-        if (!out?.canceled) setStatus(`导出审核历史失败: ${out?.error || "unknown"}`, false);
+        if (!out?.canceled) setStatus(`导出审核历史失败: ${formatAiwfError(out)}`, false);
         return;
       }
       setStatus(`审核历史已导出: ${out.path} (${out.total} 条)`, true);
     } catch (error) {
-      setStatus(`导出审核历史失败: ${error}`, false);
+      setStatus(`导出审核历史失败: ${formatAiwfError(error)}`, false);
     }
   }
 

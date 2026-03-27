@@ -4,7 +4,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
 async function loadAppServicesSupportModule() {
-  const file = pathToFileURL(path.resolve(__dirname, "../renderer/workflow/app-services-support.js")).href;
+  const file = pathToFileURL(path.resolve(__dirname, "../renderer/workflow/app-services.js")).href;
   return import(file);
 }
 

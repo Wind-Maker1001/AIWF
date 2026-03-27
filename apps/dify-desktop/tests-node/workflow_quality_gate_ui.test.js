@@ -93,3 +93,40 @@ test("workflow quality gate ui refreshes and exports reports", async () => {
   assert.deepEqual(rows, [[{ run_id: "run_abc" }]]);
   assert.deepEqual(statuses, [{ text: "质量门禁报告已导出: D:/exports/quality-gate.json", ok: true }]);
 });
+
+test("workflow quality gate ui formats structured export failure", async () => {
+  const { createWorkflowQualityGateUi } = await loadQualityGateUiModule();
+  const statuses = [];
+  global.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+  };
+  global.window = {
+    aiwfDesktop: {
+      exportWorkflowQualityGateReports: async () => ({
+        ok: false,
+        error: "workflow contract invalid: workflow.version is required",
+        error_items: [{ path: "workflow.version", code: "required", message: "workflow.version is required" }],
+      }),
+    },
+  };
+
+  try {
+    const ui = createWorkflowQualityGateUi({
+      qualityGateExportFormat: { value: "json" },
+    }, {
+      setStatus: (text, ok) => statuses.push({ text, ok }),
+      qualityGatePrefsPayload: () => ({ filter: {}, format: "json" }),
+      qualityGateFilterPayload: () => ({}),
+    });
+    await ui.exportQualityGateReports();
+  } finally {
+    delete global.localStorage;
+    delete global.window;
+  }
+
+  assert.deepEqual(statuses, [{
+    text: "导出质量门禁失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。",
+    ok: false,
+  }]);
+});

@@ -3,6 +3,7 @@ import {
   versionComparePayload,
   versionListRequestPayload,
 } from "./version-cache-support.js";
+import { formatAiwfError } from "./workflow-contract.js";
 
 function createWorkflowVersionCacheUi(els, deps = {}) {
   const {
@@ -29,7 +30,7 @@ function createWorkflowVersionCacheUi(els, deps = {}) {
     }
     const out = await window.aiwfDesktop.compareWorkflowVersions(payload);
     renderVersionCompare(out);
-    setStatus(out?.ok ? "版本对比完成" : `版本对比失败: ${out?.error || "unknown"}`, !!out?.ok);
+    setStatus(out?.ok ? "版本对比完成" : `版本对比失败: ${formatAiwfError(out)}`, !!out?.ok);
   }
 
   async function refreshCacheStats() {

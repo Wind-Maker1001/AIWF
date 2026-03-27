@@ -1,8 +1,10 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 function createWorkflowSupportRunCompareRenderer(els) {
   function renderCompareResult(out) {
     if (!els.compareSummary || !els.compareRows) return;
     if (!out?.ok) {
-      els.compareSummary.textContent = `瀵规瘮澶辫触: ${out?.error || "unknown"}`;
+      els.compareSummary.textContent = `瀵规瘮澶辫触: ${formatAiwfError(out)}`;
       els.compareRows.innerHTML = '<tr><td colspan="5" style="color:#74879b">鏆傛棤</td></tr>';
       return;
     }

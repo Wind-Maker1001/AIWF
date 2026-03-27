@@ -80,3 +80,44 @@ test("workflow preflight ui renders unknown node type issues with contract guida
   row.children[3].children[0].onclick();
   assert.deepEqual(focusCalls, ["n_unknown"]);
 });
+
+test("workflow preflight ui renders graph contract issues with error code", async () => {
+  const { createWorkflowPreflightUi } = await loadPreflightUiModule();
+  const preflightRows = {
+    innerHTML: "",
+    children: [],
+    appendChild(node) {
+      this.children.push(node);
+    },
+  };
+  const ui = createWorkflowPreflightUi({
+    preflightSummary: { textContent: "", style: {} },
+    preflightRisk: { textContent: "", style: {} },
+    preflightRows,
+  }, {
+    createElement: createFakeElement,
+  });
+
+  ui.renderPreflightReport({
+    ok: false,
+    issues: [
+      {
+        level: "error",
+        kind: "graph_contract",
+        message: "workflow.version is required",
+        error_code: "required",
+        error_path: "workflow.version",
+        error_contract: "contracts/desktop/node_config_validation_errors.v1.json",
+        resolution_hint: "请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。",
+      },
+    ],
+  });
+
+  assert.equal(preflightRows.children.length, 1);
+  const row = preflightRows.children[0];
+  assert.equal(row.children[1].textContent, "required");
+  assert.match(row.children[2].textContent, /workflow\.version is required/);
+  assert.match(row.children[2].textContent, /workflow\.version/);
+  assert.match(row.children[2].textContent, /node_config_validation_errors\.v1\.json/);
+  assert.match(row.children[2].textContent, /请先把流程迁移到带顶层 version 的格式/);
+});

@@ -1,3 +1,5 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 import {
   buildQualityRuleSetOptions,
   collectQualityRulesFromGraph,
@@ -55,7 +57,7 @@ function createWorkflowQualityRuleSetUi(els, deps = {}) {
       await refreshQualityRuleSets();
       setStatus(`质量规则集已保存: ${id}`, true);
     } else {
-      setStatus(`保存规则集失败: ${out?.error || "unknown"}`, false);
+      setStatus(`保存规则集失败: ${formatAiwfError(out)}`, false);
     }
   }
 
@@ -71,7 +73,7 @@ function createWorkflowQualityRuleSetUi(els, deps = {}) {
       await refreshQualityRuleSets();
       setStatus(`质量规则集已删除: ${id}`, true);
     } else {
-      setStatus(`删除规则集失败: ${out?.error || "unknown"}`, false);
+      setStatus(`删除规则集失败: ${formatAiwfError(out)}`, false);
     }
   }
 

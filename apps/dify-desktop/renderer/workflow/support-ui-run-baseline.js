@@ -1,3 +1,5 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 function createWorkflowSupportRunBaseline(els, deps = {}) {
   const { setStatus = () => {} } = deps;
 
@@ -12,7 +14,7 @@ function createWorkflowSupportRunBaseline(els, deps = {}) {
       name: `baseline_${runA.slice(0, 8)}`,
     });
     if (out?.ok) setStatus(`基线已保存: ${out?.item?.baseline_id}`, true);
-    else setStatus(`保存基线失败: ${out?.error || "unknown"}`, false);
+    else setStatus(`保存基线失败: ${formatAiwfError(out)}`, false);
   }
 
   async function compareWithLatestBaseline() {
@@ -32,7 +34,7 @@ function createWorkflowSupportRunBaseline(els, deps = {}) {
       baseline_id: first.baseline_id,
     });
     if (!out?.ok) {
-      setStatus(`基线对比失败: ${out?.error || "unknown"}`, false);
+      setStatus(`基线对比失败: ${formatAiwfError(out)}`, false);
       return;
     }
     const regression = out.regression || {};
@@ -50,7 +52,7 @@ function createWorkflowSupportRunBaseline(els, deps = {}) {
     }
     const out = await window.aiwfDesktop.getWorkflowLineage({ run_id: runId });
     if (!out?.ok) {
-      setStatus(`加载血缘失败: ${out?.error || "unknown"}`, false);
+      setStatus(`加载血缘失败: ${formatAiwfError(out)}`, false);
       return;
     }
     const lineage = out.lineage || {};

@@ -1,3 +1,4 @@
+import { formatAiwfError } from "./workflow-contract.js";
 import { createWorkflowSupportRunBaseline } from "./support-ui-run-baseline.js";
 import { createWorkflowSupportRunCompareRenderer } from "./support-ui-run-compare-renderer.js";
 
@@ -21,7 +22,7 @@ function createWorkflowSupportRunCompare(els, deps = {}) {
     setLastCompareResult(out);
     els.log.textContent = JSON.stringify(out, null, 2);
     renderer.renderCompareResult(out);
-    setStatus(out?.ok ? "杩愯瀵规瘮瀹屾垚" : `杩愯瀵规瘮澶辫触: ${out?.error || "unknown"}`, !!out?.ok);
+    setStatus(out?.ok ? "杩愯瀵规瘮瀹屾垚" : `杩愯瀵规瘮澶辫触: ${formatAiwfError(out)}`, !!out?.ok);
   }
 
   async function exportCompareReport() {
@@ -35,7 +36,7 @@ function createWorkflowSupportRunCompare(els, deps = {}) {
       const format = String(els.compareReportFormat?.value || "md").trim() || "md";
       const out = await window.aiwfDesktop.exportCompareReport({ run_a: runA, run_b: runB, format });
       if (!out?.ok) {
-        if (!out?.canceled) setStatus(`瀵煎嚭瀵规瘮鎶ュ憡澶辫触: ${out?.error || "unknown"}`, false);
+        if (!out?.canceled) setStatus(`瀵煎嚭瀵规瘮鎶ュ憡澶辫触: ${formatAiwfError(out)}`, false);
         return;
       }
       setStatus(`瀵规瘮鎶ュ憡宸插鍑? ${out.path}`, true);

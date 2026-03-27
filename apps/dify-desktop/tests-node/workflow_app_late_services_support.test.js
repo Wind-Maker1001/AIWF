@@ -3,18 +3,14 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
-async function loadLateSupportModule() {
-  const file = pathToFileURL(path.resolve(__dirname, "../renderer/workflow/app-late-services-support.js")).href;
-  return import(file);
-}
-
 test("workflow late services support builds scoped dependency bags", async () => {
+  const file = pathToFileURL(path.resolve(__dirname, "../renderer/workflow/app-late-services.js")).href;
   const {
     buildFlowIoDeps,
     buildPaletteUiDeps,
     buildCanvasViewUiDeps,
     buildRunControllerUiDeps,
-  } = await loadLateSupportModule();
+  } = await import(file);
 
   const noop = () => {};
   const ctx = {

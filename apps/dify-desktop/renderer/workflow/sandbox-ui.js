@@ -6,6 +6,7 @@ import {
   sandboxPresetExportPayload,
   sandboxRulesPayload,
 } from "./sandbox-support.js";
+import { formatAiwfError } from "./workflow-contract.js";
 
 function createWorkflowSandboxUi(els, deps = {}) {
   const {
@@ -36,7 +37,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
       format: sandboxExportFormat(els.sandboxExportFormat?.value || "md"),
     });
     if (!out?.ok) {
-      if (!out?.canceled) setStatus(`导出 Sandbox 报告失败: ${out?.error || "unknown"}`, false);
+      if (!out?.canceled) setStatus(`导出 Sandbox 报告失败: ${formatAiwfError(out)}`, false);
       return;
     }
     setStatus(`Sandbox 报告已导出: ${out.path}`, true);
@@ -45,7 +46,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
   async function loadSandboxRules() {
     const out = await window.aiwfDesktop.getWorkflowSandboxAlertRules();
     if (!out?.ok) {
-      setStatus(`加载 Sandbox 规则失败: ${out?.error || "unknown"}`, false);
+      setStatus(`加载 Sandbox 规则失败: ${formatAiwfError(out)}`, false);
       return;
     }
     applySandboxRulesToUi(out.rules || {});
@@ -62,7 +63,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
       sandboxRulesPayload(sandboxRulesPayloadFromUi())
     );
     if (!out?.ok) {
-      setStatus(`保存 Sandbox 规则失败: ${out?.error || "unknown"}`, false);
+      setStatus(`保存 Sandbox 规则失败: ${formatAiwfError(out)}`, false);
       return;
     }
     applySandboxRulesToUi(out.rules || {});
@@ -78,7 +79,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
       sandboxRulesPayload(sandboxRulesPayloadFromUi())
     );
     if (!out?.ok) {
-      setStatus(`应用预设失败: ${out?.error || "unknown"}`, false);
+      setStatus(`应用预设失败: ${formatAiwfError(out)}`, false);
       return;
     }
     applySandboxRulesToUi(out.rules || {});
@@ -90,7 +91,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
   async function applySandboxMute() {
     const out = await window.aiwfDesktop.muteWorkflowSandboxAlert(sandboxMutePayload(els));
     if (!out?.ok) {
-      setStatus(`应用静默失败: ${out?.error || "unknown"}`, false);
+      setStatus(`应用静默失败: ${formatAiwfError(out)}`, false);
       return;
     }
     setStatus(`已静默: ${out.key} 到 ${out.mute_until}`, true);
@@ -103,7 +104,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
       sandboxPresetExportPayload(currentSandboxPresetPayload())
     );
     if (!out?.ok) {
-      if (!out?.canceled) setStatus(`导出预设失败: ${out?.error || "unknown"}`, false);
+      if (!out?.canceled) setStatus(`导出预设失败: ${formatAiwfError(out)}`, false);
       return;
     }
     setStatus(`已导出预设: ${out.path}`, true);
@@ -112,7 +113,7 @@ function createWorkflowSandboxUi(els, deps = {}) {
   async function importSandboxPreset() {
     const out = await window.aiwfDesktop.importWorkflowSandboxPreset({});
     if (!out?.ok) {
-      if (!out?.canceled) setStatus(`导入预设失败: ${out?.error || "unknown"}`, false);
+      if (!out?.canceled) setStatus(`导入预设失败: ${formatAiwfError(out)}`, false);
       return;
     }
     applySandboxPresetPayload(out.preset || {});

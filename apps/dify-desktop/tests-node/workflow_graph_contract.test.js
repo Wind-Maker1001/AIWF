@@ -21,6 +21,8 @@ test("main workflow graph normalization carries version and reports migration", 
   });
   assert.equal(invalid.ok, false);
   assert.match(invalid.errors.join(" | "), /workflow\.version is required/);
+  assert.ok(Array.isArray(invalid.error_items));
+  assert.ok(invalid.error_items.some((item) => item.path === "workflow.version" && item.code === "required"));
 
   const unknownType = workflowGraph.validateGraph({
     workflow_id: "wf_unknown_type_contract",
@@ -30,4 +32,5 @@ test("main workflow graph normalization carries version and reports migration", 
   });
   assert.equal(unknownType.ok, false);
   assert.match(unknownType.errors.join(" | "), /unregistered node types/i);
+  assert.ok(unknownType.error_items.some((item) => item.code === "unknown_node_type"));
 });

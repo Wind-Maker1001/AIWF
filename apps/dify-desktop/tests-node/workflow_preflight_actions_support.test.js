@@ -50,3 +50,47 @@ test("workflow preflight actions support builds acceptance report", async () => 
     after: { ok: true },
   });
 });
+
+test("workflow report support builds versioned preflight report envelope", async () => {
+  const { createWorkflowReportSupport } = require("../workflow_ipc_reports");
+  const support = createWorkflowReportSupport({
+    deepClone: (value) => JSON.parse(JSON.stringify(value)),
+  });
+
+  const envelope = support.buildPreflightReportEnvelope({
+    ok: false,
+    ts: "2026-03-19T00:00:00.000Z",
+    risk: { score: 32, label: "medium" },
+    issues: [
+      {
+        level: "error",
+        kind: "graph_contract",
+        message: "workflow.version is required",
+        error_code: "required",
+        error_path: "workflow.version",
+        error_contract: "contracts/desktop/node_config_validation_errors.v1.json",
+      },
+    ],
+  });
+
+  assert.deepEqual(envelope, {
+    schema_version: "workflow_preflight_report_export.v1",
+    authority: "contracts/desktop/preflight_report_contract.v1.json",
+    report: {
+      schema_version: "workflow_preflight_report.v1",
+      ok: false,
+      ts: "2026-03-19T00:00:00.000Z",
+      risk: { score: 32, label: "medium" },
+      issues: [
+        {
+          level: "error",
+          kind: "graph_contract",
+          message: "workflow.version is required",
+          error_code: "required",
+          error_path: "workflow.version",
+          error_contract: "contracts/desktop/node_config_validation_errors.v1.json",
+        },
+      ],
+    },
+  });
+});

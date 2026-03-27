@@ -1,3 +1,5 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 function createWorkflowPanelsAdminVersionRenderers(els, deps = {}) {
   const { setStatus = () => {} } = deps;
 
@@ -49,11 +51,15 @@ function createWorkflowPanelsAdminVersionRenderers(els, deps = {}) {
       restoreBtn.textContent = "恢复";
       restoreBtn.onclick = async () => {
         const out = await window.aiwfDesktop.restoreWorkflowVersion({ version_id: it.version_id });
-        if (out?.ok && out?.graph) {
+        if (!out?.ok || !out?.graph) {
+          setStatus(`恢复失败: ${formatAiwfError(out)}`, false);
+          return;
+        }
+        try {
           window.aiwfDesktop.__applyRestoredWorkflowGraph?.(out.graph);
           setStatus(`已恢复版本: ${String(it.version_id || "").slice(0, 8)}`, true);
-        } else {
-          setStatus(`恢复失败: ${out?.error || "unknown"}`, false);
+        } catch (error) {
+          setStatus(`恢复失败: ${formatAiwfError(error)}`, false);
         }
       };
       tdOp.append(restoreBtn);
@@ -65,7 +71,7 @@ function createWorkflowPanelsAdminVersionRenderers(els, deps = {}) {
   function renderVersionCompare(out) {
     if (!els.versionCompareSummary || !els.versionCompareRows) return;
     if (!out?.ok) {
-      els.versionCompareSummary.textContent = `版本对比失败: ${out?.error || "unknown"}`;
+      els.versionCompareSummary.textContent = `版本对比失败: ${formatAiwfError(out)}`;
       els.versionCompareRows.innerHTML = '<tr><td colspan="3" style="color:#74879b">暂无</td></tr>';
       return;
     }

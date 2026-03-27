@@ -1,3 +1,5 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 function createWorkflowPanelsGovernanceSandboxRenderers(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -36,7 +38,7 @@ function createWorkflowPanelsGovernanceSandboxRenderers(els, deps = {}) {
           minutes: 60,
         });
         if (!outMute?.ok) {
-          setStatus(`静默失败: ${outMute?.error || "unknown"}`, false);
+          setStatus(`静默失败: ${formatAiwfError(outMute)}`, false);
           return;
         }
         setStatus(`已静默 ${String(r.node_type || "")}/${String(r.node_id || "")} 60分钟`, true);
@@ -69,7 +71,7 @@ function createWorkflowPanelsGovernanceSandboxRenderers(els, deps = {}) {
       rollbackBtn.onclick = async () => {
         const out = await window.aiwfDesktop.rollbackWorkflowSandboxRuleVersion({ version_id: vid });
         if (!out?.ok) {
-          setStatus(`回滚规则失败: ${out?.error || "unknown"}`, false);
+          setStatus(`回滚规则失败: ${formatAiwfError(out)}`, false);
           return;
         }
         applySandboxRulesToUi(out.rules || {});

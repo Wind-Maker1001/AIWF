@@ -1,3 +1,5 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 function createWorkflowPanelsGovernanceReviewRenderers(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -5,6 +7,18 @@ function createWorkflowPanelsGovernanceReviewRenderers(els, deps = {}) {
     refreshReviewQueue = async () => {},
     refreshReviewHistory = async () => {},
   } = deps;
+
+  function reviewSubmitStatusText(out, approved) {
+    if (out?.ok) {
+      return approved ? "审核已批准并自动续跑" : "审核已驳回并自动续跑";
+    }
+    if (out?.review_saved && out?.resumed) {
+      return approved
+        ? `审核已批准，但自动续跑失败: ${formatAiwfError(out.resumed)}`
+        : `审核已驳回，但自动续跑失败: ${formatAiwfError(out.resumed)}`;
+    }
+    return `审核失败: ${formatAiwfError(out)}`;
+  }
 
   function renderQualityGateRows(items = []) {
     if (!els.qualityGateRows) return;
@@ -73,7 +87,7 @@ function createWorkflowPanelsGovernanceReviewRenderers(els, deps = {}) {
           auto_resume: true,
         });
         if (out?.resumed) els.log.textContent = JSON.stringify(out.resumed, null, 2);
-        setStatus(out?.ok ? "审核已批准并自动续跑" : `审核失败: ${out?.error || "unknown"}`, !!out?.ok);
+        setStatus(reviewSubmitStatusText(out, true), !!out?.ok);
         await refreshReviewQueue();
         await refreshRunHistory();
         await refreshReviewHistory();
@@ -94,7 +108,7 @@ function createWorkflowPanelsGovernanceReviewRenderers(els, deps = {}) {
           auto_resume: true,
         });
         if (out?.resumed) els.log.textContent = JSON.stringify(out.resumed, null, 2);
-        setStatus(out?.ok ? "审核已驳回并自动续跑" : `审核失败: ${out?.error || "unknown"}`, !!out?.ok);
+        setStatus(reviewSubmitStatusText(out, false), !!out?.ok);
         await refreshReviewQueue();
         await refreshRunHistory();
         await refreshReviewHistory();

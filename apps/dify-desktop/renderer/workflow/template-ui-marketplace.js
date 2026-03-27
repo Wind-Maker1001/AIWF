@@ -3,6 +3,7 @@ import {
   parseLocalTemplateStorageText,
   stringifyLocalTemplateStorage,
 } from "./template-storage-contract.js";
+import { formatAiwfError } from "./workflow-contract.js";
 
 function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
   const {
@@ -90,14 +91,14 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
   }
 
   async function installTemplatePack() {
-    const out = await window.aiwfDesktop.loadWorkflow();
+    const out = await window.aiwfDesktop.loadWorkflow({ validateGraphContract: false });
     if (!out?.ok || !out?.path) {
-      if (!out?.canceled) setStatus(`读取模板包失败: ${out?.error || "unknown"}`, false);
+      if (!out?.canceled) setStatus(`读取模板包失败: ${formatAiwfError(out)}`, false);
       return;
     }
     const ret = await window.aiwfDesktop.installTemplatePack({ path: out.path });
     if (!ret?.ok) {
-      setStatus(`安装模板包失败: ${ret?.error || "unknown"}`, false);
+      setStatus(`安装模板包失败: ${formatAiwfError(ret)}`, false);
       return;
     }
     await refreshTemplateMarketplace();
@@ -115,7 +116,7 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     }
     const out = await window.aiwfDesktop.removeTemplatePack({ id: packId });
     if (!out?.ok) {
-      setStatus(`移除模板包失败: ${out?.error || "unknown"}`, false);
+      setStatus(`移除模板包失败: ${formatAiwfError(out)}`, false);
       return;
     }
     await refreshTemplateMarketplace();
@@ -133,7 +134,7 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     }
     const out = await window.aiwfDesktop.exportTemplatePack({ id: packId });
     if (out?.ok) setStatus(`模板包已导出: ${out.path}`, true);
-    else if (!out?.canceled) setStatus(`导出模板包失败: ${out?.error || "unknown"}`, false);
+    else if (!out?.canceled) setStatus(`导出模板包失败: ${formatAiwfError(out)}`, false);
   }
 
   return {

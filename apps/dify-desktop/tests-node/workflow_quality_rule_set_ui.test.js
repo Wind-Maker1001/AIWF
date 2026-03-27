@@ -133,3 +133,34 @@ test("workflow quality rule set ui removes current set and syncs selected id", a
   assert.deepEqual(removals, ["set_b"]);
   assert.deepEqual(statuses, [{ text: "质量规则集已删除: set_b", ok: true }]);
 });
+
+test("workflow quality rule set ui formats structured save failure", async () => {
+  const { createWorkflowQualityRuleSetUi } = await loadQualityRuleSetUiModule();
+  const statuses = [];
+  global.window = {
+    aiwfDesktop: {
+      saveQualityRuleSet: async () => ({
+        ok: false,
+        error: "workflow contract invalid: workflow.version is required",
+        error_items: [{ path: "workflow.version", code: "required", message: "workflow.version is required" }],
+      }),
+    },
+  };
+
+  try {
+    const ui = createWorkflowQualityRuleSetUi({
+      qualityRuleSetId: { value: "finance-default" },
+    }, {
+      setStatus: (text, ok) => statuses.push({ text, ok }),
+      exportGraph: () => ({ nodes: [], edges: [] }),
+    });
+    await ui.saveQualityRuleSetFromGraph();
+  } finally {
+    delete global.window;
+  }
+
+  assert.deepEqual(statuses, [{
+    text: "保存规则集失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。",
+    ok: false,
+  }]);
+});

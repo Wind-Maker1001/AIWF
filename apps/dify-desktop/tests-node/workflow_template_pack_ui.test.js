@@ -32,7 +32,10 @@ test("workflow template ui installs template pack and refreshes template select"
       setItem: () => {},
     },
     aiwfDesktop: {
-      loadWorkflow: async () => ({ ok: true, path: "D:/packs/sample-template-pack.json" }),
+      loadWorkflow: async (opts) => {
+        assert.deepEqual(opts, { validateGraphContract: false });
+        return { ok: true, path: "D:/packs/sample-template-pack.json" };
+      },
       installTemplatePack: async (payload) => {
         assert.deepEqual(payload, { path: "D:/packs/sample-template-pack.json" });
         return { ok: true, item: { id: "pack_1", name: "Finance Pack" } };
@@ -150,4 +153,42 @@ test("workflow template ui guards template pack actions for non-pack templates",
     { text: "当前模板不是模板包来源，无法移除", ok: false },
     { text: "当前模板不是模板包来源，无法导出", ok: false },
   ]);
+});
+
+test("workflow template ui formats structured template pack load failure", async () => {
+  const { createWorkflowTemplateUi } = await loadTemplateUiModule();
+  const statuses = [];
+  global.window = {
+    localStorage: {
+      getItem: () => null,
+      setItem: () => {},
+    },
+    aiwfDesktop: {
+      loadWorkflow: async () => ({
+        ok: false,
+        canceled: false,
+        error_code: "workflow_load_invalid_json",
+        error: "Unexpected token",
+      }),
+    },
+  };
+
+  try {
+    const ui = createWorkflowTemplateUi({
+      templateSelect: { value: "" },
+      templateParamsForm: null,
+      templateParams: { value: "" },
+    }, {
+      builtinTemplates: [],
+      store: {},
+      setStatus: (text, ok) => statuses.push({ text, ok }),
+    });
+    await ui.installTemplatePack();
+  } finally {
+    delete global.window;
+  }
+
+  assert.equal(statuses.length, 1);
+  assert.equal(statuses[0].ok, false);
+  assert.match(statuses[0].text, /workflow_load_invalid_json/);
 });

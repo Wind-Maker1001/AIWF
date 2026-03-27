@@ -2,6 +2,7 @@ import {
   normalizeQualityGateExportFormat,
   parseQualityGatePrefs,
 } from "./quality-gate-support.js";
+import { formatAiwfError } from "./workflow-contract.js";
 
 function createWorkflowQualityGateUi(els, deps = {}) {
   const {
@@ -50,7 +51,7 @@ function createWorkflowQualityGateUi(els, deps = {}) {
     });
     if (!out?.ok) {
       if (!out?.canceled) {
-        setStatus(`导出质量门禁失败: ${out?.error || "unknown"}`, false);
+        setStatus(`导出质量门禁失败: ${formatAiwfError(out)}`, false);
       }
       return;
     }

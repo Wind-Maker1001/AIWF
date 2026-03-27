@@ -1,4 +1,5 @@
 import { statusColor } from "./panels-ui-run-shared.js";
+import { formatAiwfError } from "./workflow-contract.js";
 
 function createWorkflowPanelsRunHistoryRenderers(els, deps = {}) {
   const {
@@ -75,7 +76,7 @@ function createWorkflowPanelsRunHistoryRenderers(els, deps = {}) {
         els.log.textContent = JSON.stringify(out, null, 2);
         await refreshRunHistory();
         await refreshReviewQueue();
-        setStatus(out?.ok ? `续跑完成: ${it.run_id}` : `续跑失败: ${out?.error || "unknown"}`, !!out?.ok);
+        setStatus(out?.ok ? `续跑完成: ${it.run_id}` : `续跑失败: ${formatAiwfError(out)}`, !!out?.ok);
       };
 
       const btnCompare = document.createElement("button");
@@ -109,7 +110,7 @@ function createWorkflowPanelsRunHistoryRenderers(els, deps = {}) {
         els.log.textContent = JSON.stringify(out, null, 2);
         await refreshRunHistory();
         await refreshReviewQueue();
-        setStatus(out?.ok ? `失败节点重试完成: ${it.run_id}` : `失败节点重试失败: ${out?.error || "unknown"}`, !!out?.ok);
+        setStatus(out?.ok ? `失败节点重试完成: ${it.run_id}` : `失败节点重试失败: ${formatAiwfError(out)}`, !!out?.ok);
       };
 
       const btnLog = document.createElement("button");

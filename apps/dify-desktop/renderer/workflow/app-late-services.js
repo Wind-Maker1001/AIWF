@@ -6,15 +6,186 @@ import { createWorkflowPreflightControllerUi } from "./preflight-controller-ui.j
 import { createWorkflowPreflightActionsUi } from "./preflight-actions-ui.js";
 import { createWorkflowAppPublishUi } from "./app-publish-ui.js";
 import { createWorkflowRunControllerUi } from "./run-controller-ui.js";
-import {
-  buildAppPublishUiDeps,
-  buildCanvasViewUiDeps,
-  buildFlowIoDeps,
-  buildPaletteUiDeps,
-  buildPreflightActionsDeps,
-  buildPreflightControllerDeps,
-  buildRunControllerUiDeps,
-} from "./app-late-services-support.js";
+
+function buildFlowIoDeps(ctx = {}) {
+  const {
+    setStatus = () => {},
+    graphPayload = () => ({}),
+    refreshVersions = async () => {},
+    migrateLoadedWorkflowGraph = () => ({}),
+    applyLoadedWorkflowGraph = () => {},
+    getLoadedWorkflowName = () => "",
+    renderMigrationReport = () => {},
+  } = ctx;
+
+  return {
+    setStatus,
+    graphPayload,
+    refreshVersions: () => refreshVersions(),
+    migrateLoadedWorkflowGraph,
+    applyLoadedWorkflowGraph,
+    getLoadedWorkflowName,
+    renderMigrationReport,
+  };
+}
+
+function buildPaletteUiDeps(ctx = {}) {
+  const {
+    setStatus = () => {},
+    nodeCatalog = {},
+    defaultNodeConfigFn = () => ({}),
+    store,
+    selectNodeIds = () => {},
+    renderAll = () => {},
+    computeDropPosition = () => ({ x: 0, y: 0 }),
+  } = ctx;
+
+  return {
+    setStatus,
+    nodeCatalog,
+    defaultNodeConfigFn,
+    createNode: (type, x, y, config) => store.addNode(type, x, y, config),
+    selectNodeIds: (ids) => selectNodeIds(ids),
+    renderAll,
+    computeDropPosition,
+  };
+}
+
+function buildCanvasViewUiDeps(ctx = {}) {
+  const {
+    canvas,
+    setStatus = () => {},
+    renderNodeConfigEditor = () => {},
+    renderEdgeConfigEditor = () => {},
+    refreshOfflineBoundaryHint = () => {},
+    getNode = () => null,
+    selectNodeIds = () => {},
+    renderAll = () => {},
+  } = ctx;
+
+  return {
+    canvas,
+    setStatus,
+    renderNodeConfigEditor: () => renderNodeConfigEditor(),
+    renderEdgeConfigEditor: () => renderEdgeConfigEditor(),
+    refreshOfflineBoundaryHint,
+    getNode: (id) => getNode(id),
+    selectNodeIds: (ids) => selectNodeIds(ids),
+    renderAll,
+  };
+}
+
+function buildPreflightControllerDeps(ctx = {}) {
+  const {
+    graphPayload = () => ({}),
+    store,
+    applyLoadedWorkflowGraph = () => {},
+    computePreflightRisk = () => ({}),
+    renderPreflightReport = () => {},
+    setLastPreflightReport = () => {},
+  } = ctx;
+
+  return {
+    graphPayload,
+    exportGraph: () => store.exportGraph(),
+    applyGraph: (graph) => applyLoadedWorkflowGraph(graph),
+    computePreflightRisk,
+    renderPreflightReport,
+    setLastPreflightReport,
+  };
+}
+
+function buildPreflightActionsDeps(ctx = {}) {
+  const {
+    setStatus = () => {},
+    runWorkflowPreflight = async () => ({ ok: true }),
+    allTemplates = () => [],
+    currentTemplateGovernance = () => ({}),
+    autoFixGraphStructure = () => ({}),
+    renderAutoFixDiff = () => {},
+    getLastPreflightReport = () => null,
+    getLastTemplateAcceptanceReport = () => null,
+    setLastAutoFixSummary = () => {},
+    setLastTemplateAcceptanceReport = () => {},
+  } = ctx;
+
+  return {
+    setStatus,
+    runWorkflowPreflight,
+    allTemplates,
+    currentTemplateGovernance,
+    autoFixGraphStructure,
+    renderAutoFixDiff,
+    getLastPreflightReport,
+    getLastTemplateAcceptanceReport,
+    setLastAutoFixSummary,
+    setLastTemplateAcceptanceReport,
+  };
+}
+
+function buildAppPublishUiDeps(ctx = {}) {
+  const {
+    setStatus = () => {},
+    graphPayload = () => ({}),
+    runWorkflowPreflight = async () => ({ ok: true }),
+    collectAppSchemaFromForm = () => ({}),
+    normalizeAppSchemaObject = (obj) => obj,
+    currentTemplateGovernance = () => ({}),
+    parseRunParamsLoose = () => ({}),
+    getLastPreflightReport = () => null,
+    getLastTemplateAcceptanceReport = () => null,
+    renderAppRows = () => {},
+    appSchemaRowsFromObject = () => [],
+    renderAppSchemaForm = () => {},
+    syncAppSchemaJsonFromForm = () => {},
+    syncAppSchemaFormFromJson = () => {},
+    syncRunParamsJsonFromForm = () => {},
+    syncRunParamsFormFromJson = () => {},
+  } = ctx;
+
+  return {
+    setStatus,
+    graphPayload,
+    runWorkflowPreflight,
+    collectAppSchemaFromForm,
+    normalizeAppSchemaObject,
+    currentTemplateGovernance,
+    parseRunParamsLoose,
+    getLastPreflightReport,
+    getLastTemplateAcceptanceReport,
+    renderAppRows,
+    appSchemaRowsFromObject,
+    renderAppSchemaForm,
+    syncAppSchemaJsonFromForm,
+    syncAppSchemaFormFromJson,
+    syncRunParamsJsonFromForm,
+    syncRunParamsFormFromJson,
+  };
+}
+
+function buildRunControllerUiDeps(ctx = {}) {
+  const {
+    setStatus = () => {},
+    runWorkflowPreflight = async () => ({ ok: true }),
+    runPayload = () => ({}),
+    renderNodeRuns = () => {},
+    refreshDiagnostics = async () => {},
+    refreshRunHistory = async () => {},
+    refreshReviewQueue = async () => {},
+    refreshQueue = async () => {},
+  } = ctx;
+
+  return {
+    setStatus,
+    runWorkflowPreflight,
+    runPayload,
+    renderNodeRuns,
+    refreshDiagnostics,
+    refreshRunHistory,
+    refreshReviewQueue,
+    refreshQueue,
+  };
+}
 
 function createWorkflowLateServices(ctx = {}) {
   const {
@@ -165,3 +336,12 @@ function createWorkflowLateServices(ctx = {}) {
 }
 
 export { createWorkflowLateServices };
+export {
+  buildAppPublishUiDeps,
+  buildCanvasViewUiDeps,
+  buildFlowIoDeps,
+  buildPaletteUiDeps,
+  buildPreflightActionsDeps,
+  buildPreflightControllerDeps,
+  buildRunControllerUiDeps,
+};

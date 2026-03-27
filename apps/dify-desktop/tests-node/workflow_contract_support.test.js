@@ -31,6 +31,27 @@ test("workflow contract helper migrates missing version and rejects missing work
     /workflow\.workflow_id is required/i,
   );
 
+  assert.throws(
+    () => assertWorkflowContract({
+      workflow_id: "wf_unknown_type",
+      version: WORKFLOW_SCHEMA_VERSION,
+      nodes: [{ id: "n1", type: "unknown_future_node" }],
+      edges: [],
+    }),
+    /workflow contains unregistered node types/i,
+  );
+  try {
+    assertWorkflowContract({
+      workflow_id: "wf_unknown_type",
+      version: WORKFLOW_SCHEMA_VERSION,
+      nodes: [{ id: "n1", type: "unknown_future_node" }],
+      edges: [],
+    });
+  } catch (error) {
+    assert.ok(Array.isArray(error?.details?.error_items));
+    assert.ok(error.details.error_items.some((item) => item.path === "workflow.nodes" && item.code === "unknown_node_type"));
+  }
+
   assert.ok(NODE_CONFIG_SCHEMA_IDS.includes("manual_review"));
   assert.ok(NODE_CONFIG_SCHEMA_IDS.includes("ai_refine"));
   assert.ok(NODE_CONFIG_SCHEMA_IDS.includes("quality_check_v3"));

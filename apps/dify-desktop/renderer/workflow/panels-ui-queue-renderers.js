@@ -1,5 +1,7 @@
 import { statusColor } from "./panels-ui-run-shared.js";
 
+import { formatAiwfError } from "./workflow-contract.js";
+
 function createWorkflowPanelsQueueRenderers(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -27,7 +29,7 @@ function createWorkflowPanelsQueueRenderers(els, deps = {}) {
       cancelBtn.textContent = "取消";
       cancelBtn.onclick = async () => {
         const out = await window.aiwfDesktop.cancelWorkflowTask({ task_id: it.task_id });
-        setStatus(out?.ok ? "已取消任务" : `取消失败: ${out?.error || "unknown"}`, !!out?.ok);
+        setStatus(out?.ok ? "已取消任务" : `取消失败: ${formatAiwfError(out)}`, !!out?.ok);
         await refreshQueue();
       };
       const retryBtn = document.createElement("button");
@@ -36,7 +38,7 @@ function createWorkflowPanelsQueueRenderers(els, deps = {}) {
       retryBtn.textContent = "重试";
       retryBtn.onclick = async () => {
         const out = await window.aiwfDesktop.retryWorkflowTask({ task_id: it.task_id });
-        setStatus(out?.ok ? "已加入重试队列" : `重试失败: ${out?.error || "unknown"}`, !!out?.ok);
+        setStatus(out?.ok ? "已加入重试队列" : `重试失败: ${formatAiwfError(out)}`, !!out?.ok);
         await refreshQueue();
       };
       tdOp.append(cancelBtn, retryBtn);

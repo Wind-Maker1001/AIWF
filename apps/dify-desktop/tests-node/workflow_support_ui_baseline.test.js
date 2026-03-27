@@ -106,3 +106,33 @@ test("workflow support ui guards when baseline or lineage inputs are missing", a
     { text: "请先在“运行对比”里选择 Run A", ok: false },
   ]);
 });
+
+test("workflow support ui formats structured baseline failure", async () => {
+  const { createWorkflowSupportUi } = await loadSupportUiModule();
+  const statuses = [];
+  global.window = {
+    aiwfDesktop: {
+      saveRunBaseline: async () => ({
+        ok: false,
+        error: "workflow contract invalid: workflow.version is required",
+        error_items: [{ path: "workflow.version", code: "required", message: "workflow.version is required" }],
+      }),
+    },
+  };
+
+  try {
+    const ui = createWorkflowSupportUi({
+      compareRunA: { value: "run_a_12345678" },
+    }, {
+      setStatus: (text, ok) => statuses.push({ text, ok }),
+    });
+    await ui.saveCurrentRunAsBaseline();
+  } finally {
+    delete global.window;
+  }
+
+  assert.deepEqual(statuses, [{
+    text: "保存基线失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。",
+    ok: false,
+  }]);
+});

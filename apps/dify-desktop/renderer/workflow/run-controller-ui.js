@@ -1,3 +1,5 @@
+import { formatWorkflowContractError } from "./workflow-contract.js";
+
 function createWorkflowRunControllerUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -10,10 +12,16 @@ function createWorkflowRunControllerUi(els, deps = {}) {
     refreshQueue = async () => {},
   } = deps;
 
+  function issueStatusText(issue = {}) {
+    const message = String(issue?.message || "").trim();
+    const resolution = String(issue?.resolution_hint || "").trim();
+    return resolution ? `${message} | ${resolution}` : message;
+  }
+
   function preflightMessages(pre) {
     const issues = Array.isArray(pre?.issues) ? pre.issues : [];
-    const warns = issues.filter((x) => String(x.level || "") === "warning").map((x) => String(x.message || ""));
-    const errs = issues.filter((x) => String(x.level || "") === "error").map((x) => String(x.message || ""));
+    const warns = issues.filter((x) => String(x.level || "") === "warning").map((x) => issueStatusText(x));
+    const errs = issues.filter((x) => String(x.level || "") === "error").map((x) => issueStatusText(x));
     return { warns, errs };
   }
 
@@ -51,11 +59,13 @@ function createWorkflowRunControllerUi(els, deps = {}) {
         const lineageEdges = Number(out?.lineage?.edge_count || 0);
         const aiCalls = Number(out?.governance?.ai_budget?.calls || 0);
         setStatus(`运行完成: ${out.run_id} | SLA:${slaPassed ? "通过" : "未通过"} | 血缘边:${lineageEdges} | AI调用:${aiCalls}`, true);
+      } else if (out?.error) {
+        setStatus(`运行失败: ${formatWorkflowContractError(out)}`, false);
       } else {
         setStatus(`运行结束: ${out?.status || "failed"}`, false);
       }
-    } catch (e) {
-      setStatus(`运行失败: ${e}`, false);
+    } catch (error) {
+      setStatus(`运行失败: ${formatWorkflowContractError(error)}`, false);
     }
   }
 
@@ -87,10 +97,10 @@ function createWorkflowRunControllerUi(els, deps = {}) {
         cfg: {},
         priority: 100,
       });
-      setStatus(out?.ok ? "任务已加入队列" : `入队失败: ${out?.error || "unknown"}`, !!out?.ok);
+      setStatus(out?.ok ? "任务已加入队列" : `入队失败: ${formatWorkflowContractError(out)}`, !!out?.ok);
       await refreshQueue();
-    } catch (e) {
-      setStatus(`入队失败: ${e}`, false);
+    } catch (error) {
+      setStatus(`入队失败: ${formatWorkflowContractError(error)}`, false);
     }
   }
 

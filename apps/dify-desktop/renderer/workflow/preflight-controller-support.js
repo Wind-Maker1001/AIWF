@@ -1,27 +1,45 @@
 import { IO_CONTRACT_COMPATIBLE_OPERATORS } from "./preflight-rust-helpers.js";
+import { getWorkflowContractResolutionHint } from "./workflow-contract.js";
 
 function buildGraphValidationIssues(valid = {}) {
   const issues = [];
+  const errorItems = Array.isArray(valid.error_items) ? valid.error_items : [];
+  const warningItems = Array.isArray(valid.warning_items) ? valid.warning_items : [];
   const classifyKind = (message) => /unregistered node types/i.test(String(message || ""))
     ? "unknown_node_type"
     : "graph";
-  const buildIssue = (level, msg) => {
+  const buildIssue = (level, msg, item = null) => {
     const message = String(msg || "");
-    const kind = classifyKind(message);
+    const errorCode = String(item?.code || "").trim();
+    const errorPath = String(item?.path || "").trim();
+    const errorContract = String(item?.error_contract || "").trim();
+    const kind = classifyKind(message) === "unknown_node_type"
+      ? "unknown_node_type"
+      : (errorContract ? "graph_contract" : classifyKind(message));
     if (kind === "unknown_node_type") {
       return {
         level,
         kind,
         message,
+        error_code: errorCode || "unknown_node_type",
+        error_path: errorPath || "workflow.nodes",
         contract_boundary: "node_catalog_truth",
         resolution_hint: "replace node type or sync Rust manifest / local node policy",
         action_text: "定位节点",
       };
     }
-    return { level, kind, message };
+    return {
+      level,
+      kind,
+      message,
+      error_code: errorCode,
+      error_path: errorPath,
+      error_contract: errorContract,
+      resolution_hint: errorContract ? getWorkflowContractResolutionHint({ code: errorCode, path: errorPath, message }) : "",
+    };
   };
-  (valid.errors || []).forEach((msg) => issues.push(buildIssue("error", msg)));
-  (valid.warnings || []).forEach((msg) => issues.push(buildIssue("warning", msg)));
+  (valid.errors || []).forEach((msg, index) => issues.push(buildIssue("error", msg, errorItems[index] || null)));
+  (valid.warnings || []).forEach((msg, index) => issues.push(buildIssue("warning", msg, warningItems[index] || null)));
   return issues;
 }
 

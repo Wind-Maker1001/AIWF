@@ -1,3 +1,5 @@
+import { formatAiwfError } from "./workflow-contract.js";
+
 function createWorkflowPanelsAdminAppRenderers(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -18,6 +20,15 @@ function createWorkflowPanelsAdminAppRenderers(els, deps = {}) {
       return;
     }
     els.cacheStatsText.textContent = `缓存项:${Number(stats.entries || 0)} 命中:${Number(stats.hits || 0)} 未命中:${Number(stats.misses || 0)} 命中率:${Number(stats.hit_rate || 0)}`;
+  }
+
+  function appRunStatusText(out) {
+    if (out?.ok) return "应用运行完成";
+    if (out?.error || (Array.isArray(out?.error_items) && out.error_items.length)) {
+      return `应用运行失败: ${formatAiwfError(out)}`;
+    }
+    const status = String(out?.status || out?.result?.status || "").trim();
+    return status ? `应用运行结束: ${status}` : `应用运行失败: ${formatAiwfError(out)}`;
   }
 
   function renderAppRows(items = []) {
@@ -52,7 +63,7 @@ function createWorkflowPanelsAdminAppRenderers(els, deps = {}) {
           els.log.textContent = JSON.stringify(out.result, null, 2);
           if (els.timelineRunId) els.timelineRunId.value = String(out.result.run_id || "");
         }
-        setStatus(out?.ok ? "应用运行完成" : `应用运行失败: ${out?.error || "unknown"}`, !!out?.ok);
+        setStatus(appRunStatusText(out), !!out?.ok);
         await refreshRunHistory();
         await refreshDiagnostics();
       };

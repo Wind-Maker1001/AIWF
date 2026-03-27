@@ -6,6 +6,7 @@ import {
 import {
   assertWorkflowContract,
   combineWorkflowMigrationReports,
+  formatWorkflowContractError,
 } from "./workflow-contract.js";
 
 function createWorkflowFlowIoUi(els, deps = {}) {
@@ -22,7 +23,7 @@ function createWorkflowFlowIoUi(els, deps = {}) {
   function exportJson() {
     const json = stringifyWorkflowGraph(graphPayload());
     if (els.log) els.log.textContent = json;
-    setStatus("宸插鍑烘祦绋?JSON 鍒板彸渚ф棩蹇楀尯", true);
+    setStatus("已导出流程 JSON 到右侧日志区", true);
   }
 
   async function saveFlow() {
@@ -32,13 +33,19 @@ function createWorkflowFlowIoUi(els, deps = {}) {
       const name = saveWorkflowName(els.workflowName?.value || "");
       const out = await window.aiwfDesktop.saveWorkflow(graph, name);
       if (out?.ok) {
-        setStatus(`娴佺▼宸蹭繚瀛? ${out.path}`, true);
+        setStatus(`流程已保存: ${out.path}`, true);
         await refreshVersions();
-      } else if (!out?.canceled) {
-        setStatus(`淇濆瓨澶辫触: ${out?.error || "unknown"}`, false);
+        return;
       }
-    } catch (e) {
-      setStatus(`淇濆瓨澶辫触: ${e}`, false);
+      if (out?.saved_local && out?.path) {
+        setStatus(`流程已保存到本地: ${out.path} | 版本记录失败: ${formatWorkflowContractError(out)}`, true);
+        return;
+      }
+      if (!out?.canceled) {
+        setStatus(`保存失败: ${formatWorkflowContractError(out)}`, false);
+      }
+    } catch (error) {
+      setStatus(`保存失败: ${formatWorkflowContractError(error)}`, false);
     }
   }
 
@@ -46,7 +53,7 @@ function createWorkflowFlowIoUi(els, deps = {}) {
     try {
       const out = await window.aiwfDesktop.loadWorkflow();
       if (!out?.ok) {
-        if (!out?.canceled) setStatus(`鍔犺浇澶辫触: ${out?.error || "unknown"}`, false);
+        if (!out?.canceled) setStatus(`加载失败: ${formatWorkflowContractError(out)}`, false);
         return;
       }
       const migrated = migrateLoadedWorkflowGraph(out.graph || {});
@@ -55,8 +62,8 @@ function createWorkflowFlowIoUi(els, deps = {}) {
       if (els.workflowName) els.workflowName.value = getLoadedWorkflowName() || "Custom Workflow";
       renderMigrationReport(migrationReport);
       setStatus(loadWorkflowStatusMessage(out.path, migrationReport), true);
-    } catch (e) {
-      setStatus(`鍔犺浇澶辫触: ${e}`, false);
+    } catch (error) {
+      setStatus(`加载失败: ${formatWorkflowContractError(error)}`, false);
     }
   }
 

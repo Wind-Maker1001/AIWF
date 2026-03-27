@@ -156,3 +156,78 @@ test("workflow app publish ui falls back to empty app rows when list fails", asy
 
   assert.deepEqual(renderCalls, [[]]);
 });
+
+test("workflow app publish ui formats structured remote publish failure", async () => {
+  const { createWorkflowAppPublishUi } = await loadAppPublishUiModule();
+  const statuses = [];
+  global.window = {
+    aiwfDesktop: {
+      publishWorkflowApp: async () => ({
+        ok: false,
+        error: "workflow app graph node config invalid: workflow.nodes[0].config.manifest.command is required when workflow.nodes[0].config.op is register",
+        error_items: [{ path: "workflow.nodes[0].config.manifest.command", code: "conditional_required", message: "workflow.nodes[0].config.manifest.command is required when workflow.nodes[0].config.op is register" }],
+      }),
+      listWorkflowApps: async () => ({ items: [] }),
+    },
+  };
+
+  try {
+    const ui = createWorkflowAppPublishUi({
+      appPublishName: { value: "Finance App" },
+      publishRequirePreflight: { checked: false },
+      appSchemaJson: { value: "" },
+    }, {
+      setStatus: (text, ok) => statuses.push({ text, ok }),
+      graphPayload: () => ({ name: "Finance App", nodes: [], edges: [] }),
+      collectAppSchemaFromForm: () => ({}),
+      renderAppRows: () => {},
+    });
+
+    await ui.publishApp();
+  } finally {
+    delete global.window;
+  }
+
+  assert.equal(statuses.length, 1);
+  assert.equal(statuses[0].ok, false);
+  assert.match(statuses[0].text, /\[conditional_required\] workflow\.nodes\[0\]\.config\.manifest\.command/);
+});
+
+test("workflow app publish ui formats structured local workflow contract failure", async () => {
+  const { createWorkflowAppPublishUi } = await loadAppPublishUiModule();
+  const statuses = [];
+  global.window = {
+    aiwfDesktop: {
+      publishWorkflowApp: async () => ({
+        ok: false,
+        error: "workflow contract invalid: workflow.version is required",
+        error_code: "workflow_contract_invalid",
+        graph_contract: "contracts/workflow/workflow.schema.json",
+        error_item_contract: "contracts/desktop/node_config_validation_errors.v1.json",
+        error_items: [{ path: "workflow.version", code: "required", message: "workflow.version is required" }],
+      }),
+      listWorkflowApps: async () => ({ items: [] }),
+    },
+  };
+
+  try {
+    const ui = createWorkflowAppPublishUi({
+      appPublishName: { value: "Finance App" },
+      publishRequirePreflight: { checked: false },
+      appSchemaJson: { value: "" },
+    }, {
+      setStatus: (text, ok) => statuses.push({ text, ok }),
+      graphPayload: () => ({ name: "Finance App", version: "1.0.0", nodes: [], edges: [] }),
+      collectAppSchemaFromForm: () => ({}),
+      renderAppRows: () => {},
+    });
+
+    await ui.publishApp();
+  } finally {
+    delete global.window;
+  }
+
+  assert.equal(statuses.length, 1);
+  assert.equal(statuses[0].ok, false);
+  assert.match(statuses[0].text, /\[required\] workflow\.version/);
+});

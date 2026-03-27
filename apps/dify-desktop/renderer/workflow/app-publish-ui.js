@@ -1,3 +1,5 @@
+import { formatWorkflowContractError } from "./workflow-contract.js";
+
 function createWorkflowAppPublishUi(els, deps = {}) {
   const {
     setStatus = () => {},
@@ -17,6 +19,12 @@ function createWorkflowAppPublishUi(els, deps = {}) {
     syncRunParamsJsonFromForm = () => {},
     syncRunParamsFormFromJson = () => {},
   } = deps;
+
+  function issueStatusText(issue = {}) {
+    const message = String(issue?.message || "").trim();
+    const resolution = String(issue?.resolution_hint || "").trim();
+    return resolution ? `${message}（${resolution}）` : message;
+  }
 
   function handleAppSchemaAdd() {
     const existing = appSchemaRowsFromObject(collectAppSchemaFromForm());
@@ -69,7 +77,7 @@ function createWorkflowAppPublishUi(els, deps = {}) {
       if (!pre?.ok) {
         const errs = (pre.issues || [])
           .filter((x) => String(x.level || "") === "error")
-          .map((x) => String(x.message || ""));
+          .map((x) => issueStatusText(x));
         setStatus(`发布阻断：预检未通过 (${errs.join(" | ")})`, false);
         return;
       }
@@ -97,7 +105,7 @@ function createWorkflowAppPublishUi(els, deps = {}) {
         latest_template_acceptance: getLastTemplateAcceptanceReport() || null,
       },
     });
-    setStatus(out?.ok ? "流程应用已发布" : `发布失败: ${out?.error || "unknown"}`, !!out?.ok);
+    setStatus(out?.ok ? "流程应用已发布" : `发布失败: ${formatWorkflowContractError(out)}`, !!out?.ok);
     await refreshApps();
   }
 
