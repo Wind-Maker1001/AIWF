@@ -1,4 +1,10 @@
-const { assertWorkflowContract } = require("./workflow_contract");
+const {
+  NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+  WORKFLOW_CONTRACT_AUTHORITY,
+  assertWorkflowContract,
+  createWorkflowContractError,
+  normalizeWorkflowContract,
+} = require("./workflow_contract");
 const { TEMPLATE_PACK_ENTRY_SCHEMA_VERSION } = require("./workflow_ipc_state");
 const {
   exportTemplatePackArtifact,
@@ -29,6 +35,31 @@ function registerWorkflowStoreIpc(ctx, deps) {
       .replace(/[\\/:*?"<>|]/g, "_")
       .replace(/\s+/g, "_")
       .slice(0, 80) || "workflow";
+  }
+
+  function workflowContractFailure(error) {
+    const details = error && typeof error === "object" && error.details && typeof error.details === "object"
+      ? error.details
+      : {};
+    return {
+      ok: false,
+      canceled: false,
+      error: String(error?.message || error || "workflow contract invalid"),
+      error_code: String(error?.code || "workflow_contract_invalid"),
+      graph_contract: String(details.graph_contract || WORKFLOW_CONTRACT_AUTHORITY),
+      error_item_contract: String(details.error_item_contract || NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY),
+      error_items: Array.isArray(details.error_items) ? details.error_items : [],
+    };
+  }
+
+  function workflowLoadFailure(error) {
+    const isSyntaxError = error instanceof SyntaxError;
+    return {
+      ok: false,
+      canceled: false,
+      error: String(error?.message || error || "workflow load failed"),
+      error_code: isSyntaxError ? "workflow_load_invalid_json" : "workflow_load_failed",
+    };
   }
 
   ipcMain.handle("aiwf:listTemplateMarketplace", async (_evt, req) => {
@@ -210,6 +241,9 @@ function registerWorkflowStoreIpc(ctx, deps) {
       appendAudit("workflow_save", { path: filePath, workflow_name: String(payload?.name || safeName) });
       return { ok: true, path: filePath };
     } catch (error) {
+      if (error && typeof error === "object" && String(error.code || "") === "workflow_contract_invalid") {
+        return workflowContractFailure(error);
+      }
       return { ok: false, canceled: false, error: String(error) };
     }
   });
@@ -218,6 +252,7 @@ function registerWorkflowStoreIpc(ctx, deps) {
     try {
       const options = opts && typeof opts === "object" ? opts : {};
       const allowMockIo = isMockIoAllowed();
+      const validateGraphContract = options.validateGraphContract !== false;
       let canceled = false;
       let filePaths = [];
       if (options.mock && options.path && allowMockIo) {
@@ -236,10 +271,19 @@ function registerWorkflowStoreIpc(ctx, deps) {
       if (canceled || !filePaths || !filePaths.length) return { ok: false, canceled: true };
       const filePath = filePaths[0];
       const graph = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      if (validateGraphContract) {
+        const contract = normalizeWorkflowContract(graph, { allowVersionMigration: true });
+        if (!contract.ok) {
+          return workflowContractFailure(createWorkflowContractError(contract.errors));
+        }
+      }
       appendAudit("workflow_load", { path: filePath });
       return { ok: true, canceled: false, path: filePath, graph };
     } catch (error) {
-      return { ok: false, canceled: false, error: String(error) };
+      if (error && typeof error === "object" && String(error.code || "") === "workflow_contract_invalid") {
+        return workflowContractFailure(error);
+      }
+      return workflowLoadFailure(error);
     }
   });
 }

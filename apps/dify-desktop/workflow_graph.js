@@ -1,4 +1,7 @@
 const {
+  NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+  WORKFLOW_CONTRACT_AUTHORITY,
+  buildValidationErrorItems,
   WORKFLOW_SCHEMA_VERSION,
   normalizeWorkflowContract,
   validateWorkflowTopLevel,
@@ -111,12 +114,19 @@ function topoSort(nodes, edges) {
 function validateGraph(graph) {
   const topLevel = validateWorkflowTopLevel(graph, { requireNonEmptyNodes: true });
   const errors = [...topLevel.errors];
+  const errorItems = buildValidationErrorItems(topLevel.errors).map((item) => ({
+    ...item,
+    graph_contract: WORKFLOW_CONTRACT_AUTHORITY,
+    error_contract: NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+  }));
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph?.edges) ? graph.edges : [];
   const idSet = new Set();
   const unknownNodeTypes = findUnknownWorkflowNodeTypes(graph);
   if (unknownNodeTypes.length > 0) {
-    errors.push(`workflow contains unregistered node types: ${unknownNodeTypes.join(", ")}`);
+    const message = `workflow contains unregistered node types: ${unknownNodeTypes.join(", ")}`;
+    errors.push(message);
+    errorItems.push({ path: "workflow.nodes", code: "unknown_node_type", message, contract_boundary: "node_catalog_truth" });
   }
 
   for (const n of nodes) {
@@ -137,7 +147,7 @@ function validateGraph(graph) {
   }
   const ordered = topoSort(nodes, edges);
   if (ordered.length !== nodes.length) errors.push("workflow has cycle; only DAG is supported");
-  return { ok: errors.length === 0, errors, ordered };
+  return { ok: errors.length === 0, errors, error_items: errorItems, ordered };
 }
 
 module.exports = {

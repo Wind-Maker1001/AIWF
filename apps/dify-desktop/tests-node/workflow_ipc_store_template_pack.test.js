@@ -123,3 +123,138 @@ test("workflow ipc store exports template pack as artifact schema", async () => 
   assert.equal(payload.templates.length, 1);
   assert.equal(payload.templates[0].id, "tpl_1");
 });
+
+test("workflow ipc store saveWorkflow returns structured workflow contract failure", async () => {
+  const { handlers, root } = createIpcHarness();
+  const saveWorkflow = handlers["aiwf:saveWorkflow"];
+  assert.equal(typeof saveWorkflow, "function");
+
+  const out = await saveWorkflow(null, {
+    workflow_id: "wf_invalid",
+    nodes: [{ id: "n1", type: "ingest_files" }],
+    edges: [],
+  }, "Invalid Workflow", {
+    mock: true,
+    path: path.join(root, "invalid_workflow.json"),
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.canceled, false);
+  assert.equal(out.error_code, "workflow_contract_invalid");
+  assert.equal(out.graph_contract, "contracts/workflow/workflow.schema.json");
+  assert.equal(out.error_item_contract, "contracts/desktop/node_config_validation_errors.v1.json");
+  assert.ok(Array.isArray(out.error_items));
+  assert.ok(out.error_items.some((item) => item.path === "workflow.version" && item.code === "required"));
+});
+
+test("workflow ipc store saveWorkflow rejects unregistered node types", async () => {
+  const { handlers, root } = createIpcHarness();
+  const saveWorkflow = handlers["aiwf:saveWorkflow"];
+  assert.equal(typeof saveWorkflow, "function");
+
+  const out = await saveWorkflow(null, {
+    workflow_id: "wf_unknown_type",
+    version: "1.0.0",
+    nodes: [{ id: "n1", type: "unknown_future_node" }],
+    edges: [],
+  }, "Unknown Node Workflow", {
+    mock: true,
+    path: path.join(root, "unknown_type_workflow.json"),
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.error_code, "workflow_contract_invalid");
+  assert.ok(Array.isArray(out.error_items));
+  assert.ok(out.error_items.some((item) => item.path === "workflow.nodes" && item.code === "unknown_node_type"));
+});
+
+test("workflow ipc store loadWorkflow returns structured invalid json failure", async () => {
+  const { handlers, root } = createIpcHarness();
+  const loadWorkflow = handlers["aiwf:loadWorkflow"];
+  assert.equal(typeof loadWorkflow, "function");
+
+  const badJsonPath = path.join(root, "broken_workflow.json");
+  fs.writeFileSync(badJsonPath, "{ invalid", "utf8");
+
+  const out = await loadWorkflow(null, {
+    mock: true,
+    path: badJsonPath,
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.canceled, false);
+  assert.equal(out.error_code, "workflow_load_invalid_json");
+  assert.match(String(out.error || ""), /json|position|unexpected/i);
+});
+
+test("workflow ipc store loadWorkflow rejects unregistered node types with structured contract failure", async () => {
+  const { handlers, root, audits } = createIpcHarness();
+  const loadWorkflow = handlers["aiwf:loadWorkflow"];
+  assert.equal(typeof loadWorkflow, "function");
+
+  const invalidWorkflowPath = path.join(root, "unknown_type_workflow.json");
+  fs.writeFileSync(invalidWorkflowPath, `${JSON.stringify({
+    workflow_id: "wf_unknown_type",
+    version: "1.0.0",
+    nodes: [{ id: "n1", type: "unknown_future_node" }],
+    edges: [],
+  }, null, 2)}\n`, "utf8");
+
+  const out = await loadWorkflow(null, {
+    mock: true,
+    path: invalidWorkflowPath,
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.canceled, false);
+  assert.equal(out.error_code, "workflow_contract_invalid");
+  assert.ok(Array.isArray(out.error_items));
+  assert.ok(out.error_items.some((item) => item.path === "workflow.nodes" && item.code === "unknown_node_type"));
+  assert.equal(audits.some((entry) => entry.action === "workflow_load"), false);
+});
+
+test("workflow ipc store loadWorkflow still accepts legacy graphs missing version", async () => {
+  const { handlers, root } = createIpcHarness();
+  const loadWorkflow = handlers["aiwf:loadWorkflow"];
+  assert.equal(typeof loadWorkflow, "function");
+
+  const legacyWorkflowPath = path.join(root, "legacy_missing_version.json");
+  fs.writeFileSync(legacyWorkflowPath, `${JSON.stringify({
+    workflow_id: "wf_legacy",
+    nodes: [{ id: "n1", type: "ingest_files" }],
+    edges: [],
+  }, null, 2)}\n`, "utf8");
+
+  const out = await loadWorkflow(null, {
+    mock: true,
+    path: legacyWorkflowPath,
+  });
+
+  assert.equal(out.ok, true);
+  assert.equal(out.graph.workflow_id, "wf_legacy");
+  assert.equal("version" in out.graph, false);
+});
+
+test("workflow ipc store loadWorkflow can skip graph contract validation for non-workflow json pickers", async () => {
+  const { handlers, root } = createIpcHarness();
+  const loadWorkflow = handlers["aiwf:loadWorkflow"];
+  assert.equal(typeof loadWorkflow, "function");
+
+  const templatePackPath = path.join(root, "template_pack.json");
+  fs.writeFileSync(templatePackPath, `${JSON.stringify({
+    schema_version: "template_pack_artifact.v1",
+    id: "pack_1",
+    name: "Pack One",
+    templates: [],
+  }, null, 2)}\n`, "utf8");
+
+  const out = await loadWorkflow(null, {
+    mock: true,
+    path: templatePackPath,
+    validateGraphContract: false,
+  });
+
+  assert.equal(out.ok, true);
+  assert.equal(out.path, templatePackPath);
+  assert.equal(out.graph.schema_version, "template_pack_artifact.v1");
+});
