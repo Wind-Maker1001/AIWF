@@ -1,54 +1,71 @@
-# AIWF Documentation Index
+# AIWF Quickstart
 
-Use this page as the canonical documentation entrypoint for the current codebase.
+Use this page for the fastest current local startup path.
+For the full categorized documentation map, use [README.md](README.md).
 
-## Core
+## Current Default Path
 
-- Repository overview: [../README.md](../README.md)
-- Native WinUI quickstart: [quickstart_native_winui.md](quickstart_native_winui.md)
+- WinUI is the primary desktop frontend.
+- Electron is the compatibility shell, not the default main path.
+- `base-java` owns job lifecycle.
+- `glue-python` owns governance state.
+
+If you are trying to understand why those boundaries exist, read:
+
+- [architecture_cognition_review_20260328.md](architecture_cognition_review_20260328.md)
+- [governance_control_plane_boundary_20260324.md](governance_control_plane_boundary_20260324.md)
+- [frontend_convergence_decision_20260320.md](frontend_convergence_decision_20260320.md)
+
+## 1. Bring Up Backend Services
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\db_migrate.ps1 -SqlPassword "<YOUR_SA_PASSWORD>"
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\restart_services.ps1
+```
+
+Use [quickstart_backend.md](quickstart_backend.md) if you need backend-only setup details.
+
+## 2. Launch the Primary Frontend
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1
+```
+
+For the native frontend directly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_native_winui.ps1 -Configuration Debug
+```
+
+Use [quickstart_native_winui.md](quickstart_native_winui.md) if you need WinUI-specific prerequisites.
+
+## 3. Run Local Verification
+
+Fast local profile:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick
+```
+
+Default local profile:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
+```
+
+Use [verification.md](verification.md) for the exact gate and profile coverage.
+
+## 4. Compatibility Paths
+
+Only use these if you explicitly need the compatibility flow:
+
+- [quickstart_desktop_offline.md](quickstart_desktop_offline.md)
+- [dify_desktop_app.md](dify_desktop_app.md)
+- [offline_delivery_minimal.md](offline_delivery_minimal.md)
+
+## 5. Next Docs To Read
+
+- Full documentation map: [README.md](README.md)
 - Native WinUI delivery: [offline_delivery_native_winui.md](offline_delivery_native_winui.md)
-- Backend quickstart: [quickstart_backend.md](quickstart_backend.md)
-- Verification guide: [verification.md](verification.md)
 - Cleaning rules: [cleaning_rules.md](cleaning_rules.md)
-- Frontend convergence decision: [frontend_convergence_decision_20260320.md](frontend_convergence_decision_20260320.md)
-- Electron compatibility retirement: [electron_compatibility_retirement_plan_20260321.md](electron_compatibility_retirement_plan_20260321.md)
-- Personal sideload certificate: [personal_sideload_certificate_20260321.md](personal_sideload_certificate_20260321.md)
-
-## Runtime and Delivery
-
 - Dify/local backend integration: [dify_local_integration.md](dify_local_integration.md)
-- Finance template usage: [finance_template_v1.md](finance_template_v1.md)
-- Native WinUI frontend: [../apps/dify-native-winui/README.md](../apps/dify-native-winui/README.md)
-
-## Compatibility
-
-- Desktop offline quickstart: [quickstart_desktop_offline.md](quickstart_desktop_offline.md)
-- Electron compatibility guide: [dify_desktop_app.md](dify_desktop_app.md)
-- Electron offline bundle delivery: [offline_delivery_minimal.md](offline_delivery_minimal.md)
-
-## Quality and Performance
-
-- Regression quality gate: [regression_quality.md](regression_quality.md)
-- Rust new-ops gate: [perf_gate_new_ops.md](perf_gate_new_ops.md)
-- Glue-python regression checklist: [glue_python_regression_checklist.md](glue_python_regression_checklist.md)
-- Observability assets: [../ops/observability/README.md](../ops/observability/README.md)
-
-## Reference
-
-- Dify adapter v1: [dify_adapter_v1.md](dify_adapter_v1.md)
-- Dify workflow HTTP node template: [dify_workflow_http_node_template.md](dify_workflow_http_node_template.md)
-- Rust extension operators v1: [rust_extension_ops_v1.md](rust_extension_ops_v1.md)
-- Desktop workflow refactor plan: [desktop_workflow_app_refactor_plan.md](desktop_workflow_app_refactor_plan.md)
-
-## History and Status
-
-- Backend chiplet decoupling summary: [backend_chiplet_decoupling.md](backend_chiplet_decoupling.md)
-- Latest release notes in repo: [release_notes_v1.1.6.md](release_notes_v1.1.6.md)
-- Archived handoff and snapshot docs: [archive/README.md](archive/README.md)
-
-The following files are historical context, handoff notes, or archived snapshots rather than primary onboarding docs:
-
-- `archive/`
-- `*handoff*.md`
-- `*snapshot*.md`
-- `release_notes_v1.*.md`

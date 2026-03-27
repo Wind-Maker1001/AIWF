@@ -2,6 +2,8 @@
 
 These files are kept for historical context, handoff continuity, or earlier planning snapshots.
 
+The active documentation entrypoint for the repository is now [../README.md](../README.md).
+
 ## Archived Here
 
 - `accel_rust_modularization_handoff_20260310.md`
@@ -29,3 +31,9 @@ Current scripts directly reference only:
 - `release_notes_v1.1.6.md`
 
 There are no remaining top-level historical planning or handoff docs besides the currently retained release notes.
+
+## Archive Rules
+
+- New handoff, snapshot, and one-off migration notes should go here unless they remain active design authority.
+- Active architecture, operations, or onboarding docs should stay in top-level `docs/` and be linked from [../README.md](../README.md).
+- Archive content is historical context, not the default starting point for current implementation work.
