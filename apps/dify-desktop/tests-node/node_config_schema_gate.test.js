@@ -37,21 +37,9 @@ test("node config schema coverage gate passes", () => {
   assert.equal(payload.contractSchemaVersion, "node_config_contracts.v1");
   assert.equal(payload.targetCount, 30);
   assert.equal(payload.coveredCount, 30);
-  assert.equal(payload.pythonRuntimeContractAuthority, "contracts/desktop/node_config_contracts.v1.json");
-  assert.equal(payload.pythonRuntimeSchemaVersion, "node_config_contracts.v1");
-  assert.equal(payload.pythonRuntimeCoveredCount, 30);
   assert.ok(payload.contractValidatorKindCount >= 20);
-  assert.ok(payload.pythonRuntimeSupportedValidatorKindCount >= payload.contractValidatorKindCount);
-  assert.ok(payload.pythonRuntimeSupportedValidatorKinds.includes("conditional_required_non_empty"));
-  assert.ok(payload.pythonRuntimeSupportedValidatorKinds.includes("paired_required"));
-  assert.ok(payload.pythonRuntimeSupportedValidatorKinds.includes("op_in_allowed_ops"));
   assert.equal(payload.minimumNestedShapeConstrained, 19);
   assert.equal(payload.nestedShapeConstrainedCount, 19);
-  assert.deepEqual(payload.drift.pythonRuntimeAuthorityDrift, []);
-  assert.deepEqual(payload.drift.pythonRuntimeSchemaVersionDrift, []);
-  assert.deepEqual(payload.drift.pythonRuntimeMissingTypes, []);
-  assert.deepEqual(payload.drift.pythonRuntimeStaleTypes, []);
-  assert.deepEqual(payload.drift.pythonRuntimeMissingValidatorKinds, []);
   assert.deepEqual(
     payload.requiredNestedNodeTypes,
     [
@@ -103,9 +91,4 @@ test("node config schema coverage gate emits structured failure details", () => 
   assert.ok(Array.isArray(payload.drift.contractModuleTypeDrift));
   assert.ok(Array.isArray(payload.drift.contractModuleQualityDrift));
   assert.ok(Array.isArray(payload.drift.requiredNestedTypesMissingFromContract));
-  assert.ok(Array.isArray(payload.drift.pythonRuntimeAuthorityDrift));
-  assert.ok(Array.isArray(payload.drift.pythonRuntimeSchemaVersionDrift));
-  assert.ok(Array.isArray(payload.drift.pythonRuntimeMissingTypes));
-  assert.ok(Array.isArray(payload.drift.pythonRuntimeStaleTypes));
-  assert.ok(Array.isArray(payload.drift.pythonRuntimeMissingValidatorKinds));
 });

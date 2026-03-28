@@ -48,11 +48,11 @@ function createWorkflowQualityRuleSetSupport(deps = {}) {
     return {
       schema_version: String(source.schema_version || current.schema_version || QUALITY_RULE_SET_SCHEMA_VERSION),
       provider,
-      owner: String(source.owner || current.owner || (provider === GLUE_PROVIDER ? "glue-python" : "desktop.local_legacy")),
+      owner: String(source.owner || current.owner || "glue-python"),
       source_of_truth: String(
         source.source_of_truth
           || current.source_of_truth
-          || (provider === GLUE_PROVIDER ? "glue-python.governance.quality_rule_sets" : "desktop.workflow_store.quality_rule_center")
+          || "glue-python.governance.quality_rule_sets"
       ),
       id,
       name: String(source.name || current.name || id).trim() || id,

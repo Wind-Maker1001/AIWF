@@ -90,7 +90,6 @@ from aiwf.governance_surface import (
 )
 from aiwf.node_config_contract_runtime import (
     NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
-    build_validation_error_items,
 )
 
 
@@ -155,6 +154,55 @@ def _normalize_workflow_graph_error_messages(message: str) -> list[str]:
     return [text]
 
 
+def _normalize_validation_error_item(message: str) -> dict[str, str]:
+    text = str(message or "").strip()
+    if not text:
+        return {"path": "", "code": "validation_error", "message": ""}
+    if re.match(r"^workflow contains unregistered node types:", text):
+        return {"path": "workflow.nodes", "code": "unknown_node_type", "message": text}
+    path = text
+    code = "validation_error"
+    for pattern in [
+        r"^(.*?) keys must not be empty$",
+        r"^(.*?) must match .*$",
+        r"^(.*?) must be included in .* when both are provided$",
+        r"^(.*?) is required when .*$",
+        r"^(.*?) requires one of .*$",
+        r"^(.*?) must contain at least one node$",
+        r"^(.*?) must not be empty$",
+        r"^(.*?) must be .*$",
+        r"^(.*?) is required$",
+    ]:
+        match = re.match(pattern, text)
+        if match:
+            path = str(match.group(1) or "").strip() or text
+            break
+    if text.endswith(" must be a boolean"): code = "type_boolean"
+    elif text.endswith(" must be a string"): code = "type_string"
+    elif text.endswith(" must not be empty"): code = "string_empty"
+    elif " must be one of: " in text: code = "enum_not_allowed"
+    elif text.endswith(" must be an array"): code = "type_array"
+    elif text.endswith(" must contain at least one node"): code = "array_min_items"
+    elif text.endswith(" must be an object"): code = "type_object"
+    elif text.endswith(" keys must not be empty"): code = "empty_key"
+    elif text.endswith(" must be JSON-compatible"): code = "json_not_compatible"
+    elif text.endswith(" must be an integer"): code = "type_integer"
+    elif text.endswith(" must be a number"): code = "type_number"
+    elif " must be >= " in text: code = "min_value"
+    elif " requires one of " in text: code = "missing_one_of"
+    elif " is required when " in text and text.endswith(" is provided"): code = "paired_required"
+    elif " is required when " in text: code = "conditional_required"
+    elif " must be included in " in text and text.endswith(" when both are provided"): code = "membership_required"
+    elif " validator kind unsupported: " in text: code = "unsupported_validator_kind"
+    elif text.endswith(" must not be undefined"): code = "undefined_not_allowed"
+    elif text.endswith(" is required"): code = "required"
+    return {"path": path, "code": code, "message": text}
+
+
+def _build_validation_error_items(errors: list[str]) -> list[dict[str, str]]:
+    return [_normalize_validation_error_item(msg) for msg in errors if str(msg or "").strip()]
+
+
 def _workflow_graph_error_response(provider: str, scope: str, exc: ValueError) -> JSONResponse:
     normalized_errors = _normalize_workflow_graph_error_messages(str(exc))
     return JSONResponse(
@@ -167,7 +215,7 @@ def _workflow_graph_error_response(provider: str, scope: str, exc: ValueError) -
             "error_scope": scope,
             "graph_contract": WORKFLOW_GRAPH_CONTRACT_AUTHORITY,
             "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
-            "error_items": build_validation_error_items(normalized_errors),
+            "error_items": _build_validation_error_items(normalized_errors),
         },
     )
 
@@ -189,7 +237,7 @@ def _governance_validation_error_response(
             "error_code": GOVERNANCE_VALIDATION_ERROR_CODE,
             "error_scope": scope,
             "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
-            "error_items": build_validation_error_items(items),
+            "error_items": _build_validation_error_items(items),
         },
     )
 

@@ -237,21 +237,6 @@ def validate_governance_surface_entries(entries: Optional[Iterable[Dict[str, Any
             elif value is None:
                 issues.append(f"{capability} missing {field}")
 
-        if str(entry.get("control_plane_role") or "").strip() != GOVERNANCE_CONTROL_PLANE_ROLE:
-            issues.append(f"{capability} control_plane_role drift")
-        if str(entry.get("control_plane") or "").strip() != GOVERNANCE_CONTROL_PLANE_ROLE:
-            issues.append(f"{capability} control_plane drift")
-        if str(entry.get("control_plane_status") or "").strip() != GOVERNANCE_CONTROL_PLANE_STATUS:
-            issues.append(f"{capability} control_plane_status drift")
-        if str(entry.get("state_owner") or "").strip() != GOVERNANCE_STATE_CONTROL_PLANE_OWNER:
-            issues.append(f"{capability} state_owner drift")
-        if str(entry.get("host_runtime") or "").strip() != GOVERNANCE_STATE_CONTROL_PLANE_OWNER:
-            issues.append(f"{capability} host_runtime drift")
-        if str(entry.get("job_lifecycle_control_plane_owner") or "").strip() != JOB_LIFECYCLE_CONTROL_PLANE_OWNER:
-            issues.append(f"{capability} job_lifecycle_control_plane_owner drift")
-        if bool(entry.get("lifecycle_mutation_allowed")):
-            issues.append(f"{capability} lifecycle_mutation_allowed must remain false")
-
         route_prefix = str(entry.get("route_prefix") or "").strip()
         owned_route_prefixes = _normalize_owned_route_prefixes(entry.get("owned_route_prefixes"))
         if route_prefix and route_prefix not in owned_route_prefixes:

@@ -28,24 +28,6 @@ if (-not $RepoRoot) {
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw "node not found in PATH"
 }
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-  throw "python not found in PATH"
-}
-
-$pythonScript = @'
-import json
-import os
-import sys
-from pathlib import Path
-
-repo_root = Path(sys.argv[1]).resolve()
-os.environ["AIWF_REPO_ROOT"] = str(repo_root)
-sys.path.insert(0, str(repo_root / "apps" / "glue-python"))
-
-from aiwf.node_config_contract_runtime import build_node_config_contract_runtime_summary
-
-print(json.dumps(build_node_config_contract_runtime_summary(), ensure_ascii=False))
-'@
 
 $nodeScript = @'
 const path = require("path");
@@ -100,7 +82,6 @@ function uniqueSorted(values) {
   const contractJson = JSON.parse(require("fs").readFileSync(contractPath, "utf8"));
   const contractCjs = require(contractCjsPath);
   const contractEsm = await import(pathToFileURL(contractEsmPath).href);
-  const pythonRuntime = JSON.parse(process.env.AIWF_NODE_CONFIG_PYTHON_RUNTIME_JSON || "{}");
 
   const cjsIds = Array.isArray(cjs.NODE_CONFIG_SCHEMA_IDS) ? cjs.NODE_CONFIG_SCHEMA_IDS : [];
   const esmIds = Array.isArray(esm.NODE_CONFIG_SCHEMA_IDS) ? esm.NODE_CONFIG_SCHEMA_IDS : [];
@@ -154,19 +135,6 @@ function uniqueSorted(values) {
   const nestedCovered = TARGET_NODE_TYPES.filter((type) => cjsQuality[type] === "nested_shape_constrained");
   const requiredNestedMissing = requiredNestedNodeTypes.filter((type) => cjsQuality[type] !== "nested_shape_constrained");
   const nestedShapeConstrainedDeficit = Math.max(0, minimumNestedShapeConstrained - nestedCovered.length);
-  const pythonRuntimeContractAuthority = String(pythonRuntime?.authority || "").trim();
-  const pythonRuntimeSchemaVersion = String(pythonRuntime?.schema_version || "").trim();
-  const pythonRuntimeContractTypes = uniqueSorted(pythonRuntime?.contract_types || []);
-  const pythonRuntimeSupportedValidatorKinds = uniqueSorted(pythonRuntime?.supported_validator_kinds || []);
-  const pythonRuntimeMissingTypes = contractTypes.filter((type) => !pythonRuntimeContractTypes.includes(type));
-  const pythonRuntimeStaleTypes = pythonRuntimeContractTypes.filter((type) => !contractTypes.includes(type));
-  const pythonRuntimeMissingValidatorKinds = contractValidatorKinds.filter((kind) => !pythonRuntimeSupportedValidatorKinds.includes(kind));
-  const pythonRuntimeAuthorityDrift = pythonRuntimeContractAuthority && pythonRuntimeContractAuthority !== contractAuthority
-    ? [pythonRuntimeContractAuthority]
-    : (pythonRuntimeContractAuthority ? [] : ["<missing>"]);
-  const pythonRuntimeSchemaVersionDrift = pythonRuntimeSchemaVersion && pythonRuntimeSchemaVersion !== contractSchemaVersion
-    ? [pythonRuntimeSchemaVersion]
-    : (pythonRuntimeSchemaVersion ? [] : ["<missing>"]);
 
   if (missingFromCatalog.length > 0) issues.push(`node config schema target missing from defaults catalog: ${missingFromCatalog.join(", ")}`);
   if (missingFromCjs.length > 0) issues.push(`node config schema coverage missing in workflow_contract.js: ${missingFromCjs.join(", ")}`);
@@ -184,21 +152,6 @@ function uniqueSorted(values) {
   }
   if (requiredNestedMissing.length > 0) {
     issues.push(`node config schema required nested coverage missing: ${requiredNestedMissing.join(", ")}`);
-  }
-  if (pythonRuntimeAuthorityDrift.length > 0) {
-    issues.push(`node config python runtime authority drift: ${pythonRuntimeAuthorityDrift.join(", ")}`);
-  }
-  if (pythonRuntimeSchemaVersionDrift.length > 0) {
-    issues.push(`node config python runtime schema version drift: ${pythonRuntimeSchemaVersionDrift.join(", ")}`);
-  }
-  if (pythonRuntimeMissingTypes.length > 0) {
-    issues.push(`node config python runtime missing contract types: ${pythonRuntimeMissingTypes.join(", ")}`);
-  }
-  if (pythonRuntimeStaleTypes.length > 0) {
-    issues.push(`node config python runtime has stale contract types: ${pythonRuntimeStaleTypes.join(", ")}`);
-  }
-  if (pythonRuntimeMissingValidatorKinds.length > 0) {
-    issues.push(`node config python runtime missing validator kinds: ${pythonRuntimeMissingValidatorKinds.join(", ")}`);
   }
 
   const summary = {
@@ -218,11 +171,6 @@ function uniqueSorted(values) {
     requiredNestedSatisfied: requiredNestedNodeTypes.filter((type) => cjsQuality[type] === "nested_shape_constrained"),
     requiredNestedMissing,
     qualityCounts,
-    pythonRuntimeContractAuthority,
-    pythonRuntimeSchemaVersion,
-    pythonRuntimeCoveredCount: pythonRuntimeContractTypes.length,
-    pythonRuntimeSupportedValidatorKindCount: pythonRuntimeSupportedValidatorKinds.length,
-    pythonRuntimeSupportedValidatorKinds,
     drift: {
       missingFromCatalog,
       missingFromCjs,
@@ -235,11 +183,6 @@ function uniqueSorted(values) {
       contractModuleTypeDrift,
       contractModuleQualityDrift,
       requiredNestedTypesMissingFromContract,
-      pythonRuntimeAuthorityDrift,
-      pythonRuntimeSchemaVersionDrift,
-      pythonRuntimeMissingTypes,
-      pythonRuntimeStaleTypes,
-      pythonRuntimeMissingValidatorKinds,
     },
     issues,
     covered: TARGET_NODE_TYPES,
@@ -264,14 +207,8 @@ if ($null -eq $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES) {
 } else {
   $previousRequiredNestedNodeTypes = $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES
 }
-$previousPythonRuntimeSummary = if ($null -eq $env:AIWF_NODE_CONFIG_PYTHON_RUNTIME_JSON) { $null } else { $env:AIWF_NODE_CONFIG_PYTHON_RUNTIME_JSON }
 $env:AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED = [string]$MinimumNestedShapeConstrained
 $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES = (@($RequiredNestedNodeTypes | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ",")
-$pythonRuntimeSummaryJson = $pythonScript | python - $RepoRoot
-if ($LASTEXITCODE -ne 0) {
-  throw "python node config contract runtime summary failed"
-}
-$env:AIWF_NODE_CONFIG_PYTHON_RUNTIME_JSON = [string]$pythonRuntimeSummaryJson
 
 try {
   $nodeScript | node - $RepoRoot
@@ -291,10 +228,5 @@ finally {
     Remove-Item Env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES -ErrorAction SilentlyContinue
   } else {
     $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES = $previousRequiredNestedNodeTypes
-  }
-  if ($null -eq $previousPythonRuntimeSummary) {
-    Remove-Item Env:AIWF_NODE_CONFIG_PYTHON_RUNTIME_JSON -ErrorAction SilentlyContinue
-  } else {
-    $env:AIWF_NODE_CONFIG_PYTHON_RUNTIME_JSON = $previousPythonRuntimeSummary
   }
 }

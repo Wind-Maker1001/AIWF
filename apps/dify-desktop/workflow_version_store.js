@@ -62,11 +62,11 @@ function createWorkflowVersionStore(deps = {}) {
     return {
       schema_version: String(source.schema_version || current.schema_version || WORKFLOW_VERSION_SCHEMA_VERSION),
       provider,
-      owner: String(source.owner || current.owner || (provider === GLUE_PROVIDER ? "glue-python" : "desktop.local_legacy")),
+      owner: String(source.owner || current.owner || "glue-python"),
       source_of_truth: String(
         source.source_of_truth
           || current.source_of_truth
-          || (provider === GLUE_PROVIDER ? "glue-python.governance.workflow_versions" : "desktop.workflow_store.workflow_versions")
+          || "glue-python.governance.workflow_versions"
       ),
       version_id: versionId,
       ts: String(source.ts || current.ts || new Date().toISOString()),

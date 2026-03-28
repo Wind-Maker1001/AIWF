@@ -39,11 +39,11 @@ function createWorkflowRunBaselineStore(deps = {}) {
     return {
       schema_version: String(source.schema_version || current.schema_version || "run_baseline_entry.v1"),
       provider,
-      owner: String(source.owner || current.owner || (provider === GLUE_PROVIDER ? "glue-python" : "desktop.local_legacy")),
+      owner: String(source.owner || current.owner || "glue-python"),
       source_of_truth: String(
         source.source_of_truth
           || current.source_of_truth
-          || (provider === GLUE_PROVIDER ? "glue-python.governance.run_baselines" : "desktop.workflow_store.run_baselines")
+          || "glue-python.governance.run_baselines"
       ),
       baseline_id: baselineId,
       name: String(source.name || current.name || runId).trim() || runId,

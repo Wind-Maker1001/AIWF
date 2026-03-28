@@ -50,11 +50,11 @@ function createWorkflowAppRegistryStore(deps = {}) {
     return {
       schema_version: String(source.schema_version || current.schema_version || WORKFLOW_APP_SCHEMA_VERSION),
       provider,
-      owner: String(source.owner || current.owner || (provider === GLUE_PROVIDER ? "glue-python" : "desktop.local_legacy")),
+      owner: String(source.owner || current.owner || "glue-python"),
       source_of_truth: String(
         source.source_of_truth
           || current.source_of_truth
-          || (provider === GLUE_PROVIDER ? "glue-python.governance.workflow_apps" : "desktop.workflow_store.workflow_apps")
+          || "glue-python.governance.workflow_apps"
       ),
       app_id: appId,
       name: String(source.name || current.name || safeGraph?.name || appId).trim() || appId,
