@@ -9,8 +9,6 @@ from typing import Any, Dict, List, Optional
 from aiwf.paths import resolve_bus_root
 from aiwf.governance_workflow_versions import (
     get_workflow_version,
-    save_workflow_version,
-    validate_workflow_graph,
 )
 
 
@@ -60,12 +58,6 @@ def validate_published_version_id(value: str) -> str:
     return version_id
 
 
-def build_legacy_embedded_version_id(app_id: str) -> str:
-    safe = "".join(char if char.isalnum() or char in {"_", "-", "."} else "_" for char in str(app_id or "").strip())
-    safe = safe[:120] or "app"
-    return f"legacy_app_{safe}_embedded"
-
-
 def normalize_workflow_app_payload(
     payload: Dict[str, Any],
     *,
@@ -74,24 +66,9 @@ def normalize_workflow_app_payload(
     source = payload if isinstance(payload, dict) else {}
     current = existing if isinstance(existing, dict) else {}
     app_id = validate_workflow_app_id(source.get("app_id") or current.get("app_id") or "")
-    published_version_id_raw = str(source.get("published_version_id") or current.get("published_version_id") or "").strip()
-    if published_version_id_raw:
-        published_version_id = validate_published_version_id(published_version_id_raw)
-    else:
-        legacy_graph_source = source.get("graph") if source.get("graph") is not None else current.get("graph")
-        if legacy_graph_source is None:
-            raise ValueError("workflow app published_version_id is required")
-        legacy_graph = validate_workflow_graph(legacy_graph_source)
-        legacy_workflow_id = str(source.get("workflow_id") or current.get("workflow_id") or legacy_graph.get("workflow_id") or "").strip()
-        legacy_name = str(source.get("name") or current.get("name") or legacy_graph.get("name") or app_id).strip() or app_id
-        migrated_version = save_workflow_version({
-            "version_id": build_legacy_embedded_version_id(app_id),
-            "workflow_id": legacy_workflow_id or str(legacy_graph.get("workflow_id") or "").strip(),
-            "workflow_name": legacy_name,
-            "path": "",
-            "graph": legacy_graph,
-        })
-        published_version_id = str(migrated_version.get("version_id") or "").strip()
+    published_version_id = validate_published_version_id(
+        source.get("published_version_id") or current.get("published_version_id") or ""
+    )
     version_item = get_workflow_version(published_version_id)
     if version_item is None:
         raise ValueError(f"workflow app published_version_id not found: {published_version_id}")

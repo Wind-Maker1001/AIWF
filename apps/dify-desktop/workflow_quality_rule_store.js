@@ -1,10 +1,10 @@
 const GLUE_PROVIDER = "glue_http";
-const QUALITY_RULE_SET_SCHEMA_VERSION = "quality_rule_set.v1";
 const {
   createGovernanceGlueStoreSupport,
   GOVERNANCE_CAPABILITIES,
   GOVERNANCE_DEFAULT_GLUE_URL,
 } = require("./workflow_governance");
+const QUALITY_RULE_SET_SCHEMA_VERSION = GOVERNANCE_CAPABILITIES.QUALITY_RULE_SETS.schema_version;
 const {
   workflowStoreRemoteErrorResult,
 } = require("./workflow_store_remote_error");

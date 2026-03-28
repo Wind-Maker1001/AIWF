@@ -115,7 +115,6 @@ function failPayload(payload) {
 
   const appStore = createWorkflowAppRegistryStore({
     loadConfig: () => ({ mode: "base_api", glueUrl: "http://127.0.0.1:18081" }),
-    validateWorkflowGraph: () => {},
     fetchImpl: async (url, init = {}) => {
       if (url.endsWith("/governance/meta/control-plane")) {
         return governanceBoundaryResponse("workflow_apps", "/governance/workflow-apps");
@@ -129,9 +128,9 @@ function failPayload(payload) {
             schema_version: "workflow_app_registry_entry.v1",
             workflow_id: "wf_schema_gate",
             name: "Schema Gate App",
+            published_version_id: "ver_schema_gate_001",
             params_schema: {},
             template_policy: {},
-            graph: graph(),
           }],
         });
       }

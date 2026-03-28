@@ -1,10 +1,10 @@
 const GLUE_PROVIDER = "glue_http";
-const WORKFLOW_APP_SCHEMA_VERSION = "workflow_app_registry_entry.v1";
 const {
   createGovernanceGlueStoreSupport,
   GOVERNANCE_CAPABILITIES,
   GOVERNANCE_DEFAULT_GLUE_URL,
 } = require("./workflow_governance");
+const WORKFLOW_APP_SCHEMA_VERSION = GOVERNANCE_CAPABILITIES.WORKFLOW_APPS.schema_version;
 const {
   workflowStoreRemoteErrorResult,
 } = require("./workflow_store_remote_error");
@@ -14,7 +14,6 @@ function createWorkflowAppRegistryStore(deps = {}) {
     loadConfig = () => ({}),
     nowIso = () => new Date().toISOString(),
     fetchImpl = typeof fetch === "function" ? fetch : null,
-    validateWorkflowGraph = () => {},
     env = process.env,
   } = deps;
   const {
@@ -42,11 +41,7 @@ function createWorkflowAppRegistryStore(deps = {}) {
     const appId = String(source.app_id || current.app_id || "").trim();
     if (!appId) throw new Error("workflow app id is required");
     const publishedVersionId = String(source.published_version_id || current.published_version_id || "").trim();
-    const graph = source.graph !== undefined ? source.graph : current.graph;
-    const hasLegacyGraph = !!(graph && typeof graph === "object");
-    if (!publishedVersionId && !hasLegacyGraph) throw new Error("workflow app published_version_id is required");
-    const safeGraph = hasLegacyGraph ? clone(graph) : null;
-    if (!publishedVersionId && safeGraph) validateWorkflowGraph(safeGraph);
+    if (!publishedVersionId) throw new Error("workflow app published_version_id is required");
     return {
       schema_version: String(source.schema_version || current.schema_version || WORKFLOW_APP_SCHEMA_VERSION),
       provider,
@@ -57,14 +52,13 @@ function createWorkflowAppRegistryStore(deps = {}) {
           || "glue-python.governance.workflow_apps"
       ),
       app_id: appId,
-      name: String(source.name || current.name || safeGraph?.name || appId).trim() || appId,
-      workflow_id: String(source.workflow_id || current.workflow_id || safeGraph?.workflow_id || "").trim() || "custom",
+      name: String(source.name || current.name || appId).trim() || appId,
+      workflow_id: String(source.workflow_id || current.workflow_id || "").trim() || "custom",
       published_version_id: publishedVersionId,
       params_schema: clone(source.params_schema && typeof source.params_schema === "object" ? source.params_schema : (current.params_schema || {})),
       template_policy: clone(source.template_policy && typeof source.template_policy === "object" ? source.template_policy : (current.template_policy || {})),
       created_at: String(source.created_at || current.created_at || nowIso()),
       updated_at: String(source.updated_at || nowIso()),
-      ...(safeGraph && !publishedVersionId ? { graph: safeGraph } : {}),
     };
   }
 
