@@ -126,8 +126,8 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_governance_store_sc
 This gate now enforces:
 
 - backend-owned governance / publishing stores keep `schema_version` on their normalized output objects
-- `workflow_app_registry_store.js`, `workflow_quality_rule_store.js`, `workflow_manual_review_store.js`, `workflow_version_store.js`, `workflow_run_baseline_store.js`, `workflow_run_audit_store.js`, `workflow_sandbox_rule_store.js`, and `workflow_sandbox_autofix_store.js` keep explicit version markers in source
-- workflow run audit paths keep `schema_version` on run entries, audit events, timeline payloads, and failure summaries
+- `workflow_app_registry_store.js`, `workflow_quality_rule_store.js`, `workflow_manual_review_store.js`, `workflow_version_store.js`, `workflow_run_baseline_store.js`, `workflow_sandbox_rule_store.js`, and `workflow_sandbox_autofix_store.js` keep explicit version markers in source
+- workflow run audit no longer belongs to this default governance-owned store set; its default owner is now local runtime, with remote lifecycle providers used only explicitly through `base_http`
 - sandbox governance paths keep `schema_version` on sandbox rules, rule versions, compare payloads, rollback payloads, autofix state, and autofix action history
 - failure output stays machine-readable so the architecture scorecard can call out missing source markers or missing runtime schema-version outputs explicitly
 

@@ -42,11 +42,6 @@ async function withGovernanceMock(runItems, fn) {
         boundary: {
           governance_surfaces: [
             {
-              capability: 'workflow_run_audit',
-              route_prefix: '/governance/workflow-runs',
-              owned_route_prefixes: ['/governance/workflow-runs', '/governance/workflow-audit-events'],
-            },
-            {
               capability: 'workflow_versions',
               route_prefix: '/governance/workflow-versions',
               owned_route_prefixes: ['/governance/workflow-versions'],
@@ -54,10 +49,6 @@ async function withGovernanceMock(runItems, fn) {
           ],
         },
       });
-      return;
-    }
-    if (req.method === 'GET' && url.pathname === '/governance/workflow-runs') {
-      governanceJson(res, 200, { ok: true, items });
       return;
     }
     if (req.method === 'GET' && url.pathname === '/governance/workflow-versions') {

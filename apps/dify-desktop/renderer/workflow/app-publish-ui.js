@@ -101,8 +101,6 @@ function createWorkflowAppPublishUi(els, deps = {}) {
         version: 1,
         governance: currentTemplateGovernance(),
         runtime_defaults: parseRunParamsLoose(),
-        latest_preflight: getLastPreflightReport() || null,
-        latest_template_acceptance: getLastTemplateAcceptanceReport() || null,
       },
     });
     setStatus(out?.ok ? "流程应用已发布" : `发布失败: ${formatWorkflowContractError(out)}`, !!out?.ok);

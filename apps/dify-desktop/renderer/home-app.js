@@ -342,11 +342,7 @@ async function runMain(){
     }
     const j=await window.aiwfDesktop.runCleaning(payload,cfgFromUi());
     show(j);renderMetrics(j);
-    if(j?.fallback_applied){
-      setStatus(`生成完成（已自动切换离线模式）：${j.fallback_message || "后端不可用或失败"}`, true);
-    }else{
-      setStatus(j.ok?"生成完成":"生成失败",!!j.ok);
-    }
+    setStatus(j.ok?"生成完成":"生成失败",!!j.ok);
   }catch(e){setStatus("运行失败: "+e,false)}
 }
 

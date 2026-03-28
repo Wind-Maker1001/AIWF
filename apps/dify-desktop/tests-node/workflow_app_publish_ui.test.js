@@ -103,8 +103,6 @@ test("workflow app publish ui publishes app and refreshes list", async () => {
       normalizeAppSchemaObject: (obj) => ({ ...obj, normalized: { type: "boolean" } }),
       currentTemplateGovernance: () => ({ mode: "strict" }),
       parseRunParamsLoose: () => ({ region: "cn" }),
-      getLastPreflightReport: () => ({ ok: true }),
-      getLastTemplateAcceptanceReport: () => ({ accepted: true }),
       renderAppRows: (items) => renderCalls.push(items),
     });
 
@@ -125,8 +123,6 @@ test("workflow app publish ui publishes app and refreshes list", async () => {
       version: 1,
       governance: { mode: "strict" },
       runtime_defaults: { region: "cn" },
-      latest_preflight: { ok: true },
-      latest_template_acceptance: { accepted: true },
     },
   });
   assert.deepEqual(renderCalls, [[{ app_id: "app_1", name: "Finance App" }]]);

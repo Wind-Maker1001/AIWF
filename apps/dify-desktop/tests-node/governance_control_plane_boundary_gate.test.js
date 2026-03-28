@@ -39,7 +39,7 @@ test("governance control plane boundary gate passes", () => {
   assert.match(payload.manifestPath, /governance_capabilities\.v1\.json/i);
   assert.match(payload.desktopGeneratedPath, /workflow_governance_capabilities\.generated\.js/i);
   assert.match(payload.winUiGeneratedPath, /GovernanceCapabilities\.Generated\.cs/i);
-  assert.ok(payload.surfaceCount >= 8);
+  assert.ok(payload.surfaceCount >= 7);
   assert.ok(payload.governanceRouteCount >= payload.coveredGovernanceRouteCount);
   assert.deepEqual(payload.drift.uncoveredGovernanceRoutes, []);
   assert.deepEqual(payload.drift.duplicateOwnedRoutePrefixes, []);

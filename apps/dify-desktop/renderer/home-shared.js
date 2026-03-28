@@ -82,14 +82,10 @@ const cfgFromUi=()=>({
   mode:$("mode").value,
   baseUrl:$("baseUrl").value.trim(),
   apiKey:$("apiKey").value.trim(),
-  enableOfflineFallback:$("enableOfflineFallback").checked,
-  fallbackPolicy:$("fallbackPolicy").value,
   outputRoot:$("outputRoot").value.trim(),
   samplePoolDir:$("samplePoolDir").value.trim(),
 });
 const uiCfgFromUi=()=>({
-  enableOfflineFallback:$("enableOfflineFallback").checked,
-  fallbackPolicy:$("fallbackPolicy").value,
   outputRoot:$("outputRoot").value.trim(),
   samplePoolDir:$("samplePoolDir").value.trim(),
   xlsxTemplatePath:$("xlsxTemplatePath").value.trim(),
@@ -122,8 +118,6 @@ const saveCfgFromUi=()=>Object.assign({}, cfgFromUi(), uiCfgFromUi());
 function applyUiCfg(cfg){
   const c = cfg || {};
   const defaultDebateRules = "谣言=内容差\n成瘾=能力减损\n社交=社交与表达";
-  $("enableOfflineFallback").checked = c.enableOfflineFallback !== false;
-  $("fallbackPolicy").value = c.fallbackPolicy || "smart";
   $("outputRoot").value = c.outputRoot || "E:\\Desktop_Real\\AIWF";
   $("samplePoolDir").value = c.samplePoolDir || "";
   $("xlsxTemplatePath").value = c.xlsxTemplatePath || "";

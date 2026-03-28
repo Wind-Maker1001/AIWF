@@ -47,9 +47,8 @@ if (-not $SkipEnsureGlueBridge) {
   $env:AIWF_QUALITY_RULE_SET_PROVIDER = "glue_http"
   $env:AIWF_WORKFLOW_APP_REGISTRY_PROVIDER = "glue_http"
   $env:AIWF_WORKFLOW_VERSION_PROVIDER = "glue_http"
-  $env:AIWF_WORKFLOW_RUN_AUDIT_PROVIDER = "glue_http"
   $env:AIWF_RUN_BASELINE_PROVIDER = "glue_http"
-  Info "default launch will use backend-owned manual review, quality rule, app registry, workflow version, run audit, and run baseline providers"
+  Info "default launch will use backend-owned manual review, quality rule, app registry, workflow version, and run baseline providers; workflow run audit remains local-runtime by default"
 } else {
   Warn "skip local governance bridge health/start check"
 }

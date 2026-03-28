@@ -41,9 +41,12 @@ function createWorkflowAppRegistryStore(deps = {}) {
     const current = existing && typeof existing === "object" ? existing : {};
     const appId = String(source.app_id || current.app_id || "").trim();
     if (!appId) throw new Error("workflow app id is required");
+    const publishedVersionId = String(source.published_version_id || current.published_version_id || "").trim();
     const graph = source.graph !== undefined ? source.graph : current.graph;
-    validateWorkflowGraph(graph);
-    const safeGraph = clone(graph);
+    const hasLegacyGraph = !!(graph && typeof graph === "object");
+    if (!publishedVersionId && !hasLegacyGraph) throw new Error("workflow app published_version_id is required");
+    const safeGraph = hasLegacyGraph ? clone(graph) : null;
+    if (!publishedVersionId && safeGraph) validateWorkflowGraph(safeGraph);
     return {
       schema_version: String(source.schema_version || current.schema_version || WORKFLOW_APP_SCHEMA_VERSION),
       provider,
@@ -56,11 +59,12 @@ function createWorkflowAppRegistryStore(deps = {}) {
       app_id: appId,
       name: String(source.name || current.name || safeGraph?.name || appId).trim() || appId,
       workflow_id: String(source.workflow_id || current.workflow_id || safeGraph?.workflow_id || "").trim() || "custom",
+      published_version_id: publishedVersionId,
       params_schema: clone(source.params_schema && typeof source.params_schema === "object" ? source.params_schema : (current.params_schema || {})),
       template_policy: clone(source.template_policy && typeof source.template_policy === "object" ? source.template_policy : (current.template_policy || {})),
-      graph: safeGraph,
       created_at: String(source.created_at || current.created_at || nowIso()),
       updated_at: String(source.updated_at || nowIso()),
+      ...(safeGraph && !publishedVersionId ? { graph: safeGraph } : {}),
     };
   }
 
@@ -107,7 +111,7 @@ function createWorkflowAppRegistryStore(deps = {}) {
           app_id: normalized.app_id,
           name: normalized.name,
           workflow_id: normalized.workflow_id,
-          graph: clone(normalized.graph),
+          published_version_id: normalized.published_version_id,
           params_schema: clone(normalized.params_schema),
           template_policy: clone(normalized.template_policy),
         },

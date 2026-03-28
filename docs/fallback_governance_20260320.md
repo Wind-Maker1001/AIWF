@@ -156,8 +156,8 @@ Phase 3 前应至少具备以下 gate：
 
 - retired_at: 2026-03-23
 - owner: workflow/observability convergence
-- removal_reason: workflow run history / timeline / failure summary / audit log 的默认写入与查询已全部收口到 glue-python；本地 run/audit JSONL 不再允许作为兼容 provider 继续存在
-- follow_up: 显式声明 `workflowRunAuditProvider=local_legacy` 现在会直接失败，提醒调用方改用 glue-python workflow run audit contract
+- removal_reason: 旧的 `local_legacy` run/audit mirror 语义已退役；本地 workflow runtime 继续保留自己的私有 run/audit truth，但不再伪装成 governance-owned compatibility provider
+- follow_up: 显式声明 `workflowRunAuditProvider=local_legacy` 现在会直接失败；远端 run audit 仅在显式声明 `base_http` 时使用
 
 ### desktop run baseline `local_legacy` provider
 

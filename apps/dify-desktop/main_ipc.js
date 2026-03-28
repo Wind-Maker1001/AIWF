@@ -33,7 +33,6 @@ function registerIpcHandlers(ctx) {
     localBuildAuditLogPath,
     appendLocalBuildAudit,
     classifyRemoteFailure,
-    shouldFallbackByPolicy,
   } = createMainIpcLogSupport(ctx);
   const {
     resolveOutputRoot,
@@ -52,7 +51,6 @@ function registerIpcHandlers(ctx) {
     resolveOutputRoot,
     appendRunModeAudit,
     classifyRemoteFailure,
-    shouldFallbackByPolicy,
   });
 
   registerPathIpc(ctx, {
@@ -85,5 +83,4 @@ function registerIpcHandlers(ctx) {
 module.exports = {
   registerIpcHandlers,
 };
-
 

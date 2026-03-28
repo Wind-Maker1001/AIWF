@@ -67,18 +67,6 @@ from aiwf.governance_manual_reviews import (
     list_manual_reviews,
     submit_manual_review,
 )
-from aiwf.governance_workflow_run_audit import (
-    WORKFLOW_AUDIT_EVENT_SCHEMA_VERSION,
-    WORKFLOW_RUN_AUDIT_OWNER,
-    WORKFLOW_RUN_AUDIT_SCHEMA_VERSION,
-    failure_summary as workflow_failure_summary,
-    get_workflow_run,
-    list_workflow_audit_events,
-    list_workflow_runs,
-    record_workflow_audit_event,
-    record_workflow_run,
-    run_timeline as workflow_run_timeline,
-)
 from aiwf.governance_run_baselines import (
     RUN_BASELINE_OWNER,
     RUN_BASELINE_SCHEMA_VERSION,
@@ -251,7 +239,8 @@ class WorkflowAppReq(BaseModel):
     app_id: Optional[str] = None
     name: Optional[str] = None
     workflow_id: Optional[str] = None
-    graph: Dict[str, Any] = Field(default_factory=dict)
+    published_version_id: Optional[str] = None
+    graph: Optional[Dict[str, Any]] = None
     params_schema: Dict[str, Any] = Field(default_factory=dict)
     template_policy: Dict[str, Any] = Field(default_factory=dict)
 
@@ -295,30 +284,6 @@ class ManualReviewSubmitReq(BaseModel):
     approved: bool
     reviewer: str = "reviewer"
     comment: str = ""
-
-
-class WorkflowRunRecordReq(BaseModel):
-    ts: Optional[str] = None
-    workflow_id: Optional[str] = None
-    status: Optional[str] = None
-    ok: Optional[bool] = None
-    payload: Dict[str, Any] = Field(default_factory=dict)
-    config: Dict[str, Any] = Field(default_factory=dict)
-    result: Dict[str, Any] = Field(default_factory=dict)
-
-
-class WorkflowRunRecordEnvelope(BaseModel):
-    run: WorkflowRunRecordReq
-
-
-class WorkflowAuditEventReq(BaseModel):
-    ts: Optional[str] = None
-    action: str
-    detail: Dict[str, Any] = Field(default_factory=dict)
-
-
-class WorkflowAuditEventEnvelope(BaseModel):
-    event: WorkflowAuditEventReq
 
 
 class RunBaselineReq(BaseModel):
@@ -657,7 +622,7 @@ def put_governance_workflow_app(app_id: str, req: WorkflowAppUpsertReq):
     try:
         item = save_workflow_app(payload)
     except ValueError as exc:
-        return _workflow_graph_error_response(WORKFLOW_APP_OWNER, "workflow_app", exc)
+        return _governance_validation_error_response(WORKFLOW_APP_OWNER, "workflow_app", exc)
     return {"ok": True, "provider": WORKFLOW_APP_OWNER, "item": item}
 
 
@@ -767,78 +732,6 @@ def post_governance_manual_review_submit(req: ManualReviewSubmitReq):
         "provider": MANUAL_REVIEW_OWNER,
         "item": result["item"],
         "remaining": result["remaining"],
-    }
-
-
-@app.get("/governance/workflow-runs")
-def list_governance_workflow_runs(limit: int = 200):
-    return {
-        "ok": True,
-        "provider": WORKFLOW_RUN_AUDIT_OWNER,
-        "items": list_workflow_runs(limit),
-    }
-
-
-@app.get("/governance/workflow-runs/failure-summary")
-def get_governance_workflow_failure_summary(limit: int = 400):
-    return {
-        "provider": WORKFLOW_RUN_AUDIT_OWNER,
-        **workflow_failure_summary(limit),
-    }
-
-
-@app.get("/governance/workflow-runs/{run_id}")
-def get_governance_workflow_run(run_id: str):
-    try:
-        item = get_workflow_run(run_id)
-    except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
-    if item is None:
-        return JSONResponse(
-            status_code=404,
-            content={"ok": False, "error": f"run not found: {run_id}"},
-        )
-    return {"ok": True, "provider": WORKFLOW_RUN_AUDIT_OWNER, "item": item}
-
-
-@app.put("/governance/workflow-runs/{run_id}")
-def put_governance_workflow_run(run_id: str, req: WorkflowRunRecordEnvelope):
-    payload = req.run.model_dump()
-    payload["run_id"] = str(run_id or "")
-    try:
-        item = record_workflow_run(payload)
-    except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
-    return {"ok": True, "provider": WORKFLOW_RUN_AUDIT_OWNER, "item": item}
-
-
-@app.get("/governance/workflow-runs/{run_id}/timeline")
-def get_governance_workflow_run_timeline(run_id: str):
-    try:
-        result = workflow_run_timeline(run_id)
-    except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
-    return {
-        "provider": WORKFLOW_RUN_AUDIT_OWNER,
-        **result,
-    }
-
-
-@app.post("/governance/workflow-audit-events")
-def post_governance_workflow_audit_event(req: WorkflowAuditEventEnvelope):
-    try:
-        item = record_workflow_audit_event(req.event.model_dump())
-    except ValueError as exc:
-        return JSONResponse(status_code=400, content={"ok": False, "error": str(exc)})
-    return {"ok": True, "provider": WORKFLOW_RUN_AUDIT_OWNER, "item": item}
-
-
-@app.get("/governance/workflow-audit-events")
-def list_governance_workflow_audit_events(limit: int = 200, action: str = ""):
-    return {
-        "ok": True,
-        "provider": WORKFLOW_RUN_AUDIT_OWNER,
-        "items": list_workflow_audit_events(limit, action),
     }
 
 

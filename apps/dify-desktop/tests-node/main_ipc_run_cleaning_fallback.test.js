@@ -66,28 +66,30 @@ function readLastAuditLine(fp) {
   return JSON.parse(lines[lines.length - 1]);
 }
 
-test("aiwf:runCleaning falls back to offline when base_api throws", async () => {
+test("aiwf:runCleaning surfaces base_api request failure without offline fallback", async () => {
   const { ipcMain, runModeAudit } = createCtx({
     runViaBaseApi: async () => {
       throw new Error("network down");
     },
-    runOfflineCleaningInWorker: async () => ({ ok: true, job_id: "local-fallback-1", artifacts: [{ kind: "md" }] }),
+    runOfflineCleaningInWorker: async () => {
+      throw new Error("should not be called");
+    },
   });
   const h = ipcMain.handlers.get("aiwf:runCleaning");
   assert.equal(typeof h, "function");
-  const out = await h({}, { params: { report_title: "x" } }, { mode: "base_api", enableOfflineFallback: true });
-  assert.equal(out.ok, true);
-  assert.equal(out.fallback_applied, true);
-  assert.equal(out.fallback_reason, "remote_request_failed");
-  assert.equal(out.job_id, "local-fallback-1");
+  await assert.rejects(
+    () => h({}, { params: { report_title: "x" } }, { mode: "base_api" }),
+    /network down/i,
+  );
   assert.equal(fs.existsSync(runModeAudit), true);
   const last = readLastAuditLine(runModeAudit);
   assert.equal(last.mode, "base_api");
-  assert.equal(last.fallback_applied, true);
+  assert.equal(last.ok, false);
   assert.equal(last.reason, "remote_request_failed");
+  assert.match(String(last.remote_error || ""), /network down/i);
 });
 
-test("aiwf:runCleaning returns remote not-ok when fallback disabled", async () => {
+test("aiwf:runCleaning returns remote not-ok without offline fallback", async () => {
   const { ipcMain, runModeAudit } = createCtx({
     runViaBaseApi: async () => ({ ok: false, job_id: "remote-failed", error: "bad request" }),
     runOfflineCleaningInWorker: async () => {
@@ -95,12 +97,12 @@ test("aiwf:runCleaning returns remote not-ok when fallback disabled", async () =
     },
   });
   const h = ipcMain.handlers.get("aiwf:runCleaning");
-  const out = await h({}, { params: {} }, { mode: "base_api", enableOfflineFallback: false });
+  const out = await h({}, { params: {} }, { mode: "base_api" });
   assert.equal(out.ok, false);
   assert.equal(out.job_id, "remote-failed");
   const last = readLastAuditLine(runModeAudit);
   assert.equal(last.mode, "base_api");
-  assert.equal(last.fallback_applied, false);
+  assert.equal(last.ok, false);
   assert.equal(last.reason, "remote_returned_not_ok");
 });
 
@@ -109,17 +111,16 @@ test("aiwf:runCleaning keeps remote success without fallback marker", async () =
     runViaBaseApi: async () => ({ ok: true, job_id: "remote-ok", artifacts: [{ kind: "xlsx" }] }),
   });
   const h = ipcMain.handlers.get("aiwf:runCleaning");
-  const out = await h({}, { params: {} }, { mode: "base_api", enableOfflineFallback: true });
+  const out = await h({}, { params: {} }, { mode: "base_api" });
   assert.equal(out.ok, true);
   assert.equal(out.job_id, "remote-ok");
   assert.equal(out.fallback_applied, undefined);
   const last = readLastAuditLine(runModeAudit);
   assert.equal(last.mode, "base_api");
-  assert.equal(last.fallback_applied, false);
   assert.equal(last.ok, true);
 });
 
-test("aiwf:runCleaning smart policy does not fallback on client_4xx error", async () => {
+test("aiwf:runCleaning surfaces client_4xx error directly", async () => {
   const { ipcMain } = createCtx({
     runViaBaseApi: async () => {
       throw new Error("INPUT_INVALID: bad request http_400");
@@ -128,7 +129,7 @@ test("aiwf:runCleaning smart policy does not fallback on client_4xx error", asyn
   });
   const h = ipcMain.handlers.get("aiwf:runCleaning");
   await assert.rejects(
-    () => h({}, { params: {} }, { mode: "base_api", enableOfflineFallback: true, fallbackPolicy: "smart" }),
+    () => h({}, { params: {} }, { mode: "base_api" }),
     /INPUT_INVALID|bad request|http_400/i,
   );
 });

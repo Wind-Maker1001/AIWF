@@ -418,7 +418,7 @@ function renderMetrics(p){
   $("mJob").textContent=p?.job_id||"-";
   const ok=!!(p?.ok||p?.run?.ok);
   $("mOk").textContent=ok?"成功":"失败";
-  const mode = p?.fallback_applied ? "offline_fallback" : (p?.mode || (cfgFromUi().mode || "-"));
+  const mode = p?.mode || (cfgFromUi().mode || "-");
   $("mMode").textContent=String(mode);
   const q = Number(p?.quality_score?.score ?? p?.quality_score ?? p?.quality?.quality_score ?? 0);
   $("mQScore").textContent=Number.isFinite(q) && q > 0 ? q.toFixed(1) : "-";

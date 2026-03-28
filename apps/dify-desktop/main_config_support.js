@@ -11,8 +11,6 @@ function createConfigSupport({ app, fs, path }) {
       baseUrl: "http://127.0.0.1:18080",
       glueUrl: "http://127.0.0.1:18081",
       apiKey: "",
-      enableOfflineFallback: true,
-      fallbackPolicy: "smart",
       outputRoot,
     };
   }
@@ -61,8 +59,8 @@ function createConfigSupport({ app, fs, path }) {
       }
       const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
       if (!cfg || typeof cfg !== "object") return defaultCfg();
-      if (typeof cfg.enableOfflineFallback === "undefined") cfg.enableOfflineFallback = true;
-      if (!cfg.fallbackPolicy) cfg.fallbackPolicy = "smart";
+      delete cfg.enableOfflineFallback;
+      delete cfg.fallbackPolicy;
       if (!cfg.glueUrl) cfg.glueUrl = "http://127.0.0.1:18081";
       if (!cfg.outputRoot) cfg.outputRoot = defaultCfg().outputRoot;
       return cfg;
@@ -72,8 +70,10 @@ function createConfigSupport({ app, fs, path }) {
   }
 
   function saveConfig(cfg) {
+    const source = cfg && typeof cfg === "object" ? cfg : {};
+    const { enableOfflineFallback, fallbackPolicy, ...nextCfg } = source;
     fs.mkdirSync(path.dirname(configPath()), { recursive: true });
-    fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2), "utf8");
+    fs.writeFileSync(configPath(), JSON.stringify(nextCfg, null, 2), "utf8");
   }
 
   return {

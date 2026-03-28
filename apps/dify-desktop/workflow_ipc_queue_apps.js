@@ -61,6 +61,13 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     return workflowStoreRemoteErrorResult(error);
   }
 
+  function buildPublishedVersionId(graph, req) {
+    const explicit = String(req?.published_version_id || req?.version_id || "").trim();
+    if (explicit) return explicit;
+    const workflowId = String(graph?.workflow_id || "workflow").trim().replace(/[^a-zA-Z0-9_.-]+/g, "_").slice(0, 80) || "workflow";
+    return `${workflowId}_published_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+  }
+
   function applyPendingReviewEnqueueResult(out, enqueueOut) {
     if (!enqueueOut?.ok) {
       const reviewEnqueue = {
@@ -377,20 +384,42 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     } catch (error) {
       return workflowContractFailure(error);
     }
+    const merged = normalizeWorkflowConfig({ ...loadConfig() });
+    const versionOut = await workflowVersionStore.recordVersion({
+      version_id: buildPublishedVersionId(graph, req),
+      workflow_id: String(graph?.workflow_id || "custom"),
+      workflow_name: name,
+      graph,
+    }, merged);
+    if (!versionOut?.ok) return versionOut;
+    const publishedVersionId = String(versionOut?.item?.version_id || "").trim();
+    if (!publishedVersionId) {
+      return {
+        ok: false,
+        error: "published version id missing after snapshot record",
+        error_code: "workflow_version_snapshot_missing",
+      };
+    }
     const out = await workflowAppRegistryStore.publishApp({
       app_id: String(req?.app_id || "").trim() || undefined,
       name,
       workflow_id: String(graph?.workflow_id || "custom"),
+      published_version_id: publishedVersionId,
       params_schema: req?.params_schema && typeof req.params_schema === "object" ? req.params_schema : {},
       template_policy: req?.template_policy && typeof req.template_policy === "object" ? req.template_policy : {},
-      graph,
-    });
+    }, merged);
     if (out?.ok) {
       appendAudit("workflow_publish_app", {
         app_id: String(out?.item?.app_id || ""),
         name: String(out?.item?.name || ""),
         provider: String(out?.provider || ""),
+        published_version_id: publishedVersionId,
       });
+      return {
+        ...out,
+        published_version_id: publishedVersionId,
+        published_version: versionOut?.item || null,
+      };
     }
     return out;
   });
@@ -407,9 +436,26 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}), ...(req?.cfg || {}) });
       const item = await workflowAppRegistryStore.getApp(appId, merged);
       if (!item) return { ok: false, error: "workflow app not found" };
+      let versionItem = null;
+      const publishedVersionId = String(item?.published_version_id || "").trim();
+      if (publishedVersionId) {
+        versionItem = await workflowVersionStore.getVersion(publishedVersionId, merged);
+        if (!versionItem?.graph || typeof versionItem.graph !== "object") {
+          return {
+            ok: false,
+            error: `workflow version not found for app: ${publishedVersionId}`,
+            error_code: "workflow_app_version_missing",
+            app_id: appId,
+            published_version_id: publishedVersionId,
+          };
+        }
+      }
       const params = req?.params && typeof req.params === "object" ? req.params : {};
       const mergedPayload = req?.payload && typeof req.payload === "object" ? { ...req.payload } : {};
-      mergedPayload.workflow = applyTemplateParams(item.graph || {}, params);
+      const sourceGraph = versionItem?.graph && typeof versionItem.graph === "object"
+        ? versionItem.graph
+        : (item.graph && typeof item.graph === "object" ? item.graph : {});
+      mergedPayload.workflow = applyTemplateParams(sourceGraph, params);
       if (!mergedPayload.workflow.workflow_id) mergedPayload.workflow.workflow_id = item.workflow_id || "custom";
       const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
       if (!rulesOut?.ok) return rulesOut;
@@ -433,16 +479,18 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       if (!out?.review_enqueue_failed) {
         await sandboxAutoFixStore.processRunAutoFix(out, effectivePayload || {}, merged);
       }
-      appendAudit("workflow_run_app", {
-        app_id: appId,
-        run_id: String(out?.run_id || ""),
-        ok: !!out?.ok,
-        provider: String(item?.provider || ""),
-      });
+        appendAudit("workflow_run_app", {
+          app_id: appId,
+          run_id: String(out?.run_id || ""),
+          ok: !!out?.ok,
+          provider: String(item?.provider || ""),
+          published_version_id: publishedVersionId,
+        });
       return {
         ok: !!out?.ok,
         app_id: appId,
         provider: String(item?.provider || ""),
+        published_version_id: publishedVersionId,
         result: out,
         run_id: String(out?.run_id || ""),
         status: String(out?.status || ""),

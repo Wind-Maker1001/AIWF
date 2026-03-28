@@ -17,7 +17,6 @@ test("governance capability manifest and generated assets stay aligned", () => {
 
   assert.match(manifest, /governance_capabilities\.v1/);
   assert.match(manifest, /quality_rule_sets/);
-  assert.match(manifest, /workflow_run_audit/);
   assert.match(manifest, /run_baselines/);
 
   assert.match(exportScript, /governance_capabilities\.v1\.json/);
@@ -35,15 +34,13 @@ test("governance capability manifest and generated assets stay aligned", () => {
 
   assert.match(desktopGenerated, /GOVERNANCE_CAPABILITIES/);
   assert.match(desktopGenerated, /GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS/);
-  assert.match(desktopGenerated, /WORKFLOW_RUN_AUDIT/);
   assert.match(desktopGenerated, /RUN_BASELINES/);
-  assert.match(desktopGenerated, /WORKFLOW_AUDIT_EVENTS/);
+  assert.doesNotMatch(desktopGenerated, /WORKFLOW_RUN_AUDIT/);
 
   assert.match(winUiGenerated, /public static class GovernanceCapabilitiesGenerated/);
-  assert.match(winUiGenerated, /public const string WORKFLOW_RUN_AUDIT/);
   assert.match(winUiGenerated, /public const string QUALITY_RULE_SETS/);
-  assert.match(winUiGenerated, /WORKFLOW_RUN_AUDIT_WORKFLOW_AUDIT_EVENTS_ROUTE_PREFIX/);
   assert.match(winUiGenerated, /WORKFLOW_SANDBOX_RULES_RULE_VERSIONS_ROUTE_PREFIX/);
+  assert.doesNotMatch(winUiGenerated, /WORKFLOW_RUN_AUDIT/);
 
   assert.match(workflowGovernance, /workflow_governance_capabilities\.generated\.js/);
   assert.match(workflowGovernance, /GOVERNANCE_CAPABILITIES/);

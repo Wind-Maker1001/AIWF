@@ -4,6 +4,11 @@ import com.aiwf.base.service.JobService;
 import com.aiwf.base.config.AppProperties;
 import com.aiwf.base.glue.GlueHealthResult;
 import com.aiwf.base.glue.GlueRunResult;
+import com.aiwf.base.web.dto.AuditEventResp;
+import com.aiwf.base.web.dto.JobFailureSummaryResp;
+import com.aiwf.base.web.dto.JobRunRecordResp;
+import com.aiwf.base.web.dto.JobRunTimelineResp;
+import com.aiwf.base.web.dto.JobTimelineItemResp;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +20,7 @@ import org.springframework.jdbc.datasource.lookup.DataSourceLookupFailureExcepti
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -140,5 +146,79 @@ class JobControllerContractTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.ok").value(false))
                 .andExpect(jsonPath("$.error").value("job_not_found"));
+    }
+
+    @Test
+    void historyEndpointsExposeLifecycleRunAuditViews() throws Exception {
+        when(jobs.listRunHistory(50)).thenReturn(List.of(
+                new JobRunRecordResp(
+                        "lifecycle_run_record.v1",
+                        "base-java",
+                        "base-java.jobs",
+                        "job1",
+                        "2026-03-28T00:00:00Z",
+                        "cleaning",
+                        "DONE",
+                        true,
+                        Map.of(),
+                        Map.of(),
+                        Map.of("job_id", "job1")
+                )
+        ));
+        when(jobs.getRunTimeline("job1")).thenReturn(
+                new JobRunTimelineResp(
+                        "lifecycle_run_timeline.v1",
+                        true,
+                        "base-java",
+                        "base-java.jobs",
+                        "job1",
+                        "DONE",
+                        List.of(new JobTimelineItemResp("cleaning", "cleaning", "DONE", "2026-03-28T00:00:00Z", "2026-03-28T00:00:01Z", 1.0, ""))
+                )
+        );
+        when(jobs.getFailureSummary(25)).thenReturn(
+                new JobFailureSummaryResp(
+                        "lifecycle_failure_summary.v1",
+                        true,
+                        "base-java",
+                        "base-java.jobs",
+                        10,
+                        2,
+                        Map.of("cleaning", Map.of("failed", 2))
+                )
+        );
+        when(jobs.listAuditEvents(40, "STEP_DONE")).thenReturn(List.of(
+                new AuditEventResp(
+                        "lifecycle_audit_event.v1",
+                        "base-java",
+                        "base-java.jobs",
+                        "2026-03-28T00:00:02Z",
+                        "glue",
+                        "STEP_DONE",
+                        "job1",
+                        "cleaning",
+                        Map.of("ok", true)
+                )
+        ));
+
+        mockMvc.perform(get("/api/v1/jobs/history").param("limit", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].run_id").value("job1"))
+                .andExpect(jsonPath("$[0].owner").value("base-java"));
+
+        mockMvc.perform(get("/api/v1/jobs/job1/timeline"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.run_id").value("job1"))
+                .andExpect(jsonPath("$.timeline[0].node_id").value("cleaning"));
+
+        mockMvc.perform(get("/api/v1/jobs/failure-summary").param("limit", "25"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.failed_runs").value(2))
+                .andExpect(jsonPath("$.owner").value("base-java"));
+
+        mockMvc.perform(get("/api/v1/jobs/audit-events").param("limit", "40").param("action", "STEP_DONE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].action").value("STEP_DONE"))
+                .andExpect(jsonPath("$[0].owner").value("base-java"));
     }
 }

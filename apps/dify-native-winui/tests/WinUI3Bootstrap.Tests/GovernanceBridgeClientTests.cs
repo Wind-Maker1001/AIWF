@@ -113,56 +113,21 @@ public sealed class GovernanceBridgeClientTests
     }
 
     [Fact]
-    public async Task ListWorkflowAuditEventsAsync_PrimesBoundaryAndUsesOwnedRoutePrefix()
+    public async Task ListWorkflowAuditEventsAsync_UsesLifecycleAuditEndpoint()
     {
-        var callIndex = 0;
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
         {
-            callIndex += 1;
-            if (callIndex == 1)
-            {
-                Assert.Equal("http://127.0.0.1:18081/governance/meta/control-plane", request.RequestUri!.AbsoluteUri);
-                return Json(HttpStatusCode.OK, """
-                    {
-                      "ok": true,
-                      "boundary": {
-                        "schema_version": "governance_surface.v1",
-                        "status": "effective_second_control_plane",
-                        "control_plane_role": "governance_state",
-                        "governance_state_control_plane_owner": "glue-python",
-                        "job_lifecycle_control_plane_owner": "base-java",
-                        "operator_semantics_authority_owner": "accel-rust",
-                        "workflow_authoring_surface_owner": "dify-desktop",
-                        "meta_route": "/governance/meta/control-plane",
-                        "governance_surfaces": [
-                          {
-                            "capability": "workflow_run_audit",
-                            "route_prefix": "/governance/workflow-runs",
-                            "owned_route_prefixes": ["/governance/workflow-runs", "/governance/workflow-audit-events-v2"],
-                            "state_owner": "glue-python",
-                            "control_plane_role": "governance_state",
-                            "lifecycle_mutation_allowed": false
-                          }
-                        ]
-                      }
-                    }
-                    """);
-            }
-
-            Assert.Equal("http://127.0.0.1:18081/governance/workflow-audit-events-v2?limit=80&action=run_workflow", request.RequestUri!.AbsoluteUri);
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/audit-events?limit=80&action=run_workflow", request.RequestUri!.AbsoluteUri);
             return Json(HttpStatusCode.OK, """
-                {
-                  "ok": true,
-                  "items": [
-                    {
-                      "ts": "2026-03-21T00:00:00Z",
-                      "action": "run_workflow",
-                      "detail": {
-                        "run_id": "run_1"
-                      }
+                [
+                  {
+                    "ts": "2026-03-21T00:00:00Z",
+                    "action": "run_workflow",
+                    "detail": {
+                      "run_id": "run_1"
                     }
-                  ]
-                }
+                  }
+                ]
                 """);
         }, autoBoundary: false));
 
@@ -170,7 +135,6 @@ public sealed class GovernanceBridgeClientTests
         var items = await client.ListWorkflowAuditEventsAsync("http://127.0.0.1:18081", "", action: "run_workflow");
 
         Assert.Single(items);
-        Assert.Equal(2, callIndex);
     }
 
     [Fact]
@@ -273,20 +237,17 @@ public sealed class GovernanceBridgeClientTests
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
         {
-            Assert.Equal("http://127.0.0.1:18081/governance/workflow-runs?limit=80", request.RequestUri!.AbsoluteUri);
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/history?limit=80", request.RequestUri!.AbsoluteUri);
             return Json(HttpStatusCode.OK, """
-                {
-                  "ok": true,
-                  "items": [
-                    {
-                      "run_id": "run_1",
-                      "workflow_id": "wf_finance",
-                      "status": "failed",
-                      "ok": false,
-                      "ts": "2026-03-21T00:00:00Z"
-                    }
-                  ]
-                }
+                [
+                  {
+                    "run_id": "run_1",
+                    "workflow_id": "wf_finance",
+                    "status": "failed",
+                    "ok": false,
+                    "ts": "2026-03-21T00:00:00Z"
+                  }
+                ]
                 """);
         }));
 
@@ -303,7 +264,7 @@ public sealed class GovernanceBridgeClientTests
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
         {
-            Assert.Equal("http://127.0.0.1:18081/governance/workflow-runs/run_1/timeline", request.RequestUri!.AbsoluteUri);
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/run_1/timeline", request.RequestUri!.AbsoluteUri);
             return Json(HttpStatusCode.OK, """
                 {
                   "ok": true,
@@ -332,8 +293,10 @@ public sealed class GovernanceBridgeClientTests
     [Fact]
     public async Task GetWorkflowFailureSummaryAsync_ParsesSummaryItems()
     {
-        using var http = new HttpClient(new StubHttpMessageHandler(_ =>
-            Json(HttpStatusCode.OK, """
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/failure-summary?limit=120", request.RequestUri!.AbsoluteUri);
+            return Json(HttpStatusCode.OK, """
                 {
                   "ok": true,
                   "by_node": {
@@ -343,7 +306,8 @@ public sealed class GovernanceBridgeClientTests
                     }
                   }
                 }
-                """)));
+                """);
+        }));
 
         var client = new GovernanceBridgeClient(http);
         var items = await client.GetWorkflowFailureSummaryAsync("http://127.0.0.1:18081", "");
@@ -359,20 +323,17 @@ public sealed class GovernanceBridgeClientTests
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
         {
-            Assert.Contains("action=run_workflow", request.RequestUri!.Query, StringComparison.Ordinal);
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/audit-events?limit=80&action=run_workflow", request.RequestUri!.AbsoluteUri);
             return Json(HttpStatusCode.OK, """
-                {
-                  "ok": true,
-                  "items": [
-                    {
-                      "ts": "2026-03-21T00:00:00Z",
-                      "action": "run_workflow",
-                      "detail": {
-                        "run_id": "run_1"
-                      }
+                [
+                  {
+                    "ts": "2026-03-21T00:00:00Z",
+                    "action": "run_workflow",
+                    "detail": {
+                      "run_id": "run_1"
                     }
-                  ]
-                }
+                  }
+                ]
                 """);
         }));
 
@@ -620,20 +581,17 @@ public sealed class GovernanceBridgeClientTests
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
         {
-            Assert.Equal("http://127.0.0.1:18081/governance/workflow-runs?limit=80", request.RequestUri!.AbsoluteUri);
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/history?limit=80", request.RequestUri!.AbsoluteUri);
             return Json(HttpStatusCode.OK, """
-                {
-                  "ok": true,
-                  "items": [
-                    {
-                      "run_id": "run_1",
-                      "workflow_id": "wf_finance",
-                      "status": "failed",
-                      "ok": false,
-                      "ts": "2026-03-21T00:00:00Z"
-                    }
-                  ]
-                }
+                [
+                  {
+                    "run_id": "run_1",
+                    "workflow_id": "wf_finance",
+                    "status": "failed",
+                    "ok": false,
+                    "ts": "2026-03-21T00:00:00Z"
+                  }
+                ]
                 """);
         }));
 
@@ -650,7 +608,7 @@ public sealed class GovernanceBridgeClientTests
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
         {
-            Assert.Equal("http://127.0.0.1:18081/governance/workflow-runs/run_1/timeline", request.RequestUri!.AbsoluteUri);
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/run_1/timeline", request.RequestUri!.AbsoluteUri);
             return Json(HttpStatusCode.OK, """
                 {
                   "ok": true,
@@ -679,8 +637,10 @@ public sealed class GovernanceBridgeClientTests
     [Fact]
     public async Task GetWorkflowFailureSummaryAsync_ParsesNodeFailures()
     {
-        using var http = new HttpClient(new StubHttpMessageHandler(_ =>
-            Json(HttpStatusCode.OK, """
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/failure-summary?limit=120", request.RequestUri!.AbsoluteUri);
+            return Json(HttpStatusCode.OK, """
                 {
                   "ok": true,
                   "by_node": {
@@ -690,7 +650,8 @@ public sealed class GovernanceBridgeClientTests
                     }
                   }
                 }
-                """)));
+                """);
+        }));
 
         var client = new GovernanceBridgeClient(http);
         var rows = await client.GetWorkflowFailureSummaryAsync("http://127.0.0.1:18081", "");
@@ -705,20 +666,17 @@ public sealed class GovernanceBridgeClientTests
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
         {
-            Assert.Contains("action=run_workflow", request.RequestUri!.Query, StringComparison.Ordinal);
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/audit-events?limit=80&action=run_workflow", request.RequestUri!.AbsoluteUri);
             return Json(HttpStatusCode.OK, """
-                {
-                  "ok": true,
-                  "items": [
-                    {
-                      "ts": "2026-03-21T00:00:00Z",
-                      "action": "run_workflow",
-                      "detail": {
-                        "run_id": "run_1"
-                      }
+                [
+                  {
+                    "ts": "2026-03-21T00:00:00Z",
+                    "action": "run_workflow",
+                    "detail": {
+                      "run_id": "run_1"
                     }
-                  ]
-                }
+                  }
+                ]
                 """);
         }));
 
@@ -781,14 +739,6 @@ public sealed class GovernanceBridgeClientTests
                     "capability": "manual_reviews",
                     "route_prefix": "/governance/manual-reviews",
                     "owned_route_prefixes": ["/governance/manual-reviews"],
-                    "state_owner": "glue-python",
-                    "control_plane_role": "governance_state",
-                    "lifecycle_mutation_allowed": false
-                  },
-                  {
-                    "capability": "workflow_run_audit",
-                    "route_prefix": "/governance/workflow-runs",
-                    "owned_route_prefixes": ["/governance/workflow-runs", "/governance/workflow-audit-events"],
                     "state_owner": "glue-python",
                     "control_plane_role": "governance_state",
                     "lifecycle_mutation_allowed": false

@@ -6,10 +6,12 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from aiwf.node_config_contract_runtime import (
-    find_unknown_workflow_node_types,
-)
 from aiwf.paths import resolve_bus_root
+from aiwf.governance_workflow_versions import (
+    get_workflow_version,
+    save_workflow_version,
+    validate_workflow_graph,
+)
 
 
 WORKFLOW_APP_SCHEMA_VERSION = "workflow_app_registry_entry.v1"
@@ -49,39 +51,19 @@ def validate_workflow_app_id(value: str) -> str:
     return app_id
 
 
-def validate_workflow_graph(graph: Any) -> Dict[str, Any]:
-    if not isinstance(graph, dict):
-        raise ValueError("workflow app graph must be an object")
-    workflow_id = str(graph.get("workflow_id") or "").strip()
-    version = str(graph.get("version") or "").strip()
-    nodes = graph.get("nodes")
-    edges = graph.get("edges")
-    if not workflow_id:
-        raise ValueError("workflow app graph requires workflow_id")
-    if not version:
-        raise ValueError("workflow app graph requires version")
-    if not isinstance(nodes, list):
-        raise ValueError("workflow app graph requires nodes array")
-    if not isinstance(edges, list):
-        raise ValueError("workflow app graph requires edges array")
-    for index, node in enumerate(nodes):
-        if not isinstance(node, dict):
-            raise ValueError(f"workflow app graph nodes[{index}] must be an object")
-        if not str(node.get("id") or "").strip():
-            raise ValueError(f"workflow app graph nodes[{index}] requires id")
-        if not str(node.get("type") or "").strip():
-            raise ValueError(f"workflow app graph nodes[{index}] requires type")
-    for index, edge in enumerate(edges):
-        if not isinstance(edge, dict):
-            raise ValueError(f"workflow app graph edges[{index}] must be an object")
-        if not str(edge.get("from") or "").strip():
-            raise ValueError(f"workflow app graph edges[{index}] requires from")
-        if not str(edge.get("to") or "").strip():
-            raise ValueError(f"workflow app graph edges[{index}] requires to")
-    unknown_node_types = find_unknown_workflow_node_types(graph)
-    if unknown_node_types:
-        raise ValueError("workflow app graph contains unregistered node types: " + ", ".join(unknown_node_types))
-    return _clone(graph)
+def validate_published_version_id(value: str) -> str:
+    version_id = str(value or "").strip()
+    if not version_id:
+        raise ValueError("workflow app published_version_id is required")
+    if len(version_id) > 160:
+        raise ValueError("workflow app published_version_id must be 160 characters or fewer")
+    return version_id
+
+
+def build_legacy_embedded_version_id(app_id: str) -> str:
+    safe = "".join(char if char.isalnum() or char in {"_", "-", "."} else "_" for char in str(app_id or "").strip())
+    safe = safe[:120] or "app"
+    return f"legacy_app_{safe}_embedded"
 
 
 def normalize_workflow_app_payload(
@@ -92,9 +74,41 @@ def normalize_workflow_app_payload(
     source = payload if isinstance(payload, dict) else {}
     current = existing if isinstance(existing, dict) else {}
     app_id = validate_workflow_app_id(source.get("app_id") or current.get("app_id") or "")
-    graph = validate_workflow_graph(source.get("graph") if source.get("graph") is not None else current.get("graph"))
-    name = str(source.get("name") or current.get("name") or graph.get("name") or app_id).strip() or app_id
-    workflow_id = str(source.get("workflow_id") or current.get("workflow_id") or graph.get("workflow_id") or "").strip()
+    published_version_id_raw = str(source.get("published_version_id") or current.get("published_version_id") or "").strip()
+    if published_version_id_raw:
+        published_version_id = validate_published_version_id(published_version_id_raw)
+    else:
+        legacy_graph_source = source.get("graph") if source.get("graph") is not None else current.get("graph")
+        if legacy_graph_source is None:
+            raise ValueError("workflow app published_version_id is required")
+        legacy_graph = validate_workflow_graph(legacy_graph_source)
+        legacy_workflow_id = str(source.get("workflow_id") or current.get("workflow_id") or legacy_graph.get("workflow_id") or "").strip()
+        legacy_name = str(source.get("name") or current.get("name") or legacy_graph.get("name") or app_id).strip() or app_id
+        migrated_version = save_workflow_version({
+            "version_id": build_legacy_embedded_version_id(app_id),
+            "workflow_id": legacy_workflow_id or str(legacy_graph.get("workflow_id") or "").strip(),
+            "workflow_name": legacy_name,
+            "path": "",
+            "graph": legacy_graph,
+        })
+        published_version_id = str(migrated_version.get("version_id") or "").strip()
+    version_item = get_workflow_version(published_version_id)
+    if version_item is None:
+        raise ValueError(f"workflow app published_version_id not found: {published_version_id}")
+    workflow_id = str(
+        source.get("workflow_id")
+        or current.get("workflow_id")
+        or version_item.get("workflow_id")
+        or ""
+    ).strip()
+    if not workflow_id:
+        raise ValueError("workflow app workflow_id is required")
+    name = str(
+        source.get("name")
+        or current.get("name")
+        or version_item.get("workflow_name")
+        or app_id
+    ).strip() or app_id
     params_schema = source.get("params_schema") if source.get("params_schema") is not None else current.get("params_schema")
     template_policy = source.get("template_policy") if source.get("template_policy") is not None else current.get("template_policy")
     if params_schema is None:
@@ -114,7 +128,7 @@ def normalize_workflow_app_payload(
         "app_id": app_id,
         "name": name,
         "workflow_id": workflow_id,
-        "graph": graph,
+        "published_version_id": published_version_id,
         "params_schema": _clone(params_schema),
         "template_policy": _clone(template_policy),
         "created_at": created_at,

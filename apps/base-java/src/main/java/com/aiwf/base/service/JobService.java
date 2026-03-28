@@ -3,6 +3,7 @@ package com.aiwf.base.service;
 import com.aiwf.base.db.JobRepository;
 import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.db.model.AuditLogRow;
 import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
@@ -14,9 +15,14 @@ import com.aiwf.base.glue.GlueJobContext;
 import com.aiwf.base.glue.GlueRunFlowReq;
 import com.aiwf.base.glue.GlueRunResult;
 import com.aiwf.base.web.ApiException;
+import com.aiwf.base.web.dto.AuditEventResp;
 import com.aiwf.base.web.dto.ArtifactResp;
+import com.aiwf.base.web.dto.JobFailureSummaryResp;
 import com.aiwf.base.web.dto.JobCreateResp;
 import com.aiwf.base.web.dto.JobDetailsResp;
+import com.aiwf.base.web.dto.JobRunRecordResp;
+import com.aiwf.base.web.dto.JobRunTimelineResp;
+import com.aiwf.base.web.dto.JobTimelineItemResp;
 import com.aiwf.base.web.dto.StepFailReq;
 import com.aiwf.base.web.dto.StepFailResp;
 import com.aiwf.base.web.dto.StepResp;
@@ -26,6 +32,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -108,6 +121,81 @@ public class JobService {
     public List<ArtifactResp> listArtifacts(String jobId) {
         requireJob(jobId);
         return jobs.listArtifacts(jobId).stream().map(this::toArtifactResp).toList();
+    }
+
+    public List<JobRunRecordResp> listRunHistory(int limit) {
+        return jobs.listRecentJobs(limit).stream().map(this::toRunRecord).toList();
+    }
+
+    public JobRunRecordResp getRunRecord(String jobId) {
+        return toRunRecord(requireJob(jobId));
+    }
+
+    public JobRunTimelineResp getRunTimeline(String jobId) {
+        JobRunRecordResp record = toRunRecord(requireJob(jobId));
+        @SuppressWarnings("unchecked")
+        List<StepResp> steps = (List<StepResp>) record.result().getOrDefault("steps", List.of());
+        List<JobTimelineItemResp> timeline = new ArrayList<>();
+        for (StepResp step : steps) {
+            timeline.add(new JobTimelineItemResp(
+                    step.stepId(),
+                    step.stepId(),
+                    step.status(),
+                    step.startedAt(),
+                    step.endedAt(),
+                    secondsBetween(step.startedAt(), step.endedAt()),
+                    step.error()
+            ));
+        }
+        timeline.sort((a, b) -> String.valueOf(a.startedAt()).compareTo(String.valueOf(b.startedAt())));
+        return new JobRunTimelineResp(
+                "lifecycle_run_timeline.v1",
+                true,
+                "base-java",
+                "base-java.jobs",
+                record.runId(),
+                record.status(),
+                timeline
+        );
+    }
+
+    public JobFailureSummaryResp getFailureSummary(int limit) {
+        List<JobRow> runs = jobs.listRecentJobs(limit);
+        int failedRuns = 0;
+        Map<String, Map<String, Object>> byNode = new LinkedHashMap<>();
+        for (JobRow run : runs) {
+            if (run.status() == JobStatus.FAILED) {
+                failedRuns += 1;
+            }
+            for (StepResp step : jobs.listSteps(run.jobId()).stream().map(this::toStepResp).toList()) {
+                if (!"FAILED".equalsIgnoreCase(step.status())) continue;
+                Map<String, Object> current = byNode.computeIfAbsent(step.stepId(), key -> {
+                    Map<String, Object> seed = new LinkedHashMap<>();
+                    seed.put("failed", 0);
+                    seed.put("samples", new ArrayList<String>());
+                    return seed;
+                });
+                current.put("failed", ((Number) current.get("failed")).intValue() + 1);
+                @SuppressWarnings("unchecked")
+                List<String> samples = (List<String>) current.get("samples");
+                if (samples.size() < 3 && step.error() != null && !step.error().isBlank()) {
+                    samples.add(step.error().substring(0, Math.min(step.error().length(), 200)));
+                }
+            }
+        }
+        return new JobFailureSummaryResp(
+                "lifecycle_failure_summary.v1",
+                true,
+                "base-java",
+                "base-java.jobs",
+                runs.size(),
+                failedRuns,
+                byNode
+        );
+    }
+
+    public List<AuditEventResp> listAuditEvents(int limit, String action) {
+        return jobs.listAuditEvents(limit, action).stream().map(this::toAuditEventResp).toList();
     }
 
     public GlueRunResult runFlow(
@@ -226,6 +314,66 @@ public class JobService {
 
     private ArtifactResp toArtifactResp(ArtifactRow row) {
         return new ArtifactResp(row.artifactId(), row.kind(), row.path(), row.sha256(), row.createdAt());
+    }
+
+    private AuditEventResp toAuditEventResp(AuditLogRow row) {
+        return new AuditEventResp(
+                "lifecycle_audit_event.v1",
+                "base-java",
+                "base-java.jobs",
+                row.createdAt(),
+                row.actor(),
+                row.action(),
+                row.jobId(),
+                row.stepId(),
+                JsonUtil.fromJson(row.detailJson())
+        );
+    }
+
+    private JobRunRecordResp toRunRecord(JobRow row) {
+        List<StepResp> steps = jobs.listSteps(row.jobId()).stream().map(this::toStepResp).toList();
+        List<ArtifactResp> artifacts = jobs.listArtifacts(row.jobId()).stream().map(this::toArtifactResp).toList();
+        Map<String, Object> payload = steps.isEmpty() ? Map.of() : JsonUtil.fromJsonObject(steps.get(0).paramsJson());
+        String workflowId = steps.isEmpty() ? "" : defaultIfBlank(steps.get(0).stepId(), "");
+        boolean ok = row.status() == JobStatus.DONE;
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("job_id", row.jobId());
+        result.put("status", row.status().toDb());
+        result.put("ok", ok);
+        result.put("steps", steps);
+        result.put("artifacts", artifacts);
+        return new JobRunRecordResp(
+                "lifecycle_run_record.v1",
+                "base-java",
+                "base-java.jobs",
+                row.jobId(),
+                row.createdAt(),
+                workflowId,
+                row.status().toDb(),
+                ok,
+                payload,
+                Map.of(),
+                result
+        );
+    }
+
+    private double secondsBetween(Object startedAt, Object endedAt) {
+        Instant start = toInstant(startedAt);
+        Instant end = toInstant(endedAt);
+        if (start == null || end == null) {
+            return 0;
+        }
+        return Math.max(0, Duration.between(start, end).toMillis() / 1000.0);
+    }
+
+    private Instant toInstant(Object value) {
+        if (value == null) return null;
+        if (value instanceof Instant instant) return instant;
+        if (value instanceof OffsetDateTime offsetDateTime) return offsetDateTime.toInstant();
+        if (value instanceof LocalDateTime localDateTime) return localDateTime.toInstant(ZoneOffset.UTC);
+        if (value instanceof java.sql.Timestamp timestamp) return timestamp.toInstant();
+        if (value instanceof java.util.Date date) return date.toInstant();
+        return null;
     }
 
     private static String defaultIfBlank(String value, String fallback) {

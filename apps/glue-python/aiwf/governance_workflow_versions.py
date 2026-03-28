@@ -95,7 +95,6 @@ def normalize_workflow_version_payload(
     graph = validate_workflow_graph(source.get("graph") if source.get("graph") is not None else current.get("graph"))
     workflow_id = str(source.get("workflow_id") or current.get("workflow_id") or graph.get("workflow_id") or "").strip()
     workflow_name = str(source.get("workflow_name") or current.get("workflow_name") or graph.get("name") or workflow_id).strip() or workflow_id
-    path_value = str(source.get("path") or current.get("path") or "").strip()
     ts = str(source.get("ts") or current.get("ts") or now_iso())
     return {
         "schema_version": WORKFLOW_VERSION_SCHEMA_VERSION,
@@ -105,7 +104,6 @@ def normalize_workflow_version_payload(
         "ts": ts,
         "workflow_id": workflow_id,
         "workflow_name": workflow_name,
-        "path": path_value,
         "graph": graph,
     }
 

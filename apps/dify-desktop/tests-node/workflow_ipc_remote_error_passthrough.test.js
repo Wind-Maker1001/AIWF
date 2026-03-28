@@ -219,7 +219,7 @@ test("workflow queue apps ipc preserves structured enqueue failure details", asy
       sandboxRuleStore: { getRuntimeRules: async () => ({ ok: true, rules: {} }) },
       sandboxAutoFixStore: { applyPayload: async (payload) => payload, processRunAutoFix: async () => ({ ok: true }) },
       workflowAppRegistryStore: { getApp: async () => null, publishApp: async () => ({ ok: true }), listApps: async () => ({ ok: true, items: [] }) },
-      workflowVersionStore: { listVersions: async () => ({ ok: true, items: [] }), getVersion: async () => null, compareVersions: async () => ({ ok: true }) },
+      workflowVersionStore: { recordVersion: async () => ({ ok: true, item: { version_id: "ver_1" } }), listVersions: async () => ({ ok: true, items: [] }), getVersion: async () => null, compareVersions: async () => ({ ok: true }) },
     },
   );
 

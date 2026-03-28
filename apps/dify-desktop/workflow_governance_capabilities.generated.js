@@ -78,20 +78,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
     }
   },
   {
-    "constant": "WORKFLOW_RUN_AUDIT",
-    "capability": "workflow_run_audit",
-    "route_prefix": "/governance/workflow-runs",
-    "owned_route_prefixes": [
-      "/governance/workflow-runs",
-      "/governance/workflow-audit-events"
-    ],
-    "route_constant_map": {
-      "PRIMARY": "/governance/workflow-runs",
-      "WORKFLOW_RUNS": "/governance/workflow-runs",
-      "WORKFLOW_AUDIT_EVENTS": "/governance/workflow-audit-events"
-    }
-  },
-  {
     "constant": "RUN_BASELINES",
     "capability": "run_baselines",
     "route_prefix": "/governance/run-baselines",
@@ -149,14 +135,6 @@ const GOVERNANCE_CAPABILITIES = Object.freeze({
       "/governance/manual-reviews"
     ]
   },
-  "WORKFLOW_RUN_AUDIT": {
-    "capability": "workflow_run_audit",
-    "route_prefix": "/governance/workflow-runs",
-    "owned_route_prefixes": [
-      "/governance/workflow-runs",
-      "/governance/workflow-audit-events"
-    ]
-  },
   "RUN_BASELINES": {
     "capability": "run_baselines",
     "route_prefix": "/governance/run-baselines",
@@ -191,11 +169,6 @@ const GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS = Object.freeze({
   "MANUAL_REVIEWS": {
     "PRIMARY": "/governance/manual-reviews",
     "MANUAL_REVIEWS": "/governance/manual-reviews"
-  },
-  "WORKFLOW_RUN_AUDIT": {
-    "PRIMARY": "/governance/workflow-runs",
-    "WORKFLOW_RUNS": "/governance/workflow-runs",
-    "WORKFLOW_AUDIT_EVENTS": "/governance/workflow-audit-events"
   },
   "RUN_BASELINES": {
     "PRIMARY": "/governance/run-baselines",

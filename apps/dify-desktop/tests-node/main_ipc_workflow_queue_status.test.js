@@ -59,11 +59,6 @@ function createCtx(overrides = {}) {
           route_prefix: "/governance/manual-reviews",
           owned_route_prefixes: ["/governance/manual-reviews"],
         },
-        {
-          capability: "workflow_run_audit",
-          route_prefix: "/governance/workflow-runs",
-          owned_route_prefixes: ["/governance/workflow-runs", "/governance/workflow-audit-events"],
-        },
       ]);
     }
     if (method === "GET" && target.endsWith("/governance/workflow-sandbox/rules")) {
@@ -102,24 +97,6 @@ function createCtx(overrides = {}) {
         status: 200,
         async text() {
           return JSON.stringify({ ok: true, items: remote.manualReviews });
-        },
-      };
-    }
-    if (method === "PUT" && target.includes("/governance/workflow-runs/")) {
-      return {
-        ok: true,
-        status: 200,
-        async text() {
-          return JSON.stringify({ ok: true, item: {} });
-        },
-      };
-    }
-    if (method === "POST" && target.endsWith("/governance/workflow-audit-events")) {
-      return {
-        ok: true,
-        status: 200,
-        async text() {
-          return JSON.stringify({ ok: true, item: {} });
         },
       };
     }
@@ -460,24 +437,6 @@ test("workflow queue preserves pending-review status when review enqueue fails",
               error_code: "manual_review_store_unavailable",
               error_items: [{ path: "review_queue", code: "unavailable", message: "manual review queue unavailable" }],
             });
-          },
-        };
-      }
-      if (method === "PUT" && target.includes("/governance/workflow-runs/")) {
-        return {
-          ok: true,
-          status: 200,
-          async text() {
-            return JSON.stringify({ ok: true, item: {} });
-          },
-        };
-      }
-      if (method === "POST" && target.endsWith("/governance/workflow-audit-events")) {
-        return {
-          ok: true,
-          status: 200,
-          async text() {
-            return JSON.stringify({ ok: true, item: {} });
           },
         };
       }

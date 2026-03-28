@@ -105,17 +105,6 @@ function createMainIpcLogSupport(ctx) {
     return "unknown";
   }
 
-  function shouldFallbackByPolicy(policyRaw, failureClass) {
-    const policy = String(policyRaw || "smart").trim().toLowerCase();
-    if (policy === "always") return true;
-    if (policy === "never") return false;
-    if (policy === "smart_strict") {
-      return failureClass === "timeout" || failureClass === "network" || failureClass === "server_5xx";
-    }
-    if (failureClass === "client_4xx") return false;
-    return true;
-  }
-
   return {
     appendRunModeAudit,
     appendLocalGateAudit,
@@ -126,7 +115,6 @@ function createMainIpcLogSupport(ctx) {
     localGateAuditLogPath,
     pruneJsonlLog,
     readJsonlTail,
-    shouldFallbackByPolicy,
   };
 }
 

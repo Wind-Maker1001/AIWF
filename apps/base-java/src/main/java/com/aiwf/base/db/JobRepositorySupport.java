@@ -1,6 +1,7 @@
 package com.aiwf.base.db;
 
 import com.aiwf.base.db.model.ArtifactRow;
+import com.aiwf.base.db.model.AuditLogRow;
 import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
@@ -92,6 +93,21 @@ final class JobRepositorySupport {
             VALUES (?, ?, ?, ?, ?, SYSDATETIME())
             """;
 
+    static final String SELECT_RECENT_JOBS = """
+            SELECT job_id, owner, status, created_at
+            FROM dbo.jobs
+            ORDER BY created_at DESC
+            OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+            """;
+
+    static final String SELECT_AUDIT_EVENTS = """
+            SELECT created_at, actor, action, job_id, step_id, detail_json
+            FROM dbo.audit_log
+            WHERE (? = '' OR action = ?)
+            ORDER BY audit_id DESC
+            OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+            """;
+
     static final RowMapper<JobRow> JOB_ROW_MAPPER = (rs, rowNum) -> new JobRow(
             rs.getString("job_id"),
             rs.getObject("created_at"),
@@ -119,5 +135,14 @@ final class JobRepositorySupport {
             rs.getString("path"),
             rs.getString("sha256"),
             rs.getObject("created_at")
+    );
+
+    static final RowMapper<AuditLogRow> AUDIT_LOG_ROW_MAPPER = (rs, rowNum) -> new AuditLogRow(
+            rs.getObject("created_at"),
+            rs.getString("actor"),
+            rs.getString("action"),
+            rs.getString("job_id"),
+            rs.getString("step_id"),
+            rs.getString("detail_json")
     );
 }

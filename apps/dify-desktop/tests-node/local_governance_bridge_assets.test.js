@@ -30,16 +30,16 @@ test("frontend launch scripts ensure local governance bridge before startup", ()
   assert.match(runWinUi, /AIWF_QUALITY_RULE_SET_PROVIDER/);
   assert.match(runWinUi, /AIWF_WORKFLOW_APP_REGISTRY_PROVIDER/);
   assert.match(runWinUi, /AIWF_WORKFLOW_VERSION_PROVIDER/);
-  assert.match(runWinUi, /AIWF_WORKFLOW_RUN_AUDIT_PROVIDER/);
   assert.match(runWinUi, /AIWF_RUN_BASELINE_PROVIDER/);
+  assert.match(runWinUi, /workflow run audit remains local-runtime by default/);
   assert.match(runDesktop, /ensure_local_governance_bridge\.ps1/);
   assert.match(runDesktop, /SkipEnsureGlueBridge/);
   assert.match(runDesktop, /AIWF_MANUAL_REVIEW_PROVIDER/);
   assert.match(runDesktop, /AIWF_QUALITY_RULE_SET_PROVIDER/);
   assert.match(runDesktop, /AIWF_WORKFLOW_APP_REGISTRY_PROVIDER/);
   assert.match(runDesktop, /AIWF_WORKFLOW_VERSION_PROVIDER/);
-  assert.match(runDesktop, /AIWF_WORKFLOW_RUN_AUDIT_PROVIDER/);
   assert.match(runDesktop, /AIWF_RUN_BASELINE_PROVIDER/);
+  assert.match(runDesktop, /workflow run audit remains local-runtime by default/);
 
   assert.match(quickstart, /glue-python governance bridge/i);
   assert.match(quickstart, /SkipEnsureGlueBridge/);

@@ -72,7 +72,6 @@ function createWorkflowVersionStore(deps = {}) {
       ts: String(source.ts || current.ts || new Date().toISOString()),
       workflow_name: String(source.workflow_name || current.workflow_name || graph.name || graph.workflow_id || "").trim(),
       workflow_id: String(source.workflow_id || current.workflow_id || graph.workflow_id || "").trim(),
-      path: String(source.path || current.path || "").trim(),
       graph: clone(graph),
     };
   }
@@ -171,7 +170,6 @@ function createWorkflowVersionStore(deps = {}) {
           ts: normalized.ts,
           workflow_id: normalized.workflow_id,
           workflow_name: normalized.workflow_name,
-          path: normalized.path,
           graph: clone(normalized.graph),
         },
       },

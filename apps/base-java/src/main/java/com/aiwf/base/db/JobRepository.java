@@ -2,6 +2,7 @@ package com.aiwf.base.db;
 
 import com.aiwf.base.db.model.ArtifactRow;
 import com.aiwf.base.db.model.AuditEvent;
+import com.aiwf.base.db.model.AuditLogRow;
 import com.aiwf.base.db.model.JobRow;
 import com.aiwf.base.db.model.JobStatus;
 import com.aiwf.base.db.model.StepRow;
@@ -152,6 +153,27 @@ public class JobRepository {
                 JobRepositorySupport.SELECT_ARTIFACTS,
                 JobRepositorySupport.ARTIFACT_ROW_MAPPER,
                 jobId
+        );
+    }
+
+    public List<JobRow> listRecentJobs(int limit) {
+        int safeLimit = Math.max(1, Math.min(5000, limit));
+        return jdbc.query(
+                JobRepositorySupport.SELECT_RECENT_JOBS,
+                JobRepositorySupport.JOB_ROW_MAPPER,
+                safeLimit
+        );
+    }
+
+    public List<AuditLogRow> listAuditEvents(int limit, String action) {
+        int safeLimit = Math.max(1, Math.min(5000, limit));
+        String normalizedAction = action == null ? "" : action.trim();
+        return jdbc.query(
+                JobRepositorySupport.SELECT_AUDIT_EVENTS,
+                JobRepositorySupport.AUDIT_LOG_ROW_MAPPER,
+                normalizedAction,
+                normalizedAction,
+                safeLimit
         );
     }
 

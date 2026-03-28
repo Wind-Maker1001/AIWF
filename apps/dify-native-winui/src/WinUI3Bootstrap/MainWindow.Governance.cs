@@ -209,7 +209,7 @@ public sealed partial class MainWindow
     {
         try
         {
-            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var baseUrl = GetBridgeBaseUrlOrThrow();
             var apiKey = ApiKeyTextBox.Text.Trim();
 
             var runs = await _governanceClient.ListWorkflowRunsAsync(baseUrl, apiKey, limit: 40);

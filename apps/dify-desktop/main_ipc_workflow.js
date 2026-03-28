@@ -14,7 +14,7 @@ const { createWorkflowSandboxAutoFixStore } = require("./workflow_sandbox_autofi
 const { createWorkflowAppRegistryStore } = require("./workflow_app_registry_store");
 const { createWorkflowVersionStore } = require("./workflow_version_store");
 const { createWorkflowManualReviewStore } = require("./workflow_manual_review_store");
-const { GLUE_PROVIDER, createWorkflowRunAuditStore } = require("./workflow_run_audit_store");
+const { createWorkflowRunAuditStore } = require("./workflow_run_audit_store");
 const { createWorkflowRunBaselineStore } = require("./workflow_run_baseline_store");
 
 function createWorkflowAuditMirrorSupport(deps) {

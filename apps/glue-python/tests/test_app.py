@@ -104,8 +104,6 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(caps["governance"]["workflow_versions"]["schema_version"], "workflow_version_snapshot.v1")
         self.assertEqual(caps["governance"]["manual_reviews"]["owner"], "glue-python")
         self.assertEqual(caps["governance"]["manual_reviews"]["schema_version"], "manual_review_item.v1")
-        self.assertEqual(caps["governance"]["workflow_run_audit"]["owner"], "glue-python")
-        self.assertEqual(caps["governance"]["workflow_run_audit"]["schema_version"], "workflow_run_audit_entry.v1")
         self.assertEqual(caps["governance"]["run_baselines"]["owner"], "glue-python")
         self.assertEqual(caps["governance"]["run_baselines"]["schema_version"], "run_baseline_entry.v1")
         self.assertEqual(caps["governance_surface"]["schema_version"], "governance_surface.v1")
@@ -122,7 +120,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(caps["control_plane_boundary"]["job_lifecycle_control_plane_owner"], "base-java")
         self.assertEqual(caps["control_plane_boundary"]["operator_semantics_authority_owner"], "accel-rust")
         self.assertEqual(caps["control_plane_boundary"]["meta_route"], GOVERNANCE_SURFACE_META_ROUTE)
-        self.assertGreaterEqual(len(caps["control_plane_boundary"]["governance_surfaces"]), 8)
+        self.assertGreaterEqual(len(caps["control_plane_boundary"]["governance_surfaces"]), 7)
         self.assertIn("parquet", caps["artifacts"]["selection_tokens"]["core"])
         self.assertIn("xlsx", caps["artifacts"]["selection_tokens"]["office"])
         self.assertEqual(caps["registry"]["default_conflict_policy"], "replace")
@@ -151,19 +149,16 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(boundary["operator_semantics_authority_owner"], "accel-rust")
         self.assertEqual(boundary["workflow_authoring_surface_owner"], "dify-desktop")
         self.assertEqual(boundary["meta_route"], GOVERNANCE_SURFACE_META_ROUTE)
-        workflow_run_audit = next(item for item in boundary["governance_surfaces"] if item["capability"] == "workflow_run_audit")
-        self.assertEqual(workflow_run_audit["route_prefix"], "/governance/workflow-runs")
-        self.assertEqual(
-            workflow_run_audit["owned_route_prefixes"],
-            ["/governance/workflow-runs", "/governance/workflow-audit-events"],
-        )
-        self.assertEqual(workflow_run_audit["state_owner"], "glue-python")
-        self.assertEqual(workflow_run_audit["job_lifecycle_control_plane_owner"], "base-java")
-        self.assertFalse(workflow_run_audit["lifecycle_mutation_allowed"])
+        workflow_versions = next(item for item in boundary["governance_surfaces"] if item["capability"] == "workflow_versions")
+        self.assertEqual(workflow_versions["route_prefix"], "/governance/workflow-versions")
+        self.assertEqual(workflow_versions["owned_route_prefixes"], ["/governance/workflow-versions"])
+        self.assertEqual(workflow_versions["state_owner"], "glue-python")
+        self.assertEqual(workflow_versions["job_lifecycle_control_plane_owner"], "base-java")
+        self.assertFalse(workflow_versions["lifecycle_mutation_allowed"])
 
     def test_governance_surface_entries_validate_cleanly(self):
         entries = list_governance_surface_entries()
-        self.assertGreaterEqual(len(entries), 8)
+        self.assertGreaterEqual(len(entries), 7)
         self.assertEqual(validate_governance_surface_entries(entries), [])
         self.assertTrue(all(item["control_plane_role"] == GOVERNANCE_CONTROL_PLANE_ROLE for item in entries))
         self.assertTrue(all(item["route_prefix"].startswith("/governance/") for item in entries))
@@ -317,18 +312,29 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(empty_resp.status_code, 200)
                 self.assertEqual(empty_resp.json()["items"], [])
 
-                save_resp = self.client.put(
-                    "/governance/workflow-apps/finance_app",
+                version_resp = self.client.put(
+                    "/governance/workflow-versions/ver_finance_a",
                     json={
-                        "app": {
-                            "name": "Finance App",
-                            "workflow_id": "wf_finance",
+                        "version": {
+                            "workflow_name": "Finance Flow",
                             "graph": {
                                 "workflow_id": "wf_finance",
                                 "version": "workflow.v1",
                                 "nodes": [],
                                 "edges": [],
                             },
+                        }
+                    },
+                )
+                self.assertEqual(version_resp.status_code, 200)
+
+                save_resp = self.client.put(
+                    "/governance/workflow-apps/finance_app",
+                    json={
+                        "app": {
+                            "name": "Finance App",
+                            "workflow_id": "wf_finance",
+                            "published_version_id": "ver_finance_a",
                             "params_schema": {"region": {"type": "string"}},
                             "template_policy": {"version": 1, "governance": {"mode": "strict"}},
                         }
@@ -339,6 +345,7 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(item["app_id"], "finance_app")
                 self.assertEqual(item["owner"], "glue-python")
                 self.assertEqual(item["schema_version"], "workflow_app_registry_entry.v1")
+                self.assertEqual(item["published_version_id"], "ver_finance_a")
                 self.assertEqual(item["template_policy"]["version"], 1)
 
                 get_resp = self.client.get("/governance/workflow-apps/finance_app")
@@ -349,7 +356,7 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(list_resp.status_code, 200)
                 self.assertEqual(len(list_resp.json()["items"]), 1)
 
-    def test_workflow_app_routes_reject_invalid_graph_contract(self):
+    def test_workflow_app_routes_reject_missing_published_version_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
                 resp = self.client.put(
@@ -357,7 +364,6 @@ class AppRouteTests(unittest.TestCase):
                     json={
                         "app": {
                             "name": "Bad App",
-                            "graph": {"workflow_id": "wf_only"},
                         }
                     },
                 )
@@ -365,69 +371,30 @@ class AppRouteTests(unittest.TestCase):
                 payload = resp.json()
                 self.assertFalse(payload["ok"])
                 self.assertEqual(payload["provider"], "glue-python")
-                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["error_code"], "governance_validation_invalid")
                 self.assertEqual(payload["error_scope"], "workflow_app")
-                self.assertEqual(payload["graph_contract"], "contracts/workflow/workflow.schema.json")
-                self.assertEqual(payload["error_item_contract"], "contracts/desktop/node_config_validation_errors.v1.json")
-                self.assertTrue(any(item["path"] == "workflow.version" and item["code"] == "required" for item in payload["error_items"]))
+                self.assertTrue("published_version_id" in payload["error"])
 
-    def test_workflow_app_routes_accept_node_config_semantics_owned_by_desktop(self):
+    def test_workflow_app_routes_reject_unknown_published_version_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
                 resp = self.client.put(
-                    "/governance/workflow-apps/bad_app_contract",
+                    "/governance/workflow-apps/bad_app_missing_version",
                     json={
                         "app": {
-                            "name": "Bad App Contract",
-                            "graph": {
-                                "workflow_id": "wf_bad_app_contract",
-                                "version": "workflow.v1",
-                                "nodes": [
-                                    {
-                                        "id": "n1",
-                                        "type": "plugin_registry_v1",
-                                        "config": {
-                                            "op": "register",
-                                            "manifest": {"command": ""},
-                                        },
-                                    }
-                                ],
-                                "edges": [],
-                            },
-                        }
-                    },
-                )
-                self.assertEqual(resp.status_code, 200)
-                payload = resp.json()
-                self.assertTrue(payload["ok"])
-                self.assertEqual(payload["provider"], "glue-python")
-                self.assertEqual(payload["item"]["owner"], "glue-python")
-                self.assertEqual(payload["item"]["graph"]["nodes"][0]["type"], "plugin_registry_v1")
-                self.assertEqual(payload["item"]["graph"]["nodes"][0]["config"]["manifest"]["command"], "")
-
-    def test_workflow_app_routes_reject_unregistered_node_types(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
-                resp = self.client.put(
-                    "/governance/workflow-apps/bad_app_unknown_type",
-                    json={
-                        "app": {
-                            "name": "Bad Unknown Type",
-                            "graph": {
-                                "workflow_id": "wf_bad_unknown_type",
-                                "version": "workflow.v1",
-                                "nodes": [{"id": "n1", "type": "unknown_future_node"}],
-                                "edges": [],
-                            },
+                            "name": "Bad App Missing Version",
+                            "workflow_id": "wf_bad_app_contract",
+                            "published_version_id": "ver_missing",
                         }
                     },
                 )
                 self.assertEqual(resp.status_code, 400)
                 payload = resp.json()
                 self.assertFalse(payload["ok"])
-                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "governance_validation_invalid")
                 self.assertEqual(payload["error_scope"], "workflow_app")
-                self.assertTrue(any(item["path"] == "workflow.nodes" and item["code"] == "unknown_node_type" for item in payload["error_items"]))
+                self.assertTrue("published_version_id not found" in payload["error"])
 
     def test_workflow_version_routes_store_and_compare_backend_owned_snapshots(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -616,73 +583,6 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(resp.status_code, 400)
                 self.assertFalse(resp.json()["ok"])
 
-    def test_workflow_run_audit_routes_store_and_query_backend_owned_history(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
-                put_ok = self.client.put(
-                    "/governance/workflow-runs/run_1",
-                    json={
-                        "run": {
-                            "workflow_id": "wf_finance",
-                            "status": "failed",
-                            "ok": False,
-                            "payload": {"workflow_id": "wf_finance"},
-                            "config": {"mode": "base_api"},
-                            "result": {
-                                "run_id": "run_1",
-                                "workflow_id": "wf_finance",
-                                "status": "failed",
-                                "ok": False,
-                                "node_runs": [
-                                    {
-                                        "id": "n1",
-                                        "type": "ingest_files",
-                                        "status": "done",
-                                        "started_at": "2026-03-21T00:00:00Z",
-                                        "ended_at": "2026-03-21T00:00:01Z",
-                                        "seconds": 1.0,
-                                    },
-                                    {
-                                        "id": "n2",
-                                        "type": "quality_check_v3",
-                                        "status": "failed",
-                                        "started_at": "2026-03-21T00:00:01Z",
-                                        "ended_at": "2026-03-21T00:00:03Z",
-                                        "seconds": 2.0,
-                                        "error": "boom",
-                                    },
-                                ],
-                            },
-                        }
-                    },
-                )
-                self.assertEqual(put_ok.status_code, 200)
-                self.assertEqual(put_ok.json()["item"]["owner"], "glue-python")
-
-                list_resp = self.client.get("/governance/workflow-runs?limit=20")
-                self.assertEqual(list_resp.status_code, 200)
-                self.assertEqual(len(list_resp.json()["items"]), 1)
-
-                timeline_resp = self.client.get("/governance/workflow-runs/run_1/timeline")
-                self.assertEqual(timeline_resp.status_code, 200)
-                self.assertEqual(len(timeline_resp.json()["timeline"]), 2)
-
-                failure_resp = self.client.get("/governance/workflow-runs/failure-summary?limit=20")
-                self.assertEqual(failure_resp.status_code, 200)
-                self.assertEqual(failure_resp.json()["failed_runs"], 1)
-                self.assertEqual(failure_resp.json()["by_node"]["quality_check_v3"]["failed"], 1)
-
-                audit_post = self.client.post(
-                    "/governance/workflow-audit-events",
-                    json={"event": {"action": "run_workflow", "detail": {"run_id": "run_1"}}},
-                )
-                self.assertEqual(audit_post.status_code, 200)
-                self.assertEqual(audit_post.json()["item"]["action"], "run_workflow")
-
-                audit_list = self.client.get("/governance/workflow-audit-events?action=run_workflow")
-                self.assertEqual(audit_list.status_code, 200)
-                self.assertEqual(len(audit_list.json()["items"]), 1)
-
     def test_run_baseline_routes_store_backend_owned_baselines(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
@@ -711,15 +611,6 @@ class AppRouteTests(unittest.TestCase):
                 list_resp = self.client.get("/governance/run-baselines")
                 self.assertEqual(list_resp.status_code, 200)
                 self.assertEqual(len(list_resp.json()["items"]), 1)
-
-    def test_workflow_run_audit_routes_reject_invalid_payload(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
-                resp = self.client.put(
-                    "/governance/workflow-runs/run_bad",
-                    json={"run": {"workflow_id": "wf_only", "payload": []}},
-                )
-                self.assertEqual(resp.status_code, 422)
 
     @patch.object(glue_app, "_run_flow_with_runner")
     def test_cleaning_success_response_shape(self, run_flow_with_runner):

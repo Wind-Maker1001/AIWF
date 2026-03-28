@@ -5,7 +5,8 @@ This is the current primary frontend path.
 When you launch the AIWF desktop frontend, use WinUI by default rather than Electron.
 
 The default WinUI launch path now ensures the local glue-python governance bridge is healthy first.
-It also defaults manual review, quality rule sets, workflow app registry, workflow version storage, workflow run audit, and run baseline to backend-owned glue-python providers.
+It also defaults manual review, quality rule sets, workflow app registry, workflow version storage, and run baseline to backend-owned glue-python providers.
+Workflow run audit remains local-runtime by default for local workflow execution, and only uses a remote provider when explicitly requested.
 
 ## Current Role
 

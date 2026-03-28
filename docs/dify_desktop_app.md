@@ -24,14 +24,7 @@ WinUI is the primary frontend. Electron remains for Workflow Studio compatibilit
   - runs the local offline engine
 - `base_api`
   - calls your local backend
-  - can automatically fall back to offline mode
-
-Current fallback policies in the UI:
-
-- `smart`
-- `smart_strict`
-- `always`
-- `never`
+  - stays on the backend path and surfaces backend failures directly
 
 ## Current Desktop Defaults
 
@@ -39,8 +32,6 @@ From the current Electron config support:
 
 - `mode = offline_local`
 - `baseUrl = http://127.0.0.1:18080`
-- `enableOfflineFallback = true`
-- `fallbackPolicy = smart`
 - `outputRoot`:
   - `E:\Desktop_Real\AIWF` if `E:\Desktop_Real` exists
   - otherwise `Desktop\AIWF_Builds`

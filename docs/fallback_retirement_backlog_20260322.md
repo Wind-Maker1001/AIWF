@@ -33,7 +33,7 @@
 #### desktop workflow run audit local mirror
 
 - 当前状态：已于 2026-03-23 退役。
-- removal_result：`workflowRunAuditProvider=local_legacy` 不再被接受；workflow run history / timeline / failure summary / audit log 统一改由 glue-python owner 提供。
+- removal_result：`workflowRunAuditProvider=local_legacy` 不再被接受；当前保留的是 desktop local-runtime run/audit truth，远端 run audit 改为显式 `base_http` provider。
 - residual_risk：仍需观察极少数绕过推荐启动链的旧脚本是否会命中显式 local_legacy 配置并失败。
 
 ### Batch B：主路径已后端化，但仍有 `offline_local` 本地 owner
@@ -89,7 +89,7 @@
 ## 2026-03-22 到 2026-04-05 的执行顺序
 
 1. 先完成 `sandbox autofix local mirror` 的 `offline_local` 收口设计，因为它已经从 `base_api` 运行主路径退出，是最接近可删的一项。
-2. 再处理 `workflow run audit local mirror`，把 replay / history 默认读源继续往 backend query model 收紧。
+2. 再处理 `workflow run audit` 的 execution / governance 分界，避免继续把本地 runtime run/audit 真相默认写进 glue-python。
 3. 然后推进 quality rule set / app registry / workflow version 的 `offline_local` owner 收口。
 4. 前端默认启动链已经补上 `ensure_local_governance_bridge.ps1`；下一步可以开始在不要求用户手工先起 glue-python 的前提下收口 `offline_local` 的 governance owner。
 

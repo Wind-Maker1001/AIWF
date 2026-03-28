@@ -55,13 +55,14 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
 
 Use [verification.md](verification.md) for the exact gate and profile coverage.
 
-## 4. Compatibility Paths
+## Compatibility
 
 Only use these if you explicitly need the compatibility flow:
 
 - [quickstart_desktop_offline.md](quickstart_desktop_offline.md)
 - [dify_desktop_app.md](dify_desktop_app.md)
 - [offline_delivery_minimal.md](offline_delivery_minimal.md)
+- [electron_compatibility_retirement_plan_20260321.md](electron_compatibility_retirement_plan_20260321.md)
 
 ## 5. Next Docs To Read
 
@@ -69,3 +70,4 @@ Only use these if you explicitly need the compatibility flow:
 - Native WinUI delivery: [offline_delivery_native_winui.md](offline_delivery_native_winui.md)
 - Cleaning rules: [cleaning_rules.md](cleaning_rules.md)
 - Dify/local backend integration: [dify_local_integration.md](dify_local_integration.md)
+- Personal sideload certificate: [personal_sideload_certificate_20260321.md](personal_sideload_certificate_20260321.md)

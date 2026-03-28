@@ -165,4 +165,75 @@ class JobFlowIntegrationTest extends IntegrationTestSupport {
                 .containsEntry("job_id", jobId)
                 .containsEntry("step_id", "cleaning");
     }
+
+    @Test
+    void lifecycleRunAuditEndpointsExposeSqlBackedViews() throws Exception {
+        String createResponse = mockMvc.perform(post("/api/v1/jobs/create")
+                        .param("owner", "ops")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String jobId = String.valueOf(readJsonMap(createResponse).get("job_id"));
+
+        mockMvc.perform(post("/api/v1/jobs/{jobId}/steps/{stepId}/start", jobId, "cleaning")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "input_uri": "bus://in.csv",
+                                  "output_uri": "bus://out.csv",
+                                  "ruleset_version": "v3",
+                                  "params": {
+                                    "sample": true
+                                  }
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/jobs/{jobId}/artifacts/register", jobId)
+                        .param("actor", "glue")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "artifact_id": "xlsx_fin_001",
+                                  "kind": "xlsx",
+                                  "path": "D:\\\\AIWF\\\\bus\\\\jobs\\\\job\\\\artifacts\\\\fin.xlsx",
+                                  "sha256": "sha"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/jobs/{jobId}/steps/{stepId}/done", jobId, "cleaning")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"output_hash\":\"abc123\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/jobs/history").param("limit", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].run_id").value(jobId))
+                .andExpect(jsonPath("$[0].owner").value("base-java"))
+                .andExpect(jsonPath("$[0].result.steps[0].step_id").value("cleaning"))
+                .andExpect(jsonPath("$[0].result.artifacts[0].artifact_id").value("xlsx_fin_001"));
+
+        mockMvc.perform(get("/api/v1/jobs/{jobId}/record", jobId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.run_id").value(jobId))
+                .andExpect(jsonPath("$.workflow_id").value("cleaning"));
+
+        mockMvc.perform(get("/api/v1/jobs/{jobId}/timeline", jobId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.timeline[0].node_id").value("cleaning"));
+
+        mockMvc.perform(get("/api/v1/jobs/failure-summary").param("limit", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.owner").value("base-java"));
+
+        mockMvc.perform(get("/api/v1/jobs/audit-events").param("limit", "20").param("action", "STEP_DONE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].action").value("STEP_DONE"))
+                .andExpect(jsonPath("$[0].job_id").value(jobId));
+    }
 }

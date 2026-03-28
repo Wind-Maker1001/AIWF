@@ -25,10 +25,6 @@ public static class GovernanceCapabilitiesGenerated
     public const string MANUAL_REVIEWS = "manual_reviews";
     public const string MANUAL_REVIEWS_ROUTE_PREFIX = "/governance/manual-reviews";
     public const string MANUAL_REVIEWS_MANUAL_REVIEWS_ROUTE_PREFIX = "/governance/manual-reviews";
-    public const string WORKFLOW_RUN_AUDIT = "workflow_run_audit";
-    public const string WORKFLOW_RUN_AUDIT_ROUTE_PREFIX = "/governance/workflow-runs";
-    public const string WORKFLOW_RUN_AUDIT_WORKFLOW_RUNS_ROUTE_PREFIX = "/governance/workflow-runs";
-    public const string WORKFLOW_RUN_AUDIT_WORKFLOW_AUDIT_EVENTS_ROUTE_PREFIX = "/governance/workflow-audit-events";
     public const string RUN_BASELINES = "run_baselines";
     public const string RUN_BASELINES_ROUTE_PREFIX = "/governance/run-baselines";
     public const string RUN_BASELINES_RUN_BASELINES_ROUTE_PREFIX = "/governance/run-baselines";

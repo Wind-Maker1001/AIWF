@@ -44,8 +44,6 @@
           <div class="field"><label>运行模式（一般选第一个）</label><select id="mode"><option value="offline_local">离线本地模式（推荐）</option><option value="base_api">连接你的 AIWF 后端</option></select></div>
           <div class="field"><label>后端地址（只在“连接后端”时填写）</label><fluent-text-field id="baseUrl" placeholder="http://127.0.0.1:18080"></fluent-text-field></div>
           <div class="field"><label>API Key（可选）</label><fluent-text-field id="apiKey" placeholder="X-API-Key"></fluent-text-field></div>
-          <div class="field"><label><input id="enableOfflineFallback" type="checkbox" checked style="width:auto;margin-right:6px" />后端失败时自动切换离线模式</label></div>
-          <div class="field"><label>回退策略</label><select id="fallbackPolicy"><option value="smart" selected>smart（推荐）</option><option value="smart_strict">smart_strict（仅网络/超时/5xx）</option><option value="always">always（全部回退）</option><option value="never">never（不回退）</option></select></div>
           <div class="field"><label>报告标题（会出现在 docx/pptx 封面）</label><fluent-text-field id="reportTitle" placeholder="例如：AI 对就业影响的证据整理"></fluent-text-field></div>
           <div class="field"><label>主数据文件（可选）</label><fluent-text-field id="inputPath" placeholder="例如：D:\\data\\input.pdf"></fluent-text-field></div>
           <div class="field">

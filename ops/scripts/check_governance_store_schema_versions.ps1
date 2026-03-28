@@ -40,7 +40,6 @@ function failPayload(payload) {
     { name: "workflow_manual_review_store", file: path.join(repoRoot, "apps", "dify-desktop", "workflow_manual_review_store.js") },
     { name: "workflow_version_store", file: path.join(repoRoot, "apps", "dify-desktop", "workflow_version_store.js") },
     { name: "workflow_run_baseline_store", file: path.join(repoRoot, "apps", "dify-desktop", "workflow_run_baseline_store.js") },
-    { name: "workflow_run_audit_store", file: path.join(repoRoot, "apps", "dify-desktop", "workflow_run_audit_store.js") },
     { name: "workflow_sandbox_rule_store", file: path.join(repoRoot, "apps", "dify-desktop", "workflow_sandbox_rule_store.js") },
     { name: "workflow_sandbox_autofix_store", file: path.join(repoRoot, "apps", "dify-desktop", "workflow_sandbox_autofix_store.js") },
   ];
@@ -65,9 +64,6 @@ function failPayload(payload) {
   const {
     createWorkflowRunBaselineStore,
   } = require(path.join(repoRoot, "apps", "dify-desktop", "workflow_run_baseline_store.js"));
-  const {
-    createWorkflowRunAuditStore,
-  } = require(path.join(repoRoot, "apps", "dify-desktop", "workflow_run_audit_store.js"));
   const {
     createWorkflowSandboxRuleStore,
   } = require(path.join(repoRoot, "apps", "dify-desktop", "workflow_sandbox_rule_store.js"));
@@ -246,73 +242,6 @@ function failPayload(payload) {
   const baselines = await baselineStore.list(20, { mode: "base_api" });
   recordOutput("workflow_run_baseline_entry", !!baselines?.items?.[0]?.schema_version);
 
-  const runAuditStore = createWorkflowRunAuditStore({
-    loadConfig: () => ({ mode: "base_api", glueUrl: "http://127.0.0.1:18081" }),
-    fetchImpl: async (url, init = {}) => {
-      if (url.endsWith("/governance/meta/control-plane")) {
-        return governanceBoundaryResponse(
-          "workflow_run_audit",
-          "/governance/workflow-runs",
-          ["/governance/workflow-runs", "/governance/workflow-audit-events"]
-        );
-      }
-      const method = String(init.method || "GET").toUpperCase();
-      if (method === "GET" && url.includes("/governance/workflow-runs?")) {
-        return jsonResponse(200, {
-          ok: true,
-          items: [{
-            run_id: "run_schema_gate",
-            workflow_id: "wf_schema_gate",
-            schema_version: "workflow_run_entry.v1",
-            status: "done",
-            ok: true,
-            payload: {},
-            config: {},
-            result: {},
-          }],
-        });
-      }
-      if (method === "GET" && url.endsWith("/governance/workflow-runs/run_schema_gate/timeline")) {
-        return jsonResponse(200, {
-          ok: true,
-          schema_version: "workflow_run_timeline.v1",
-          run_id: "run_schema_gate",
-          status: "done",
-          timeline: [],
-        });
-      }
-      if (method === "GET" && url.includes("/governance/workflow-runs/failure-summary?")) {
-        return jsonResponse(200, {
-          ok: true,
-          schema_version: "workflow_failure_summary.v1",
-          total_runs: 1,
-          failed_runs: 0,
-          by_node: {},
-        });
-      }
-      if (method === "GET" && url.includes("/governance/workflow-audit-events?")) {
-        return jsonResponse(200, {
-          ok: true,
-          items: [{
-            schema_version: "workflow_audit_event.v1",
-            ts: "2026-03-24T00:00:00Z",
-            action: "run_workflow",
-            detail: { run_id: "run_schema_gate" },
-          }],
-        });
-      }
-      return jsonResponse(500, { ok: false, error: `unexpected run audit request: ${method} ${url}` });
-    },
-  });
-  const runs = await runAuditStore.listRuns(20, { mode: "base_api" });
-  recordOutput("workflow_run_entry", !!runs?.items?.[0]?.schema_version);
-  const timeline = await runAuditStore.getRunTimeline("run_schema_gate", { mode: "base_api" });
-  recordOutput("workflow_run_timeline", !!timeline?.schema_version);
-  const failureSummary = await runAuditStore.getFailureSummary(20, { mode: "base_api" });
-  recordOutput("workflow_failure_summary", !!failureSummary?.schema_version);
-  const auditLogs = await runAuditStore.listAuditLogs(20, "run_workflow", { mode: "base_api" });
-  recordOutput("workflow_audit_event", !!auditLogs?.items?.[0]?.schema_version);
-
   const sandboxSupport = {
     normalizeSandboxAlertRules(input) {
       const source = input && typeof input === "object" ? input : {};
@@ -463,10 +392,6 @@ function failPayload(payload) {
     "workflow_manual_review_item",
     "workflow_version_snapshot",
     "workflow_run_baseline_entry",
-    "workflow_run_entry",
-    "workflow_run_timeline",
-    "workflow_failure_summary",
-    "workflow_audit_event",
     "workflow_sandbox_rules",
     "workflow_sandbox_rule_version",
     "workflow_sandbox_rule_compare",

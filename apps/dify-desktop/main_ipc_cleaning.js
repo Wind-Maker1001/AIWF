@@ -15,7 +15,6 @@ function registerCleaningIpc(ctx, deps) {
     resolveOutputRoot,
     appendRunModeAudit,
     classifyRemoteFailure,
-    shouldFallbackByPolicy,
   } = deps;
 
   ipcMain.handle("aiwf:getConfig", async () => loadConfig());
@@ -42,22 +41,18 @@ function registerCleaningIpc(ctx, deps) {
       appendRunModeAudit({
         ts: new Date().toISOString(),
         mode: "offline_local",
-        fallback_applied: false,
         ok: !!(local && local.ok),
         job_id: local && local.job_id ? String(local.job_id) : "",
         duration_ms: Date.now() - startedAt,
       });
       return local;
     }
-    const allowFallback = merged.enableOfflineFallback !== false;
-    const fallbackPolicy = String(merged.fallbackPolicy || "smart").trim().toLowerCase() || "smart";
     try {
       const remote = await runViaBaseApi(payload, merged);
       if (remote && remote.ok) {
         appendRunModeAudit({
           ts: new Date().toISOString(),
           mode: "base_api",
-          fallback_applied: false,
           ok: true,
           job_id: remote && remote.job_id ? String(remote.job_id) : "",
           duration_ms: Date.now() - startedAt,
@@ -65,68 +60,28 @@ function registerCleaningIpc(ctx, deps) {
         return remote;
       }
       const failureClass = classifyRemoteFailure(null, remote);
-      if (!allowFallback || !shouldFallbackByPolicy(fallbackPolicy, failureClass)) {
-        appendRunModeAudit({
-          ts: new Date().toISOString(),
-          mode: "base_api",
-          fallback_applied: false,
-          ok: !!(remote && remote.ok),
-          reason: "remote_returned_not_ok",
-          failure_class: failureClass,
-          fallback_policy: fallbackPolicy,
-          job_id: remote && remote.job_id ? String(remote.job_id) : "",
-          duration_ms: Date.now() - startedAt,
-        });
-        return remote;
-      }
-      const local = await runOfflineCleaningInWorker(payload, outRoot);
-      const out = {
-        ...(local || {}),
-        fallback_applied: true,
-        fallback_reason: "remote_returned_not_ok",
-        fallback_policy: fallbackPolicy,
-        failure_class: failureClass,
-        fallback_message: "后端返回失败，已自动切换到离线本地模式完成清洗。",
-        remote_result: remote || null,
-      };
       appendRunModeAudit({
         ts: new Date().toISOString(),
         mode: "base_api",
-        fallback_applied: true,
-        ok: !!(out && out.ok),
+        ok: !!(remote && remote.ok),
         reason: "remote_returned_not_ok",
         failure_class: failureClass,
-        fallback_policy: fallbackPolicy,
-        job_id: out && out.job_id ? String(out.job_id) : "",
+        job_id: remote && remote.job_id ? String(remote.job_id) : "",
         duration_ms: Date.now() - startedAt,
       });
-      return out;
+      return remote;
     } catch (error) {
       const failureClass = classifyRemoteFailure(error, null);
-      if (!allowFallback || !shouldFallbackByPolicy(fallbackPolicy, failureClass)) throw error;
-      const local = await runOfflineCleaningInWorker(payload, outRoot);
-      const out = {
-        ...(local || {}),
-        fallback_applied: true,
-        fallback_reason: "remote_request_failed",
-        fallback_policy: fallbackPolicy,
-        failure_class: failureClass,
-        fallback_message: "后端不可用，已自动切换到离线本地模式完成清洗。",
-        remote_error: String(error && error.message ? error.message : error),
-      };
       appendRunModeAudit({
         ts: new Date().toISOString(),
         mode: "base_api",
-        fallback_applied: true,
-        ok: !!(out && out.ok),
+        ok: false,
         reason: "remote_request_failed",
         failure_class: failureClass,
-        fallback_policy: fallbackPolicy,
         remote_error: String(error && error.message ? error.message : error),
-        job_id: out && out.job_id ? String(out.job_id) : "",
         duration_ms: Date.now() - startedAt,
       });
-      return out;
+      throw error;
     }
   });
 

@@ -30,9 +30,9 @@ test("governance store schema version gate passes", () => {
   const payload = parseJsonLine(`${result.stdout}\n${result.stderr}`);
   assert.ok(payload, `expected structured JSON payload in output:\n${result.stdout}\n${result.stderr}`);
   assert.equal(payload.status, "passed");
-  assert.ok(payload.sourceModuleCount >= 8);
+  assert.ok(payload.sourceModuleCount >= 7);
   assert.equal(payload.sourceSchemaVersionCount, payload.sourceModuleCount);
-  assert.ok(payload.runtimeCheckCount >= 16);
+  assert.ok(payload.runtimeCheckCount >= 12);
   assert.equal(payload.runtimeSchemaVersionCount, payload.runtimeCheckCount);
   assert.deepEqual(payload.drift.missingSourceSchemaVersionModules, []);
   assert.deepEqual(payload.drift.missingRuntimeSchemaVersionOutputs, []);

@@ -23,11 +23,6 @@ from aiwf.governance_workflow_apps import (
     WORKFLOW_APP_SCHEMA_VERSION,
     WORKFLOW_APP_STORE_SCHEMA_VERSION,
 )
-from aiwf.governance_workflow_run_audit import (
-    WORKFLOW_AUDIT_EVENT_SCHEMA_VERSION,
-    WORKFLOW_RUN_AUDIT_OWNER,
-    WORKFLOW_RUN_AUDIT_SCHEMA_VERSION,
-)
 from aiwf.governance_workflow_sandbox_autofix import (
     WORKFLOW_SANDBOX_AUTOFIX_OWNER,
     WORKFLOW_SANDBOX_AUTOFIX_SCHEMA_VERSION,
@@ -132,18 +127,6 @@ def _base_governance_surface_entries() -> List[Dict[str, Any]]:
             "schema_version": MANUAL_REVIEW_SCHEMA_VERSION,
             "store_schema_version": MANUAL_REVIEW_QUEUE_STORE_SCHEMA_VERSION,
             "source_of_truth": "glue-python.governance.manual_reviews",
-        },
-        {
-            "capability": "workflow_run_audit",
-            "route_prefix": "/governance/workflow-runs",
-            "owned_route_prefixes": [
-                "/governance/workflow-runs",
-                "/governance/workflow-audit-events",
-            ],
-            "state_owner": WORKFLOW_RUN_AUDIT_OWNER,
-            "schema_version": WORKFLOW_RUN_AUDIT_SCHEMA_VERSION,
-            "store_schema_version": WORKFLOW_AUDIT_EVENT_SCHEMA_VERSION,
-            "source_of_truth": "glue-python.governance.workflow_run_audit",
         },
         {
             "capability": "run_baselines",

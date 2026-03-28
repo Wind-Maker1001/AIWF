@@ -48,7 +48,7 @@
 - glue-python 从 2026-03-21 起开始拥有 workflow app registry 的后端存储与查询边界。
 - glue-python 从 2026-03-21 起开始拥有 workflow version snapshot 与 compare diff 的后端存储与查询边界。
 - glue-python 从 2026-03-21 起开始拥有 manual review queue/history 的后端状态与历史边界。
-- glue-python 从 2026-03-21 起开始拥有 workflow run history / timeline / failure summary / audit log 的后端查询边界。
+- glue-python 从 2026-03-21 起开始拥有联网运行场景下的 workflow run history / timeline / failure summary / audit log 后端查询边界；desktop local runtime 仍保留本地 execution truth。
 - glue-python 从 2026-03-21 起开始拥有 run baseline registry 的后端存储与查询边界。
 - glue-python 可以维护 runtime catalog，但它不是跨平台 operator registry 的权威源。
 

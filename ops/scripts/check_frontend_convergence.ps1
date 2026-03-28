@@ -74,9 +74,8 @@ $checks = @(
       "AIWF_QUALITY_RULE_SET_PROVIDER",
       "AIWF_WORKFLOW_APP_REGISTRY_PROVIDER",
       "AIWF_WORKFLOW_VERSION_PROVIDER",
-      "AIWF_WORKFLOW_RUN_AUDIT_PROVIDER",
       "AIWF_RUN_BASELINE_PROVIDER",
-      "backend-owned manual review, quality rule, app registry, workflow version, run audit, and run baseline providers"
+      "workflow run audit remains local-runtime by default"
     )
   },
   @{
@@ -87,9 +86,8 @@ $checks = @(
       "AIWF_QUALITY_RULE_SET_PROVIDER",
       "AIWF_WORKFLOW_APP_REGISTRY_PROVIDER",
       "AIWF_WORKFLOW_VERSION_PROVIDER",
-      "AIWF_WORKFLOW_RUN_AUDIT_PROVIDER",
       "AIWF_RUN_BASELINE_PROVIDER",
-      "backend-owned manual review, quality rule, app registry, workflow version, run audit, and run baseline providers"
+      "workflow run audit remains local-runtime by default"
     )
   },
   @{
@@ -186,7 +184,7 @@ $checks = @(
     Path = Join-Path $RepoRoot "docs\quickstart_native_winui.md"
     Patterns = @(
       "glue-python governance bridge",
-      "manual review, quality rule sets, workflow app registry, workflow version storage, workflow run audit, and run baseline",
+      "manual review, quality rule sets, workflow app registry, workflow version storage, and run baseline",
       "SkipEnsureGlueBridge"
     )
   },

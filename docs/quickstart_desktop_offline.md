@@ -8,7 +8,7 @@ WinUI is the primary frontend. Electron is the secondary compatibility frontend.
 
 - default mode is `offline_local`
 - no local SQL Server / Java / Python / Rust service is required
-- the desktop app still supports `base_api` mode and offline fallback when you need it later
+- the desktop app still supports explicit `base_api` mode when you need the backend later
 
 ## Run or Package
 
@@ -31,7 +31,6 @@ Artifacts are written under `apps/dify-desktop/dist`.
 ## Default Desktop Behavior
 
 - mode: `offline_local`
-- fallback policy: `smart`
 - output root:
   - `E:\Desktop_Real\AIWF` if `E:\Desktop_Real` exists
   - otherwise `Desktop\AIWF_Builds`
@@ -83,7 +82,7 @@ Current Fluent variants in the UI:
 
 ## Optional Backend Mode
 
-The desktop app can also call your local AIWF backend in `base_api` mode and fall back to offline mode when configured.
+The desktop app can also call your local AIWF backend in `base_api` mode. `offline_local` and `base_api` are explicit modes, not automatic failover paths.
 
 See:
 

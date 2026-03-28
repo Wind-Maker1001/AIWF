@@ -67,24 +67,6 @@ Production check (retry + timeout + alert log):
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_integration_production_check.ps1 -MaxRetries 3 -TimeoutSec 180
 ```
 
-Fallback policy options (desktop/base_api mode):
-- `smart` (default): fallback for timeout/network/server/not-ok
-- `smart_strict`: fallback only for timeout/network/5xx
-- `always`: always fallback when primary path not successful
-- `never`: disable fallback
-
-Run with automatic offline fallback (primary Dify bridge fails -> local desktop offline cleaning):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_run_with_offline_fallback.ps1
-```
-
-Disable fallback in production check:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_integration_production_check.ps1 -EnableOfflineFallback:$false
-```
-
 HTTP node template doc:
 - `docs/dify_workflow_http_node_template.md`
 

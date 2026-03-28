@@ -277,12 +277,11 @@ public sealed class GovernanceBridgeClient
         CancellationToken cancellationToken = default)
     {
         var safeLimit = Math.Clamp(limit, 1, 5000);
-        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.WORKFLOW_RUN_AUDIT, cancellationToken: cancellationToken);
-        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"{routePrefix}?limit={safeLimit}", apiKey);
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"/api/v1/jobs/history?limit={safeLimit}", apiKey);
         using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        var root = ParseRoot(body, response.IsSuccessStatusCode);
-        var array = root?["items"] as JsonArray;
+        var root = ParseNode(body, response.IsSuccessStatusCode);
+        var array = root as JsonArray;
         if (array is null) return Array.Empty<GovernanceWorkflowRunItem>();
         return array.OfType<JsonObject>().Select(ParseWorkflowRunItem).ToList();
     }
@@ -293,8 +292,7 @@ public sealed class GovernanceBridgeClient
         string runId,
         CancellationToken cancellationToken = default)
     {
-        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.WORKFLOW_RUN_AUDIT, cancellationToken: cancellationToken);
-        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"{routePrefix}/{Uri.EscapeDataString(runId.Trim())}/timeline", apiKey);
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"/api/v1/jobs/{Uri.EscapeDataString(runId.Trim())}/timeline", apiKey);
         using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         var root = ParseRoot(body, response.IsSuccessStatusCode);
@@ -309,8 +307,7 @@ public sealed class GovernanceBridgeClient
         int limit = 120,
         CancellationToken cancellationToken = default)
     {
-        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.WORKFLOW_RUN_AUDIT, cancellationToken: cancellationToken);
-        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"{routePrefix}/failure-summary?limit={Math.Clamp(limit, 1, 5000)}", apiKey);
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"/api/v1/jobs/failure-summary?limit={Math.Clamp(limit, 1, 5000)}", apiKey);
         using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         var root = ParseRoot(body, response.IsSuccessStatusCode);
@@ -340,17 +337,11 @@ public sealed class GovernanceBridgeClient
     {
         var query = new List<string> { $"limit={Math.Clamp(limit, 1, 5000)}" };
         if (!string.IsNullOrWhiteSpace(action)) query.Add($"action={Uri.EscapeDataString(action.Trim())}");
-        var routePrefix = await ResolveGovernanceRoutePrefixAsync(
-            baseUrl,
-            apiKey,
-            GovernanceCapabilitiesGenerated.WORKFLOW_RUN_AUDIT,
-            preferredOwnedPrefix: GovernanceCapabilitiesGenerated.WORKFLOW_RUN_AUDIT_WORKFLOW_AUDIT_EVENTS_ROUTE_PREFIX,
-            cancellationToken: cancellationToken);
-        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"{routePrefix}?{string.Join("&", query)}", apiKey);
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"/api/v1/jobs/audit-events?{string.Join("&", query)}", apiKey);
         using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        var root = ParseRoot(body, response.IsSuccessStatusCode);
-        var array = root?["items"] as JsonArray;
+        var root = ParseNode(body, response.IsSuccessStatusCode);
+        var array = root as JsonArray;
         if (array is null) return Array.Empty<GovernanceAuditEventItem>();
         return array.OfType<JsonObject>().Select(ParseAuditEventItem).ToList();
     }
@@ -714,6 +705,26 @@ public sealed class GovernanceBridgeClient
         {
             var message = root?["error"]?.GetValue<string>() ?? json;
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(message) ? "governance request failed" : message);
+        }
+
+        return root;
+    }
+
+    private static JsonNode? ParseNode(string json, bool isSuccessStatusCode)
+    {
+        JsonNode? root = null;
+        try
+        {
+            root = JsonNode.Parse(json);
+        }
+        catch
+        {
+        }
+
+        if (!isSuccessStatusCode)
+        {
+            var message = root?["error"]?.GetValue<string>() ?? json;
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(message) ? "request failed" : message);
         }
 
         return root;

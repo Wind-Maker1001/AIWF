@@ -108,7 +108,7 @@ AIWF 当前更接近一个多运行时平台仓库，而不是普通多语言 mo
 
 2026-03-24 新增的 Phase 2 起步边界：
 
-- `workflow_app_registry_store`、`workflow_quality_rule_store`、`workflow_manual_review_store`、`workflow_version_store`、`workflow_run_baseline_store`、`workflow_run_audit_store`、`workflow_sandbox_rule_store`、`workflow_sandbox_autofix_store` 已被收口进统一的 `schema_version` gate。
+- `workflow_app_registry_store`、`workflow_quality_rule_store`、`workflow_manual_review_store`、`workflow_version_store`、`workflow_run_baseline_store`、`workflow_sandbox_rule_store`、`workflow_sandbox_autofix_store` 已被收口进统一的 `schema_version` gate。
 - 其中之前最容易漂移的几类对象已补齐主路径版本字段：workflow run entry / audit event / timeline / failure summary，sandbox rules / rule versions / compare payload / rollback payload，sandbox autofix state / action history。
 - 新增 `ops/scripts/check_governance_store_schema_versions.ps1` 后，这些 backend-owned store 的 source marker 与 runtime normalized output 都开始被 CI / release-ready scorecard 约束，而不再只是实现细节。
 
@@ -377,15 +377,15 @@ AIWF 当前更接近一个多运行时平台仓库，而不是普通多语言 mo
 - desktop 在 `base_api` 路径开始优先通过后端 version store 记录、列出、恢复与对比 workflow 版本
 - manual review queue/history foundation 已落地到 glue-python，后端开始拥有审核状态与历史查询边界
 - desktop 在 run / queue / sandbox 主路径中生成 `pending_reviews` 时，`base_api` 路径开始优先写入后端 manual review store；前端继续保留审核操作面
-- workflow run audit query foundation 已落地到 glue-python，后端开始拥有 run history / timeline / failure summary / audit log 的查询边界
-- desktop 在 `base_api` 路径开始优先通过后端 run audit store 查询运行历史与审计；本地文件仅保留镜像职责
+- workflow run audit query foundation 已落地到 glue-python，后端可承接联网运行的 run history / timeline / failure summary / audit log 查询边界
+- 当前 desktop workflow studio 仍保留本地 runtime run/audit truth；`base_api` 不再自动等同于远端 run audit owner
 - 自 2026-03-22 起，`base_api` 默认已不再把 workflow audit event 或 run history 写入本地 run/audit mirror；quality gate report、sandbox alerts 与 perf dashboard 也已改为消费 backend run query model
-- 自 2026-03-22 起，推荐前端启动路径开始默认把 workflow version 与 workflow run audit provider 切到 glue-python，这让 `offline_local` 的这两类本地 owner 开始退出默认使用面
+- 自 2026-03-22 起，推荐前端启动路径开始默认把 workflow version provider 切到 glue-python；workflow run audit 后续改为显式 `base_http` provider，而不再按启动路径默认后端化
 - 自 2026-03-22 起，推荐前端启动路径也开始默认把 quality rule set 与 workflow app registry provider 切到 glue-python，这让 `offline_local` 的更多治理/发布 owner 开始退出默认使用面
 - 自 2026-03-22 起，推荐前端启动路径也开始默认把 manual review 与 run baseline provider 切到 glue-python，这让 `offline_local` 的审核与回归 owner 也开始退出默认使用面
 - 自 2026-03-22 起，这六类 governance / publishing stores 的默认解析也已改为优先 glue-python；`local_legacy` 从“隐式默认”收缩成“只有显式声明时才允许的兼容 fallback”
 - 自 2026-03-23 起，`workflow version local_legacy` 已正式退役；workflow version snapshot / compare 不再允许继续回落到本地 JSONL
-- 自 2026-03-23 起，`workflow run audit local_legacy` 也已正式退役；workflow run history / timeline / failure summary / audit log 不再允许继续回落到本地 JSONL
+- 自 2026-03-23 起，`workflow run audit local_legacy` 已正式退役；当前保留的是 desktop local-runtime truth，而不是旧的 local_legacy provider 语义
 - 自 2026-03-23 起，`workflow quality rule set local_legacy` 与 `workflow app registry local_legacy` 也已正式退役；quality rule set 与 workflow app registry 不再允许继续回落到本地 JSON
 - 自 2026-03-23 起，`manual review local_legacy` 与 `run baseline local_legacy` 也已正式退役；manual review queue/history 与 run baseline registry 不再允许继续回落到本地 JSON
 - 自 2026-03-23 起，`sandbox autofix local_legacy` 也已正式退役；sandbox autofix state / actions / execution overlay 不再允许继续回落到本地 provider

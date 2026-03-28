@@ -2,13 +2,17 @@ package com.aiwf.base.web;
 
 import com.aiwf.base.service.JobService;
 import com.aiwf.base.glue.GlueRunResult;
+import com.aiwf.base.web.dto.AuditEventResp;
+import com.aiwf.base.web.dto.ArtifactResp;
 import com.aiwf.base.web.dto.CreateJobPolicyReq;
 import com.aiwf.base.web.dto.GlueHealthResp;
+import com.aiwf.base.web.dto.JobFailureSummaryResp;
 import com.aiwf.base.web.dto.JobCreateResp;
 import com.aiwf.base.web.dto.JobDetailsResp;
-import com.aiwf.base.web.dto.StepResp;
-import com.aiwf.base.web.dto.ArtifactResp;
+import com.aiwf.base.web.dto.JobRunRecordResp;
+import com.aiwf.base.web.dto.JobRunTimelineResp;
 import com.aiwf.base.web.dto.RunFlowReq;
+import com.aiwf.base.web.dto.StepResp;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,6 +47,18 @@ public class JobController {
         return jobs.getJob(jobId);
     }
 
+    @GetMapping("/history")
+    public java.util.List<JobRunRecordResp> listRunHistory(
+            @RequestParam(name = "limit", defaultValue = "200") int limit
+    ) {
+        return jobs.listRunHistory(limit);
+    }
+
+    @GetMapping("/{jobId}/record")
+    public JobRunRecordResp getRunRecord(@PathVariable("jobId") @NotBlank String jobId) {
+        return jobs.getRunRecord(jobId);
+    }
+
     @GetMapping("/{jobId}/steps")
     public java.util.List<StepResp> listSteps(@PathVariable("jobId") @NotBlank String jobId) {
         return jobs.listSteps(jobId);
@@ -51,6 +67,26 @@ public class JobController {
     @GetMapping("/{jobId}/artifacts")
     public java.util.List<ArtifactResp> listArtifacts(@PathVariable("jobId") @NotBlank String jobId) {
         return jobs.listArtifacts(jobId);
+    }
+
+    @GetMapping("/{jobId}/timeline")
+    public JobRunTimelineResp getRunTimeline(@PathVariable("jobId") @NotBlank String jobId) {
+        return jobs.getRunTimeline(jobId);
+    }
+
+    @GetMapping("/failure-summary")
+    public JobFailureSummaryResp getFailureSummary(
+            @RequestParam(name = "limit", defaultValue = "400") int limit
+    ) {
+        return jobs.getFailureSummary(limit);
+    }
+
+    @GetMapping("/audit-events")
+    public java.util.List<AuditEventResp> listAuditEvents(
+            @RequestParam(name = "limit", defaultValue = "200") int limit,
+            @RequestParam(name = "action", defaultValue = "") String action
+    ) {
+        return jobs.listAuditEvents(limit, action);
     }
 
     @PostMapping("/{jobId}/run/{flow}")
