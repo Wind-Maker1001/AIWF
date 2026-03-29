@@ -175,15 +175,38 @@ function createWorkflowIpcStateSupport(ctx) {
 
   function appendRunHistory(run, payload, mergedConfig) {
     try {
+      const sourcePayload = payload && typeof payload === "object" ? payload : {};
+      const runRequestKind = String(
+        sourcePayload.run_request_kind
+        || run?.run_request_kind
+        || ((sourcePayload.version_id || sourcePayload.published_version_id) ? "reference" : "draft")
+      ).trim() || "draft";
+      const versionId = String(sourcePayload.version_id || run?.version_id || "").trim();
+      const publishedVersionId = String(sourcePayload.published_version_id || run?.published_version_id || "").trim();
+      const workflowDefinitionSource = String(
+        sourcePayload.workflow_definition_source
+        || run?.workflow_definition_source
+        || (runRequestKind === "reference" ? "version_reference" : "draft_inline")
+      ).trim() || (runRequestKind === "reference" ? "version_reference" : "draft_inline");
+      const payloadSnapshot = JSON.parse(JSON.stringify(sourcePayload || {}));
+      const resultSnapshot = JSON.parse(JSON.stringify(run || {}));
+      if (runRequestKind === "reference") {
+        delete payloadSnapshot.workflow;
+        delete resultSnapshot.workflow;
+      }
       const item = {
         ts: new Date().toISOString(),
         run_id: String(run?.run_id || ""),
         workflow_id: String(run?.workflow_id || ""),
         status: String(run?.status || ""),
         ok: !!run?.ok,
-        payload: payload || {},
+        run_request_kind: runRequestKind,
+        version_id: versionId,
+        published_version_id: publishedVersionId,
+        workflow_definition_source: workflowDefinitionSource,
+        payload: payloadSnapshot,
         config: mergedConfig || {},
-        result: run || {},
+        result: resultSnapshot,
       };
       fs.appendFileSync(runHistoryPath(), `${JSON.stringify(item)}\n`, "utf8");
     } catch {}

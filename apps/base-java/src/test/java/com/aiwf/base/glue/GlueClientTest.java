@@ -86,6 +86,51 @@ class GlueClientTest {
     }
 
     @Test
+    void runReferencePostsJsonBody() throws Exception {
+        AtomicReference<String> method = new AtomicReference<>();
+        AtomicReference<String> path = new AtomicReference<>();
+        AtomicReference<Map<String, Object>> body = new AtomicReference<>();
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/jobs/job-ref/run-reference", exchange -> {
+            method.set(exchange.getRequestMethod());
+            path.set(exchange.getRequestURI().getPath());
+            body.set(readJsonMap(exchange));
+            writeJson(exchange, 200, """
+                    {
+                      "ok": true,
+                      "job_id": "job-ref",
+                      "version_id": "ver_finance_001",
+                      "seconds": 0.75
+                    }
+                    """);
+        });
+        server.start();
+
+        GlueClient glueClient = new GlueClient(appProperties(serverBaseUrl()), RestClient.builder());
+        GlueRunResult result = glueClient.runReference("job-ref", new GlueRunReferenceReq(
+                "ver_finance_001",
+                "ver_finance_001",
+                "local",
+                "v1",
+                "trace-ref-1",
+                new GlueJobContext("D:\\AIWF\\bus\\jobs\\job-ref", "D:\\AIWF\\bus\\jobs\\job-ref\\stage", "D:\\AIWF\\bus\\jobs\\job-ref\\artifacts", "D:\\AIWF\\bus\\jobs\\job-ref\\evidence"),
+                Map.of("region", "cn")
+        ));
+
+        assertThat(result.isOk()).isTrue();
+        assertThat(result.getJobId()).isEqualTo("job-ref");
+        assertThat(result.extras()).containsEntry("version_id", "ver_finance_001");
+        assertThat(method.get()).isEqualTo("POST");
+        assertThat(path.get()).isEqualTo("/jobs/job-ref/run-reference");
+        assertThat(body.get()).containsEntry("version_id", "ver_finance_001");
+        assertThat(body.get()).containsEntry("published_version_id", "ver_finance_001");
+        assertThat(body.get()).containsEntry("actor", "local");
+        assertThat(body.get()).containsEntry("ruleset_version", "v1");
+        assertThat(body.get()).containsEntry("trace_id", "trace-ref-1");
+        assertThat(castMap(body.get().get("params"))).containsEntry("region", "cn");
+    }
+
+    @Test
     void healthRetriesBeforeSucceeding() throws Exception {
         AtomicInteger attempts = new AtomicInteger();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

@@ -11,14 +11,14 @@ const {
   governanceBoundaryResponse,
 } = require("./governance_test_support");
 
-function makeVersion(versionId, graph) {
+function makeVersion(versionId, workflowDefinition) {
   return {
     version_id: versionId,
     ts: "2026-03-21T00:00:00Z",
     workflow_name: "Finance Flow",
     workflow_id: "wf_finance",
     path: `D:/flows/${versionId}.json`,
-    graph,
+    workflow_definition: workflowDefinition,
   };
 }
 
@@ -81,6 +81,8 @@ test("workflow version store uses glue provider for backend-owned snapshots", as
       if (method === "PUT") {
         const id = decodeURIComponent(String(url).split("/").pop() || "");
         const body = JSON.parse(String(init.body || "{}"));
+        assert.equal(typeof body.version.workflow_definition, "object");
+        assert.equal(body.version.graph, undefined);
         remote.set(id, {
           schema_version: "workflow_version_snapshot.v1",
           owner: "glue-python",
@@ -113,14 +115,20 @@ test("workflow version store uses glue provider for backend-owned snapshots", as
 
   const saved = await store.recordVersion(makeVersion("ver_a", graphA()), { mode: "base_api" });
   assert.equal(saved.provider, GLUE_PROVIDER);
+  assert.equal(saved.item.workflow_definition.workflow_id, "wf_finance");
+  assert.equal(saved.item.graph, undefined);
   await store.recordVersion(makeVersion("ver_b", graphB()), { mode: "base_api" });
 
   const listed = await store.listVersions(100, "", { mode: "base_api" });
   assert.equal(listed.provider, GLUE_PROVIDER);
   assert.equal(listed.items.length, 2);
+  assert.equal(listed.items[0].workflow_definition.workflow_id, "wf_finance");
+  assert.equal(listed.items[0].graph, undefined);
 
   const restored = await store.getVersion("ver_b", { mode: "base_api" });
   assert.equal(restored.owner, "glue-python");
+  assert.equal(restored.workflow_definition.workflow_id, "wf_finance");
+  assert.equal(restored.graph, undefined);
 
   const compared = await store.compareVersions("ver_a", "ver_b", { mode: "base_api" });
   assert.equal(compared.summary.changed_nodes, 1);

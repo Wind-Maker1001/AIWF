@@ -98,3 +98,6 @@ mod part2;
 
 #[path = "main_tests_part3.rs"]
 mod part3;
+
+#[path = "main_tests_part4.rs"]
+mod part4;

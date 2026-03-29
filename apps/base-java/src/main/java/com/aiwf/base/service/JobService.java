@@ -13,6 +13,7 @@ import com.aiwf.base.glue.GlueGateway;
 import com.aiwf.base.glue.GlueHealthResult;
 import com.aiwf.base.glue.GlueJobContext;
 import com.aiwf.base.glue.GlueRunFlowReq;
+import com.aiwf.base.glue.GlueRunReferenceReq;
 import com.aiwf.base.glue.GlueRunResult;
 import com.aiwf.base.web.ApiException;
 import com.aiwf.base.web.dto.AuditEventResp;
@@ -47,6 +48,7 @@ import java.util.UUID;
 @Service
 public class JobService {
     private static final String JOB_DIRS_FAIL_ACTION = "JOB_DIRS_FAIL";
+    private static final String FLOW_RUN_REQUEST_ACTION = "FLOW_RUN_REQUEST";
     private static final Set<String> RESERVED_GLUE_PARAM_KEYS = Set.of(
             "job_id",
             "flow",
@@ -58,6 +60,14 @@ public class JobService {
             "artifacts_dir",
             "evidence_dir"
     );
+    private static final String LEGACY_FLOW_COMPATIBILITY_PATH = "run_flow_legacy";
+    private static final String LEGACY_FLOW_REMOVE_BY = "2026-06-30";
+    private static final String LEGACY_FLOW_KILL_CONDITION = "migrate Dify and all direct flow consumers to run-reference";
+    private static final String LEGACY_FLOW_DISPATCH_SOURCE = "legacy_flow_dispatch";
+    private static final String VERSION_REFERENCE_SOURCE = "version_reference";
+    private static final String LEGACY_FLOW_REQUEST_KIND = "legacy_flow";
+    private static final String REFERENCE_REQUEST_KIND = "reference";
+    private static final String REFERENCE_ROUTE_STEP_ID = "run_reference";
 
     private final JobRepository jobs;
     private final JobStatusService jobStatus;
@@ -211,6 +221,7 @@ public class JobService {
 
         String effectiveActor = defaultIfBlank(actor, "glue");
         String effectiveRuleset = (rulesetVersion == null || rulesetVersion.isBlank()) ? "v1" : rulesetVersion;
+        Map<String, Object> normalizedParams = GlueRunParamsSupport.filterReservedKeys(params, RESERVED_GLUE_PARAM_KEYS);
         try {
             JobWorkspaceSupport.ensureJobDirs(jobsBusRoot, jobId);
         } catch (RuntimeException e) {
@@ -220,6 +231,13 @@ public class JobService {
 
         try {
             GlueJobContext jobContext = JobWorkspaceSupport.buildJobContext(jobsBusRoot, jobId);
+            jobs.audit(new AuditEvent(
+                    jobId,
+                    effectiveActor,
+                    FLOW_RUN_REQUEST_ACTION,
+                    flow,
+                    JsonUtil.toJson(buildLegacyRunRequestDetail(flow, effectiveActor, effectiveRuleset, normalizedParams))
+            ));
             return glue.runFlow(jobId, flow, new GlueRunFlowReq(
                     jobId,
                     flow,
@@ -227,12 +245,101 @@ public class JobService {
                     effectiveRuleset,
                     newTraceId(),
                     jobContext,
-                    GlueRunParamsSupport.filterReservedKeys(params, RESERVED_GLUE_PARAM_KEYS)
+                    normalizedParams
             ));
         } catch (RestClientException e) {
-            jobs.audit(new AuditEvent(jobId, effectiveActor, "FLOW_RUN_FAIL", flow, e.getMessage()));
+            jobs.audit(new AuditEvent(
+                    jobId,
+                    effectiveActor,
+                    "FLOW_RUN_FAIL",
+                    flow,
+                    JsonUtil.toJson(buildRunFailureDetail(
+                            LEGACY_FLOW_REQUEST_KIND,
+                            flow,
+                            Map.of(),
+                            effectiveRuleset,
+                            normalizedParams,
+                            e.getMessage(),
+                            Map.of(
+                                    "compatibility_path", LEGACY_FLOW_COMPATIBILITY_PATH,
+                                    "remove_by", LEGACY_FLOW_REMOVE_BY,
+                                    "kill_condition", LEGACY_FLOW_KILL_CONDITION
+                            )
+                    ))
+            ));
             jobStatus.onStepFail(jobId);
             return GlueRunResult.failed(jobId, flow, e.getMessage());
+        }
+    }
+
+    public GlueRunResult runWorkflowReference(
+            String jobId,
+            String versionId,
+            String actor,
+            String rulesetVersion,
+            Map<String, Object> params
+    ) {
+        String normalizedVersionId = defaultIfBlank(versionId, "");
+        if (normalizedVersionId.isEmpty()) {
+            throw ApiException.badRequest("workflow_reference_request_invalid", "version_id is required");
+        }
+        Map<String, Object> referenceParams = new LinkedHashMap<>();
+        referenceParams.put("version_id", normalizedVersionId);
+        referenceParams.put("published_version_id", normalizedVersionId);
+        if (params != null && !params.isEmpty()) {
+            referenceParams.putAll(params);
+        }
+        if (jobs.getJob(jobId) == null) {
+            throw ApiException.notFound("job_not_found", "job not found", Map.of("job_id", jobId));
+        }
+        String effectiveActor = defaultIfBlank(actor, "glue");
+        String effectiveRuleset = (rulesetVersion == null || rulesetVersion.isBlank()) ? "v1" : rulesetVersion;
+        Map<String, Object> normalizedParams = GlueRunParamsSupport.filterReservedKeys(referenceParams, RESERVED_GLUE_PARAM_KEYS);
+        try {
+            JobWorkspaceSupport.ensureJobDirs(jobsBusRoot, jobId);
+        } catch (RuntimeException e) {
+            recordJobDirFailure(jobId, effectiveActor, e);
+            return GlueRunResult.failed(jobId, "", "failed to prepare job directories");
+        }
+        try {
+            GlueJobContext jobContext = JobWorkspaceSupport.buildJobContext(jobsBusRoot, jobId);
+            jobs.audit(new AuditEvent(
+                    jobId,
+                    effectiveActor,
+                    FLOW_RUN_REQUEST_ACTION,
+                    REFERENCE_ROUTE_STEP_ID,
+                    JsonUtil.toJson(buildReferenceRunRequestDetail(normalizedVersionId, effectiveActor, effectiveRuleset, normalizedParams))
+            ));
+            return glue.runReference(jobId, new GlueRunReferenceReq(
+                    normalizedVersionId,
+                    normalizedVersionId,
+                    effectiveActor,
+                    effectiveRuleset,
+                    newTraceId(),
+                    jobContext,
+                    normalizedParams
+            ));
+        } catch (RestClientException e) {
+            jobs.audit(new AuditEvent(
+                    jobId,
+                    effectiveActor,
+                    "FLOW_RUN_FAIL",
+                    REFERENCE_ROUTE_STEP_ID,
+                    JsonUtil.toJson(buildRunFailureDetail(
+                            REFERENCE_REQUEST_KIND,
+                            "run-reference",
+                            Map.of(
+                                    "version_id", normalizedVersionId,
+                                    "published_version_id", normalizedVersionId
+                            ),
+                            effectiveRuleset,
+                            normalizedParams,
+                            e.getMessage(),
+                            Map.of("workflow_definition_source", VERSION_REFERENCE_SOURCE)
+                    ))
+            ));
+            jobStatus.onStepFail(jobId);
+            return GlueRunResult.failed(jobId, "", e.getMessage());
         }
     }
 
@@ -333,8 +440,16 @@ public class JobService {
     private JobRunRecordResp toRunRecord(JobRow row) {
         List<StepResp> steps = jobs.listSteps(row.jobId()).stream().map(this::toStepResp).toList();
         List<ArtifactResp> artifacts = jobs.listArtifacts(row.jobId()).stream().map(this::toArtifactResp).toList();
-        Map<String, Object> payload = steps.isEmpty() ? Map.of() : JsonUtil.fromJsonObject(steps.get(0).paramsJson());
-        String workflowId = steps.isEmpty() ? "" : defaultIfBlank(steps.get(0).stepId(), "");
+        Map<String, Object> requestMetadata = latestRunRequestMetadata(row.jobId());
+        Map<String, Object> payload = normalizeRunRecordPayload(requestMetadata, steps);
+        String runRequestKind = stringValue(requestMetadata.get("run_request_kind"), steps.isEmpty() ? LEGACY_FLOW_REQUEST_KIND : LEGACY_FLOW_REQUEST_KIND);
+        String versionId = stringValue(requestMetadata.get("version_id"), "");
+        String publishedVersionId = stringValue(requestMetadata.get("published_version_id"), "");
+        String workflowDefinitionSource = stringValue(
+                requestMetadata.get("workflow_definition_source"),
+                REFERENCE_REQUEST_KIND.equals(runRequestKind) ? VERSION_REFERENCE_SOURCE : LEGACY_FLOW_DISPATCH_SOURCE
+        );
+        String workflowId = resolveWorkflowId(requestMetadata, steps);
         boolean ok = row.status() == JobStatus.DONE;
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("job_id", row.jobId());
@@ -348,6 +463,10 @@ public class JobService {
                 "base-java.jobs",
                 row.jobId(),
                 row.createdAt(),
+                runRequestKind,
+                versionId,
+                publishedVersionId,
+                workflowDefinitionSource,
                 workflowId,
                 row.status().toDb(),
                 ok,
@@ -382,5 +501,109 @@ public class JobService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? fallback : trimmed;
+    }
+
+    private Map<String, Object> latestRunRequestMetadata(String jobId) {
+        return jobs.listJobAuditEvents(jobId, 50).stream()
+                .filter(item -> FLOW_RUN_REQUEST_ACTION.equalsIgnoreCase(String.valueOf(item.action())))
+                .findFirst()
+                .map(item -> JsonUtil.fromJsonObject(item.detailJson()))
+                .orElse(Map.of());
+    }
+
+    private Map<String, Object> normalizeRunRecordPayload(Map<String, Object> requestMetadata, List<StepResp> steps) {
+        String runRequestKind = stringValue(requestMetadata.get("run_request_kind"), "");
+        if (REFERENCE_REQUEST_KIND.equals(runRequestKind)) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            putIfPresent(out, "version_id", requestMetadata.get("version_id"));
+            putIfPresent(out, "published_version_id", requestMetadata.get("published_version_id"));
+            putIfPresent(out, "params", requestMetadata.get("params"));
+            putIfPresent(out, "compatibility_path", requestMetadata.get("compatibility_path"));
+            return out;
+        }
+        if (!requestMetadata.isEmpty()) {
+            return new LinkedHashMap<>(requestMetadata);
+        }
+        return steps.isEmpty() ? Map.of() : JsonUtil.fromJsonObject(steps.get(0).paramsJson());
+    }
+
+    private String resolveWorkflowId(Map<String, Object> requestMetadata, List<StepResp> steps) {
+        String workflowId = stringValue(requestMetadata.get("workflow_id"), "");
+        if (!workflowId.isEmpty()) return workflowId;
+        workflowId = stringValue(requestMetadata.get("published_version_id"), "");
+        if (!workflowId.isEmpty()) return workflowId;
+        workflowId = stringValue(requestMetadata.get("version_id"), "");
+        if (!workflowId.isEmpty()) return workflowId;
+        return steps.isEmpty() ? "" : defaultIfBlank(steps.get(0).stepId(), "");
+    }
+
+    private Map<String, Object> buildLegacyRunRequestDetail(
+            String flow,
+            String actor,
+            String rulesetVersion,
+            Map<String, Object> params
+    ) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("run_request_kind", LEGACY_FLOW_REQUEST_KIND);
+        detail.put("workflow_definition_source", LEGACY_FLOW_DISPATCH_SOURCE);
+        detail.put("workflow_id", flow);
+        detail.put("flow", flow);
+        detail.put("actor", actor);
+        detail.put("ruleset_version", rulesetVersion);
+        detail.put("params", params);
+        detail.put("compatibility_path", LEGACY_FLOW_COMPATIBILITY_PATH);
+        detail.put("remove_by", LEGACY_FLOW_REMOVE_BY);
+        detail.put("kill_condition", LEGACY_FLOW_KILL_CONDITION);
+        return detail;
+    }
+
+    private Map<String, Object> buildReferenceRunRequestDetail(
+            String versionId,
+            String actor,
+            String rulesetVersion,
+            Map<String, Object> params
+    ) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("run_request_kind", REFERENCE_REQUEST_KIND);
+        detail.put("workflow_definition_source", VERSION_REFERENCE_SOURCE);
+        detail.put("workflow_id", versionId);
+        detail.put("version_id", versionId);
+        detail.put("published_version_id", versionId);
+        detail.put("actor", actor);
+        detail.put("ruleset_version", rulesetVersion);
+        detail.put("params", params);
+        return detail;
+    }
+
+    private Map<String, Object> buildRunFailureDetail(
+            String runRequestKind,
+            String flow,
+            Map<String, Object> referenceFields,
+            String rulesetVersion,
+            Map<String, Object> params,
+            String error,
+            Map<String, Object> extras
+    ) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("run_request_kind", runRequestKind);
+        detail.put("flow", flow);
+        detail.put("ruleset_version", rulesetVersion);
+        detail.put("params", params);
+        detail.put("error", defaultIfBlank(error, "dispatch failed"));
+        detail.putAll(referenceFields);
+        detail.putAll(extras);
+        return detail;
+    }
+
+    private void putIfPresent(Map<String, Object> target, String key, Object value) {
+        if (value != null) {
+            target.put(key, value);
+        }
+    }
+
+    private String stringValue(Object value, String fallback) {
+        if (value == null) return fallback;
+        String normalized = String.valueOf(value).trim();
+        return normalized.isEmpty() ? fallback : normalized;
     }
 }

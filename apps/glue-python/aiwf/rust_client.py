@@ -462,6 +462,44 @@ def workflow_run(
     return post_json("/workflow/run", payload, base_url=base_url, timeout=timeout)
 
 
+def workflow_reference_run_v1(
+    *,
+    workflow_definition: Dict[str, Any],
+    version_id: str,
+    published_version_id: str = "",
+    job_id: str = "",
+    actor: str = "",
+    ruleset_version: str = "",
+    trace_id: str = "",
+    traceparent: str = "",
+    tenant_id: str = "",
+    run_id: str = "",
+    job_context: Optional[Dict[str, Any]] = None,
+    params: Optional[Dict[str, Any]] = None,
+    base_url: str = "http://127.0.0.1:18082",
+    timeout: float = 60.0,
+) -> Dict[str, Any]:
+    payload = {
+        "workflow_definition": workflow_definition,
+        "version_id": version_id,
+        "published_version_id": published_version_id or version_id,
+        "job_id": job_id,
+        "actor": actor,
+        "ruleset_version": ruleset_version,
+        "trace_id": trace_id,
+        "traceparent": traceparent,
+        "tenant_id": tenant_id,
+        "run_id": run_id,
+        "job_context": job_context or {},
+        "params": params or {},
+    }
+    import requests
+
+    url = _url(base_url, "/operators/workflow_reference_run_v1")
+    response = requests.post(url, json=payload, timeout=timeout)
+    return _json_or_ok(response, "POST /operators/workflow_reference_run_v1")
+
+
 def plugin_exec_v1(
     *,
     plugin: str,

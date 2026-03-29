@@ -4,7 +4,6 @@ import {
   stringifyWorkflowGraph,
 } from "./flow-io-support.js";
 import {
-  assertWorkflowContract,
   combineWorkflowMigrationReports,
   formatWorkflowContractError,
 } from "./workflow-contract.js";
@@ -29,7 +28,6 @@ function createWorkflowFlowIoUi(els, deps = {}) {
   async function saveFlow() {
     try {
       const graph = graphPayload();
-      assertWorkflowContract(graph, { requireNonEmptyNodes: true });
       const name = saveWorkflowName(els.workflowName?.value || "");
       const out = await window.aiwfDesktop.saveWorkflow(graph, name);
       if (out?.ok) {

@@ -66,8 +66,8 @@ function createWorkflowAppPublishUi(els, deps = {}) {
   }
 
   async function publishApp() {
-    const graph = graphPayload();
-    const name = String(els.appPublishName?.value || graph?.name || "").trim();
+    const authoringGraph = graphPayload();
+    const name = String(els.appPublishName?.value || authoringGraph?.name || "").trim();
     if (!name) {
       setStatus("应用名称不能为空", false);
       return;
@@ -95,7 +95,7 @@ function createWorkflowAppPublishUi(els, deps = {}) {
     }
     const out = await window.aiwfDesktop.publishWorkflowApp({
       name,
-      graph,
+      graph: authoringGraph,
       params_schema: schema,
       template_policy: {
         version: 1,

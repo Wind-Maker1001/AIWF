@@ -51,12 +51,12 @@ function createWorkflowPanelsAdminVersionRenderers(els, deps = {}) {
       restoreBtn.textContent = "恢复";
       restoreBtn.onclick = async () => {
         const out = await window.aiwfDesktop.restoreWorkflowVersion({ version_id: it.version_id });
-        if (!out?.ok || !out?.graph) {
+        if (!out?.ok || !out?.workflow_definition) {
           setStatus(`恢复失败: ${formatAiwfError(out)}`, false);
           return;
         }
         try {
-          window.aiwfDesktop.__applyRestoredWorkflowGraph?.(out.graph);
+          window.aiwfDesktop.__applyRestoredWorkflowGraph?.(out.workflow_definition);
           setStatus(`已恢复版本: ${String(it.version_id || "").slice(0, 8)}`, true);
         } catch (error) {
           setStatus(`恢复失败: ${formatAiwfError(error)}`, false);

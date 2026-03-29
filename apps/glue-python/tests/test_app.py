@@ -68,6 +68,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         caps = payload["capabilities"]
         self.assertIn("cleaning", caps["flows"])
+        self.assertNotIn("workflow_reference", caps["flows"])
         self.assertIn("txt", caps["input_formats"])
         self.assertEqual(caps["input_domains"][0]["name"], "ingest")
         self.assertIn("trim", caps["preprocess"]["field_transforms"])
@@ -312,20 +313,33 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(empty_resp.status_code, 200)
                 self.assertEqual(empty_resp.json()["items"], [])
 
-                version_resp = self.client.put(
-                    "/governance/workflow-versions/ver_finance_a",
-                    json={
-                        "version": {
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    return_value={
+                        "ok": True,
+                        "normalized_workflow_definition": {
+                            "workflow_id": "wf_finance",
+                            "version": "workflow.v1",
+                            "nodes": [],
+                            "edges": [],
+                        },
+                    },
+                ):
+                    version_resp = self.client.put(
+                        "/governance/workflow-versions/ver_finance_a",
+                        json={
+                            "version": {
                             "workflow_name": "Finance Flow",
-                            "graph": {
+                            "workflow_definition": {
                                 "workflow_id": "wf_finance",
                                 "version": "workflow.v1",
                                 "nodes": [],
                                 "edges": [],
-                            },
-                        }
-                    },
-                )
+                                },
+                            }
+                        },
+                    )
                 self.assertEqual(version_resp.status_code, 200)
 
                 save_resp = self.client.put(
@@ -347,14 +361,20 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(item["schema_version"], "workflow_app_registry_entry.v1")
                 self.assertEqual(item["published_version_id"], "ver_finance_a")
                 self.assertEqual(item["template_policy"]["version"], 1)
+                self.assertNotIn("graph", item)
+                self.assertNotIn("workflow_definition", item)
 
                 get_resp = self.client.get("/governance/workflow-apps/finance_app")
                 self.assertEqual(get_resp.status_code, 200)
                 self.assertEqual(get_resp.json()["item"]["params_schema"]["region"]["type"], "string")
+                self.assertNotIn("graph", get_resp.json()["item"])
+                self.assertNotIn("workflow_definition", get_resp.json()["item"])
 
                 list_resp = self.client.get("/governance/workflow-apps")
                 self.assertEqual(list_resp.status_code, 200)
                 self.assertEqual(len(list_resp.json()["items"]), 1)
+                self.assertNotIn("graph", list_resp.json()["items"][0])
+                self.assertNotIn("workflow_definition", list_resp.json()["items"][0])
 
     def test_workflow_app_routes_reject_missing_published_version_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -416,26 +436,36 @@ class AppRouteTests(unittest.TestCase):
                     "edges": [{"from": "n1", "to": "n2"}],
                 }
 
-                put_a = self.client.put(
-                    "/governance/workflow-versions/ver_a",
-                    json={"version": {"workflow_name": "Finance Flow", "graph": version_a}},
-                )
-                self.assertEqual(put_a.status_code, 200)
-                self.assertEqual(put_a.json()["item"]["owner"], "glue-python")
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    side_effect=[
+                        {"ok": True, "normalized_workflow_definition": version_a},
+                        {"ok": True, "normalized_workflow_definition": version_b},
+                    ],
+                ):
+                    put_a = self.client.put(
+                        "/governance/workflow-versions/ver_a",
+                        json={"version": {"workflow_name": "Finance Flow", "workflow_definition": version_a}},
+                    )
+                    self.assertEqual(put_a.status_code, 200)
+                    self.assertEqual(put_a.json()["item"]["owner"], "glue-python")
 
-                put_b = self.client.put(
-                    "/governance/workflow-versions/ver_b",
-                    json={"version": {"workflow_name": "Finance Flow", "graph": version_b}},
-                )
+                    put_b = self.client.put(
+                        "/governance/workflow-versions/ver_b",
+                        json={"version": {"workflow_name": "Finance Flow", "workflow_definition": version_b}},
+                    )
                 self.assertEqual(put_b.status_code, 200)
 
                 list_resp = self.client.get("/governance/workflow-versions?workflow_name=Finance%20Flow")
                 self.assertEqual(list_resp.status_code, 200)
                 self.assertEqual(len(list_resp.json()["items"]), 2)
+                self.assertNotIn("graph", list_resp.json()["items"][0])
 
                 get_resp = self.client.get("/governance/workflow-versions/ver_b")
                 self.assertEqual(get_resp.status_code, 200)
-                self.assertEqual(get_resp.json()["item"]["graph"]["nodes"][1]["type"], "quality_check_v3")
+                self.assertNotIn("graph", get_resp.json()["item"])
+                self.assertEqual(get_resp.json()["item"]["workflow_definition"]["nodes"][1]["type"], "quality_check_v3")
 
                 compare_resp = self.client.post(
                     "/governance/workflow-versions/compare",
@@ -451,10 +481,22 @@ class AppRouteTests(unittest.TestCase):
     def test_workflow_version_routes_reject_invalid_graph_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
-                resp = self.client.put(
-                    "/governance/workflow-versions/ver_bad",
-                    json={"version": {"graph": {"workflow_id": "wf_only"}}},
-                )
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    side_effect=glue_app.WorkflowValidationFailure(
+                        "workflow.version is required",
+                        error_items=[{
+                            "path": "workflow.version",
+                            "code": "required",
+                            "message": "workflow.version is required",
+                        }],
+                    ),
+                ):
+                    resp = self.client.put(
+                        "/governance/workflow-versions/ver_bad",
+                        json={"version": {"graph": {"workflow_id": "wf_only"}}},
+                    )
                 self.assertEqual(resp.status_code, 400)
                 payload = resp.json()
                 self.assertFalse(payload["ok"])
@@ -468,19 +510,31 @@ class AppRouteTests(unittest.TestCase):
     def test_workflow_version_routes_reject_unregistered_node_types(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
-                resp = self.client.put(
-                    "/governance/workflow-versions/ver_bad_unknown_type",
-                    json={
-                        "version": {
-                            "graph": {
-                                "workflow_id": "wf_bad_unknown_type",
-                                "version": "workflow.v1",
-                                "nodes": [{"id": "n1", "type": "unknown_future_node"}],
-                                "edges": [],
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    side_effect=glue_app.WorkflowValidationFailure(
+                        "workflow contains unregistered node types: unknown_future_node",
+                        error_items=[{
+                            "path": "workflow.nodes",
+                            "code": "unknown_node_type",
+                            "message": "workflow contains unregistered node types: unknown_future_node",
+                        }],
+                    ),
+                ):
+                    resp = self.client.put(
+                        "/governance/workflow-versions/ver_bad_unknown_type",
+                        json={
+                            "version": {
+                                "graph": {
+                                    "workflow_id": "wf_bad_unknown_type",
+                                    "version": "workflow.v1",
+                                    "nodes": [{"id": "n1", "type": "unknown_future_node"}],
+                                    "edges": [],
+                                }
                             }
-                        }
-                    },
-                )
+                        },
+                    )
                 self.assertEqual(resp.status_code, 400)
                 payload = resp.json()
                 self.assertFalse(payload["ok"])
@@ -491,36 +545,67 @@ class AppRouteTests(unittest.TestCase):
     def test_workflow_version_routes_accept_node_config_semantics_owned_by_desktop(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
-                resp = self.client.put(
-                    "/governance/workflow-versions/ver_bad_contract",
-                    json={
-                        "version": {
-                            "graph": {
-                                "workflow_id": "wf_bad_version_contract",
-                                "version": "workflow.v1",
-                                "nodes": [
-                                    {
-                                        "id": "n1",
-                                        "type": "parquet_io_v2",
-                                        "config": {
-                                            "op": "read",
-                                            "path": "demo.parquet",
-                                            "predicate_eq": 1,
-                                        },
-                                    }
-                                ],
-                                "edges": [],
-                            }
+                graph = {
+                    "workflow_id": "wf_bad_version_contract",
+                    "version": "workflow.v1",
+                    "nodes": [
+                        {
+                            "id": "n1",
+                            "type": "parquet_io_v2",
+                            "config": {
+                                "op": "read",
+                                "path": "demo.parquet",
+                                "predicate_eq": 1,
+                            },
                         }
-                    },
-                )
+                    ],
+                    "edges": [],
+                }
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    return_value={"ok": True, "normalized_workflow_definition": graph},
+                ):
+                    resp = self.client.put(
+                        "/governance/workflow-versions/ver_bad_contract",
+                        json={"version": {"workflow_definition": graph}},
+                    )
                 self.assertEqual(resp.status_code, 200)
                 payload = resp.json()
                 self.assertTrue(payload["ok"])
                 self.assertEqual(payload["provider"], "glue-python")
                 self.assertEqual(payload["item"]["owner"], "glue-python")
-                self.assertEqual(payload["item"]["graph"]["nodes"][0]["type"], "parquet_io_v2")
-                self.assertEqual(payload["item"]["graph"]["nodes"][0]["config"]["predicate_eq"], 1)
+                self.assertNotIn("graph", payload["item"])
+                self.assertEqual(payload["item"]["workflow_definition"]["nodes"][0]["type"], "parquet_io_v2")
+                self.assertEqual(payload["item"]["workflow_definition"]["nodes"][0]["config"]["predicate_eq"], 1)
+
+    def test_workflow_version_routes_fail_closed_when_rust_validation_unavailable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    side_effect=glue_app.WorkflowValidationUnavailable("workflow validation unavailable: connection refused"),
+                ):
+                    resp = self.client.put(
+                        "/governance/workflow-versions/ver_unavailable",
+                        json={
+                            "version": {
+                                "graph": {
+                                    "workflow_id": "wf_unavailable",
+                                    "version": "workflow.v1",
+                                    "nodes": [{"id": "n1", "type": "ingest_files"}],
+                                    "edges": [],
+                                }
+                            }
+                        },
+                    )
+                self.assertEqual(resp.status_code, 503)
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "workflow_validation_unavailable")
+                self.assertEqual(payload["error_scope"], "workflow_version")
 
     def test_manual_review_routes_enqueue_list_submit_and_history(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -628,6 +713,249 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(payload["flow"], "cleaning")
         self.assertIn("seconds", payload)
         self.assertEqual(payload["custom"], "value")
+
+    def test_run_reference_success_response_shape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                workflow_definition = {
+                    "workflow_id": "cleaning",
+                    "version": "workflow.v1",
+                    "nodes": [],
+                    "edges": [],
+                }
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    return_value={"ok": True, "normalized_workflow_definition": workflow_definition},
+                ), patch.object(glue_app, "_run_workflow_definition_reference", return_value={"ok": True, "custom": "value"}) as run_ref:
+                    save_resp = self.client.put(
+                        "/governance/workflow-versions/ver_cleaning_compat_001",
+                        json={"version": {"workflow_name": "Cleaning Compat", "workflow_definition": workflow_definition}},
+                    )
+                    self.assertEqual(save_resp.status_code, 200)
+
+                    resp = self.client.post(
+                        "/jobs/job123/run-reference",
+                        json={"actor": "local", "ruleset_version": "v1", "version_id": "ver_cleaning_compat_001", "params": {"x": 1}},
+                    )
+
+                self.assertEqual(resp.status_code, 200)
+                payload = resp.json()
+                self.assertTrue(payload["ok"])
+                self.assertEqual(payload["job_id"], "job123")
+                self.assertEqual(payload["version_id"], "ver_cleaning_compat_001")
+                self.assertEqual(payload["published_version_id"], "ver_cleaning_compat_001")
+                self.assertIn("seconds", payload)
+                self.assertEqual(payload["custom"], "value")
+                self.assertEqual(run_ref.call_count, 1)
+
+    def test_legacy_run_flow_route_rejects_workflow_reference_bridge(self):
+        resp = self.client.post(
+            "/jobs/job123/run/workflow_reference",
+            json={"actor": "local", "ruleset_version": "v1", "params": {"x": 1}},
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["flow"], "workflow_reference")
+        self.assertIn("retired", payload["error"])
+
+    def test_run_reference_rejects_mismatched_published_version_id(self):
+        resp = self.client.post(
+            "/jobs/job123/run-reference",
+            json={"actor": "local", "ruleset_version": "v1", "version_id": "ver_cleaning_compat_001", "published_version_id": "other"},
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job123")
+        self.assertIn("must match version_id", payload["error"])
+
+    def test_run_reference_rejects_unknown_version_reference(self):
+        resp = self.client.post(
+            "/jobs/job123/run-reference",
+            json={"actor": "local", "ruleset_version": "v1", "version_id": "missing_ref"},
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job123")
+        self.assertIn("unknown workflow version reference", payload["error"])
+
+    def test_run_reference_rejects_legacy_payload_fields(self):
+        resp = self.client.post(
+            "/jobs/job123/run-reference",
+            json={
+                "actor": "local",
+                "ruleset_version": "v1",
+                "version_id": "ver_cleaning_compat_001",
+                "workflow_definition": {"workflow_id": "wf_bad"},
+            },
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job123")
+        self.assertIn("must not include", payload["error"])
+
+    def test_run_workflow_reference_looks_up_governance_version_store(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                workflow_definition = {
+                    "workflow_id": "cleaning",
+                    "version": "workflow.v1",
+                    "nodes": [],
+                    "edges": [],
+                }
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    return_value={"ok": True, "normalized_workflow_definition": workflow_definition},
+                ), patch.object(glue_app, "_run_workflow_definition_reference", return_value={"ok": True, "adapter": "cleaning"}) as adapter:
+                    save_resp = self.client.put(
+                        "/governance/workflow-versions/ver_cleaning_compat_001",
+                        json={"version": {"workflow_name": "Cleaning Compat", "workflow_definition": workflow_definition}},
+                    )
+                    self.assertEqual(save_resp.status_code, 200)
+
+                    out = glue_app._run_workflow_reference(
+                        "job123",
+                        glue_app.RunReferenceReq(
+                            actor="local",
+                            ruleset_version="v1",
+                            version_id="ver_cleaning_compat_001",
+                            params={"x": 1},
+                        ),
+                    )
+
+                self.assertTrue(out["ok"])
+                self.assertEqual(adapter.call_count, 1)
+                version_item = adapter.call_args.args[2]
+                self.assertEqual(version_item["version_id"], "ver_cleaning_compat_001")
+                self.assertEqual(version_item["workflow_definition"]["workflow_id"], "cleaning")
+
+    def test_run_workflow_definition_reference_calls_rust_execution_surface(self):
+        version_item = {
+            "version_id": "ver_cleaning_compat_001",
+            "workflow_definition": {
+                "workflow_id": "cleaning",
+                "version": "workflow.v1",
+                "nodes": [],
+                "edges": [],
+            },
+        }
+        with patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False), patch.object(
+            glue_app,
+            "workflow_reference_run_v1",
+            return_value={
+                "ok": True,
+                "operator": "workflow_reference_run_v1",
+                "execution": {
+                    "operator": "workflow_run",
+                    "status": "done",
+                },
+                "final_output": {
+                    "operator": "cleaning",
+                    "outputs": {
+                        "cleaned_csv": {"path": "D:/tmp/job/stage/cleaned.csv", "sha256": "csv"},
+                        "cleaned_parquet": {"path": "D:/tmp/job/stage/cleaned.parquet", "sha256": "parquet"},
+                        "profile_json": {"path": "D:/tmp/job/evidence/profile.json", "sha256": "profile"},
+                        "xlsx_fin": {"path": "D:/tmp/job/artifacts/fin.xlsx", "sha256": "xlsx"},
+                        "audit_docx": {"path": "D:/tmp/job/artifacts/audit.docx", "sha256": "docx"},
+                        "deck_pptx": {"path": "D:/tmp/job/artifacts/deck.pptx", "sha256": "pptx"},
+                    },
+                    "profile": {"rows": 1, "cols": 2},
+                    "office_generation_mode": "rust",
+                    "office_generation_warning": None,
+                },
+            },
+        ) as rust_exec, patch.object(glue_app, "sha256_file", side_effect=lambda _path: "sha"), patch.object(
+            glue_app, "base_step_start_impl", return_value=None
+        ), patch.object(
+            glue_app, "base_step_done_impl", return_value=None
+        ), patch.object(
+            glue_app, "base_step_fail_impl", return_value=None
+        ), patch.object(
+            glue_app, "base_artifact_upsert_impl", return_value=None
+        ):
+            out = glue_app._run_workflow_definition_reference(
+                "job123",
+                glue_app.RunReferenceReq(
+                    actor="local",
+                    ruleset_version="v1",
+                    version_id="ver_cleaning_compat_001",
+                    params={"rows": [{"id": 1, "amount": 10.0}]},
+                    job_context=make_job_context(r"D:\tmp\job"),
+                ),
+                version_item,
+            )
+
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["workflow_definition_source"], "version_reference")
+        self.assertEqual(out["version_id"], "ver_cleaning_compat_001")
+        self.assertEqual(out["execution"]["operator"], "workflow_run")
+        self.assertEqual(out["final_output"]["operator"], "cleaning")
+        self.assertTrue(str(out["final_output"]["outputs"]["cleaned_parquet"]["path"]).endswith("cleaned.parquet"))
+        self.assertEqual(rust_exec.call_count, 1)
+
+    def test_run_reference_rejects_invalid_stored_workflow_definition(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                workflow_definition = {
+                    "workflow_id": "cleaning",
+                    "version": "workflow.v1",
+                    "nodes": [],
+                    "edges": [],
+                }
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                    side_effect=[
+                        {"ok": True, "normalized_workflow_definition": workflow_definition},
+                        glue_app.WorkflowValidationFailure(
+                            "workflow contains unregistered node types: unknown_future_node",
+                            error_items=[{
+                                "path": "workflow.nodes",
+                                "code": "unknown_node_type",
+                                "message": "workflow contains unregistered node types: unknown_future_node",
+                            }],
+                        ),
+                    ],
+                ):
+                    save_resp = self.client.put(
+                        "/governance/workflow-versions/ver_cleaning_compat_001",
+                        json={"version": {"workflow_name": "Cleaning Compat", "workflow_definition": workflow_definition}},
+                    )
+                    self.assertEqual(save_resp.status_code, 200)
+
+                    resp = self.client.post(
+                        "/jobs/job123/run-reference",
+                        json={"actor": "local", "ruleset_version": "v1", "version_id": "ver_cleaning_compat_001"},
+                    )
+
+                self.assertEqual(resp.status_code, 400)
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_reference_run")
+
+    def test_run_reference_rejects_version_item_missing_workflow_definition(self):
+        with patch.object(glue_app, "get_workflow_version", return_value={"version_id": "ver_missing_def"}):
+            resp = self.client.post(
+                "/jobs/job123/run-reference",
+                json={"actor": "local", "ruleset_version": "v1", "version_id": "ver_missing_def"},
+            )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job123")
+        self.assertIn("workflow_definition missing", payload["error"])
 
     @patch.object(glue_app, "_run_flow_with_runner")
     def test_cleaning_exposes_office_generation_fields(self, run_flow_with_runner):

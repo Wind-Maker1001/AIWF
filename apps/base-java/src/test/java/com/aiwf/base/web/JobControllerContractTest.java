@@ -108,6 +108,80 @@ class JobControllerContractTest {
     }
 
     @Test
+    void runReferencePassesReferenceFirstParams() throws Exception {
+        when(jobs.runWorkflowReference(eq("job3"), eq("ver_finance_001"), eq("local"), eq("v3"), anyMap()))
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "job3", "version_id", "ver_finance_001"), "job3", ""));
+
+        String body = """
+                {
+                  "version_id": "ver_finance_001",
+                  "actor": "local",
+                  "ruleset_version": "v3",
+                  "params": {
+                    "region": "cn"
+                  }
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/jobs/job3/run-reference")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(true))
+                .andExpect(jsonPath("$.job_id").value("job3"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> paramsCap = ArgumentCaptor.forClass(Map.class);
+        verify(jobs).runWorkflowReference(eq("job3"), eq("ver_finance_001"), eq("local"), eq("v3"), paramsCap.capture());
+        assertThat(paramsCap.getValue()).containsEntry("region", "cn");
+    }
+
+    @Test
+    void runReferenceRejectsWorkflowPayloadFields() throws Exception {
+        String body = """
+                {
+                  "version_id": "ver_finance_001",
+                  "workflow_definition": {
+                    "workflow_id": "wf_finance"
+                  }
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/jobs/job4/run-reference")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("workflow_reference_request_invalid"));
+    }
+
+    @Test
+    void legacyRunRejectsReferenceFirstFields() throws Exception {
+        String body = """
+                {
+                  "version_id": "ver_finance_001"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/jobs/job5/run/cleaning")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("legacy_flow_not_allowed"));
+    }
+
+    @Test
+    void legacyRunRejectsNonWhitelistedFlow() throws Exception {
+        mockMvc.perform(post("/api/v1/jobs/job6/run/transforming")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"actor\":\"local\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("legacy_flow_not_allowed"));
+    }
+
+    @Test
     void glueHealthReflectsDownstreamFailure() throws Exception {
         when(jobs.glueHealth()).thenReturn(GlueHealthResult.unavailable("connection refused"));
 
@@ -157,6 +231,10 @@ class JobControllerContractTest {
                         "base-java.jobs",
                         "job1",
                         "2026-03-28T00:00:00Z",
+                        "reference",
+                        "ver_finance_001",
+                        "ver_finance_001",
+                        "version_reference",
                         "cleaning",
                         "DONE",
                         true,
@@ -204,7 +282,9 @@ class JobControllerContractTest {
         mockMvc.perform(get("/api/v1/jobs/history").param("limit", "50"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].run_id").value("job1"))
-                .andExpect(jsonPath("$[0].owner").value("base-java"));
+                .andExpect(jsonPath("$[0].owner").value("base-java"))
+                .andExpect(jsonPath("$[0].run_request_kind").value("reference"))
+                .andExpect(jsonPath("$[0].version_id").value("ver_finance_001"));
 
         mockMvc.perform(get("/api/v1/jobs/job1/timeline"))
                 .andExpect(status().isOk())

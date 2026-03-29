@@ -204,8 +204,36 @@ class JobServiceTest {
         GlueRunResult out = service.runFlow("job1", "cleaning", "ops", "v1", Map.of("sample", true));
 
         assertThat(out.isOk()).isFalse();
-        verify(jobs).audit(new AuditEvent("job1", "ops", "FLOW_RUN_FAIL", "cleaning", "glue down"));
+        verify(jobs).audit(argThat(event ->
+                event != null
+                        && "job1".equals(event.jobId())
+                        && "ops".equals(event.actor())
+                        && "FLOW_RUN_FAIL".equals(event.action())
+                        && "cleaning".equals(event.stepId())
+                        && String.valueOf(event.detailJson()).contains("glue down")
+        ));
         verify(jobStatus).onStepFail("job1");
+    }
+
+    @Test
+    void runWorkflowReferenceDispatchesReferenceFlowWithVersionIdParam() {
+        when(jobs.getJob("job1")).thenReturn(new JobRow("job1", null, "owner", JobStatus.RUNNING));
+        when(glue.runReference(org.mockito.ArgumentMatchers.eq("job1"), any()))
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "job1", "version_id", "ver_finance_001"), "job1", ""));
+
+        org.mockito.ArgumentCaptor<com.aiwf.base.glue.GlueRunReferenceReq> reqCap =
+                org.mockito.ArgumentCaptor.forClass(com.aiwf.base.glue.GlueRunReferenceReq.class);
+
+        GlueRunResult out = service.runWorkflowReference("job1", "ver_finance_001", "ops", "v3", Map.of("region", "cn"));
+
+        assertThat(out.isOk()).isTrue();
+        verify(glue).runReference(org.mockito.ArgumentMatchers.eq("job1"), reqCap.capture());
+        com.aiwf.base.glue.GlueRunReferenceReq req = reqCap.getValue();
+        assertThat(req.versionId()).isEqualTo("ver_finance_001");
+        assertThat(req.publishedVersionId()).isEqualTo("ver_finance_001");
+        assertThat(req.rulesetVersion()).isEqualTo("v3");
+        assertThat(req.params()).containsEntry("version_id", "ver_finance_001");
+        assertThat(req.params()).containsEntry("region", "cn");
     }
 
     @Test

@@ -1,5 +1,4 @@
 import { WORKFLOW_SCHEMA_VERSION } from "./workflow-contract.js";
-import { assertRegisteredWorkflowNodeTypes } from "./node-catalog-contract.js";
 
 function parseChipletIsolatedTypes(text) {
   return String(text || "")
@@ -13,11 +12,12 @@ function positiveIntegerOrDefault(value, fallback) {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
 
-function buildBaseRunPayload(els, graph, sandboxDedupWindowSec = 600) {
+function buildDraftRunPayload(els, graph, sandboxDedupWindowSec = 600) {
   const normalizedGraph = graph && typeof graph === "object" ? graph : {};
-  assertRegisteredWorkflowNodeTypes(normalizedGraph, { stage: "run_payload" });
   const workflowVersion = String(normalizedGraph.version || "").trim() || WORKFLOW_SCHEMA_VERSION;
   return {
+    run_request_kind: "draft",
+    workflow_definition_source: "draft_inline",
     workflow_id: normalizedGraph.workflow_id || "custom_v1",
     workflow_version: workflowVersion,
     workflow: {
@@ -67,6 +67,24 @@ function buildBaseRunPayload(els, graph, sandboxDedupWindowSec = 600) {
   };
 }
 
+function buildReferenceRunRequest(reference = {}, extra = {}) {
+  const source = reference && typeof reference === "object" ? reference : {};
+  const ext = extra && typeof extra === "object" ? extra : {};
+  const publishedVersionId = String(source.published_version_id || ext.published_version_id || "").trim();
+  const versionId = String(source.version_id || ext.version_id || publishedVersionId).trim();
+  return {
+    run_request_kind: "reference",
+    workflow_definition_source: "version_reference",
+    ...(publishedVersionId ? { published_version_id: publishedVersionId } : {}),
+    ...(versionId ? { version_id: versionId } : {}),
+    ...ext,
+  };
+}
+
+function buildBaseRunPayload(els, graph, sandboxDedupWindowSec = 600) {
+  return buildDraftRunPayload(els, graph, sandboxDedupWindowSec);
+}
+
 function mergeRunPayload(base, extra = {}) {
   const ext = extra && typeof extra === "object" ? extra : {};
   const out = { ...base, ...ext };
@@ -75,7 +93,9 @@ function mergeRunPayload(base, extra = {}) {
 }
 
 export {
+  buildDraftRunPayload,
   buildBaseRunPayload,
+  buildReferenceRunRequest,
   mergeRunPayload,
   parseChipletIsolatedTypes,
   positiveIntegerOrDefault,

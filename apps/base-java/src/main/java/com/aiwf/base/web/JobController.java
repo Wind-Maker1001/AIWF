@@ -11,16 +11,19 @@ import com.aiwf.base.web.dto.JobCreateResp;
 import com.aiwf.base.web.dto.JobDetailsResp;
 import com.aiwf.base.web.dto.JobRunRecordResp;
 import com.aiwf.base.web.dto.JobRunTimelineResp;
+import com.aiwf.base.web.dto.RunWorkflowReferenceReq;
 import com.aiwf.base.web.dto.RunFlowReq;
 import com.aiwf.base.web.dto.StepResp;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/jobs")
 public class JobController {
+    private static final Set<String> LEGACY_FLOW_WHITELIST = Set.of("cleaning");
 
     private final JobService jobs;
 
@@ -95,9 +98,44 @@ public class JobController {
             @PathVariable("flow") @NotBlank String flow,
             @RequestBody RunFlowReq body
     ) {
+        if (!LEGACY_FLOW_WHITELIST.contains(flow)) {
+            throw ApiException.badRequest(
+                    "legacy_flow_not_allowed",
+                    "legacy /run/{flow} path is restricted to approved compatibility flows",
+                    Map.of(
+                            "flow", flow,
+                            "allowed_flows", LEGACY_FLOW_WHITELIST,
+                            "compatibility_path", "run_flow_legacy"
+                    )
+            );
+        }
+        if (body.containsReferenceFields()) {
+            throw ApiException.badRequest(
+                    "legacy_flow_not_allowed",
+                    "legacy /run/{flow} path must not carry reference-first fields",
+                    Map.of(
+                            "flow", flow,
+                            "compatibility_path", "run_flow_legacy"
+                    )
+            );
+        }
         return jobs.runFlow(
                 jobId,
                 flow,
+                body.actorOrDefault("local"),
+                body.rulesetVersionOrDefault("v1"),
+                body.resolvedParams()
+        );
+    }
+
+    @PostMapping("/{jobId}/run-reference")
+    public GlueRunResult runWorkflowReference(
+            @PathVariable("jobId") @NotBlank String jobId,
+            @RequestBody RunWorkflowReferenceReq body
+    ) {
+        return jobs.runWorkflowReference(
+                jobId,
+                body.resolvedVersionId(),
                 body.actorOrDefault("local"),
                 body.rulesetVersionOrDefault("v1"),
                 body.resolvedParams()

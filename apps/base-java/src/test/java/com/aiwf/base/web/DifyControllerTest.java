@@ -43,8 +43,8 @@ class DifyControllerTest {
     void runCleaningOneShotReturnsJobRunAndArtifacts() throws Exception {
         when(jobs.createJob(eq("dify"), anyMap()))
                 .thenReturn(new JobCreateResp("j100", "dify", "RUNNING", "D:\\AIWF\\bus\\jobs\\j100", null));
-        when(jobs.runFlow(eq("j100"), eq("cleaning"), eq("dify"), eq("v1"), anyMap()))
-                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "j100"), "j100", "cleaning"));
+        when(jobs.runWorkflowReference(eq("j100"), eq("ver_cleaning_compat_001"), eq("dify"), eq("v1"), anyMap()))
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "j100", "version_id", "ver_cleaning_compat_001"), "j100", ""));
         when(jobs.listSteps(eq("j100"))).thenReturn(List.of(new StepResp("j100", "cleaning", "DONE", null, null, null, null, null, null, null, null)));
         when(jobs.listArtifacts(eq("j100"))).thenReturn(List.of(new ArtifactResp("xlsx_fin_001", "xlsx", null, null, null)));
 
@@ -82,8 +82,8 @@ class DifyControllerTest {
     void runCleaningNullStringsFallbackToDefaults() throws Exception {
         when(jobs.createJob(eq("dify"), anyMap()))
                 .thenReturn(new JobCreateResp("j101", "dify", "RUNNING", "D:\\AIWF\\bus\\jobs\\j101", null));
-        when(jobs.runFlow(eq("j101"), eq("cleaning"), eq("dify"), eq("v1"), anyMap()))
-                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "j101"), "j101", "cleaning"));
+        when(jobs.runWorkflowReference(eq("j101"), eq("ver_cleaning_compat_001"), eq("dify"), eq("v1"), anyMap()))
+                .thenReturn(GlueRunResult.fromMap(Map.of("ok", true, "job_id", "j101", "version_id", "ver_cleaning_compat_001"), "j101", ""));
         when(jobs.listSteps(eq("j101"))).thenReturn(List.of());
         when(jobs.listArtifacts(eq("j101"))).thenReturn(List.of());
 
@@ -103,7 +103,7 @@ class DifyControllerTest {
                 .andExpect(jsonPath("$.job_id").value("j101"));
 
         verify(jobs).createJob(eq("dify"), anyMap());
-        verify(jobs).runFlow(eq("j101"), eq("cleaning"), eq("dify"), eq("v1"), anyMap());
+        verify(jobs).runWorkflowReference(eq("j101"), eq("ver_cleaning_compat_001"), eq("dify"), eq("v1"), anyMap());
     }
 
     @Test

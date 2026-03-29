@@ -1,15 +1,13 @@
 const {
   NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
   WORKFLOW_CONTRACT_AUTHORITY,
-  assertWorkflowContract,
-  createWorkflowContractError,
-  normalizeWorkflowContract,
 } = require("./workflow_contract");
 const { TEMPLATE_PACK_ENTRY_SCHEMA_VERSION } = require("./workflow_ipc_state");
 const {
   exportTemplatePackArtifact,
   normalizeTemplatePackArtifact,
 } = require("./workflow_template_pack_contract");
+const { workflowStoreRemoteErrorResult } = require("./workflow_store_remote_error");
 
 function registerWorkflowStoreIpc(ctx, deps) {
   const {
@@ -28,6 +26,13 @@ function registerWorkflowStoreIpc(ctx, deps) {
     resolveMockFilePath,
     saveTemplateMarketplace,
     workflowVersionStore,
+    workflowValidationSupport = {
+      validateWorkflowDefinitionAuthoritatively: async ({ workflowDefinition }) => ({
+        ok: true,
+        normalized_workflow_definition: workflowDefinition,
+        notes: [],
+      }),
+    },
   } = deps;
 
   function safeWorkflowName(name) {
@@ -62,9 +67,45 @@ function registerWorkflowStoreIpc(ctx, deps) {
     };
   }
 
+  async function validateWorkflowDefinition(graph, options = {}) {
+    return await workflowValidationSupport.validateWorkflowDefinitionAuthoritatively({
+      workflowDefinition: graph,
+      cfg: options?.cfg || null,
+      allowVersionMigration: options?.allowVersionMigration === true,
+      requireNonEmptyNodes: options?.requireNonEmptyNodes === true,
+      validationScope: String(options?.validationScope || "authoring"),
+    });
+  }
+
   ipcMain.handle("aiwf:listTemplateMarketplace", async (_evt, req) => {
     const limit = Number(req?.limit || 500);
     return { ok: true, items: listTemplateMarketplace(limit) };
+  });
+
+  ipcMain.handle("aiwf:validateWorkflowDefinition", async (_evt, req) => {
+    try {
+      const source = req && typeof req === "object" ? req : {};
+      const merged = source.cfg && typeof source.cfg === "object" ? source.cfg : null;
+      const validated = await validateWorkflowDefinition(
+        source.workflow_definition && typeof source.workflow_definition === "object"
+          ? source.workflow_definition
+          : {},
+        {
+          cfg: merged,
+          allowVersionMigration: source.allowVersionMigration === true,
+          requireNonEmptyNodes: source.requireNonEmptyNodes === true,
+          validationScope: String(source.validation_scope || "authoring"),
+        },
+      );
+      return {
+        ok: true,
+        workflow_definition: validated?.normalized_workflow_definition || {},
+        notes: Array.isArray(validated?.notes) ? validated.notes : [],
+        error_items: Array.isArray(validated?.error_items) ? validated.error_items : [],
+      };
+    } catch (error) {
+      return workflowStoreRemoteErrorResult(error);
+    }
   });
 
   ipcMain.handle("aiwf:installTemplatePack", async (_evt, req) => {
@@ -81,7 +122,18 @@ function registerWorkflowStoreIpc(ctx, deps) {
         allowVersionMigration: true,
         source: fromPath || "inline",
       });
-      const templates = Array.isArray(normalizedPack.templates) ? normalizedPack.templates : [];
+      const templates = [];
+      for (const template of (Array.isArray(normalizedPack.templates) ? normalizedPack.templates : [])) {
+        const validated = await validateWorkflowDefinition(template.workflow_definition || {}, {
+          allowVersionMigration: true,
+          requireNonEmptyNodes: true,
+          validationScope: "authoring",
+        });
+        templates.push({
+          ...template,
+          workflow_definition: validated?.normalized_workflow_definition || template.workflow_definition || {},
+        });
+      }
       if (!templates.length) return { ok: false, error: "templates required" };
       const id = String(normalizedPack.id || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`);
       const item = {
@@ -212,22 +264,28 @@ function registerWorkflowStoreIpc(ctx, deps) {
       }
       if (canceled || !filePath) return { ok: false, canceled: true };
       const payload = graph && typeof graph === "object" ? graph : {};
-      assertWorkflowContract(payload, { requireNonEmptyNodes: true });
+      const validated = await validateWorkflowDefinition(payload, {
+        requireNonEmptyNodes: true,
+        validationScope: "authoring",
+      });
+      const normalizedPayload = validated?.normalized_workflow_definition && typeof validated.normalized_workflow_definition === "object"
+        ? validated.normalized_workflow_definition
+        : payload;
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+      fs.writeFileSync(filePath, `${JSON.stringify(normalizedPayload, null, 2)}\n`, "utf8");
       const versionItem = {
         version_id: `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`,
         ts: nowIso(),
-        workflow_name: String(payload?.name || safeName),
-        workflow_id: String(payload?.workflow_id || "custom"),
+        workflow_name: String(normalizedPayload?.name || safeName),
+        workflow_id: String(normalizedPayload?.workflow_id || "custom"),
         path: filePath,
-        graph: payload,
+        graph: normalizedPayload,
       };
       const versionOut = await workflowVersionStore.recordVersion(versionItem);
       if (!versionOut?.ok) {
         appendAudit("workflow_version_record_failed", {
           path: filePath,
-          workflow_name: String(payload?.name || safeName),
+          workflow_name: String(normalizedPayload?.name || safeName),
           error: String(versionOut?.error || "unknown"),
         });
         return {
@@ -238,13 +296,16 @@ function registerWorkflowStoreIpc(ctx, deps) {
           error: `workflow version record failed: ${versionOut?.error || "unknown"}`,
         };
       }
-      appendAudit("workflow_save", { path: filePath, workflow_name: String(payload?.name || safeName) });
-      return { ok: true, path: filePath };
+      appendAudit("workflow_save", { path: filePath, workflow_name: String(normalizedPayload?.name || safeName) });
+      return { ok: true, path: filePath, notes: Array.isArray(validated?.notes) ? validated.notes : [] };
     } catch (error) {
       if (error && typeof error === "object" && String(error.code || "") === "workflow_contract_invalid") {
         return workflowContractFailure(error);
       }
-      return { ok: false, canceled: false, error: String(error) };
+      return {
+        canceled: false,
+        ...workflowStoreRemoteErrorResult(error),
+      };
     }
   });
 
@@ -272,16 +333,31 @@ function registerWorkflowStoreIpc(ctx, deps) {
       const filePath = filePaths[0];
       const graph = JSON.parse(fs.readFileSync(filePath, "utf8"));
       if (validateGraphContract) {
-        const contract = normalizeWorkflowContract(graph, { allowVersionMigration: true });
-        if (!contract.ok) {
-          return workflowContractFailure(createWorkflowContractError(contract.errors));
-        }
+        const validated = await validateWorkflowDefinition(graph, {
+          allowVersionMigration: true,
+          requireNonEmptyNodes: false,
+          validationScope: "authoring",
+        });
+        appendAudit("workflow_load", { path: filePath, notes: Array.isArray(validated?.notes) ? validated.notes : [] });
+        return {
+          ok: true,
+          canceled: false,
+          path: filePath,
+          graph: validated?.normalized_workflow_definition && typeof validated.normalized_workflow_definition === "object"
+            ? validated.normalized_workflow_definition
+            : graph,
+          notes: Array.isArray(validated?.notes) ? validated.notes : [],
+        };
       }
       appendAudit("workflow_load", { path: filePath });
       return { ok: true, canceled: false, path: filePath, graph };
     } catch (error) {
       if (error && typeof error === "object" && String(error.code || "") === "workflow_contract_invalid") {
         return workflowContractFailure(error);
+      }
+      const remote = workflowStoreRemoteErrorResult(error);
+      if (remote?.ok === false && (remote.error_code || remote.error_items)) {
+        return { canceled: false, ...remote };
       }
       return workflowLoadFailure(error);
     }

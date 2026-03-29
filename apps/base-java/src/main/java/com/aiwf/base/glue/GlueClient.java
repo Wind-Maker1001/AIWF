@@ -56,6 +56,24 @@ public class GlueClient implements GlueGateway {
 
     @Override
     @SuppressWarnings("unchecked")
+    public GlueRunResult runReference(String jobId, GlueRunReferenceReq request) {
+        String path = "/jobs/%s/run-reference".formatted(jobId);
+        Map<String, Object> response = executeWithRetry(
+                "POST",
+                path,
+                1,
+                () -> client.post()
+                        .uri("/jobs/{jobId}/run-reference", jobId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(request == null ? Map.of() : request)
+                        .retrieve()
+                        .body(Map.class)
+        );
+        return GlueRunResult.fromMap(response, jobId, "");
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
     public GlueHealthResult health() {
         Map<String, Object> response = executeWithRetry(
                 "GET",

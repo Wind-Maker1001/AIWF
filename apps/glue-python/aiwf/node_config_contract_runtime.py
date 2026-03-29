@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
@@ -10,6 +9,11 @@ from typing import Any, Dict, List
 
 NODE_CONFIG_CONTRACT_DEFAULT_AUTHORITY = "contracts/desktop/node_config_contracts.v1.json"
 NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY = "contracts/desktop/node_config_validation_errors.v1.json"
+RUST_OPERATOR_MANIFEST_DEFAULT_AUTHORITY = "contracts/rust/operators_manifest.v1.json"
+WORKFLOW_RUNTIME_ONLY_NODE_TYPES = (
+    "compute_rust",
+    "md_output",
+)
 SUPPORTED_VALIDATOR_KINDS = (
     "aggregate_defs",
     "ai_providers",
@@ -82,79 +86,35 @@ def resolve_node_config_contract_path() -> Path:
     return _resolve_repo_root() / "contracts" / "desktop" / "node_config_contracts.v1.json"
 
 
-def resolve_workflow_node_catalog_contract_path() -> Path:
-    configured = str(os.getenv("AIWF_WORKFLOW_NODE_CATALOG_CONTRACT_PATH") or "").strip()
+def resolve_rust_operator_manifest_path() -> Path:
+    configured = str(os.getenv("AIWF_RUST_OPERATOR_MANIFEST_PATH") or "").strip()
     if configured:
         return Path(configured).resolve()
-    return _resolve_repo_root() / "apps" / "dify-desktop" / "workflow_node_catalog_contract.js"
-
-
-def resolve_desktop_rust_operator_manifest_path() -> Path:
-    configured = str(os.getenv("AIWF_DESKTOP_RUST_OPERATOR_MANIFEST_PATH") or "").strip()
-    if configured:
-        return Path(configured).resolve()
-    return _resolve_repo_root() / "apps" / "dify-desktop" / "workflow_chiplets" / "domains" / "rust_operator_manifest.generated.js"
-
-
-def _extract_frozen_json_literal(file_path: Path, marker: str) -> Any:
-    text = file_path.read_text(encoding="utf-8")
-    marker_index = text.find(marker)
-    if marker_index < 0:
-        raise ValueError(f"marker not found in {file_path}: {marker}")
-    index = marker_index + len(marker)
-    while index < len(text) and text[index].isspace():
-        index += 1
-    if index >= len(text) or text[index] not in "[{":
-        raise ValueError(f"expected JSON literal after marker in {file_path}: {marker}")
-    opener = text[index]
-    closer = "]" if opener == "[" else "}"
-    depth = 0
-    in_string = False
-    escaped = False
-    for pos in range(index, len(text)):
-        char = text[pos]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-            continue
-        if char == opener:
-            depth += 1
-        elif char == closer:
-            depth -= 1
-            if depth == 0:
-                literal = re.sub(r",(\s*[\]}])", r"\1", text[index : pos + 1])
-                return json.loads(literal)
-    raise ValueError(f"unterminated JSON literal in {file_path}: {marker}")
+    return _resolve_repo_root() / "contracts" / "rust" / "operators_manifest.v1.json"
 
 
 @lru_cache(maxsize=2)
 def load_registered_workflow_node_types() -> List[str]:
-    local_types = _extract_frozen_json_literal(
-        resolve_workflow_node_catalog_contract_path(),
-        "const LOCAL_WORKFLOW_NODE_TYPES = Object.freeze(",
-    )
-    rust_metadata = _extract_frozen_json_literal(
-        resolve_desktop_rust_operator_manifest_path(),
-        "const KNOWN_RUST_OPERATOR_METADATA = deepFreeze(",
-    )
+    contract = load_node_config_contract_set()
+    rust_manifest_path = resolve_rust_operator_manifest_path()
+    rust_payload = json.loads(rust_manifest_path.read_text(encoding="utf-8"))
     local = [
         str(item or "").strip()
-        for item in (local_types if isinstance(local_types, list) else [])
+        for item in (contract.get("contract_types") or [])
         if str(item or "").strip()
     ]
     rust = [
-        str(operator or "").strip()
-        for operator, item in (rust_metadata.items() if isinstance(rust_metadata, dict) else [])
-        if isinstance(item, dict) and bool(item.get("desktop_exposable")) and str(operator or "").strip()
+        str(item.get("operator") or "").strip()
+        for item in (
+            rust_payload.get("operators")
+            if isinstance(rust_payload.get("operators"), list)
+            else []
+        )
+        if isinstance(item, dict)
+        and bool(item.get("desktop_exposable"))
+        and str(item.get("operator") or "").strip()
     ]
-    return sorted(set(local + rust))
+    return sorted(set(local + rust + list(WORKFLOW_RUNTIME_ONLY_NODE_TYPES)))
 
 
 def find_unknown_workflow_node_types(graph: Any) -> List[str]:
@@ -212,10 +172,18 @@ def load_node_config_contract_set() -> Dict[str, Any]:
 
 def build_node_config_contract_runtime_summary() -> Dict[str, Any]:
     contract = load_node_config_contract_set()
+    rust_manifest_path = resolve_rust_operator_manifest_path()
     return {
         "schema_version": str(contract.get("schema_version") or "").strip(),
         "authority": str(contract.get("authority") or "").strip(),
         "contract_path": str(contract.get("contract_path") or "").strip(),
+        "registered_workflow_node_type_authorities": [
+            NODE_CONFIG_CONTRACT_DEFAULT_AUTHORITY,
+            RUST_OPERATOR_MANIFEST_DEFAULT_AUTHORITY,
+        ],
+        "runtime_only_node_types": list(WORKFLOW_RUNTIME_ONLY_NODE_TYPES),
+        "rust_operator_manifest_path": str(rust_manifest_path),
+        "registered_workflow_node_types": load_registered_workflow_node_types(),
         "contract_types": list(contract.get("contract_types") or []),
         "quality_by_type": _clone(contract.get("quality_by_type") or {}),
         "supported_validator_kinds": list(SUPPORTED_VALIDATOR_KINDS),
@@ -233,4 +201,5 @@ __all__ = [
     "load_node_config_contract_set",
     "load_registered_workflow_node_types",
     "resolve_node_config_contract_path",
+    "resolve_rust_operator_manifest_path",
 ]

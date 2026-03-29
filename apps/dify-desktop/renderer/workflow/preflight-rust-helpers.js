@@ -37,6 +37,15 @@ function buildIoContractInput(operator, nodeConfig, firstInputFile = "") {
   return cfg;
 }
 
+function buildWorkflowContractValidationPayload(graph, options = {}) {
+  return {
+    workflow_definition: graph && typeof graph === "object" ? graph : {},
+    allow_version_migration: options.allowVersionMigration === true,
+    require_non_empty_nodes: options.requireNonEmptyNodes !== false,
+    validation_scope: String(options.validationScope || "authoring").trim() || "authoring",
+  };
+}
+
 async function postRustOperator(endpoint, operatorPath, payload, fetchImpl = fetch) {
   const resp = await fetchImpl(`${endpoint}${operatorPath}`, {
     method: "POST",
@@ -51,6 +60,7 @@ async function postRustOperator(endpoint, operatorPath, payload, fetchImpl = fet
 }
 
 export {
+  buildWorkflowContractValidationPayload,
   IO_CONTRACT_COMPATIBLE_OPERATORS,
   buildIoContractInput,
   postRustOperator,

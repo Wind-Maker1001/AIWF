@@ -16,6 +16,8 @@ const { createWorkflowVersionStore } = require("./workflow_version_store");
 const { createWorkflowManualReviewStore } = require("./workflow_manual_review_store");
 const { createWorkflowRunAuditStore } = require("./workflow_run_audit_store");
 const { createWorkflowRunBaselineStore } = require("./workflow_run_baseline_store");
+const { createWorkflowValidationSupport } = require("./workflow_validation_service");
+const { createWorkflowExecutionSupport } = require("./workflow_execution_service");
 
 function createWorkflowAuditMirrorSupport(deps) {
   const {
@@ -108,10 +110,6 @@ function registerWorkflowIpc(ctx) {
   const workflowAppRegistryStore = createWorkflowAppRegistryStore({
     loadConfig,
     nowIso,
-    validateWorkflowGraph: (graph) => {
-      const { assertWorkflowContract } = require("./workflow_contract");
-      assertWorkflowContract(graph, { requireNonEmptyNodes: true });
-    },
   });
 
   const workflowVersionStore = createWorkflowVersionStore({
@@ -148,6 +146,14 @@ function registerWorkflowIpc(ctx) {
   });
 
   const workflowRunBaselineStore = createWorkflowRunBaselineStore({
+    loadConfig,
+  });
+
+  const workflowValidationSupport = createWorkflowValidationSupport({
+    loadConfig,
+  });
+
+  const workflowExecutionSupport = createWorkflowExecutionSupport({
     loadConfig,
   });
 
@@ -239,6 +245,9 @@ function registerWorkflowIpc(ctx) {
       sandboxRuleStore,
       sandboxAutoFixStore,
       workflowManualReviewStore,
+      workflowVersionStore,
+      workflowValidationSupport,
+      workflowExecutionSupport,
     }
   );
 
@@ -263,6 +272,9 @@ function registerWorkflowIpc(ctx) {
       sandboxRuleStore,
       sandboxAutoFixStore,
       workflowManualReviewStore,
+      workflowVersionStore,
+      workflowValidationSupport,
+      workflowExecutionSupport,
     }
   );
 
@@ -277,6 +289,7 @@ function registerWorkflowIpc(ctx) {
       resolveMockFilePath,
       saveTemplateMarketplace,
       workflowVersionStore,
+      workflowValidationSupport,
     }
   );
 
@@ -307,6 +320,8 @@ function registerWorkflowIpc(ctx) {
       sandboxAutoFixStore,
       workflowAppRegistryStore,
       workflowVersionStore,
+      workflowValidationSupport,
+      workflowExecutionSupport,
     }
   );
 

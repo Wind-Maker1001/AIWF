@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from aiwf.runtime_catalog import get_runtime_catalog
 from aiwf.flow_context import LegacyFlowPathParamsError, attach_job_context, normalize_job_context
@@ -90,6 +90,24 @@ from aiwf.governance_surface import (
 )
 from aiwf.node_config_contract_runtime import (
     NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+)
+from aiwf.workflow_validation_client import (
+    WORKFLOW_VALIDATION_UNAVAILABLE_CODE,
+    WorkflowValidationFailure,
+    WorkflowValidationUnavailable,
+    validate_workflow_definition_authoritatively,
+)
+from aiwf.rust_client import workflow_reference_run_v1
+from aiwf.flows.cleaning_flow_materialization import materialize_accel_outputs
+from aiwf.flows.cleaning_orchestrator_support import collect_materialized_artifacts, build_success_result
+from aiwf.flows.cleaning_runtime_support import sha256_file
+from aiwf.flows.cleaning_transport import (
+    base_artifact_upsert_impl,
+    base_step_done_impl,
+    base_step_fail_impl,
+    base_step_start_impl,
+    headers_from_params_impl,
+    post_json_impl,
 )
 
 
@@ -220,6 +238,44 @@ def _workflow_graph_error_response(provider: str, scope: str, exc: ValueError) -
     )
 
 
+def _workflow_graph_validation_failure_response(
+    provider: str,
+    scope: str,
+    exc: WorkflowValidationFailure,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={
+            "ok": False,
+            "provider": provider,
+            "error": str(exc),
+            "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+            "error_scope": scope,
+            "graph_contract": str(exc.graph_contract or WORKFLOW_GRAPH_CONTRACT_AUTHORITY),
+            "error_item_contract": str(exc.error_item_contract or NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY),
+            "error_items": list(exc.error_items or []),
+            "notes": list(exc.notes or []),
+        },
+    )
+
+
+def _workflow_validation_unavailable_response(
+    provider: str,
+    scope: str,
+    exc: WorkflowValidationUnavailable,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "ok": False,
+            "provider": provider,
+            "error": str(exc),
+            "error_code": WORKFLOW_VALIDATION_UNAVAILABLE_CODE,
+            "error_scope": scope,
+        },
+    )
+
+
 def _governance_validation_error_response(
     provider: str,
     scope: str,
@@ -251,6 +307,17 @@ def _debug_errors_enabled() -> bool:
 
 
 class RunReq(BaseModel):
+    actor: str = "glue"
+    ruleset_version: str = "v1"
+    trace_id: Optional[str] = None
+    job_context: Optional[Dict[str, str]] = None
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class RunReferenceReq(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    version_id: str
+    published_version_id: Optional[str] = None
     actor: str = "glue"
     ruleset_version: str = "v1"
     trace_id: Optional[str] = None
@@ -303,6 +370,7 @@ class WorkflowVersionReq(BaseModel):
     workflow_id: Optional[str] = None
     workflow_name: Optional[str] = None
     path: Optional[str] = None
+    workflow_definition: Optional[Dict[str, Any]] = None
     graph: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -466,6 +534,171 @@ def run_registered_flow(job_id: str, flow: str, req: RunReq):
 
 def run_cleaning_flow(job_id: str, req: RunReq):
     return run_registered_flow(job_id, "cleaning", req)
+
+
+def _resolve_reference_version_id(req: RunReferenceReq) -> str:
+    forbidden = []
+    extras = req.model_extra if isinstance(getattr(req, "model_extra", None), dict) else {}
+    for key in ("flow", "graph", "workflow_definition"):
+        if key in extras:
+            forbidden.append(key)
+    if forbidden:
+        raise ValueError("run-reference must not include " + ", ".join(forbidden))
+    version_id = str(req.version_id or "").strip().lower()
+    if not version_id:
+        raise ValueError("version_id is required")
+    published_version_id = str(req.published_version_id or "").strip().lower()
+    if published_version_id and published_version_id != version_id:
+        raise ValueError("published_version_id must match version_id in the current compatibility stage")
+    return version_id
+
+
+def _resolve_reference_version_item(req: RunReferenceReq) -> tuple[str, Dict[str, Any]]:
+    version_id = _resolve_reference_version_id(req)
+    item = get_workflow_version(version_id)
+    if item is None:
+        raise ValueError(f"unknown workflow version reference: {version_id}")
+    workflow_definition = item.get("workflow_definition")
+    if not isinstance(workflow_definition, dict):
+        raise ValueError(f"workflow version workflow_definition missing: {version_id}")
+    validated = validate_workflow_definition_authoritatively(
+        workflow_definition,
+        accel_url=str(os.getenv("AIWF_ACCEL_URL") or "").strip(),
+        allow_version_migration=False,
+        require_non_empty_nodes=False,
+        validation_scope="run",
+    )
+    normalized_workflow_definition = validated.get("normalized_workflow_definition")
+    if not isinstance(normalized_workflow_definition, dict):
+        raise ValueError(f"workflow version workflow_definition invalid: {version_id}")
+    normalized_item = dict(item)
+    normalized_item["workflow_definition"] = normalized_workflow_definition
+    if validated.get("notes"):
+        normalized_item["workflow_definition_notes"] = list(validated.get("notes") or [])
+    return version_id, normalized_item
+
+
+def _run_workflow_definition_reference(job_id: str, req: RunReferenceReq, version_item: Dict[str, Any]):
+    workflow_definition = version_item.get("workflow_definition") if isinstance(version_item.get("workflow_definition"), dict) else {}
+    workflow_id = str(workflow_definition.get("workflow_id") or "").strip().lower()
+    if not workflow_id:
+        raise ValueError(f"workflow version workflow_definition invalid: {str(version_item.get('version_id') or '')}")
+    version_id = str(version_item.get("version_id") or "").strip()
+    published_version_id = str(version_item.get("version_id") or "").strip()
+    normalized_context = normalize_job_context(
+        job_id,
+        params=req.params,
+        job_context=req.job_context,
+    )
+    params_obj = attach_job_context(
+        req.params,
+        job_context=normalized_context,
+        trace_id=req.trace_id,
+    )
+    params_obj["workflow_reference"] = {
+        "version_id": version_id,
+        "published_version_id": published_version_id,
+        "workflow_definition_source": "version_reference",
+    }
+    headers = headers_from_params_impl(params_obj, env_api_key=settings.api_key)
+    input_uri = params_obj.get("input_uri") or os.path.join(normalized_context["job_root"], "")
+    output_uri = params_obj.get("output_uri") or os.path.join(normalized_context["job_root"], "")
+    started_at = time.time()
+    base_step_start_impl(
+        base_url=settings.base_url,
+        job_id=job_id,
+        step_id=workflow_id,
+        actor=req.actor,
+        ruleset_version=req.ruleset_version,
+        input_uri=input_uri,
+        output_uri=output_uri,
+        params=params_obj,
+        headers=headers,
+        post_json=post_json_impl,
+    )
+    rust_out = workflow_reference_run_v1(
+        workflow_definition=workflow_definition,
+        version_id=version_id,
+        published_version_id=published_version_id,
+        job_id=job_id,
+        actor=req.actor,
+        ruleset_version=req.ruleset_version,
+        trace_id=str(req.trace_id or ""),
+        run_id=job_id,
+        job_context=normalized_context,
+        params=params_obj,
+        base_url=str(os.getenv("AIWF_ACCEL_URL") or "").strip() or "http://127.0.0.1:18082",
+    )
+    if not rust_out.get("ok"):
+        base_step_fail_impl(
+            base_url=settings.base_url,
+            job_id=job_id,
+            step_id=workflow_id,
+            actor=req.actor,
+            error=str(rust_out.get("error") or "workflow reference execution failed"),
+            headers=headers,
+            post_json=post_json_impl,
+        )
+        return rust_out
+
+    execution = rust_out.get("execution") if isinstance(rust_out.get("execution"), dict) else {}
+    final_output = rust_out.get("final_output") if isinstance(rust_out.get("final_output"), dict) else {}
+    effective_output = final_output if final_output else execution
+    accel_outputs = effective_output.get("outputs") if isinstance(effective_output.get("outputs"), dict) else {}
+    accel_profile = effective_output.get("profile") if isinstance(effective_output.get("profile"), dict) else {}
+    materialized = materialize_accel_outputs(
+        params_effective=params_obj,
+        accel_outputs=accel_outputs,
+        accel_profile=accel_profile,
+        sha256_file=sha256_file,
+    )
+    artifacts = collect_materialized_artifacts(materialized)
+    for artifact in artifacts:
+        base_artifact_upsert_impl(
+            base_url=settings.base_url,
+            job_id=job_id,
+            actor=req.actor,
+            artifact_id=artifact["artifact_id"],
+            kind=artifact["kind"],
+            path=artifact["path"],
+            sha256=artifact["sha256"],
+            extra_json=None,
+            headers=headers,
+        )
+    base_step_done_impl(
+        base_url=settings.base_url,
+        job_id=job_id,
+        step_id=workflow_id,
+        actor=req.actor,
+        output_hash=str(materialized.get("sha_parquet") or ""),
+        headers=headers,
+        post_json=post_json_impl,
+    )
+    result = build_success_result(
+        job_id=job_id,
+        materialized=materialized,
+        artifacts=artifacts,
+        accel_result={
+            "accel": {"attempted": True, "ok": True},
+            "accel_validation_error": None,
+            "use_accel_outputs": True,
+            "accel_resp": effective_output,
+        },
+        started_at=started_at,
+    )
+    result["version_id"] = version_id
+    result["published_version_id"] = published_version_id
+    result["workflow_definition_source"] = "version_reference"
+    result["workflow_id"] = workflow_id
+    result["execution"] = execution
+    result["final_output"] = effective_output
+    result["operator"] = str(rust_out.get("operator") or "workflow_reference_run_v1")
+    return result
+
+
+def _run_workflow_reference(job_id: str, req: RunReferenceReq):
+    _version_id, version_item = _resolve_reference_version_item(req)
+    return _run_workflow_definition_reference(job_id, req, version_item)
 
 
 app = FastAPI(title="AIWF glue-python", version="0.1.0")
@@ -703,7 +936,27 @@ def put_governance_workflow_version(version_id: str, req: WorkflowVersionUpsertR
     payload = req.version.model_dump()
     payload["version_id"] = str(version_id or payload.get("version_id") or "")
     try:
+        workflow_definition = (
+            payload.get("workflow_definition")
+            if isinstance(payload.get("workflow_definition"), dict)
+            else (payload.get("graph") if isinstance(payload.get("graph"), dict) else {})
+        )
+        validated = validate_workflow_definition_authoritatively(
+            workflow_definition,
+            accel_url=str(os.getenv("AIWF_ACCEL_URL") or "").strip(),
+            allow_version_migration=False,
+            require_non_empty_nodes=False,
+            validation_scope="governance_write",
+        )
+        normalized_workflow_definition = validated.get("normalized_workflow_definition")
+        if isinstance(normalized_workflow_definition, dict):
+            payload["workflow_definition"] = normalized_workflow_definition
+        payload.pop("graph", None)
         item = save_workflow_version(payload)
+    except WorkflowValidationFailure as exc:
+        return _workflow_graph_validation_failure_response(WORKFLOW_VERSION_OWNER, "workflow_version", exc)
+    except WorkflowValidationUnavailable as exc:
+        return _workflow_validation_unavailable_response(WORKFLOW_VERSION_OWNER, "workflow_version", exc)
     except ValueError as exc:
         return _workflow_graph_error_response(WORKFLOW_VERSION_OWNER, "workflow_version", exc)
     return {"ok": True, "provider": WORKFLOW_VERSION_OWNER, "item": item}
@@ -843,6 +1096,17 @@ def run_flow(job_id: str, flow: str, req: RunReq):
     t0 = time.time()
     flow = (flow or "").strip().lower()
 
+    if flow == "workflow_reference":
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "workflow_reference bridge has been retired; use /jobs/{job_id}/run-reference",
+                "job_id": job_id,
+                "flow": flow,
+            },
+        )
+
     try:
         runner = runtime_catalog.get_flow_runner(flow)
     except KeyError:
@@ -868,5 +1132,45 @@ def run_flow(job_id: str, flow: str, req: RunReq):
     out.setdefault("ok", True)
     out.setdefault("job_id", job_id)
     out.setdefault("flow", flow)
+    out.setdefault("seconds", round(time.time() - t0, 3))
+    return out
+
+
+@app.post("/jobs/{job_id}/run-reference")
+def run_reference(job_id: str, req: RunReferenceReq):
+    t0 = time.time()
+    try:
+        version_id, _version_item = _resolve_reference_version_item(req)
+        result = _run_workflow_definition_reference(job_id, req, _version_item)
+    except WorkflowValidationFailure as exc:
+        return _workflow_graph_validation_failure_response("glue-python", "workflow_reference_run", exc)
+    except WorkflowValidationUnavailable as exc:
+        return _workflow_validation_unavailable_response("glue-python", "workflow_reference_run", exc)
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(exc), "job_id": job_id, "version_id": str(req.version_id or "")},
+        )
+    except LegacyFlowPathParamsError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(exc), "job_id": job_id, "version_id": version_id},
+        )
+
+    if isinstance(result, BaseModel):
+        out = result.model_dump()
+    elif isinstance(result, dict):
+        out = result
+    else:
+        out = {"result": result}
+
+    if out.get("ok") is False:
+        status_code = 503 if str(out.get("error_code") or "") == WORKFLOW_VALIDATION_UNAVAILABLE_CODE else 400
+        return JSONResponse(status_code=status_code, content=out)
+
+    out.setdefault("ok", True)
+    out.setdefault("job_id", job_id)
+    out.setdefault("version_id", version_id)
+    out.setdefault("published_version_id", version_id)
     out.setdefault("seconds", round(time.time() - t0, 3))
     return out

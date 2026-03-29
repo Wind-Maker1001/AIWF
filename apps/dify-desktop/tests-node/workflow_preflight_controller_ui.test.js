@@ -50,7 +50,7 @@ test("workflow preflight controller auto-fixes duplicate, broken, self-loop and 
   }]);
 });
 
-test("workflow preflight controller reports missing rust endpoint for compatible nodes", async () => {
+test("workflow preflight controller reports missing rust endpoint for authoritative validation", async () => {
   const { createWorkflowPreflightControllerUi } = await loadPreflightControllerUiModule();
   const rendered = [];
   let lastReport = null;
@@ -68,7 +68,7 @@ test("workflow preflight controller reports missing rust endpoint for compatible
       ],
       edges: [{ from: "n1", to: "n2" }],
     }),
-    computePreflightRisk: (issues) => ({ score: issues.length, level: "high", label: "高风险" }),
+    computePreflightRisk: (issues) => ({ score: issues.length, level: "high", label: "high" }),
     renderPreflightReport: (report) => rendered.push(report),
     setLastPreflightReport: (report) => { lastReport = report; },
   });
@@ -76,17 +76,17 @@ test("workflow preflight controller reports missing rust endpoint for compatible
   const report = await controller.runWorkflowPreflight();
 
   assert.equal(report.ok, false);
-  assert.match(report.issues[0].message, /Rust Endpoint/);
+  assert.match(report.issues[0].message, /Rust Endpoint/i);
   assert.equal(lastReport, report);
   assert.equal(rendered.length, 1);
 });
 
-test("workflow preflight controller reports unregistered node types before runtime", async () => {
+test("workflow preflight controller reports unregistered node types from Rust workflow validation", async () => {
   const { createWorkflowPreflightControllerUi } = await loadPreflightControllerUiModule();
   let lastReport = null;
   const rendered = [];
   const controller = createWorkflowPreflightControllerUi({
-    rustEndpoint: { value: "" },
+    rustEndpoint: { value: "http://localhost:9000" },
     rustRequired: { checked: false },
     inputFiles: { value: "" },
   }, {
@@ -98,9 +98,30 @@ test("workflow preflight controller reports unregistered node types before runti
       ],
       edges: [],
     }),
-    computePreflightRisk: (issues) => ({ score: issues.length, level: "high", label: "高风险" }),
+    computePreflightRisk: (issues) => ({ score: issues.length, level: "high", label: "high" }),
     renderPreflightReport: (report) => rendered.push(report),
     setLastPreflightReport: (report) => { lastReport = report; },
+    postRustOperator: async (endpoint, operatorPath) => {
+      assert.equal(endpoint, "http://localhost:9000");
+      if (operatorPath === "/operators/workflow_contract_v1/validate") {
+        return {
+          ok: true,
+          body: {
+            ok: true,
+            status: "invalid",
+            valid: false,
+            error_item_contract: "contracts/desktop/node_config_validation_errors.v1.json",
+            error_items: [{
+              path: "workflow.nodes",
+              code: "unknown_node_type",
+              message: "workflow contains unregistered node types: unknown_future_node",
+            }],
+            notes: [],
+          },
+        };
+      }
+      return { ok: true, body: { ok: true, valid: true } };
+    },
   });
 
   const report = await controller.runWorkflowPreflight();

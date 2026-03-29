@@ -55,6 +55,59 @@ pub(crate) struct SchemaMigrationSuggestResp {
     pub(crate) steps: Vec<Value>,
 }
 
+#[derive(Deserialize)]
+pub(crate) struct WorkflowContractV1Req {
+    pub(crate) workflow_definition: Value,
+    pub(crate) allow_version_migration: Option<bool>,
+    pub(crate) require_non_empty_nodes: Option<bool>,
+    pub(crate) validation_scope: Option<String>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct WorkflowContractV1Resp {
+    pub(crate) ok: bool,
+    pub(crate) operator: String,
+    pub(crate) status: String,
+    pub(crate) schema_version: String,
+    pub(crate) graph_contract: String,
+    pub(crate) error_item_contract: String,
+    pub(crate) validation_scope: String,
+    pub(crate) valid: bool,
+    pub(crate) normalized_workflow_definition: Value,
+    pub(crate) error_items: Vec<Value>,
+    pub(crate) notes: Vec<String>,
+    pub(crate) node_type_inventory: Value,
+    pub(crate) operator_resolutions: Vec<Value>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct WorkflowReferenceRunV1Req {
+    pub(crate) workflow_definition: Value,
+    pub(crate) version_id: Option<String>,
+    pub(crate) published_version_id: Option<String>,
+    pub(crate) job_id: Option<String>,
+    pub(crate) actor: Option<String>,
+    pub(crate) ruleset_version: Option<String>,
+    pub(crate) run_id: Option<String>,
+    pub(crate) trace_id: Option<String>,
+    pub(crate) traceparent: Option<String>,
+    pub(crate) tenant_id: Option<String>,
+    pub(crate) job_context: Option<Value>,
+    pub(crate) params: Option<Value>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct WorkflowDraftRunV1Req {
+    pub(crate) workflow_definition: Value,
+    pub(crate) job_id: Option<String>,
+    pub(crate) run_id: Option<String>,
+    pub(crate) trace_id: Option<String>,
+    pub(crate) traceparent: Option<String>,
+    pub(crate) tenant_id: Option<String>,
+    pub(crate) job_context: Option<Value>,
+    pub(crate) params: Option<Value>,
+}
+
 #[derive(Serialize)]
 pub(crate) struct SchemaRegistryResp {
     pub(crate) ok: bool,

@@ -246,19 +246,34 @@ test("workflow flow io ui formats structured ipc failures", async () => {
 test("workflow flow io ui surfaces structured workflow contract error code on save", async () => {
   const { createWorkflowFlowIoUi } = await loadFlowIoUiModule();
   const statuses = [];
+  global.window = {
+    aiwfDesktop: {
+      saveWorkflow: async () => ({
+        ok: false,
+        canceled: false,
+        error: "workflow.version is required",
+        error_code: "workflow_graph_invalid",
+        error_items: [{ path: "workflow.version", code: "required", message: "workflow.version is required" }],
+      }),
+    },
+  };
 
-  const ui = createWorkflowFlowIoUi({
-    workflowName: { value: "" },
-  }, {
-    setStatus: (text, ok) => statuses.push({ text, ok }),
-    graphPayload: () => ({
-      workflow_id: "wf_invalid",
-      nodes: [{ id: "n1", type: "ingest_files" }],
-      edges: [],
-    }),
-  });
+  try {
+    const ui = createWorkflowFlowIoUi({
+      workflowName: { value: "" },
+    }, {
+      setStatus: (text, ok) => statuses.push({ text, ok }),
+      graphPayload: () => ({
+        workflow_id: "wf_invalid",
+        nodes: [{ id: "n1", type: "ingest_files" }],
+        edges: [],
+      }),
+    });
 
-  await ui.saveFlow();
+    await ui.saveFlow();
+  } finally {
+    delete global.window;
+  }
 
   assert.equal(statuses.length, 1);
   assert.equal(statuses[0].ok, false);

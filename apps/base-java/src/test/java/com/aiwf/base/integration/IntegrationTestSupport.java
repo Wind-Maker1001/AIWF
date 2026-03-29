@@ -154,22 +154,30 @@ public abstract class IntegrationTestSupport {
 
             String path = exchange.getRequestURI().getPath();
             String[] parts = path.split("/");
-            if (parts.length < 6 || !"run".equals(parts[4])) {
+            Map<String, Object> payload = mapper.readValue(exchange.getRequestBody(), new TypeReference<>() {});
+            String jobId;
+            String flow;
+            String route;
+            if (parts.length >= 5 && "run-reference".equals(parts[4])) {
+                jobId = parts[2];
+                flow = "";
+                route = "/run-reference";
+            } else if (parts.length >= 6 && "run".equals(parts[4])) {
+                jobId = parts[2];
+                flow = parts[5];
+                route = "/run/{flow}";
+            } else {
                 writeJson(exchange, 404, Map.of("ok", false, "error", "not_found"));
                 return;
             }
-
-            String jobId = parts[2];
-            String flow = parts[5];
-            Map<String, Object> payload = mapper.readValue(exchange.getRequestBody(), new TypeReference<>() {});
             StubResponse response;
             synchronized (this) {
-                runRequests.add(new CapturedRunRequest(jobId, flow, payload));
+                runRequests.add(new CapturedRunRequest(jobId, route, flow, payload));
                 response = runResponses.poll();
             }
 
             if (response == null) {
-                response = new StubResponse(200, Map.of("ok", true, "job_id", jobId, "flow", flow, "accepted", true));
+                response = new StubResponse(200, Map.of("ok", true, "job_id", jobId, "accepted", true));
             }
             writeJson(exchange, response.status(), response.body());
         }
@@ -184,7 +192,7 @@ public abstract class IntegrationTestSupport {
         }
     }
 
-    protected record CapturedRunRequest(String jobId, String flow, Map<String, Object> payload) {}
+    protected record CapturedRunRequest(String jobId, String route, String flow, Map<String, Object> payload) {}
 
     protected record StubResponse(int status, Map<String, Object> body) {}
 

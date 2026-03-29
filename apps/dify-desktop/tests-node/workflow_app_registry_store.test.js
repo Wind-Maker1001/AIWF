@@ -84,14 +84,20 @@ test("workflow app registry store uses glue provider for backend-owned registry"
   assert.equal(published.provider, GLUE_PROVIDER);
   assert.equal(remoteItems.get("finance_app_remote").template_policy.version, 1);
   assert.equal(remoteItems.get("finance_app_remote").published_version_id, "wf_finance_published_001");
+  assert.equal(remoteItems.get("finance_app_remote").graph, undefined);
+  assert.equal(remoteItems.get("finance_app_remote").workflow_definition, undefined);
 
   const listed = await store.listApps(100, { mode: "base_api" });
   assert.equal(listed.provider, GLUE_PROVIDER);
   assert.deepEqual(listed.items.map((item) => item.app_id), ["finance_app_remote"]);
+  assert.equal(listed.items[0].graph, undefined);
+  assert.equal(listed.items[0].workflow_definition, undefined);
 
   const fetched = await store.getApp("finance_app_remote", { mode: "base_api" });
   assert.equal(fetched.provider, GLUE_PROVIDER);
   assert.equal(fetched.owner, "glue-python");
+  assert.equal(fetched.graph, undefined);
+  assert.equal(fetched.workflow_definition, undefined);
 });
 
 test("workflow app registry store rejects retired local legacy provider", async () => {

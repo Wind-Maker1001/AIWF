@@ -85,6 +85,54 @@ test("workflow queue apps ipc preserves structured restore version failure detai
   assert.ok(out.error_items.some((item) => item.path === "workflow.nodes" && item.code === "unknown_node_type"));
 });
 
+test("workflow queue apps ipc restore version returns canonical workflow_definition metadata only", async () => {
+  const handlers = createQueueAppsHarness({
+    workflowValidationSupport: {
+      validateWorkflowDefinitionAuthoritatively: async ({ workflowDefinition }) => ({
+        ok: true,
+        normalized_workflow_definition: workflowDefinition,
+        notes: [{ level: "info", message: "no-op" }],
+      }),
+    },
+    workflowVersionStore: {
+      recordVersion: async () => ({ ok: true, item: { version_id: "ver_1" } }),
+      listVersions: async () => ({ ok: true, items: [] }),
+      getVersion: async () => ({
+        schema_version: "workflow_version_entry.v1",
+        provider: "glue_http",
+        owner: "glue-python",
+        source_of_truth: "glue-python.governance.workflow_versions",
+        version_id: "ver_ok",
+        ts: "2026-03-25T00:00:00.000Z",
+        workflow_name: "Finance Flow",
+        workflow_id: "wf_finance",
+        workflow_definition: {
+          workflow_id: "wf_finance",
+          version: "workflow.v1",
+          nodes: [{ id: "n1", type: "ingest_files" }],
+          edges: [],
+        },
+        graph: {
+          workflow_id: "wf_finance_legacy",
+          version: "legacy",
+          nodes: [],
+          edges: [],
+        },
+      }),
+      compareVersions: async () => ({ ok: true }),
+    },
+  });
+
+  const restoreWorkflowVersion = handlers["aiwf:restoreWorkflowVersion"];
+  const out = await restoreWorkflowVersion({}, { version_id: "ver_ok" });
+
+  assert.equal(out.ok, true);
+  assert.equal(out.workflow_definition.workflow_id, "wf_finance");
+  assert.equal(out.meta.version_id, "ver_ok");
+  assert.equal(out.meta.workflow_definition.workflow_id, "wf_finance");
+  assert.equal(out.meta.graph, undefined);
+});
+
 test("workflow queue apps ipc preserves structured run app fetch failure details", async () => {
   const remoteError = createWorkflowStoreRemoteError({
     ok: false,
@@ -153,10 +201,49 @@ test("workflow queue apps ipc publishes app via version snapshot reference", asy
 
   assert.equal(out.ok, true);
   assert.equal(out.published_version_id, "ver_finance_001");
+  assert.equal(out.item.app_id, "finance_app");
+  assert.equal(out.item.published_version_id, "ver_finance_001");
+  assert.equal(out.item.graph, undefined);
+  assert.equal(out.item.workflow_definition, undefined);
+  assert.equal(out.published_version.version_id, "ver_finance_001");
+  assert.equal(out.published_version.workflow_definition.workflow_id, "wf_finance");
+  assert.equal(out.published_version.graph, undefined);
   assert.equal(calls.length, 2);
   assert.equal(calls[0].kind, "recordVersion");
-  assert.equal(calls[0].item.graph.workflow_id, "wf_finance");
+  assert.equal(calls[0].item.workflow_definition.workflow_id, "wf_finance");
+  assert.equal(calls[0].item.graph, undefined);
   assert.equal(calls[1].kind, "publishApp");
   assert.equal(calls[1].item.published_version_id, "ver_finance_001");
   assert.equal(calls[1].item.graph, undefined);
+});
+
+test("workflow queue apps ipc publish fails closed when authoritative validation is unavailable", async () => {
+  const handlers = createQueueAppsHarness({
+    workflowValidationSupport: {
+      validateWorkflowDefinitionAuthoritatively: async () => {
+        throw createWorkflowStoreRemoteError({
+          ok: false,
+          error: "workflow validation unavailable: connection refused",
+          error_code: "workflow_validation_unavailable",
+          validation_scope: "publish",
+        });
+      },
+    },
+  });
+
+  const publishWorkflowApp = handlers["aiwf:publishWorkflowApp"];
+  const out = await publishWorkflowApp({}, {
+    app_id: "finance_app",
+    name: "Finance App",
+    graph: {
+      workflow_id: "wf_finance",
+      version: "workflow.v1",
+      nodes: [{ id: "n1", type: "ingest_files" }],
+      edges: [],
+    },
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.error_code, "workflow_validation_unavailable");
+  assert.match(String(out.error || ""), /workflow validation unavailable/i);
 });

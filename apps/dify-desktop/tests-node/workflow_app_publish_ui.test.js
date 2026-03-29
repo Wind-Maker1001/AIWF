@@ -43,7 +43,23 @@ test("workflow app publish ui blocks publish when preflight is required and fail
     aiwfDesktop: {
       publishWorkflowApp: async () => {
         publishCalled = true;
-        return { ok: true };
+        return {
+          ok: true,
+          item: {
+            app_id: "finance_app",
+            name: "Finance App",
+            workflow_id: "wf_finance",
+            published_version_id: "ver_finance_001",
+            params_schema: {},
+            template_policy: {},
+          },
+          published_version_id: "ver_finance_001",
+          published_version: {
+            version_id: "ver_finance_001",
+            workflow_id: "wf_finance",
+            workflow_definition: { workflow_id: "wf_finance", version: "workflow.v1", nodes: [], edges: [] },
+          },
+        };
       },
     },
   };
@@ -83,7 +99,23 @@ test("workflow app publish ui publishes app and refreshes list", async () => {
     aiwfDesktop: {
       publishWorkflowApp: async (payload) => {
         publishCalls.push(payload);
-        return { ok: true };
+        return {
+          ok: true,
+          item: {
+            app_id: "app_1",
+            name: payload.name,
+            workflow_id: "wf_finance",
+            published_version_id: "ver_finance_001",
+            params_schema: payload.params_schema,
+            template_policy: payload.template_policy,
+          },
+          published_version_id: "ver_finance_001",
+          published_version: {
+            version_id: "ver_finance_001",
+            workflow_id: "wf_finance",
+            workflow_definition: { workflow_id: "wf_finance", version: "workflow.v1", nodes: [], edges: [] },
+          },
+        };
       },
       listWorkflowApps: async () => ({
         items: [{ app_id: "app_1", name: "Finance App" }],

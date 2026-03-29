@@ -16,6 +16,18 @@ pub(super) fn governance_routes() -> Router<AppState> {
             post(crate::http::io_contract_v1_operator),
         )
         .route(
+            "/operators/workflow_contract_v1/validate",
+            post(crate::http::workflow_contract_v1_operator),
+        )
+        .route(
+            "/operators/workflow_reference_run_v1",
+            post(crate::http::workflow_reference_run_v1_operator),
+        )
+        .route(
+            "/operators/workflow_draft_run_v1",
+            post(crate::http::workflow_draft_run_v1_operator),
+        )
+        .route(
             "/operators/failure_policy_v1",
             post(crate::http::failure_policy_v1_operator),
         )

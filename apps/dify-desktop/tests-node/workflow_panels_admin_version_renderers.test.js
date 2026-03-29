@@ -42,7 +42,7 @@ test("workflow admin version renderers surface apply-graph failure on restore", 
     aiwfDesktop: {
       restoreWorkflowVersion: async () => ({
         ok: true,
-        graph: { workflow_id: "wf_bad", version: "1.0.0", nodes: [{ id: "n1", type: "unknown_future_node" }], edges: [] },
+        workflow_definition: { workflow_id: "wf_bad", version: "1.0.0", nodes: [{ id: "n1", type: "unknown_future_node" }], edges: [] },
       }),
       __applyRestoredWorkflowGraph() {
         const error = new Error("workflow contract invalid: workflow contains unregistered node types: unknown_future_node");

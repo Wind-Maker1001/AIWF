@@ -2,7 +2,7 @@
 const path = require("path");
 const crypto = require("crypto");
 const { runOfflineCleaning } = require("./offline_engine");
-const { normalizeWorkflow, validateGraph } = require("./workflow_graph");
+const { defaultWorkflowGraph, normalizeWorkflow, validateGraph } = require("./workflow_graph");
 const {
   nowIso,
   collectFiles,
@@ -33,6 +33,7 @@ const {
   evaluateSla,
   initAiBudgetState,
 } = require("./workflow_governance");
+const { createWorkflowValidationSupport } = require("./workflow_validation_service");
 
 function buildWorkflowDiagnostics(nodeRuns = []) {
   const byType = {};
@@ -101,9 +102,80 @@ function createWorkflowChipletRegistry(config = {}) {
 }
 
 async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeCache = null }) {
-  const normalizedWorkflow = normalizeWorkflow(payload);
+  const rawWorkflow =
+    payload.workflow && typeof payload.workflow === "object"
+      ? payload.workflow
+      : defaultWorkflowGraph();
+  const workflowDefinition = {
+    ...rawWorkflow,
+    workflow_id: String(payload.workflow_id || rawWorkflow.workflow_id || "").trim() || "custom_v1",
+    version: String(payload.workflow_version || rawWorkflow.version || "").trim(),
+    nodes: Array.isArray(rawWorkflow.nodes) ? rawWorkflow.nodes : [],
+    edges: Array.isArray(rawWorkflow.edges) ? rawWorkflow.edges : [],
+  };
+  const workflowValidationSupport =
+    typeof config?.workflowValidationSupport?.validateWorkflowDefinitionAuthoritatively === "function"
+      ? config.workflowValidationSupport
+      : createWorkflowValidationSupport({ loadConfig: () => (config || {}) });
+  let authoritativeValidation;
+  try {
+    authoritativeValidation = await workflowValidationSupport.validateWorkflowDefinitionAuthoritatively({
+      workflowDefinition,
+      cfg: config || {},
+      allowVersionMigration: true,
+      requireNonEmptyNodes: true,
+      validationScope: "run",
+    });
+  } catch (error) {
+    const remotePayload =
+      error && typeof error === "object" && error.remote_payload && typeof error.remote_payload === "object"
+        ? error.remote_payload
+        : null;
+    const normalizedFallback = normalizeWorkflow({ workflow: workflowDefinition });
+    return {
+      ok: false,
+      workflow_id: normalizedFallback.graph.workflow_id,
+      run_id: crypto.randomUUID().replace(/-/g, ""),
+      status: String(remotePayload?.error_code || "") === "workflow_validation_unavailable"
+        ? "workflow_validation_unavailable"
+        : "invalid_graph",
+      error: String(remotePayload?.error || error?.message || error || "workflow validation failed"),
+      error_code: String(remotePayload?.error_code || "workflow_graph_invalid"),
+      graph_contract: String(remotePayload?.graph_contract || ""),
+      error_item_contract: String(remotePayload?.error_item_contract || ""),
+      error_items: Array.isArray(remotePayload?.error_items) ? remotePayload.error_items : [],
+      notes: Array.isArray(remotePayload?.notes) ? remotePayload.notes : [],
+      node_runs: normalizedFallback.graph.nodes.map(makeNodeRun),
+      workflow: normalizedFallback.graph,
+      workflow_contract: {
+        ok: false,
+        migrated: Array.isArray(remotePayload?.notes) && remotePayload.notes.length > 0,
+        notes: Array.isArray(remotePayload?.notes) ? remotePayload.notes : [],
+        errors: Array.isArray(remotePayload?.error_items)
+          ? remotePayload.error_items.map((item) => String(item?.message || "")).filter(Boolean)
+          : [String(remotePayload?.error || error?.message || error || "workflow validation failed")],
+      },
+    };
+  }
+  const normalizedWorkflow = normalizeWorkflow({
+    workflow: authoritativeValidation?.normalized_workflow_definition && typeof authoritativeValidation.normalized_workflow_definition === "object"
+      ? authoritativeValidation.normalized_workflow_definition
+      : workflowDefinition,
+  });
   const graph = normalizedWorkflow.graph;
-  const workflowContract = normalizedWorkflow.contract;
+  const workflowContract = {
+    ok: true,
+    migrated:
+      normalizedWorkflow.contract.migrated
+      || (Array.isArray(authoritativeValidation?.notes) && authoritativeValidation.notes.length > 0),
+    notes: Array.from(
+      new Set([
+        ...(Array.isArray(authoritativeValidation?.notes) ? authoritativeValidation.notes : []),
+        ...(Array.isArray(normalizedWorkflow.contract.notes) ? normalizedWorkflow.contract.notes : []),
+      ]),
+    ),
+    errors: [],
+  };
   const governance = mergeGovernanceProfile(payload, config);
   const actorRole = String(payload?.actor_role || payload?.actor?.role || "owner");
   const validation = validateGraph(graph);
@@ -114,6 +186,8 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       run_id: crypto.randomUUID().replace(/-/g, ""),
       status: "invalid_graph",
       error: validation.errors.join("; "),
+      error_code: "workflow_graph_invalid",
+      error_items: Array.isArray(validation.error_items) ? validation.error_items : [],
       node_runs: graph.nodes.map(makeNodeRun),
       workflow: graph,
       workflow_contract: workflowContract,

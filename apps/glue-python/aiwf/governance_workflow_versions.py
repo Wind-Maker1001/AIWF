@@ -6,9 +6,6 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from aiwf.node_config_contract_runtime import (
-    find_unknown_workflow_node_types,
-)
 from aiwf.paths import resolve_bus_root
 
 
@@ -43,36 +40,23 @@ def _clone(value: Any) -> Any:
 def validate_workflow_graph(graph: Any) -> Dict[str, Any]:
     if not isinstance(graph, dict):
         raise ValueError("workflow version graph must be an object")
-    workflow_id = str(graph.get("workflow_id") or "").strip()
-    version = str(graph.get("version") or "").strip()
-    nodes = graph.get("nodes")
-    edges = graph.get("edges")
-    if not workflow_id:
-        raise ValueError("workflow version graph requires workflow_id")
-    if not version:
-        raise ValueError("workflow version graph requires version")
-    if not isinstance(nodes, list):
-        raise ValueError("workflow version graph requires nodes array")
-    if not isinstance(edges, list):
-        raise ValueError("workflow version graph requires edges array")
-    for index, node in enumerate(nodes):
-        if not isinstance(node, dict):
-            raise ValueError(f"workflow version graph nodes[{index}] must be an object")
-        if not str(node.get("id") or "").strip():
-            raise ValueError(f"workflow version graph nodes[{index}] requires id")
-        if not str(node.get("type") or "").strip():
-            raise ValueError(f"workflow version graph nodes[{index}] requires type")
-    for index, edge in enumerate(edges):
-        if not isinstance(edge, dict):
-            raise ValueError(f"workflow version graph edges[{index}] must be an object")
-        if not str(edge.get("from") or "").strip():
-            raise ValueError(f"workflow version graph edges[{index}] requires from")
-        if not str(edge.get("to") or "").strip():
-            raise ValueError(f"workflow version graph edges[{index}] requires to")
-    unknown_node_types = find_unknown_workflow_node_types(graph)
-    if unknown_node_types:
-        raise ValueError("workflow version graph contains unregistered node types: " + ", ".join(unknown_node_types))
     return _clone(graph)
+
+
+def resolve_workflow_definition(
+    payload: Dict[str, Any],
+    existing: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    source = payload if isinstance(payload, dict) else {}
+    current = existing if isinstance(existing, dict) else {}
+    workflow_definition = source.get("workflow_definition")
+    if workflow_definition is None:
+        workflow_definition = current.get("workflow_definition")
+    if workflow_definition is None:
+        workflow_definition = source.get("graph")
+    if workflow_definition is None:
+        workflow_definition = current.get("graph")
+    return validate_workflow_graph(workflow_definition)
 
 
 def validate_version_id(value: str) -> str:
@@ -92,9 +76,9 @@ def normalize_workflow_version_payload(
     source = payload if isinstance(payload, dict) else {}
     current = existing if isinstance(existing, dict) else {}
     version_id = validate_version_id(source.get("version_id") or current.get("version_id") or "")
-    graph = validate_workflow_graph(source.get("graph") if source.get("graph") is not None else current.get("graph"))
-    workflow_id = str(source.get("workflow_id") or current.get("workflow_id") or graph.get("workflow_id") or "").strip()
-    workflow_name = str(source.get("workflow_name") or current.get("workflow_name") or graph.get("name") or workflow_id).strip() or workflow_id
+    workflow_definition = resolve_workflow_definition(source, current)
+    workflow_id = str(source.get("workflow_id") or current.get("workflow_id") or workflow_definition.get("workflow_id") or "").strip()
+    workflow_name = str(source.get("workflow_name") or current.get("workflow_name") or workflow_definition.get("name") or workflow_id).strip() or workflow_id
     ts = str(source.get("ts") or current.get("ts") or now_iso())
     return {
         "schema_version": WORKFLOW_VERSION_SCHEMA_VERSION,
@@ -104,7 +88,7 @@ def normalize_workflow_version_payload(
         "ts": ts,
         "workflow_id": workflow_id,
         "workflow_name": workflow_name,
-        "graph": graph,
+        "workflow_definition": workflow_definition,
     }
 
 
@@ -185,12 +169,12 @@ def compare_workflow_versions(version_a: str, version_b: str) -> Dict[str, Any]:
     b = get_workflow_version(version_b)
     if not a or not b:
         raise ValueError("version not found")
-    graph_a = a.get("graph") if isinstance(a.get("graph"), dict) else {}
-    graph_b = b.get("graph") if isinstance(b.get("graph"), dict) else {}
-    nodes_a = graph_a.get("nodes") if isinstance(graph_a.get("nodes"), list) else []
-    nodes_b = graph_b.get("nodes") if isinstance(graph_b.get("nodes"), list) else []
-    edges_a = graph_a.get("edges") if isinstance(graph_a.get("edges"), list) else []
-    edges_b = graph_b.get("edges") if isinstance(graph_b.get("edges"), list) else []
+    workflow_definition_a = a.get("workflow_definition") if isinstance(a.get("workflow_definition"), dict) else {}
+    workflow_definition_b = b.get("workflow_definition") if isinstance(b.get("workflow_definition"), dict) else {}
+    nodes_a = workflow_definition_a.get("nodes") if isinstance(workflow_definition_a.get("nodes"), list) else []
+    nodes_b = workflow_definition_b.get("nodes") if isinstance(workflow_definition_b.get("nodes"), list) else []
+    edges_a = workflow_definition_a.get("edges") if isinstance(workflow_definition_a.get("edges"), list) else []
+    edges_b = workflow_definition_b.get("edges") if isinstance(workflow_definition_b.get("edges"), list) else []
 
     map_a = {str(node.get("id") or ""): node for node in nodes_a if isinstance(node, dict)}
     map_b = {str(node.get("id") or ""): node for node in nodes_b if isinstance(node, dict)}

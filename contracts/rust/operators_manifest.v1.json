@@ -149,7 +149,7 @@
       "domain": "transform",
       "source_module": "cleaning_runtime",
       "published": false,
-      "workflow_exposable": false,
+      "workflow_exposable": true,
       "desktop_exposable": false,
       "direct_http_only": false,
       "internal_only": true,
@@ -1524,7 +1524,7 @@
   "summary": {
     "known_operator_count": 89,
     "published_operator_count": 26,
-    "workflow_exposable_count": 81,
+    "workflow_exposable_count": 82,
     "desktop_exposable_count": 70,
     "direct_http_only_count": 0,
     "internal_only_count": 19

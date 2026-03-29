@@ -1,14 +1,7 @@
 const {
-  NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
-  WORKFLOW_CONTRACT_AUTHORITY,
-  buildValidationErrorItems,
   WORKFLOW_SCHEMA_VERSION,
-  normalizeWorkflowContract,
-  validateWorkflowTopLevel,
+  WORKFLOW_VERSION_MIGRATION_NOTE,
 } = require("./workflow_contract");
-const {
-  findUnknownWorkflowNodeTypes,
-} = require("./workflow_node_catalog_contract");
 
 function defaultWorkflowGraph() {
   return {
@@ -37,22 +30,18 @@ function normalizeWorkflow(payload = {}) {
     payload.workflow && typeof payload.workflow === "object"
       ? payload.workflow
       : defaultWorkflowGraph();
-  const contract = normalizeWorkflowContract(
-    {
-      ...rawWorkflow,
-      workflow_id: String(payload.workflow_id || rawWorkflow.workflow_id || ""),
-      version: String(payload.workflow_version || rawWorkflow.version || ""),
-    },
-    { allowVersionMigration: true },
-  );
-
-  const base = contract.graph || {
+  const notes = [];
+  const base = {
     ...rawWorkflow,
     workflow_id: String(payload.workflow_id || rawWorkflow.workflow_id || "custom_v1"),
-    version: String(payload.workflow_version || rawWorkflow.version || WORKFLOW_SCHEMA_VERSION),
+    version: String(payload.workflow_version || rawWorkflow.version || ""),
     nodes: Array.isArray(rawWorkflow.nodes) ? rawWorkflow.nodes : [],
     edges: Array.isArray(rawWorkflow.edges) ? rawWorkflow.edges : [],
   };
+  if (!String(base.version || "").trim()) {
+    base.version = WORKFLOW_SCHEMA_VERSION;
+    notes.push(WORKFLOW_VERSION_MIGRATION_NOTE);
+  }
 
   const nodes = Array.isArray(base.nodes)
     ? base.nodes.map((n, i) => ({
@@ -78,10 +67,10 @@ function normalizeWorkflow(payload = {}) {
       edges,
     },
     contract: {
-      ok: contract.ok,
-      migrated: contract.migrated,
-      notes: Array.isArray(contract.notes) ? [...contract.notes] : [],
-      errors: Array.isArray(contract.errors) ? [...contract.errors] : [],
+      ok: true,
+      migrated: notes.length > 0,
+      notes,
+      errors: [],
     },
   };
 }
@@ -112,41 +101,87 @@ function topoSort(nodes, edges) {
 }
 
 function validateGraph(graph) {
-  const topLevel = validateWorkflowTopLevel(graph, { requireNonEmptyNodes: true });
-  const errors = [...topLevel.errors];
-  const errorItems = buildValidationErrorItems(topLevel.errors).map((item) => ({
-    ...item,
-    graph_contract: WORKFLOW_CONTRACT_AUTHORITY,
-    error_contract: NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
-  }));
+  const errors = [];
+  const errorItems = [];
   const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph?.edges) ? graph.edges : [];
   const idSet = new Set();
-  const unknownNodeTypes = findUnknownWorkflowNodeTypes(graph);
-  if (unknownNodeTypes.length > 0) {
-    const message = `workflow contains unregistered node types: ${unknownNodeTypes.join(", ")}`;
+
+  if (!Array.isArray(graph?.nodes)) {
+    const message = "workflow.nodes must be an array";
     errors.push(message);
-    errorItems.push({ path: "workflow.nodes", code: "unknown_node_type", message, contract_boundary: "node_catalog_truth" });
+    errorItems.push({ path: "workflow.nodes", code: "type_array", message });
+  }
+  if (!Array.isArray(graph?.edges)) {
+    const message = "workflow.edges must be an array";
+    errors.push(message);
+    errorItems.push({ path: "workflow.edges", code: "type_array", message });
+  }
+  if (Array.isArray(graph?.nodes) && graph.nodes.length === 0) {
+    const message = "workflow.nodes must contain at least one node";
+    errors.push(message);
+    errorItems.push({ path: "workflow.nodes", code: "array_min_items", message });
   }
 
-  for (const n of nodes) {
-    if (!n.id) errors.push("node missing id");
-    if (idSet.has(n.id)) errors.push(`duplicate node id: ${n.id}`);
-    idSet.add(n.id);
-    if (!n.type) errors.push(`node ${n.id} missing type`);
+  for (let index = 0; index < nodes.length; index += 1) {
+    const n = nodes[index];
+    const nodeId = String(n?.id || "").trim();
+    const nodeType = String(n?.type || "").trim();
+    if (!nodeId) {
+      const message = `workflow.nodes[${index}].id is required`;
+      errors.push(message);
+      errorItems.push({ path: `workflow.nodes[${index}].id`, code: "required", message });
+      continue;
+    }
+    if (idSet.has(nodeId)) {
+      const message = `duplicate node id: ${nodeId}`;
+      errors.push(message);
+      errorItems.push({ path: `workflow.nodes[${index}].id`, code: "duplicate_node_id", message });
+    }
+    idSet.add(nodeId);
+    if (!nodeType) {
+      const message = `workflow.nodes[${index}].type is required`;
+      errors.push(message);
+      errorItems.push({ path: `workflow.nodes[${index}].type`, code: "required", message });
+    }
   }
-  for (const e of edges) {
-    if (!idSet.has(e.from)) errors.push(`edge from does not exist: ${e.from}`);
-    if (!idSet.has(e.to)) errors.push(`edge to does not exist: ${e.to}`);
+  for (let index = 0; index < edges.length; index += 1) {
+    const e = edges[index];
+    const from = String(e?.from || "").trim();
+    const to = String(e?.to || "").trim();
+    if (!from) {
+      const message = `workflow.edges[${index}].from is required`;
+      errors.push(message);
+      errorItems.push({ path: `workflow.edges[${index}].from`, code: "required", message });
+    } else if (!idSet.has(from)) {
+      const message = `edge from does not exist: ${from}`;
+      errors.push(message);
+      errorItems.push({ path: `workflow.edges[${index}].from`, code: "edge_missing_from_node", message });
+    }
+    if (!to) {
+      const message = `workflow.edges[${index}].to is required`;
+      errors.push(message);
+      errorItems.push({ path: `workflow.edges[${index}].to`, code: "required", message });
+    } else if (!idSet.has(to)) {
+      const message = `edge to does not exist: ${to}`;
+      errors.push(message);
+      errorItems.push({ path: `workflow.edges[${index}].to`, code: "edge_missing_to_node", message });
+    }
     if (typeof e.when !== "undefined" && e.when !== null) {
       const t = typeof e.when;
       if (t !== "object" && t !== "string" && t !== "boolean") {
-        errors.push(`edge.when type unsupported: ${e.from}->${e.to}`);
+        const message = `edge.when type unsupported: ${from}->${to}`;
+        errors.push(message);
+        errorItems.push({ path: `workflow.edges[${index}].when`, code: "edge_invalid_when_type", message });
       }
     }
   }
   const ordered = topoSort(nodes, edges);
-  if (ordered.length !== nodes.length) errors.push("workflow has cycle; only DAG is supported");
+  if (ordered.length !== nodes.length) {
+    const message = "workflow has cycle; only DAG is supported";
+    errors.push(message);
+    errorItems.push({ path: "workflow.edges", code: "graph_cycle", message });
+  }
   return { ok: errors.length === 0, errors, error_items: errorItems, ordered };
 }
 

@@ -118,6 +118,19 @@ pub(crate) fn metadata_domain_summaries(entries: &[OperatorMetadata]) -> Vec<Val
         .collect()
 }
 
+fn resolve_workflow_only_operator_metadata(operator: &str) -> Option<OperatorMetadata> {
+    match operator {
+        "ingest_files" => Some(OperatorMetadata::new(operator, "transform", "workflow.local_ingest")),
+        "clean_md" => Some(OperatorMetadata::new(operator, "transform", "workflow.local_transform")),
+        "compute_rust" => Some(OperatorMetadata::new(operator, "execution", "workflow.local_compute")),
+        "manual_review" => Some(OperatorMetadata::new(operator, "governance", "workflow.local_review")),
+        "ai_refine" => Some(OperatorMetadata::new(operator, "intelligence", "workflow.local_ai")),
+        "ai_audit" => Some(OperatorMetadata::new(operator, "governance", "workflow.local_ai")),
+        "md_output" => Some(OperatorMetadata::new(operator, "execution", "workflow.local_output")),
+        _ => None,
+    }
+}
+
 pub(crate) fn resolve_operator_metadata(operator: &str) -> Option<OperatorMetadata> {
     let normalized = data::normalize_operator(operator);
     if normalized.is_empty() {
@@ -128,6 +141,9 @@ pub(crate) fn resolve_operator_metadata(operator: &str) -> Option<OperatorMetada
         .find(|entry| entry.operator == normalized)
     {
         return Some(entry.clone());
+    }
+    if let Some(entry) = resolve_workflow_only_operator_metadata(&normalized) {
+        return Some(entry);
     }
     let (domain, catalog) = data::infer_domain_catalog(&normalized)?;
     Some(

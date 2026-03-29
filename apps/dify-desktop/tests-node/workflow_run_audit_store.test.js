@@ -68,7 +68,11 @@ test("workflow run audit store reads local runtime history in offline_local mode
     workflow_id: "wf_local",
     status: "failed",
     ok: false,
-    payload: { workflow: { workflow_id: "wf_local" } },
+    run_request_kind: "reference",
+    version_id: "ver_local_1",
+    published_version_id: "ver_local_1",
+    workflow_definition_source: "version_reference",
+    payload: { version_id: "ver_local_1", published_version_id: "ver_local_1" },
     config: { mode: "offline_local" },
     result: {
       ok: false,
@@ -93,10 +97,14 @@ test("workflow run audit store reads local runtime history in offline_local mode
   assert.equal(runs.provider, LOCAL_PROVIDER);
   assert.equal(runs.items.length, 1);
   assert.equal(runs.items[0].source_of_truth, "desktop.workflow_runtime.run_history");
+  assert.equal(runs.items[0].run_request_kind, "reference");
+  assert.equal(runs.items[0].version_id, "ver_local_1");
+  assert.equal(runs.items[0].published_version_id, "ver_local_1");
 
   const hit = await store.getRun("run_local_1", { mode: "offline_local" });
   assert.equal(hit.provider, LOCAL_PROVIDER);
   assert.equal(hit.run_id, "run_local_1");
+  assert.equal(hit.workflow_definition_source, "version_reference");
 
   const timeline = await store.getRunTimeline("run_local_1", { mode: "offline_local" });
   assert.equal(timeline.provider, LOCAL_PROVIDER);
@@ -140,10 +148,14 @@ test("workflow run audit store queries lifecycle backend when base_http is expli
           source_of_truth: "base-java.jobs",
           run_id: "job_1",
           ts: "2026-03-28T00:00:00Z",
+          run_request_kind: "reference",
+          version_id: "ver_backend_1",
+          published_version_id: "ver_backend_1",
+          workflow_definition_source: "version_reference",
           workflow_id: "cleaning",
           status: "DONE",
           ok: true,
-          payload: { sample: true },
+          payload: { version_id: "ver_backend_1", published_version_id: "ver_backend_1" },
           config: {},
           result: { steps: [], artifacts: [] },
         }]);
@@ -155,10 +167,14 @@ test("workflow run audit store queries lifecycle backend when base_http is expli
           source_of_truth: "base-java.jobs",
           run_id: "job_1",
           ts: "2026-03-28T00:00:00Z",
+          run_request_kind: "reference",
+          version_id: "ver_backend_1",
+          published_version_id: "ver_backend_1",
+          workflow_definition_source: "version_reference",
           workflow_id: "cleaning",
           status: "DONE",
           ok: true,
-          payload: {},
+          payload: { version_id: "ver_backend_1", published_version_id: "ver_backend_1" },
           config: {},
           result: { steps: [], artifacts: [] },
         });
@@ -206,10 +222,14 @@ test("workflow run audit store queries lifecycle backend when base_http is expli
   const runs = await store.listRuns(20, { mode: "base_api", workflowRunAuditProvider: "base_http" });
   assert.equal(runs.provider, BASE_PROVIDER);
   assert.equal(runs.items[0].owner, "base-java");
+  assert.equal(runs.items[0].run_request_kind, "reference");
+  assert.equal(runs.items[0].version_id, "ver_backend_1");
+  assert.equal(runs.items[0].published_version_id, "ver_backend_1");
 
   const hit = await store.getRun("job_1", { mode: "base_api", workflowRunAuditProvider: "base_http" });
   assert.equal(hit.provider, BASE_PROVIDER);
   assert.equal(hit.run_id, "job_1");
+  assert.equal(hit.workflow_definition_source, "version_reference");
 
   const timeline = await store.getRunTimeline("job_1", { mode: "base_api", workflowRunAuditProvider: "base_http" });
   assert.equal(timeline.provider, BASE_PROVIDER);

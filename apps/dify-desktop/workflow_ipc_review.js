@@ -28,6 +28,17 @@ function registerWorkflowReviewIpc(ctx, deps) {
     sandboxRuleStore,
     sandboxAutoFixStore,
     workflowManualReviewStore,
+    workflowVersionStore = {
+      getVersion: async () => null,
+    },
+    workflowExecutionSupport = null,
+    workflowValidationSupport = {
+      validateWorkflowDefinitionAuthoritatively: async ({ workflowDefinition }) => ({
+        ok: true,
+        normalized_workflow_definition: workflowDefinition,
+        notes: [],
+      }),
+    },
   } = deps;
 
   function applyPendingReviewEnqueueResult(out, enqueueOut) {
@@ -65,6 +76,112 @@ function registerWorkflowReviewIpc(ctx, deps) {
         status: String(source.status || "pending").trim().toLowerCase() || "pending",
       };
     });
+  }
+
+  async function validateWorkflowDefinition(graph, options = {}) {
+    return await workflowValidationSupport.validateWorkflowDefinitionAuthoritatively({
+      workflowDefinition: graph,
+      cfg: options?.cfg || null,
+      allowVersionMigration: options?.allowVersionMigration === true,
+      requireNonEmptyNodes: options?.requireNonEmptyNodes === true,
+      validationScope: String(options?.validationScope || "run"),
+    });
+  }
+
+  function allowJsCompatibilityFallback(cfg = null) {
+    const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });
+    return merged.workflowDraftExecutionCompatibilityEngine === true
+      || String(process.env.AIWF_WORKFLOW_DRAFT_ENGINE_COMPAT || "").trim() === "1";
+  }
+
+  async function executeWorkflowPayloadAuthoritatively(effectivePayload, merged) {
+    const runRequestKind = String(effectivePayload?.run_request_kind || "draft").trim().toLowerCase();
+    if (
+      workflowExecutionSupport
+      && typeof workflowExecutionSupport === "object"
+      && (
+        (runRequestKind === "reference" && typeof workflowExecutionSupport.executeReferenceWorkflowAuthoritatively === "function")
+        || (runRequestKind !== "reference" && typeof workflowExecutionSupport.executeDraftWorkflowAuthoritatively === "function")
+      )
+    ) {
+      try {
+        if (runRequestKind === "reference") {
+          return await workflowExecutionSupport.executeReferenceWorkflowAuthoritatively({
+            payload: effectivePayload,
+            cfg: merged,
+          });
+        }
+        return await workflowExecutionSupport.executeDraftWorkflowAuthoritatively({
+          payload: effectivePayload,
+          cfg: merged,
+        });
+      } catch (error) {
+        if (!allowJsCompatibilityFallback(merged)) throw error;
+      }
+    }
+    const out = await runMinimalWorkflow({
+      payload: effectivePayload,
+      config: merged,
+      outputRoot: resolveOutputRoot(merged),
+      nodeCache: createNodeCacheApi(),
+    });
+    return {
+      ...out,
+      compatibility_fallback: true,
+    };
+  }
+
+  async function buildResumePayload(found, req, hist, cfg) {
+    const basePayload = found?.payload && typeof found.payload === "object" ? { ...found.payload } : {};
+    const publishedVersionId = String(found?.published_version_id || basePayload.published_version_id || "").trim();
+    const versionId = String(found?.version_id || basePayload.version_id || publishedVersionId).trim();
+    const runRequestKind = String(found?.run_request_kind || basePayload.run_request_kind || "").trim().toLowerCase();
+    const replayPayload = {
+      ...basePayload,
+      manual_review: {
+        ...(basePayload.manual_review && typeof basePayload.manual_review === "object" ? basePayload.manual_review : {}),
+        [req.review_key]: {
+          approved: !!hist?.approved,
+          reviewer: String(hist?.reviewer || req.reviewer || "reviewer"),
+          comment: String(hist?.comment || req.comment || ""),
+        },
+      },
+      resume: {
+        run_id: String(req.run_id || "").trim(),
+        node_id: String(hist?.node_id || req.review_key || ""),
+        outputs: found?.result?.node_outputs || {},
+      },
+    };
+    if (versionId && (runRequestKind === "reference" || !basePayload.workflow || typeof basePayload.workflow !== "object")) {
+      const versionItem = await workflowVersionStore.getVersion(versionId, cfg);
+      if (!versionItem?.workflow_definition || typeof versionItem.workflow_definition !== "object") {
+        return {
+          ok: false,
+          error: `workflow version not found for review resume: ${versionId}`,
+          error_code: "workflow_run_version_missing",
+          run_id: String(req.run_id || "").trim(),
+          version_id: versionId,
+          published_version_id: publishedVersionId,
+        };
+      }
+      replayPayload.run_request_kind = "reference";
+      replayPayload.workflow_definition_source = "version_reference";
+      replayPayload.version_id = versionId;
+      if (publishedVersionId) replayPayload.published_version_id = publishedVersionId;
+      replayPayload.workflow = versionItem.workflow_definition;
+      return { ok: true, payload: replayPayload };
+    }
+    if (replayPayload.workflow && typeof replayPayload.workflow === "object") {
+      replayPayload.run_request_kind = "draft";
+      replayPayload.workflow_definition_source = String(replayPayload.workflow_definition_source || "draft_inline");
+      return { ok: true, payload: replayPayload };
+    }
+    return {
+      ok: false,
+      error: `workflow review resume payload missing for run: ${String(req.run_id || "").trim()}`,
+      error_code: "workflow_replay_payload_missing",
+      run_id: String(req.run_id || "").trim(),
+    };
   }
 
   ipcMain.handle("aiwf:listManualReviews", async () => {
@@ -134,36 +251,41 @@ function registerWorkflowReviewIpc(ctx, deps) {
       if (autoResume) {
         const found = await getRun(runId, mergedCfg);
         if (found) {
-          const basePayload = found.payload && typeof found.payload === "object" ? found.payload : {};
-          const replayPayload = {
-            ...basePayload,
-            manual_review: {
-              ...(basePayload.manual_review && typeof basePayload.manual_review === "object" ? basePayload.manual_review : {}),
-              [reviewKey]: {
-                approved: !!hist?.approved,
-                reviewer: String(hist?.reviewer || reviewer),
-                comment: String(hist?.comment || comment),
-              },
-            },
-            resume: {
-              run_id: runId,
-              node_id: String(hist?.node_id || reviewKey || ""),
-              outputs: found?.result?.node_outputs || {},
-            },
-          };
           const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(found.config || {}), ...(req?.cfg || {}) });
+          const replayPayloadOut = await buildResumePayload(found, {
+            run_id: runId,
+            review_key: reviewKey,
+            reviewer,
+            comment,
+          }, hist, merged);
+          if (!replayPayloadOut?.ok) return replayPayloadOut;
+          const replayPayload = replayPayloadOut.payload;
           const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
           if (!rulesOut?.ok) return rulesOut;
           const effectivePayload = await applyQualityRuleSetToPayload(
             await sandboxAutoFixStore.applyPayload(replayPayload, merged),
             merged
           );
-          let out = attachQualityGate(await runMinimalWorkflow({
-            payload: effectivePayload,
-            config: merged,
-            outputRoot: resolveOutputRoot(merged),
-            nodeCache: createNodeCacheApi(),
-          }), effectivePayload || {});
+          effectivePayload.run_request_kind = String(replayPayload.run_request_kind || effectivePayload.run_request_kind || "draft");
+          effectivePayload.workflow_definition_source = String(
+            replayPayload.workflow_definition_source
+            || effectivePayload.workflow_definition_source
+            || (effectivePayload.run_request_kind === "reference" ? "version_reference" : "draft_inline")
+          );
+          if (replayPayload.version_id) effectivePayload.version_id = String(replayPayload.version_id);
+          if (replayPayload.published_version_id) effectivePayload.published_version_id = String(replayPayload.published_version_id);
+          if (effectivePayload?.workflow && typeof effectivePayload.workflow === "object") {
+            const validated = await validateWorkflowDefinition(effectivePayload.workflow, {
+              cfg: merged,
+              requireNonEmptyNodes: true,
+              validationScope: "run",
+            });
+            effectivePayload.workflow = validated.normalized_workflow_definition;
+          }
+          let out = attachQualityGate(
+            await executeWorkflowPayloadAuthoritatively(effectivePayload, merged),
+            effectivePayload || {}
+          );
           if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
             const enqueueOut = await enqueueReviews(normalizePendingReviews(out.pending_reviews, out, effectivePayload), merged);
             out = applyPendingReviewEnqueueResult(out, enqueueOut);

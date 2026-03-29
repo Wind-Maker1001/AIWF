@@ -3,11 +3,13 @@ use crate::{
         CapabilitiesV1Req, ColumnarEvalV1Req, FailurePolicyV1Req, IncrementalPlanV1Req,
         IoContractV1Req, OperatorPolicyV1Req, OptimizerAdaptiveV2Req, RuntimeStatsV1Req,
         SketchV1Req, StreamWindowV1Req, StreamWindowV2Req, TenantIsolationV1Req,
+        WorkflowContractV1Req, WorkflowDraftRunV1Req, WorkflowReferenceRunV1Req,
     },
     governance_ops::{
         run_capabilities_v1, run_failure_policy_v1, run_incremental_plan_v1, run_io_contract_v1,
         run_operator_policy_v1, run_optimizer_adaptive_v2, run_runtime_stats_v1,
-        run_tenant_isolation_v1,
+        run_tenant_isolation_v1, run_workflow_contract_v1, run_workflow_draft_run_v1,
+        run_workflow_reference_run_v1,
     },
     run_columnar_eval_v1, run_sketch_v1, run_stream_window_v1, run_stream_window_v2,
 };
@@ -83,6 +85,75 @@ pub(crate) async fn io_contract_v1_operator(Json(req): Json<IoContractV1Req>) ->
     match run_io_contract_v1(req) {
         Ok(v) => support::ok_json(v),
         Err(e) => support::bad_request("io_contract_v1", e),
+    }
+}
+
+pub(crate) async fn workflow_contract_v1_operator(
+    Json(req): Json<WorkflowContractV1Req>,
+) -> impl IntoResponse {
+    match run_workflow_contract_v1(req) {
+        Ok(v) => support::ok_json(v),
+        Err(e) => support::bad_request("workflow_contract_v1", e),
+    }
+}
+
+pub(crate) async fn workflow_reference_run_v1_operator(
+    State(state): State<AppState>,
+    Json(req): Json<WorkflowReferenceRunV1Req>,
+) -> impl IntoResponse {
+    match run_workflow_contract_v1(WorkflowContractV1Req {
+        workflow_definition: req.workflow_definition.clone(),
+        allow_version_migration: Some(false),
+        require_non_empty_nodes: Some(true),
+        validation_scope: Some("run".to_string()),
+    }) {
+        Ok(v) if !v.valid => (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "ok": false,
+                "operator": "workflow_reference_run_v1",
+                "status": "invalid",
+                "graph_contract": v.graph_contract,
+                "error_item_contract": v.error_item_contract,
+                "error_items": v.error_items,
+                "notes": v.notes,
+            })),
+        ).into_response(),
+        Ok(v) => match run_workflow_reference_run_v1(&state, req, v.normalized_workflow_definition) {
+            Ok(payload) => support::ok_json(payload),
+            Err(e) => support::bad_request("workflow_reference_run_v1", e),
+        },
+        Err(e) => support::bad_request("workflow_reference_run_v1", e),
+    }
+}
+
+pub(crate) async fn workflow_draft_run_v1_operator(
+    State(state): State<AppState>,
+    Json(req): Json<WorkflowDraftRunV1Req>,
+) -> impl IntoResponse {
+    match run_workflow_contract_v1(WorkflowContractV1Req {
+        workflow_definition: req.workflow_definition.clone(),
+        allow_version_migration: Some(false),
+        require_non_empty_nodes: Some(true),
+        validation_scope: Some("run".to_string()),
+    }) {
+        Ok(v) if !v.valid => (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "ok": false,
+                "operator": "workflow_draft_run_v1",
+                "status": "invalid",
+                "graph_contract": v.graph_contract,
+                "error_item_contract": v.error_item_contract,
+                "error_items": v.error_items,
+                "notes": v.notes,
+            })),
+        ).into_response(),
+        Ok(v) => match run_workflow_draft_run_v1(&state, req, v.normalized_workflow_definition) {
+            Ok(payload) => support::ok_json(payload),
+            Err(e) => support::bad_request("workflow_draft_run_v1", e),
+        },
+        Err(e) => support::bad_request("workflow_draft_run_v1", e),
     }
 }
 

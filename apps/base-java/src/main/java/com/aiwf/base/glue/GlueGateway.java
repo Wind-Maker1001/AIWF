@@ -7,4 +7,6 @@ public interface GlueGateway {
     java.util.Map<String, Object> capabilities();
 
     GlueRunResult runFlow(String jobId, String flow, GlueRunFlowReq request);
+
+    GlueRunResult runReference(String jobId, GlueRunReferenceReq request);
 }

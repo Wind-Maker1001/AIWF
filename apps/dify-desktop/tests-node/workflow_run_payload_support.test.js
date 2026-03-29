@@ -22,11 +22,13 @@ test("workflow run payload support parses isolated types and positive limits", a
 
 test("workflow run payload support builds base payload and merges params", async () => {
   const {
+    buildDraftRunPayload,
     buildBaseRunPayload,
+    buildReferenceRunRequest,
     mergeRunPayload,
   } = await loadRunPayloadSupportModule();
 
-  const base = buildBaseRunPayload({
+  const base = buildDraftRunPayload({
     qualityRuleSetId: { value: "set_1" },
     reportTitle: { value: "Report" },
     inputFiles: { value: "D:/a.pdf" },
@@ -56,6 +58,10 @@ test("workflow run payload support builds base payload and merges params", async
   }, { workflow_id: "wf_1", version: "1.0.0" }, 42);
 
   const merged = mergeRunPayload(base, { params: { strict_output_gate: true }, extra_flag: 1 });
+  const legacyAlias = buildBaseRunPayload({}, { workflow_id: "wf_legacy", version: "1.0.0" }, 600);
+  const reference = buildReferenceRunRequest({ published_version_id: "ver_pub_1" }, { params: { region: "cn" } });
+  assert.equal(merged.run_request_kind, "draft");
+  assert.equal(merged.workflow_definition_source, "draft_inline");
   assert.equal(merged.workflow_id, "wf_1");
   assert.equal(merged.workflow_version, "1.0.0");
   assert.equal(merged.workflow.version, "1.0.0");
@@ -64,20 +70,26 @@ test("workflow run payload support builds base payload and merges params", async
   assert.equal(merged.sandbox_alert_dedup_window_sec, 42);
   assert.equal(merged.params.strict_output_gate, true);
   assert.equal(merged.extra_flag, 1);
+  assert.equal(legacyAlias.run_request_kind, "draft");
+  assert.equal(reference.run_request_kind, "reference");
+  assert.equal(reference.workflow_definition_source, "version_reference");
+  assert.equal(reference.version_id, "ver_pub_1");
+  assert.equal(reference.published_version_id, "ver_pub_1");
+  assert.deepEqual(reference.params, { region: "cn" });
 });
 
-test("workflow run payload support rejects unregistered node types", async () => {
+test("workflow run payload support keeps unknown node types in payload and defers authority to runtime validation", async () => {
   const {
     buildBaseRunPayload,
   } = await loadRunPayloadSupportModule();
 
-  assert.throws(
-    () => buildBaseRunPayload({}, {
-      workflow_id: "wf_bad_type",
-      version: "1.0.0",
-      nodes: [{ id: "n1", type: "unknown_future_node" }],
-      edges: [],
-    }),
-    /unregistered node types in run_payload/i,
-  );
+  const out = buildBaseRunPayload({}, {
+    workflow_id: "wf_bad_type",
+    version: "1.0.0",
+    nodes: [{ id: "n1", type: "unknown_future_node" }],
+    edges: [],
+  });
+
+  assert.equal(out.workflow.workflow_id, "wf_bad_type");
+  assert.equal(out.workflow.nodes[0].type, "unknown_future_node");
 });

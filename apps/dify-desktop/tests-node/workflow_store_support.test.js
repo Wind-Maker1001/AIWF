@@ -50,18 +50,18 @@ test("workflow store support derives next ids and normalizes imported graphs", a
   );
 });
 
-test("workflow store support rejects unregistered node types on import", async () => {
+test("workflow store support no longer acts as authoritative unknown-node validator on import", async () => {
   const {
     normalizeImportedGraphWithContract,
   } = await loadStoreSupportModule();
 
-  assert.throws(
-    () => normalizeImportedGraphWithContract({
-      workflow_id: "wf_unknown_type",
-      version: "1.0.0",
-      nodes: [{ id: "n1", type: "unknown_future_node" }],
-      edges: [],
-    }),
-    /unregistered node types in import/i,
-  );
+  const imported = normalizeImportedGraphWithContract({
+    workflow_id: "wf_unknown_type",
+    version: "1.0.0",
+    nodes: [{ id: "n1", type: "unknown_future_node" }],
+    edges: [],
+  });
+
+  assert.equal(imported.graph.nodes[0].type, "unknown_future_node");
+  assert.equal(imported.contract.migrated, false);
 });

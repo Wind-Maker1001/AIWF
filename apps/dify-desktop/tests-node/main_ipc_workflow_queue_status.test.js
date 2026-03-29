@@ -20,6 +20,9 @@ function createIpcMain() {
 
 function createCtx(overrides = {}) {
   const fetchImplOverride = typeof overrides.fetchImpl === "function" ? overrides.fetchImpl : null;
+  const runMinimalWorkflowImpl = typeof overrides.runMinimalWorkflow === "function"
+    ? overrides.runMinimalWorkflow
+    : (async () => ({ ok: true, run_id: "r1", status: "passed" }));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "aiwf-workflow-queue-"));
   const ipcMain = createIpcMain();
   const remote = {
@@ -39,7 +42,7 @@ function createCtx(overrides = {}) {
     manualReviews: [],
   };
   const prevFetch = global.fetch;
-  global.fetch = fetchImplOverride || (async (url, init = {}) => {
+  const defaultFetch = async (url, init = {}) => {
     const method = String(init.method || "GET").toUpperCase();
     const target = String(url);
     if (method === "GET" && target.endsWith("/governance/meta/control-plane")) {
@@ -100,8 +103,88 @@ function createCtx(overrides = {}) {
         },
       };
     }
+    if (method === "POST" && target.endsWith("/operators/workflow_contract_v1/validate")) {
+      const body = JSON.parse(String(init.body || "{}"));
+      const workflowDefinition = body.workflow_definition || {};
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            valid: true,
+            status: "done",
+            normalized_workflow_definition: workflowDefinition,
+            error_items: [],
+            notes: [],
+          });
+        },
+      };
+    }
+    if (method === "POST" && target.endsWith("/operators/workflow_draft_run_v1")) {
+      const body = JSON.parse(String(init.body || "{}"));
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          const out = await runMinimalWorkflowImpl({
+            payload: {
+              workflow: body.workflow_definition,
+              params: body.params || {},
+              trace_id: body.trace_id || "",
+              run_id: body.run_id || "",
+              tenant_id: body.tenant_id || "",
+              job_id: body.job_id || "",
+            },
+            config: {},
+            outputRoot: path.join(root, "out"),
+            nodeCache: {},
+          });
+          return JSON.stringify({
+            ok: !!out.ok,
+            operator: "workflow_draft_run_v1",
+            status: out.status || "done",
+            workflow_id: out.workflow_id || body.workflow_definition?.workflow_id || "",
+            run_id: out.run_id || "",
+            workflow_definition_source: "draft_inline",
+            execution: {
+              operator: "workflow_run",
+              status: out.status || "done",
+              run_id: out.run_id || "",
+              context: out.node_outputs || {},
+              steps: Array.isArray(out.node_runs) ? out.node_runs.map((item) => ({
+                id: item.id || "",
+                operator: item.type || "",
+                status: item.status || "",
+                started_at: item.started_at || "",
+                finished_at: item.ended_at || "",
+                duration_ms: Math.round(Number(item.seconds || 0) * 1000),
+                output_summary: item.output || {},
+                error: item.error || "",
+              })) : [],
+            },
+            final_output: {
+              status: out.status || "done",
+              pending_reviews: out.pending_reviews || [],
+            },
+          });
+        },
+      };
+    }
     throw new Error(`unexpected fetch: ${method} ${target}`);
-  });
+  };
+  global.fetch = async (url, init = {}) => {
+    if (fetchImplOverride) {
+      try {
+        return await fetchImplOverride(url, init);
+      } catch (error) {
+        if (!/unexpected fetch/i.test(String(error?.message || error))) {
+          throw error;
+        }
+      }
+    }
+    return await defaultFetch(url, init);
+  };
   const ctx = {
     app: {
       isPackaged: false,
@@ -129,7 +212,7 @@ function createCtx(overrides = {}) {
     runModeAuditLogPath: () => path.join(root, "logs", "run_mode_audit.jsonl"),
     rotateLogIfNeeded: () => {},
     createWorkflowWindow: () => {},
-    runMinimalWorkflow: async () => ({ ok: true, run_id: "r1", status: "passed" }),
+    runMinimalWorkflow: runMinimalWorkflowImpl,
     inspectFileEncoding: () => ({ path: "", ok: true }),
     toUtf8FileIfNeeded: (p) => ({ source: p, output: p, converted: false }),
     checkChineseOfficeFonts: () => ({ ok: true }),

@@ -1,5 +1,4 @@
 const {
-  assertWorkflowContract,
   NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
   WORKFLOW_CONTRACT_AUTHORITY,
 } = require("./workflow_contract");
@@ -36,6 +35,14 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     sandboxAutoFixStore,
     workflowAppRegistryStore,
     workflowVersionStore,
+    workflowExecutionSupport = null,
+    workflowValidationSupport = {
+      validateWorkflowDefinitionAuthoritatively: async ({ workflowDefinition }) => ({
+        ok: true,
+        normalized_workflow_definition: workflowDefinition,
+        notes: [],
+      }),
+    },
   } = deps;
 
   function queueConcurrency() {
@@ -61,11 +68,104 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     return workflowStoreRemoteErrorResult(error);
   }
 
+  async function validateWorkflowDefinition(graph, options = {}) {
+    return await workflowValidationSupport.validateWorkflowDefinitionAuthoritatively({
+      workflowDefinition: graph,
+      cfg: options?.cfg || null,
+      allowVersionMigration: options?.allowVersionMigration === true,
+      requireNonEmptyNodes: options?.requireNonEmptyNodes === true,
+      validationScope: String(options?.validationScope || "run"),
+    });
+  }
+
+  function allowJsCompatibilityFallback(cfg = null) {
+    const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });
+    return merged.workflowDraftExecutionCompatibilityEngine === true
+      || String(process.env.AIWF_WORKFLOW_DRAFT_ENGINE_COMPAT || "").trim() === "1";
+  }
+
+  async function executeWorkflowPayloadAuthoritatively(effectivePayload, merged) {
+    const runRequestKind = String(effectivePayload?.run_request_kind || "draft").trim().toLowerCase();
+    if (
+      workflowExecutionSupport
+      && typeof workflowExecutionSupport === "object"
+      && (
+        (runRequestKind === "reference" && typeof workflowExecutionSupport.executeReferenceWorkflowAuthoritatively === "function")
+        || (runRequestKind !== "reference" && typeof workflowExecutionSupport.executeDraftWorkflowAuthoritatively === "function")
+      )
+    ) {
+      try {
+        if (runRequestKind === "reference") {
+          return await workflowExecutionSupport.executeReferenceWorkflowAuthoritatively({
+            payload: effectivePayload,
+            cfg: merged,
+          });
+        }
+        return await workflowExecutionSupport.executeDraftWorkflowAuthoritatively({
+          payload: effectivePayload,
+          cfg: merged,
+        });
+      } catch (error) {
+        if (!allowJsCompatibilityFallback(merged)) throw error;
+      }
+    }
+    const out = await runMinimalWorkflow({
+      payload: effectivePayload,
+      config: merged,
+      outputRoot: resolveOutputRoot(merged),
+      nodeCache: createNodeCacheApi(),
+    });
+    return {
+      ...out,
+      compatibility_fallback: true,
+    };
+  }
+
   function buildPublishedVersionId(graph, req) {
     const explicit = String(req?.published_version_id || req?.version_id || "").trim();
     if (explicit) return explicit;
     const workflowId = String(graph?.workflow_id || "workflow").trim().replace(/[^a-zA-Z0-9_.-]+/g, "_").slice(0, 80) || "workflow";
     return `${workflowId}_published_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+  }
+
+  function sanitizeWorkflowVersionSnapshot(item) {
+    const source = item && typeof item === "object" ? item : {};
+    const workflowDefinition = source.workflow_definition && typeof source.workflow_definition === "object"
+      ? source.workflow_definition
+      : null;
+    return {
+      schema_version: String(source.schema_version || ""),
+      provider: String(source.provider || ""),
+      owner: String(source.owner || ""),
+      source_of_truth: String(source.source_of_truth || ""),
+      version_id: String(source.version_id || ""),
+      ts: String(source.ts || ""),
+      workflow_name: String(source.workflow_name || ""),
+      workflow_id: String(source.workflow_id || ""),
+      workflow_definition: workflowDefinition ? JSON.parse(JSON.stringify(workflowDefinition)) : null,
+    };
+  }
+
+  function sanitizeWorkflowAppPublication(item) {
+    const source = item && typeof item === "object" ? item : {};
+    return {
+      schema_version: String(source.schema_version || ""),
+      provider: String(source.provider || ""),
+      owner: String(source.owner || ""),
+      source_of_truth: String(source.source_of_truth || ""),
+      app_id: String(source.app_id || ""),
+      name: String(source.name || ""),
+      workflow_id: String(source.workflow_id || ""),
+      published_version_id: String(source.published_version_id || ""),
+      params_schema: source.params_schema && typeof source.params_schema === "object"
+        ? JSON.parse(JSON.stringify(source.params_schema))
+        : {},
+      template_policy: source.template_policy && typeof source.template_policy === "object"
+        ? JSON.parse(JSON.stringify(source.template_policy))
+        : {},
+      created_at: String(source.created_at || ""),
+      updated_at: String(source.updated_at || ""),
+    };
   }
 
   function applyPendingReviewEnqueueResult(out, enqueueOut) {
@@ -163,12 +263,20 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
             await sandboxAutoFixStore.applyPayload(next.payload || {}, merged),
             merged
           );
-          let out = sandboxSupport.attachQualityGate(await runMinimalWorkflow({
-            payload: effectivePayload,
-            config: merged,
-            outputRoot: resolveOutputRoot(merged),
-            nodeCache: createNodeCacheApi(),
-          }), effectivePayload || {});
+          effectivePayload.run_request_kind = String(effectivePayload.run_request_kind || "draft");
+          effectivePayload.workflow_definition_source = String(effectivePayload.workflow_definition_source || "draft_inline");
+          if (effectivePayload?.workflow && typeof effectivePayload.workflow === "object") {
+            const validated = await validateWorkflowDefinition(effectivePayload.workflow, {
+              cfg: merged,
+              requireNonEmptyNodes: true,
+              validationScope: "run",
+            });
+            effectivePayload.workflow = validated.normalized_workflow_definition;
+          }
+          let out = sandboxSupport.attachQualityGate(
+            await executeWorkflowPayloadAuthoritatively(effectivePayload, merged),
+            effectivePayload || {}
+          );
           if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
             const enqueueOut = await enqueueReviews(normalizePendingReviews(out.pending_reviews, out, effectivePayload), merged);
             out = applyPendingReviewEnqueueResult(out, enqueueOut);
@@ -232,13 +340,33 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     return value;
   }
 
+  function ensureDraftRunPayload(payload) {
+    const source = payload && typeof payload === "object" ? payload : {};
+    return {
+      ...source,
+      run_request_kind: "draft",
+      workflow_definition_source: String(source.workflow_definition_source || "draft_inline"),
+    };
+  }
+
   ipcMain.handle("aiwf:enqueueWorkflowTask", async (_evt, req) => {
     try {
       const mergedCfg = normalizeWorkflowConfig({ ...loadConfig(), ...((req && req.cfg) || {}) });
+      const payload = await reportSupport.applyQualityRuleSetToPayload(ensureDraftRunPayload((req && req.payload) || {}), mergedCfg);
+      payload.run_request_kind = "draft";
+      payload.workflow_definition_source = String(payload.workflow_definition_source || "draft_inline");
+      if (payload?.workflow && typeof payload.workflow === "object") {
+        const validated = await validateWorkflowDefinition(payload.workflow, {
+          cfg: mergedCfg,
+          requireNonEmptyNodes: true,
+          validationScope: "run",
+        });
+        payload.workflow = validated.normalized_workflow_definition;
+      }
       const item = {
         task_id: String((req && req.task_id) || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`),
         label: String((req && req.label) || "workflow_task"),
-        payload: await reportSupport.applyQualityRuleSetToPayload((req && req.payload) || {}, mergedCfg),
+        payload,
         cfg: (req && req.cfg) || {},
         priority: Number((req && req.priority) || 100),
         status: "queued",
@@ -340,12 +468,22 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       const merged = normalizeWorkflowConfig({ ...loadConfig() });
       const hit = await workflowVersionStore.getVersion(versionId, merged);
       if (!hit) return { ok: false, error: "version not found" };
+      const validated = await validateWorkflowDefinition(hit.workflow_definition || {}, {
+        cfg: merged,
+        requireNonEmptyNodes: false,
+        validationScope: "authoring",
+      });
       appendAudit("workflow_restore_version", {
         version_id: versionId,
         workflow_name: String(hit.workflow_name || ""),
         provider: String(hit.provider || ""),
       });
-      return { ok: true, graph: hit.graph, meta: hit };
+      return {
+        ok: true,
+        workflow_definition: validated.normalized_workflow_definition,
+        meta: sanitizeWorkflowVersionSnapshot(hit),
+        notes: Array.isArray(validated?.notes) ? validated.notes : [],
+      };
     } catch (error) {
       return normalizeWorkflowStoreError(error);
     }
@@ -380,16 +518,18 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     if (!graph) return { ok: false, error: "graph required" };
     if (!name) return { ok: false, error: "name required" };
     try {
-      assertWorkflowContract(graph, { requireNonEmptyNodes: true });
-    } catch (error) {
-      return workflowContractFailure(error);
-    }
-    const merged = normalizeWorkflowConfig({ ...loadConfig() });
+      const merged = normalizeWorkflowConfig({ ...loadConfig() });
+      const validated = await validateWorkflowDefinition(graph, {
+        cfg: merged,
+        requireNonEmptyNodes: true,
+        validationScope: "publish",
+      });
+      const normalizedWorkflowDefinition = validated.normalized_workflow_definition;
     const versionOut = await workflowVersionStore.recordVersion({
-      version_id: buildPublishedVersionId(graph, req),
-      workflow_id: String(graph?.workflow_id || "custom"),
+      version_id: buildPublishedVersionId(normalizedWorkflowDefinition, req),
+      workflow_id: String(normalizedWorkflowDefinition?.workflow_id || "custom"),
       workflow_name: name,
-      graph,
+      workflow_definition: normalizedWorkflowDefinition,
     }, merged);
     if (!versionOut?.ok) return versionOut;
     const publishedVersionId = String(versionOut?.item?.version_id || "").trim();
@@ -403,7 +543,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     const out = await workflowAppRegistryStore.publishApp({
       app_id: String(req?.app_id || "").trim() || undefined,
       name,
-      workflow_id: String(graph?.workflow_id || "custom"),
+      workflow_id: String(normalizedWorkflowDefinition?.workflow_id || "custom"),
       published_version_id: publishedVersionId,
       params_schema: req?.params_schema && typeof req.params_schema === "object" ? req.params_schema : {},
       template_policy: req?.template_policy && typeof req.template_policy === "object" ? req.template_policy : {},
@@ -416,12 +556,18 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         published_version_id: publishedVersionId,
       });
       return {
-        ...out,
+        ok: true,
+        provider: String(out?.provider || ""),
+        item: sanitizeWorkflowAppPublication(out?.item),
         published_version_id: publishedVersionId,
-        published_version: versionOut?.item || null,
+        published_version: sanitizeWorkflowVersionSnapshot(versionOut?.item),
+        notes: Array.isArray(validated?.notes) ? validated.notes : [],
       };
     }
     return out;
+    } catch (error) {
+      return normalizeWorkflowStoreError(error);
+    }
   });
 
   ipcMain.handle("aiwf:listWorkflowApps", async (_evt, req) => {
@@ -440,7 +586,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       const publishedVersionId = String(item?.published_version_id || "").trim();
       if (publishedVersionId) {
         versionItem = await workflowVersionStore.getVersion(publishedVersionId, merged);
-        if (!versionItem?.graph || typeof versionItem.graph !== "object") {
+        if (!versionItem?.workflow_definition || typeof versionItem.workflow_definition !== "object") {
           return {
             ok: false,
             error: `workflow version not found for app: ${publishedVersionId}`,
@@ -452,10 +598,26 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       }
       const params = req?.params && typeof req.params === "object" ? req.params : {};
       const mergedPayload = req?.payload && typeof req.payload === "object" ? { ...req.payload } : {};
-      const sourceGraph = versionItem?.graph && typeof versionItem.graph === "object"
-        ? versionItem.graph
-        : (item.graph && typeof item.graph === "object" ? item.graph : {});
-      mergedPayload.workflow = applyTemplateParams(sourceGraph, params);
+      mergedPayload.run_request_kind = "reference";
+      mergedPayload.workflow_definition_source = "version_reference";
+      mergedPayload.version_id = publishedVersionId;
+      mergedPayload.published_version_id = publishedVersionId;
+      const sourceWorkflowDefinition =
+        versionItem?.workflow_definition && typeof versionItem.workflow_definition === "object"
+          ? versionItem.workflow_definition
+          : {};
+      const validated = await validateWorkflowDefinition(sourceWorkflowDefinition, {
+        cfg: merged,
+        requireNonEmptyNodes: true,
+        validationScope: "run",
+      });
+      mergedPayload.workflow = applyTemplateParams(validated.normalized_workflow_definition, params);
+      const runtimeValidated = await validateWorkflowDefinition(mergedPayload.workflow, {
+        cfg: merged,
+        requireNonEmptyNodes: true,
+        validationScope: "run",
+      });
+      mergedPayload.workflow = runtimeValidated.normalized_workflow_definition;
       if (!mergedPayload.workflow.workflow_id) mergedPayload.workflow.workflow_id = item.workflow_id || "custom";
       const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
       if (!rulesOut?.ok) return rulesOut;
@@ -463,12 +625,14 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         await sandboxAutoFixStore.applyPayload(mergedPayload, merged),
         merged
       );
-      let out = sandboxSupport.attachQualityGate(await runMinimalWorkflow({
-        payload: effectivePayload,
-        config: merged,
-        outputRoot: resolveOutputRoot(merged),
-        nodeCache: createNodeCacheApi(),
-      }), effectivePayload || {});
+      effectivePayload.run_request_kind = "reference";
+      effectivePayload.workflow_definition_source = "version_reference";
+      effectivePayload.version_id = publishedVersionId;
+      effectivePayload.published_version_id = publishedVersionId;
+      let out = sandboxSupport.attachQualityGate(
+        await executeWorkflowPayloadAuthoritatively(effectivePayload, merged),
+        effectivePayload || {}
+      );
       if (Array.isArray(out?.pending_reviews) && out.pending_reviews.length) {
         const enqueueOut = await enqueueReviews(normalizePendingReviews(out.pending_reviews, out, effectivePayload), merged);
         out = applyPendingReviewEnqueueResult(out, enqueueOut);
@@ -490,6 +654,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         ok: !!out?.ok,
         app_id: appId,
         provider: String(item?.provider || ""),
+        version_id: publishedVersionId,
         published_version_id: publishedVersionId,
         result: out,
         run_id: String(out?.run_id || ""),

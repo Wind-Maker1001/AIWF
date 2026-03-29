@@ -16,13 +16,14 @@ test("main workflow graph normalization carries version and reports migration", 
 
   const invalid = workflowGraph.validateGraph({
     workflow_id: "wf_invalid_contract",
+    version: "1.0.0",
     nodes: [{ id: "n1", type: "ingest_files" }],
-    edges: [],
+    edges: [{ from: "n1", to: "missing" }],
   });
   assert.equal(invalid.ok, false);
-  assert.match(invalid.errors.join(" | "), /workflow\.version is required/);
+  assert.match(invalid.errors.join(" | "), /edge to does not exist/i);
   assert.ok(Array.isArray(invalid.error_items));
-  assert.ok(invalid.error_items.some((item) => item.path === "workflow.version" && item.code === "required"));
+  assert.ok(invalid.error_items.some((item) => item.path === "workflow.edges[0].to" && item.code === "edge_missing_to_node"));
 
   const unknownType = workflowGraph.validateGraph({
     workflow_id: "wf_unknown_type_contract",
@@ -30,7 +31,6 @@ test("main workflow graph normalization carries version and reports migration", 
     nodes: [{ id: "n1", type: "unknown_future_node" }],
     edges: [],
   });
-  assert.equal(unknownType.ok, false);
-  assert.match(unknownType.errors.join(" | "), /unregistered node types/i);
-  assert.ok(unknownType.error_items.some((item) => item.code === "unknown_node_type"));
+  assert.equal(unknownType.ok, true);
+  assert.deepEqual(unknownType.errors, []);
 });

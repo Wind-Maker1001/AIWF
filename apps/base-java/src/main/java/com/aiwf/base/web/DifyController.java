@@ -10,6 +10,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/integrations/dify")
 public class DifyController {
+    private static final String CLEANING_COMPATIBILITY_VERSION_ID = "ver_cleaning_compat_001";
 
     private final JobService jobs;
 
@@ -37,9 +38,9 @@ public class DifyController {
             );
         }
 
-        var run = jobs.runFlow(
+        var run = jobs.runWorkflowReference(
                 jobId,
-                "cleaning",
+                CLEANING_COMPATIBILITY_VERSION_ID,
                 req.actorOrDefault("dify"),
                 req.rulesetVersionOrDefault("v1"),
                 req.paramsOrEmpty()

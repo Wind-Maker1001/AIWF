@@ -9,6 +9,24 @@ function makeTmpOutDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "aiwf-governance-"));
 }
 
+function configWithAuthoritativeValidation() {
+  return {
+    workflowValidationSupport: {
+      validateWorkflowDefinitionAuthoritatively: async ({ workflowDefinition }) => ({
+        ok: true,
+        normalized_workflow_definition: {
+          ...workflowDefinition,
+          workflow_id: String(workflowDefinition?.workflow_id || "custom_v1"),
+          version: String(workflowDefinition?.version || "1.0.0"),
+          nodes: Array.isArray(workflowDefinition?.nodes) ? workflowDefinition.nodes : [],
+          edges: Array.isArray(workflowDefinition?.edges) ? workflowDefinition.edges : [],
+        },
+        notes: [],
+      }),
+    },
+  };
+}
+
 test("runMinimalWorkflow blocks forbidden nodes by role policy", async () => {
   const out = await runMinimalWorkflow({
     payload: {
@@ -20,7 +38,7 @@ test("runMinimalWorkflow blocks forbidden nodes by role policy", async () => {
         edges: [],
       },
     },
-    config: {},
+    config: configWithAuthoritativeValidation(),
     outputRoot: makeTmpOutDir(),
     nodeCache: null,
   });
@@ -41,7 +59,7 @@ test("runMinimalWorkflow emits governance input classification", async () => {
         edges: [],
       },
     },
-    config: {},
+    config: configWithAuthoritativeValidation(),
     outputRoot: makeTmpOutDir(),
     nodeCache: null,
   });
@@ -75,11 +93,46 @@ test("runMinimalWorkflow enforces ai budget max calls per run", async () => {
         edges: [{ from: "n1", to: "n2" }],
       },
     },
-    config: {},
+    config: configWithAuthoritativeValidation(),
     outputRoot: makeTmpOutDir(),
     nodeCache: null,
   });
   assert.equal(out.ok, false);
   assert.equal(out.status, "failed");
   assert.match(String(out.error || ""), /ai_budget_exceeded:calls/i);
+});
+
+test("runMinimalWorkflow fails closed when Rust-authoritative validation is unavailable", async () => {
+  const out = await runMinimalWorkflow({
+    payload: {
+      actor_role: "owner",
+      chiplet_isolation_enabled: false,
+      workflow: {
+        workflow_id: "wf_unavailable",
+        nodes: [{ id: "n1", type: "ingest_files", config: {} }],
+        edges: [],
+      },
+    },
+    config: {
+      workflowValidationSupport: {
+        validateWorkflowDefinitionAuthoritatively: async () => {
+          const error = new Error("workflow validation unavailable: connection refused");
+          error.remote_payload = {
+            ok: false,
+            error: "workflow validation unavailable: connection refused",
+            error_code: "workflow_validation_unavailable",
+            validation_scope: "run",
+          };
+          throw error;
+        },
+      },
+    },
+    outputRoot: makeTmpOutDir(),
+    nodeCache: null,
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.status, "workflow_validation_unavailable");
+  assert.equal(out.error_code, "workflow_validation_unavailable");
+  assert.match(String(out.error || ""), /workflow validation unavailable/i);
 });

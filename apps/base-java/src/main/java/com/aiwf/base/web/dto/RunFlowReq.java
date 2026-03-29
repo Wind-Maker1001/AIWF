@@ -61,6 +61,15 @@ public final class RunFlowReq extends FlexibleBody {
         return extras();
     }
 
+    public boolean containsReferenceFields() {
+        Map<String, Object> extras = extras();
+        return extras.containsKey("version_id")
+                || extras.containsKey("published_version_id")
+                || extras.containsKey("workflow_definition")
+                || extras.containsKey("graph")
+                || extras.containsKey("flow");
+    }
+
     private String normalize(String value, String fallback) {
         if (value == null) {
             return fallback;

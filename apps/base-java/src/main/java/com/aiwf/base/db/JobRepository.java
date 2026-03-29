@@ -177,6 +177,16 @@ public class JobRepository {
         );
     }
 
+    public List<AuditLogRow> listJobAuditEvents(String jobId, int limit) {
+        int safeLimit = Math.max(1, Math.min(5000, limit));
+        return jdbc.query(
+                JobRepositorySupport.SELECT_JOB_AUDIT_EVENTS,
+                JobRepositorySupport.AUDIT_LOG_ROW_MAPPER,
+                jobId,
+                safeLimit
+        );
+    }
+
     public void upsertArtifact(
             String jobId,
             String artifactId,

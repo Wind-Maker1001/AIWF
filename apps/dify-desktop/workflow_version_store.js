@@ -34,6 +34,13 @@ function createWorkflowVersionStore(deps = {}) {
     return JSON.parse(JSON.stringify(value));
   }
 
+  function resolveWorkflowDefinition(source = {}, current = {}) {
+    const definition = source.workflow_definition !== undefined
+      ? source.workflow_definition
+      : (current.workflow_definition !== undefined ? current.workflow_definition : (source.graph !== undefined ? source.graph : current.graph));
+    return definition && typeof definition === "object" ? definition : null;
+  }
+
   function stableCloneForCompare(value) {
     if (Array.isArray(value)) return value.map((item) => stableCloneForCompare(item));
     if (!value || typeof value !== "object") return value;
@@ -52,13 +59,13 @@ function createWorkflowVersionStore(deps = {}) {
     const source = item && typeof item === "object" ? item : {};
     const current = existing && typeof existing === "object" ? existing : {};
     const versionId = String(source.version_id || current.version_id || "").trim();
-    const graph = source.graph !== undefined ? source.graph : current.graph;
+    const workflowDefinition = resolveWorkflowDefinition(source, current);
     if (!versionId) throw new Error("version_id is required");
-    if (!graph || typeof graph !== "object") throw new Error("workflow version graph must be an object");
-    if (!Array.isArray(graph.nodes)) throw new Error("workflow version graph requires nodes array");
-    if (!Array.isArray(graph.edges)) throw new Error("workflow version graph requires edges array");
-    if (!String(graph.workflow_id || "").trim()) throw new Error("workflow version graph requires workflow_id");
-    if (!String(graph.version || "").trim()) throw new Error("workflow version graph requires version");
+    if (!workflowDefinition || typeof workflowDefinition !== "object") throw new Error("workflow version workflow_definition must be an object");
+    if (!Array.isArray(workflowDefinition.nodes)) throw new Error("workflow version workflow_definition requires nodes array");
+    if (!Array.isArray(workflowDefinition.edges)) throw new Error("workflow version workflow_definition requires edges array");
+    if (!String(workflowDefinition.workflow_id || "").trim()) throw new Error("workflow version workflow_definition requires workflow_id");
+    if (!String(workflowDefinition.version || "").trim()) throw new Error("workflow version workflow_definition requires version");
     return {
       schema_version: String(source.schema_version || current.schema_version || WORKFLOW_VERSION_SCHEMA_VERSION),
       provider,
@@ -70,19 +77,23 @@ function createWorkflowVersionStore(deps = {}) {
       ),
       version_id: versionId,
       ts: String(source.ts || current.ts || new Date().toISOString()),
-      workflow_name: String(source.workflow_name || current.workflow_name || graph.name || graph.workflow_id || "").trim(),
-      workflow_id: String(source.workflow_id || current.workflow_id || graph.workflow_id || "").trim(),
-      graph: clone(graph),
+      workflow_name: String(source.workflow_name || current.workflow_name || workflowDefinition.name || workflowDefinition.workflow_id || "").trim(),
+      workflow_id: String(source.workflow_id || current.workflow_id || workflowDefinition.workflow_id || "").trim(),
+      workflow_definition: clone(workflowDefinition),
     };
   }
 
   function compareVersionItems(itemA, itemB) {
-    const graphA = itemA?.graph && typeof itemA.graph === "object" ? itemA.graph : {};
-    const graphB = itemB?.graph && typeof itemB.graph === "object" ? itemB.graph : {};
-    const nodesA = Array.isArray(graphA.nodes) ? graphA.nodes : [];
-    const nodesB = Array.isArray(graphB.nodes) ? graphB.nodes : [];
-    const edgesA = Array.isArray(graphA.edges) ? graphA.edges : [];
-    const edgesB = Array.isArray(graphB.edges) ? graphB.edges : [];
+    const workflowDefinitionA = itemA?.workflow_definition && typeof itemA.workflow_definition === "object"
+      ? itemA.workflow_definition
+      : (itemA?.graph && typeof itemA.graph === "object" ? itemA.graph : {});
+    const workflowDefinitionB = itemB?.workflow_definition && typeof itemB.workflow_definition === "object"
+      ? itemB.workflow_definition
+      : (itemB?.graph && typeof itemB.graph === "object" ? itemB.graph : {});
+    const nodesA = Array.isArray(workflowDefinitionA.nodes) ? workflowDefinitionA.nodes : [];
+    const nodesB = Array.isArray(workflowDefinitionB.nodes) ? workflowDefinitionB.nodes : [];
+    const edgesA = Array.isArray(workflowDefinitionA.edges) ? workflowDefinitionA.edges : [];
+    const edgesB = Array.isArray(workflowDefinitionB.edges) ? workflowDefinitionB.edges : [];
     const mapA = new Map(nodesA.map((node) => [String(node?.id || ""), node]));
     const mapB = new Map(nodesB.map((node) => [String(node?.id || ""), node]));
     const nodeIds = Array.from(new Set([...mapA.keys(), ...mapB.keys()])).sort();
@@ -170,7 +181,7 @@ function createWorkflowVersionStore(deps = {}) {
           ts: normalized.ts,
           workflow_id: normalized.workflow_id,
           workflow_name: normalized.workflow_name,
-          graph: clone(normalized.graph),
+          workflow_definition: clone(normalized.workflow_definition),
         },
       },
       cfg

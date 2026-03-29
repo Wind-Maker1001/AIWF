@@ -5,7 +5,7 @@ use crate::{
         run_table_reconstruct_v1, run_time_series_v1,
     },
     api_types::{
-        AggregatePushdownReq, AnomalyExplainReq, CapabilitiesV1Req, ChartDataPrepReq,
+        AggregatePushdownReq, AnomalyExplainReq, CapabilitiesV1Req, ChartDataPrepReq, CleaningReq,
         ColumnarEvalV1Req, ComputeReq, ConstraintSolverReq, ContractRegressionV1Req, DiffAuditReq,
         EntityExtractReq, EntityLinkReq, EvidenceRankReq, ExplainPlanV1Req, ExplainPlanV2Req,
         FactCrosscheckReq, FailurePolicyV1Req, FeatureStoreGetReq, FeatureStoreUpsertReq,
@@ -22,7 +22,7 @@ use crate::{
         VectorIndexBuildV2Req, VectorIndexEvalV2Req, VectorIndexSearchReq, VectorIndexSearchV2Req,
         WindowRowsV1Req,
     },
-    cleaning_runtime::run_compute_metrics,
+    cleaning_runtime::{run_cleaning_operator, run_compute_metrics},
     execution_ops::{
         run_explain_plan_v1, run_optimizer_v1, run_parquet_io_v2, run_stream_state_v2,
         run_udf_wasm_v2, run_window_rows_v1,

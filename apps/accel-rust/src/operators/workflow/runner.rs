@@ -69,7 +69,27 @@ pub(crate) fn run_workflow_with_state(
         };
         let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("step");
         let op = obj.get("operator").and_then(|v| v.as_str()).unwrap_or("");
-        let input = obj.get("input").cloned().unwrap_or_else(|| json!({}));
+        let input = resolve_context_refs(
+            &obj.get("input").cloned().unwrap_or_else(|| json!({})),
+            &ctx,
+        );
+        let input_summary = summarize_value(&input);
+        let resolution = workflow_resolution_metadata(op);
+        if !workflow_conditions_satisfied(&input, &ctx) {
+            trace.push(WorkflowStepReplay {
+                id: id.to_string(),
+                operator: op.to_string(),
+                resolution,
+                status: "skipped".to_string(),
+                started_at: "".to_string(),
+                finished_at: "".to_string(),
+                duration_ms: 0,
+                input_summary,
+                output_summary: None,
+                error: None,
+            });
+            continue;
+        }
         if !operator_allowed_for_tenant(op, req.tenant_id.as_deref()) {
             return Err(workflow_error(
                 "operator_forbidden",
@@ -83,8 +103,6 @@ pub(crate) fn run_workflow_with_state(
         }
         let started_at = utc_now_iso();
         let begin = Instant::now();
-        let input_summary = summarize_value(&input);
-        let resolution = workflow_resolution_metadata(op);
         let step_result = execute_workflow_step(state, op, input);
         let output = match step_result {
             Ok(v) => v,
@@ -147,6 +165,56 @@ pub(crate) fn run_workflow_with_state(
         failed_step,
         error: failed_error,
     })
+}
+
+fn resolve_context_refs(input: &Value, ctx: &Value) -> Value {
+    match input {
+        Value::Object(map) => {
+            if map.len() == 1
+                && let Some(reference) = map.get("$context_ref").and_then(|value| value.as_str())
+            {
+                return ctx
+                    .as_object()
+                    .and_then(|context| context.get(reference))
+                    .cloned()
+                    .unwrap_or(Value::Null);
+            }
+            let mut out = serde_json::Map::new();
+            for (key, value) in map {
+                out.insert(key.clone(), resolve_context_refs(value, ctx));
+            }
+            Value::Object(out)
+        }
+        Value::Array(items) => Value::Array(items.iter().map(|item| resolve_context_refs(item, ctx)).collect()),
+        _ => input.clone(),
+    }
+}
+
+fn workflow_conditions_satisfied(input: &Value, ctx: &Value) -> bool {
+    let conditions = input
+        .get("workflow_conditions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for condition in conditions {
+        let Some(obj) = condition.as_object() else {
+            return false;
+        };
+        let source_id = obj.get("source_id").and_then(Value::as_str).unwrap_or("");
+        let field = obj.get("field").and_then(Value::as_str).unwrap_or("");
+        let op = obj.get("op").and_then(Value::as_str).unwrap_or("");
+        let expected = obj.get("value").cloned().unwrap_or(Value::Null);
+        let actual = ctx
+            .as_object()
+            .and_then(|context| context.get(source_id))
+            .and_then(|value| value.get(field))
+            .cloned()
+            .unwrap_or(Value::Null);
+        if op != "eq" || actual != expected {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]

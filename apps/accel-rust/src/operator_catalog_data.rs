@@ -102,6 +102,7 @@ pub(super) fn infer_desktop_hidden(operator: &str) -> bool {
         operator,
         "aggregate_pushdown_v1"
             | "aggregate_rows_v1"
+            | "cleaning"
             | "compute_metrics"
             | "entity_extract_v1"
             | "join_rows_v1"

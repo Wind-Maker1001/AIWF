@@ -49,13 +49,16 @@ class JobFlowIntegrationTest extends IntegrationTestSupport {
         List<CapturedRunRequest> runRequests = GLUE.runRequests();
         assertThat(runRequests).hasSize(1);
         assertThat(runRequests.getFirst().jobId()).isEqualTo(jobId);
-        assertThat(runRequests.getFirst().flow()).isEqualTo("cleaning");
+        assertThat(runRequests.getFirst().route()).isEqualTo("/run-reference");
+        assertThat(runRequests.getFirst().flow()).isEqualTo("");
         assertThat(runRequests.getFirst().payload())
                 .containsEntry("actor", "dify")
                 .containsEntry("ruleset_version", "v2");
         @SuppressWarnings("unchecked")
         Map<String, Object> params = (Map<String, Object>) runRequests.getFirst().payload().get("params");
         assertThat(params)
+                .containsEntry("version_id", "ver_cleaning_compat_001")
+                .containsEntry("published_version_id", "ver_cleaning_compat_001")
                 .containsEntry("office_lang", "zh")
                 .containsEntry("office_theme", "debate");
     }
@@ -158,7 +161,7 @@ class JobFlowIntegrationTest extends IntegrationTestSupport {
                 "SELECT actor, action, job_id, step_id FROM dbo.audit_log WHERE job_id = ? ORDER BY audit_id ASC",
                 jobId
         );
-        assertThat(audits).hasSize(2);
+        assertThat(audits).hasSize(3);
         assertThat(audits.getLast())
                 .containsEntry("actor", "ops")
                 .containsEntry("action", "FLOW_RUN_FAIL")
@@ -221,7 +224,9 @@ class JobFlowIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(get("/api/v1/jobs/{jobId}/record", jobId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.run_id").value(jobId))
-                .andExpect(jsonPath("$.workflow_id").value("cleaning"));
+                .andExpect(jsonPath("$.workflow_id").value("cleaning"))
+                .andExpect(jsonPath("$.run_request_kind").value("legacy_flow"))
+                .andExpect(jsonPath("$.workflow_definition_source").value("legacy_flow_dispatch"));
 
         mockMvc.perform(get("/api/v1/jobs/{jobId}/timeline", jobId))
                 .andExpect(status().isOk())

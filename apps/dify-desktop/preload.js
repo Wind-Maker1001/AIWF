@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld("aiwfDesktop", {
   listManualReviewHistory: (req) => ipcRenderer.invoke("aiwf:listManualReviewHistory", req),
   exportManualReviewHistory: (req) => ipcRenderer.invoke("aiwf:exportManualReviewHistory", req),
   submitManualReview: (req) => ipcRenderer.invoke("aiwf:submitManualReview", req),
+  validateWorkflowDefinition: (req) => ipcRenderer.invoke("aiwf:validateWorkflowDefinition", req),
   getWorkflowDiagnostics: (opts) => ipcRenderer.invoke("aiwf:getWorkflowDiagnostics", opts),
   getWorkflowPerfDashboard: (opts) => ipcRenderer.invoke("aiwf:getWorkflowPerfDashboard", opts),
   saveWorkflow: (graph, name, opts) => ipcRenderer.invoke("aiwf:saveWorkflow", graph, name, opts),

@@ -1,8 +1,7 @@
 import {
-  buildBaseRunPayload,
+  buildDraftRunPayload,
   mergeRunPayload,
 } from "./run-payload-support.js";
-import { assertWorkflowContract } from "./workflow-contract.js";
 
 function createWorkflowRunPayloadUi(els, deps = {}) {
   const {
@@ -17,8 +16,7 @@ function createWorkflowRunPayloadUi(els, deps = {}) {
 
   function runPayload(extra = {}) {
     const graph = graphPayload();
-    assertWorkflowContract(graph, { requireNonEmptyNodes: true });
-    const base = buildBaseRunPayload(els, graph, sandboxDedupWindowSec());
+    const base = buildDraftRunPayload(els, graph, sandboxDedupWindowSec());
     return mergeRunPayload(base, extra);
   }
 

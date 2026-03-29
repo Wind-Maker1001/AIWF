@@ -13,3 +13,9 @@ pub(crate) use io_contract::{io_contract_errors, run_io_contract_v1};
 
 mod failure;
 pub(crate) use failure::run_failure_policy_v1;
+
+mod workflow_contract;
+pub(crate) use workflow_contract::run_workflow_contract_v1;
+
+mod reference_run;
+pub(crate) use reference_run::{run_workflow_draft_run_v1, run_workflow_reference_run_v1};

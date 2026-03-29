@@ -48,6 +48,7 @@ macro_rules! define_stateful_workflow_handlers {
 }
 
 define_stateless_workflow_handlers! {
+    workflow_cleaning_handler => "cleaning", CleaningReq, run_cleaning_operator;
     workflow_transform_rows_v3_handler => "transform_rows_v3", TransformRowsV3Req, run_transform_rows_v3;
     workflow_text_preprocess_v2_handler => "text_preprocess_v2", TextPreprocessReq, run_text_preprocess_v2;
     workflow_compute_metrics_handler => "compute_metrics", ComputeReq, run_compute_metrics;

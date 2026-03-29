@@ -108,6 +108,14 @@ final class JobRepositorySupport {
             OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
             """;
 
+    static final String SELECT_JOB_AUDIT_EVENTS = """
+            SELECT created_at, actor, action, job_id, step_id, detail_json
+            FROM dbo.audit_log
+            WHERE job_id = ?
+            ORDER BY audit_id DESC
+            OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+            """;
+
     static final RowMapper<JobRow> JOB_ROW_MAPPER = (rs, rowNum) -> new JobRow(
             rs.getString("job_id"),
             rs.getObject("created_at"),

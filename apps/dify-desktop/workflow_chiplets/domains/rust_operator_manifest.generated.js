@@ -160,7 +160,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "domain": "transform",
     "source_module": "cleaning_runtime",
     "published": false,
-    "workflow_exposable": false,
+    "workflow_exposable": true,
     "desktop_exposable": false,
     "direct_http_only": false,
     "internal_only": true,
