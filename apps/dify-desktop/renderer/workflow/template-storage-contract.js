@@ -1,7 +1,6 @@
-import { assertWorkflowContract } from "./workflow-contract.js";
-
 const LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION = "local_template_storage.v1";
 const LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION = "local_template_entry.v1";
+const TEMPLATE_WORKFLOW_DEFINITION_FIELD = "workflow_definition";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -12,6 +11,13 @@ function createLocalTemplateStorageError(message, code = "local_template_storage
   error.code = code;
   error.notes = Array.isArray(notes) ? notes.slice() : [];
   return error;
+}
+
+function resolveTemplateWorkflowDefinition(source) {
+  const candidate = source?.workflow_definition !== undefined
+    ? source.workflow_definition
+    : source?.graph;
+  return candidate && typeof candidate === "object" ? clone(candidate) : null;
 }
 
 function normalizeLocalTemplateEntry(entry, index = 0, options = {}) {
@@ -36,25 +42,16 @@ function normalizeLocalTemplateEntry(entry, index = 0, options = {}) {
 
   const id = String(source.id || `custom_${index + 1}`).trim();
   const name = String(source.name || id).trim();
-  const graph = source.graph && typeof source.graph === "object" ? clone(source.graph) : null;
+  const workflowDefinition = resolveTemplateWorkflowDefinition(source);
   if (!id) throw createLocalTemplateStorageError(`local template entry[${index}] id is required`, "local_template_entry_invalid", notes);
   if (!name) throw createLocalTemplateStorageError(`local template entry[${index}] name is required`, "local_template_entry_invalid", notes);
-  if (!graph) throw createLocalTemplateStorageError(`local template entry[${index}] graph is required`, "local_template_entry_invalid", notes);
-  try {
-    assertWorkflowContract(graph, { requireNonEmptyNodes: true });
-  } catch (error) {
-    throw createLocalTemplateStorageError(
-      `local template entry[${index}] graph invalid: ${String(error?.message || error)}`,
-      "local_template_entry_invalid",
-      notes
-    );
-  }
+  if (!workflowDefinition) throw createLocalTemplateStorageError(`local template entry[${index}] workflow_definition is required`, "local_template_entry_invalid", notes);
 
   return {
     schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
     id,
     name,
-    graph,
+    workflow_definition: workflowDefinition,
     template_spec_version: Number.isFinite(Number(source.template_spec_version))
       ? Math.max(1, Math.floor(Number(source.template_spec_version)))
       : 1,
@@ -145,9 +142,11 @@ function stringifyLocalTemplateStorage(raw, options = {}) {
 export {
   LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
   LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
+  TEMPLATE_WORKFLOW_DEFINITION_FIELD,
   createLocalTemplateStorageError,
   normalizeLocalTemplateEntry,
   normalizeLocalTemplateStorage,
   parseLocalTemplateStorageText,
+  resolveTemplateWorkflowDefinition,
   stringifyLocalTemplateStorage,
 };

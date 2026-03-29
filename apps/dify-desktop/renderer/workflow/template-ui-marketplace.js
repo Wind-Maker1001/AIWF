@@ -1,5 +1,6 @@
 import {
   LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+  TEMPLATE_WORKFLOW_DEFINITION_FIELD,
   parseLocalTemplateStorageText,
   stringifyLocalTemplateStorage,
 } from "./template-storage-contract.js";
@@ -78,7 +79,7 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
       schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
       id,
       name,
-      graph: graphPayload(),
+      [TEMPLATE_WORKFLOW_DEFINITION_FIELD]: graphPayload(),
       template_spec_version: 1,
       governance: currentTemplateGovernance(),
       runtime_defaults: parseRunParamsLoose(),

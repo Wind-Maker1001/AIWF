@@ -56,6 +56,8 @@ test("workflow template marketplace support migrates legacy local template stora
     const stored = JSON.parse(localStorageState["aiwf.workflow.templates.v1"]);
     assert.equal(stored.schema_version, LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION);
     assert.equal(stored.items[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
+    assert.deepEqual(stored.items[0].workflow_definition, templateGraph());
+    assert.equal(Object.prototype.hasOwnProperty.call(stored.items[0], "graph"), false);
   } finally {
     delete global.window;
   }
@@ -99,6 +101,8 @@ test("workflow template marketplace support saves current template using version
     assert.equal(stored.items.length, 1);
     assert.equal(stored.items[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
     assert.equal(stored.items[0].name, "My Local Template");
+    assert.deepEqual(stored.items[0].workflow_definition, templateGraph());
+    assert.equal(Object.prototype.hasOwnProperty.call(stored.items[0], "graph"), false);
     assert.deepEqual(stored.items[0].runtime_defaults, { region: "cn" });
     assert.deepEqual(stored.items[0].governance, { preflight_gate_required: true });
     assert.equal(statuses.length, 1);

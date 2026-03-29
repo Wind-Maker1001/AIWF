@@ -34,10 +34,17 @@ function splitEnvList(name) {
   const defaultsCatalogModule = await import(pathToFileURL(path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "defaults-catalog.js")).href);
   const localPresentationsModule = await import(pathToFileURL(path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "local-node-presentations.js")).href);
   const localPalettePolicyModule = await import(pathToFileURL(path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "local-node-palette-policy.js")).href);
+  const workflowNodeCatalogContract = require(path.join(repoRoot, "apps", "dify-desktop", "workflow_node_catalog_contract.js"));
 
   const defaultsCatalog = Array.isArray(defaultsCatalogModule.NODE_CATALOG) ? defaultsCatalogModule.NODE_CATALOG : [];
   const localCatalog = Array.isArray(defaultsCatalogModule.LOCAL_NODE_CATALOG) ? defaultsCatalogModule.LOCAL_NODE_CATALOG : [];
   const localNodeTypes = Array.isArray(localPalettePolicyModule.LOCAL_NODE_TYPES) ? localPalettePolicyModule.LOCAL_NODE_TYPES.map(String) : [];
+  const workflowNodeCatalogLocalTypes = Array.isArray(workflowNodeCatalogContract.LOCAL_WORKFLOW_NODE_TYPES)
+    ? workflowNodeCatalogContract.LOCAL_WORKFLOW_NODE_TYPES.map(String)
+    : [];
+  const workflowNodeCatalogRegisteredTypes = Array.isArray(workflowNodeCatalogContract.REGISTERED_WORKFLOW_NODE_TYPES)
+    ? workflowNodeCatalogContract.REGISTERED_WORKFLOW_NODE_TYPES.map(String)
+    : [];
   const buildLocalNodePalettePolicy = localPalettePolicyModule.buildLocalNodePalettePolicy;
   if (typeof buildLocalNodePalettePolicy !== "function") {
     throw new Error("buildLocalNodePalettePolicy export missing");
@@ -57,6 +64,11 @@ function splitEnvList(name) {
 
   const missingCatalogTypes = localNodeTypes.filter((type) => !runtimeByType.has(type));
   const staleCatalogTypes = runtimeLocalTypes.filter((type) => !localTypeSet.has(type));
+  const missingWorkflowNodeCatalogTypes = localNodeTypes.filter((type) => !workflowNodeCatalogRegisteredTypes.includes(type));
+  const workflowNodeCatalogLocalTypeDrift = uniqueSorted([
+    ...localNodeTypes.filter((type) => !workflowNodeCatalogLocalTypes.includes(type)),
+    ...workflowNodeCatalogLocalTypes.filter((type) => !localTypeSet.has(type)),
+  ]);
   const missingCatalogPolicySourceTypes = runtimeLocalCatalog
     .filter((item) => String(item?.policy_source || "").trim().toLowerCase() !== "local_policy")
     .map((item) => String(item?.type || "").trim())
@@ -75,6 +87,12 @@ function splitEnvList(name) {
   if (staleCatalogTypes.length > 0) {
     issues.push(`defaults-catalog.js has stale local node types: ${staleCatalogTypes.join(", ")}`);
   }
+  if (missingWorkflowNodeCatalogTypes.length > 0) {
+    issues.push(`workflow_node_catalog_contract.js missing local node types: ${missingWorkflowNodeCatalogTypes.join(", ")}`);
+  }
+  if (workflowNodeCatalogLocalTypeDrift.length > 0) {
+    issues.push(`workflow_node_catalog_contract.js local node type drift: ${workflowNodeCatalogLocalTypeDrift.join(", ")}`);
+  }
   if (missingCatalogPolicySourceTypes.length > 0) {
     issues.push(`defaults-catalog.js local node policy_source drift: ${missingCatalogPolicySourceTypes.join(", ")}`);
   }
@@ -89,6 +107,7 @@ function splitEnvList(name) {
     status: issues.length > 0 ? "failed" : "passed",
     localNodeTypeCount: localNodeTypes.length,
     localCatalogCount: runtimeLocalCatalog.length,
+    workflowNodeCatalogLocalTypeCount: workflowNodeCatalogLocalTypes.length,
     requiredLocalNodeTypes,
     drift: {
       invalidSections: Array.isArray(policyResult.details?.invalidSections) ? policyResult.details.invalidSections : [],
@@ -100,6 +119,8 @@ function splitEnvList(name) {
       stalePinnedTypes: Array.isArray(policyResult.details?.stalePinnedTypes) ? policyResult.details.stalePinnedTypes : [],
       missingCatalogTypes,
       staleCatalogTypes,
+      missingWorkflowNodeCatalogTypes,
+      workflowNodeCatalogLocalTypeDrift,
       missingCatalogPolicySourceTypes,
       catalogMetadataDrift,
       requiredLocalTypeMissing,

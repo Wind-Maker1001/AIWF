@@ -260,10 +260,9 @@ This gate now enforces:
 - shared node-config parity fixtures in `contracts/desktop/node_config_contract_fixtures.v1.json` stay present for the current high-risk cross-runtime node set
 - fixture schema `contracts/desktop/node_config_contract_fixtures.schema.json` stays present beside the checked-in fixture payload
 - declared validation error code contract `contracts/desktop/node_config_validation_errors.v1.json` stays present beside `contracts/desktop/node_config_validation_errors.schema.json`
-- desktop JS runtime validation in `apps/dify-desktop/renderer/workflow/workflow-contract.js` and glue-python runtime validation in `apps/glue-python/aiwf/node_config_contract_runtime.py` both satisfy the same valid/invalid fixture cases
-- JS and Python runtimes do not silently drift on `ok/failed` outcome, structured error items, or emitted error lists for those shared fixture cases
-- fixture-declared error codes, JS runtime error codes, and Python runtime error codes all stay inside the declared validation error contract
-- failure output stays machine-readable so the release-ready scorecard can call out missing fixture coverage, JS expectation failures, Python expectation failures, structured error drift, and runtime parity drift explicitly
+- Rust workflow validation remains the authoritative source for workflow/node-config validity on desktop and glue-python write/run paths
+- declared validation error code contract `contracts/desktop/node_config_validation_errors.v1.json` stays aligned with Rust-originated error items rendered by desktop and glue-python
+- failure output stays machine-readable so the release-ready scorecard can call out missing fixture coverage, Rust expectation failures, and validation-surface drift explicitly
 
 Parity assets:
 
@@ -272,8 +271,6 @@ Parity assets:
 - `contracts/desktop/node_config_validation_errors.v1.json`
 - `contracts/desktop/node_config_validation_errors.schema.json`
 - `ops/scripts/check_node_config_runtime_parity.ps1`
-- `apps/dify-desktop/tests-node/node_config_contract_parity.test.js`
-- `apps/glue-python/tests/test_node_config_contract_parity.py`
 
 Workflow preflight report export contract:
 

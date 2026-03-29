@@ -17,7 +17,7 @@ function templateGraph() {
   };
 }
 
-test("workflow template pack contract migrates legacy artifact and validates template graphs", () => {
+test("workflow template pack contract migrates legacy artifact and normalizes template workflow definitions", () => {
   const out = normalizeTemplatePackArtifact({
     id: "pack_1",
     name: "Finance Pack",
@@ -40,9 +40,11 @@ test("workflow template pack contract migrates legacy artifact and validates tem
   assert.equal(out.templates.length, 1);
   assert.equal(out.templates[0].id, "tpl_1");
   assert.equal(out.templates[0].template_spec_version, 1);
+  assert.deepEqual(out.templates[0].workflow_definition, templateGraph());
+  assert.equal(Object.prototype.hasOwnProperty.call(out.templates[0], "graph"), false);
 });
 
-test("workflow template pack contract rejects unsupported schema version and invalid templates", () => {
+test("workflow template pack contract rejects unsupported schema version and missing template workflow definitions", () => {
   assert.throws(
     () => normalizeTemplatePackArtifact({
       schema_version: "template_pack_artifact.v999",
@@ -58,9 +60,9 @@ test("workflow template pack contract rejects unsupported schema version and inv
       schema_version: TEMPLATE_PACK_ARTIFACT_SCHEMA_VERSION,
       id: "pack_bad",
       name: "Bad",
-      templates: [{ id: "tpl_bad", name: "Bad Template", graph: { workflow_id: "wf", nodes: [], edges: [] } }],
+      templates: [{ id: "tpl_bad", name: "Bad Template" }],
     }),
-    /workflow\.version is required|workflow contract invalid/i
+    /workflow_definition is required/i
   );
 });
 
@@ -86,4 +88,6 @@ test("workflow template pack contract exports artifact schema instead of marketp
   assert.equal(artifact.source, "marketplace_export");
   assert.equal(artifact.templates.length, 1);
   assert.equal(artifact.templates[0].id, "tpl_1");
+  assert.deepEqual(artifact.templates[0].workflow_definition, templateGraph());
+  assert.equal(Object.prototype.hasOwnProperty.call(artifact.templates[0], "graph"), false);
 });

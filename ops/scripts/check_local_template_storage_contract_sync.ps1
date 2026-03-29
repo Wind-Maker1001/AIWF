@@ -84,6 +84,12 @@ function fail(payload) {
       issues: ["legacy local template entry did not migrate to versioned entry schema"],
     });
   }
+  if (!normalized.items[0]?.workflow_definition || Object.prototype.hasOwnProperty.call(normalized.items[0], "graph")) {
+    fail({
+      status: "failed",
+      issues: ["normalized local template entry did not converge to workflow_definition field"],
+    });
+  }
 
   const localStorageState = {
     "aiwf.workflow.templates.v1": JSON.stringify([{
@@ -145,6 +151,15 @@ function fail(payload) {
       issues: ["saveCurrentAsTemplate did not persist versioned local template storage"],
     });
   }
+  const savedTemplate = Array.isArray(savedStorage.items)
+    ? savedStorage.items.find((item) => String(item?.name || "") === "My Local Template")
+    : null;
+  if (!savedTemplate?.workflow_definition || Object.prototype.hasOwnProperty.call(savedTemplate, "graph")) {
+    fail({
+      status: "failed",
+      issues: ["saveCurrentAsTemplate did not persist workflow_definition as the canonical template field"],
+    });
+  }
 
   console.log(JSON.stringify({
     status: "passed",
@@ -155,6 +170,8 @@ function fail(payload) {
     localStorageNormalizedOnLoad,
     localSaveVersioned,
     savedEntryCount: Array.isArray(savedStorage.items) ? savedStorage.items.length : 0,
+    savedTemplateField: "workflow_definition",
+    savedLegacyGraphFieldPresent: Object.prototype.hasOwnProperty.call(savedTemplate || {}, "graph"),
   }));
 })().catch((error) => {
   fail({

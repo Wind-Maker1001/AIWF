@@ -37,4 +37,6 @@ test("template pack contract sync gate passes", () => {
   assert.equal(payload.installMigrated, true);
   assert.equal(payload.exportedArtifactSchemaVersion, "template_pack_artifact.v1");
   assert.equal(payload.templateCount, 1);
+  assert.equal(payload.exportedTemplateField, "workflow_definition");
+  assert.equal(payload.exportedLegacyGraphFieldPresent, false);
 });

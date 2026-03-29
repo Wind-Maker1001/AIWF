@@ -7,6 +7,13 @@ const path = require("node:path");
 const { registerWorkflowStoreIpc } = require("../workflow_ipc_store");
 const { TEMPLATE_PACK_ENTRY_SCHEMA_VERSION } = require("../workflow_ipc_state");
 const { TEMPLATE_PACK_ARTIFACT_SCHEMA_VERSION } = require("../workflow_template_pack_contract");
+const {
+  buildValidationErrorItems,
+  normalizeWorkflowContract,
+  WORKFLOW_CONTRACT_AUTHORITY,
+  NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+} = require("../workflow_contract");
+const { createWorkflowStoreRemoteError } = require("../workflow_store_remote_error");
 
 function templateGraph() {
   return {
@@ -18,7 +25,7 @@ function templateGraph() {
   };
 }
 
-function createIpcHarness() {
+function createIpcHarness(overrides = {}) {
   const handlers = {};
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "aiwf-workflow-ipc-store-"));
   const marketplace = [];
@@ -56,9 +63,38 @@ function createIpcHarness() {
     saveTemplateMarketplace: (items) => {
       marketplace.splice(0, marketplace.length, ...items);
     },
+    workflowValidationSupport: {
+      validateWorkflowDefinitionAuthoritatively: async ({
+        workflowDefinition,
+        allowVersionMigration = false,
+        requireNonEmptyNodes = false,
+      }) => {
+        const normalized = normalizeWorkflowContract(workflowDefinition, {
+          allowVersionMigration,
+          requireNonEmptyNodes,
+        });
+        if (!normalized.ok) {
+          throw createWorkflowStoreRemoteError({
+            ok: false,
+            error: normalized.errors.join("; "),
+            error_code: "workflow_graph_invalid",
+            graph_contract: WORKFLOW_CONTRACT_AUTHORITY,
+            error_item_contract: NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+            error_items: buildValidationErrorItems(normalized.errors),
+            notes: normalized.notes || [],
+          });
+        }
+        return {
+          ok: true,
+          normalized_workflow_definition: normalized.graph || workflowDefinition,
+          notes: normalized.notes || [],
+        };
+      },
+    },
     workflowVersionStore: {
       recordVersion: async () => ({ ok: true }),
     },
+    ...overrides,
   });
   return { handlers, root, marketplace, audits };
 }
@@ -86,6 +122,8 @@ test("workflow ipc store migrates legacy template pack artifact on install", asy
   assert.equal(marketplace.length, 1);
   assert.equal(marketplace[0].schema_version, TEMPLATE_PACK_ENTRY_SCHEMA_VERSION);
   assert.equal(marketplace[0].templates.length, 1);
+  assert.deepEqual(marketplace[0].templates[0].workflow_definition, templateGraph());
+  assert.equal(Object.prototype.hasOwnProperty.call(marketplace[0].templates[0], "graph"), false);
   assert.match(audits[0].action, /template_pack_install/);
   assert.equal(audits[0].detail.migrated, true);
 });
@@ -122,6 +160,8 @@ test("workflow ipc store exports template pack as artifact schema", async () => 
   assert.equal(payload.id, "pack_1");
   assert.equal(payload.templates.length, 1);
   assert.equal(payload.templates[0].id, "tpl_1");
+  assert.deepEqual(payload.templates[0].workflow_definition, templateGraph());
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.templates[0], "graph"), false);
 });
 
 test("workflow ipc store saveWorkflow returns structured workflow contract failure", async () => {
@@ -140,7 +180,7 @@ test("workflow ipc store saveWorkflow returns structured workflow contract failu
 
   assert.equal(out.ok, false);
   assert.equal(out.canceled, false);
-  assert.equal(out.error_code, "workflow_contract_invalid");
+  assert.equal(out.error_code, "workflow_graph_invalid");
   assert.equal(out.graph_contract, "contracts/workflow/workflow.schema.json");
   assert.equal(out.error_item_contract, "contracts/desktop/node_config_validation_errors.v1.json");
   assert.ok(Array.isArray(out.error_items));
@@ -163,9 +203,39 @@ test("workflow ipc store saveWorkflow rejects unregistered node types", async ()
   });
 
   assert.equal(out.ok, false);
-  assert.equal(out.error_code, "workflow_contract_invalid");
+  assert.equal(out.error_code, "workflow_graph_invalid");
   assert.ok(Array.isArray(out.error_items));
   assert.ok(out.error_items.some((item) => item.path === "workflow.nodes" && item.code === "unknown_node_type"));
+});
+
+test("workflow ipc store saveWorkflow fails closed when Rust-authoritative validation is unavailable", async () => {
+  const { handlers, root } = createIpcHarness({
+    workflowValidationSupport: {
+      validateWorkflowDefinitionAuthoritatively: async () => {
+        throw createWorkflowStoreRemoteError({
+          ok: false,
+          error: "workflow validation unavailable: connection refused",
+          error_code: "workflow_validation_unavailable",
+          validation_scope: "authoring",
+        });
+      },
+    },
+  });
+  const saveWorkflow = handlers["aiwf:saveWorkflow"];
+
+  const out = await saveWorkflow(null, {
+    workflow_id: "wf_unavailable",
+    version: "1.0.0",
+    nodes: [{ id: "n1", type: "ingest_files" }],
+    edges: [],
+  }, "Unavailable Workflow", {
+    mock: true,
+    path: path.join(root, "unavailable_workflow.json"),
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.error_code, "workflow_validation_unavailable");
+  assert.match(String(out.error || ""), /workflow validation unavailable/i);
 });
 
 test("workflow ipc store loadWorkflow returns structured invalid json failure", async () => {
@@ -207,7 +277,7 @@ test("workflow ipc store loadWorkflow rejects unregistered node types with struc
 
   assert.equal(out.ok, false);
   assert.equal(out.canceled, false);
-  assert.equal(out.error_code, "workflow_contract_invalid");
+  assert.equal(out.error_code, "workflow_graph_invalid");
   assert.ok(Array.isArray(out.error_items));
   assert.ok(out.error_items.some((item) => item.path === "workflow.nodes" && item.code === "unknown_node_type"));
   assert.equal(audits.some((entry) => entry.action === "workflow_load"), false);
@@ -232,7 +302,9 @@ test("workflow ipc store loadWorkflow still accepts legacy graphs missing versio
 
   assert.equal(out.ok, true);
   assert.equal(out.graph.workflow_id, "wf_legacy");
-  assert.equal("version" in out.graph, false);
+  assert.equal(out.graph.version, "1.0.0");
+  assert.ok(Array.isArray(out.notes));
+  assert.match(out.notes.join(" | "), /workflow\.version migrated/i);
 });
 
 test("workflow ipc store loadWorkflow can skip graph contract validation for non-workflow json pickers", async () => {
@@ -257,4 +329,26 @@ test("workflow ipc store loadWorkflow can skip graph contract validation for non
   assert.equal(out.ok, true);
   assert.equal(out.path, templatePackPath);
   assert.equal(out.graph.schema_version, "template_pack_artifact.v1");
+});
+
+test("workflow ipc store exposes authoritative workflow validation ipc", async () => {
+  const { handlers } = createIpcHarness();
+  const validateWorkflowDefinition = handlers["aiwf:validateWorkflowDefinition"];
+  assert.equal(typeof validateWorkflowDefinition, "function");
+
+  const out = await validateWorkflowDefinition(null, {
+    workflow_definition: {
+      workflow_id: "wf_validate",
+      nodes: [{ id: "n1", type: "ingest_files" }],
+      edges: [],
+    },
+    allowVersionMigration: true,
+    requireNonEmptyNodes: true,
+    validation_scope: "authoring",
+  });
+
+  assert.equal(out.ok, true);
+  assert.equal(out.workflow_definition.workflow_id, "wf_validate");
+  assert.equal(out.workflow_definition.version, "1.0.0");
+  assert.ok(Array.isArray(out.notes));
 });

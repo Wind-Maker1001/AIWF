@@ -38,10 +38,12 @@ test("workflow template storage contract migrates legacy array storage", async (
   assert.equal(out.migrated, true);
   assert.equal(out.items.length, 1);
   assert.equal(out.items[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
+  assert.deepEqual(out.items[0].workflow_definition, templateGraph());
+  assert.equal(Object.prototype.hasOwnProperty.call(out.items[0], "graph"), false);
   assert.match(out.notes.join(" | "), /local template storage schema_version migrated/i);
 });
 
-test("workflow template storage contract rejects invalid schema or graph", async () => {
+test("workflow template storage contract rejects invalid schema or missing workflow definition", async () => {
   const {
     LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
     normalizeLocalTemplateStorage,
@@ -62,10 +64,9 @@ test("workflow template storage contract rejects invalid schema or graph", async
         schema_version: "local_template_entry.v1",
         id: "bad",
         name: "Bad",
-        graph: { workflow_id: "wf_bad", nodes: [], edges: [] },
       }],
     }),
-    /workflow\.version is required|graph invalid/i
+    /workflow_definition is required/i
   );
 });
 
@@ -88,4 +89,6 @@ test("workflow template storage contract stringifies versioned envelope", async 
   assert.equal(payload.schema_version, LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION);
   assert.equal(payload.items.length, 1);
   assert.equal(payload.items[0].id, "custom_1");
+  assert.deepEqual(payload.items[0].workflow_definition, templateGraph());
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.items[0], "graph"), false);
 });

@@ -1,7 +1,7 @@
-const { assertWorkflowContract } = require("./workflow_contract");
 const { TEMPLATE_PACK_ENTRY_SCHEMA_VERSION } = require("./workflow_ipc_state");
 
 const TEMPLATE_PACK_ARTIFACT_SCHEMA_VERSION = "template_pack_artifact.v1";
+const TEMPLATE_WORKFLOW_DEFINITION_FIELD = "workflow_definition";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -14,20 +14,27 @@ function createTemplatePackContractError(message, code = "template_pack_contract
   return error;
 }
 
+function resolveTemplateWorkflowDefinition(source) {
+  const candidate = source?.workflow_definition !== undefined
+    ? source.workflow_definition
+    : source?.graph;
+  return candidate && typeof candidate === "object" ? clone(candidate) : null;
+}
+
 function normalizeTemplatePackTemplate(template, index = 0) {
   const source = template && typeof template === "object" ? template : {};
+  const { graph: _legacyGraph, workflow_definition: _legacyWorkflowDefinition, ...rest } = source;
   const id = String(source.id || `tpl_${index + 1}`).trim();
   const name = String(source.name || id || `template_${index + 1}`).trim();
-  const graph = source.graph && typeof source.graph === "object" ? clone(source.graph) : null;
+  const workflowDefinition = resolveTemplateWorkflowDefinition(source);
   if (!id) throw createTemplatePackContractError(`template[${index}] id is required`);
   if (!name) throw createTemplatePackContractError(`template[${index}] name is required`);
-  if (!graph) throw createTemplatePackContractError(`template[${index}] graph is required`);
-  assertWorkflowContract(graph, { requireNonEmptyNodes: true });
+  if (!workflowDefinition) throw createTemplatePackContractError(`template[${index}] workflow_definition is required`);
   return {
-    ...source,
+    ...rest,
     id,
     name,
-    graph,
+    workflow_definition: workflowDefinition,
     template_spec_version: Number(source.template_spec_version || 1),
     params_schema: source.params_schema && typeof source.params_schema === "object" && !Array.isArray(source.params_schema)
       ? clone(source.params_schema)
@@ -96,7 +103,7 @@ function exportTemplatePackArtifact(entry, options = {}) {
       source: options.source || "marketplace_export",
     });
   } else if (rawSchemaVersion === TEMPLATE_PACK_ENTRY_SCHEMA_VERSION) {
-    const templates = Array.isArray(source.templates)
+      const templates = Array.isArray(source.templates)
       ? source.templates.map(normalizeTemplatePackTemplate)
       : [];
     if (!templates.length) {
@@ -133,8 +140,10 @@ function exportTemplatePackArtifact(entry, options = {}) {
 
 module.exports = {
   TEMPLATE_PACK_ARTIFACT_SCHEMA_VERSION,
+  TEMPLATE_WORKFLOW_DEFINITION_FIELD,
   createTemplatePackContractError,
   exportTemplatePackArtifact,
   normalizeTemplatePackArtifact,
   normalizeTemplatePackTemplate,
+  resolveTemplateWorkflowDefinition,
 };

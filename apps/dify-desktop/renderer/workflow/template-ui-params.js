@@ -10,6 +10,7 @@ import {
   applyTemplateDependencyStateToForm,
   renderTemplateParamsFormInto,
 } from "./template-ui-param-renderer.js";
+import { resolveTemplateWorkflowDefinition } from "./template-storage-contract.js";
 
 function createWorkflowTemplateParamSupport(els, deps = {}) {
   const {
@@ -20,6 +21,11 @@ function createWorkflowTemplateParamSupport(els, deps = {}) {
     store,
     syncRunParamsFormFromJson = () => {},
     clearSelectedEdge = () => {},
+    validateWorkflowDefinition = async (workflowDefinition) => ({
+      ok: true,
+      workflow_definition: workflowDefinition,
+      notes: [],
+    }),
   } = deps;
 
   function currentTemplateItem() {
@@ -75,14 +81,15 @@ function createWorkflowTemplateParamSupport(els, deps = {}) {
     return parseTemplateParamsText(els.templateParams?.value || "");
   }
 
-  function applySelectedTemplate() {
+  async function applySelectedTemplate() {
     const id = String(els.templateSelect?.value || "").trim();
     if (!id) {
       setStatus("请先选择模板", false);
       return;
     }
     const item = currentTemplateItem();
-    if (!item || !item.graph) {
+    const workflowDefinition = resolveTemplateWorkflowDefinition(item);
+    if (!item || !workflowDefinition) {
       setStatus("模板不存在", false);
       return;
     }
@@ -94,8 +101,23 @@ function createWorkflowTemplateParamSupport(els, deps = {}) {
       setStatus(String(error?.message || error || "模板参数错误"), false);
       return;
     }
-    const graph = applyTemplateVars(item.graph, params);
-    const imported = store.importGraph(graph);
+    const graph = applyTemplateVars(workflowDefinition, params);
+    let validated;
+    try {
+      validated = await validateWorkflowDefinition(graph);
+    } catch (error) {
+      setStatus(String(error?.message || error || "模板流程校验失败"), false);
+      return;
+    }
+    if (!validated?.ok) {
+      setStatus(String(validated?.error || "模板流程校验失败"), false);
+      return;
+    }
+    const validatedGraph =
+      validated?.workflow_definition && typeof validated.workflow_definition === "object"
+        ? validated.workflow_definition
+        : graph;
+    const imported = store.importGraph(validatedGraph);
     clearSelectedEdge();
     els.workflowName.value = store.state.graph.name || String(item.name || "模板流程");
     if (item.governance && typeof item.governance === "object" && els.publishRequirePreflight) {
@@ -106,7 +128,15 @@ function createWorkflowTemplateParamSupport(els, deps = {}) {
       syncRunParamsFormFromJson();
     }
     renderAll();
-    renderMigrationReport(combineWorkflowMigrationReports({ migrated: false, notes: [] }, imported?.contract));
+    renderMigrationReport(
+      combineWorkflowMigrationReports(
+        {
+          migrated: Array.isArray(validated?.notes) && validated.notes.length > 0,
+          notes: Array.isArray(validated?.notes) ? validated.notes : [],
+        },
+        imported?.contract,
+      ),
+    );
     setStatus(`已应用模板: ${item.name || id}`, true);
   }
 

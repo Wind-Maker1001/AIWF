@@ -82,6 +82,12 @@ function fail(payload) {
       issues: ["legacy template pack did not normalize to artifact schema version"],
     });
   }
+  if (!normalized.templates?.[0]?.workflow_definition || Object.prototype.hasOwnProperty.call(normalized.templates[0], "graph")) {
+    fail({
+      status: "failed",
+      issues: ["normalized template pack template did not converge to workflow_definition field"],
+    });
+  }
 
   const exportFromEntry = exportTemplatePackArtifact({
     schema_version: TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
@@ -194,6 +200,13 @@ function fail(payload) {
       issues: ["template pack export did not write artifact schema version"],
     });
   }
+  const exportedTemplate = Array.isArray(exportedArtifact?.templates) ? exportedArtifact.templates[0] : null;
+  if (!exportedTemplate?.workflow_definition || Object.prototype.hasOwnProperty.call(exportedTemplate, "graph")) {
+    fail({
+      status: "failed",
+      issues: ["template pack export did not write workflow_definition as the canonical template field"],
+    });
+  }
 
   console.log(JSON.stringify({
     status: "passed",
@@ -204,6 +217,8 @@ function fail(payload) {
     installMigrated: !!installResult.migrated,
     exportedArtifactSchemaVersion: String(exportedArtifact.schema_version || ""),
     templateCount: Array.isArray(exportedArtifact.templates) ? exportedArtifact.templates.length : 0,
+    exportedTemplateField: "workflow_definition",
+    exportedLegacyGraphFieldPresent: Object.prototype.hasOwnProperty.call(exportedTemplate || {}, "graph"),
   }));
 })().catch((error) => {
   fail({

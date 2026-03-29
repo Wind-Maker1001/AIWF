@@ -58,6 +58,17 @@ function createWorkflowTemplateUi(els, deps = {}) {
     store,
     syncRunParamsFormFromJson,
     clearSelectedEdge: () => {},
+    validateWorkflowDefinition: async (workflowDefinition) => {
+      if (!window?.aiwfDesktop?.validateWorkflowDefinition) {
+        return { ok: true, workflow_definition: workflowDefinition, notes: [] };
+      }
+      return await window.aiwfDesktop.validateWorkflowDefinition({
+        workflow_definition: workflowDefinition,
+        allowVersionMigration: true,
+        requireNonEmptyNodes: true,
+        validation_scope: "authoring",
+      });
+    },
   });
 
   function renderTemplateSelect() {

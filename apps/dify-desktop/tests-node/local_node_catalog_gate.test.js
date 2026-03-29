@@ -32,8 +32,11 @@ test("local node catalog policy gate passes", () => {
   assert.equal(payload.status, "passed");
   assert.ok(payload.localNodeTypeCount > 0);
   assert.equal(payload.localCatalogCount, payload.localNodeTypeCount);
+  assert.equal(payload.workflowNodeCatalogLocalTypeCount, payload.localNodeTypeCount);
   assert.deepEqual(payload.drift.missingCatalogTypes, []);
   assert.deepEqual(payload.drift.catalogMetadataDrift, []);
+  assert.deepEqual(payload.drift.missingWorkflowNodeCatalogTypes, []);
+  assert.deepEqual(payload.drift.workflowNodeCatalogLocalTypeDrift, []);
 });
 
 test("local node catalog policy gate emits structured failure details", () => {

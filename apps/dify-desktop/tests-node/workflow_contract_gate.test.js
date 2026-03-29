@@ -37,4 +37,10 @@ test("workflow contract sync gate passes", () => {
   assert.equal(payload.authoringRejectedUnknownType, true);
   assert.equal(payload.preflightUnknownTypeGuided, true);
   assert.equal(payload.normalizedVersion, "1.0.0");
+  assert.equal(payload.runPayloadDefersUnknownType, true);
+  assert.equal(payload.engineUsesRustValidation, true);
+  assert.equal(payload.preflightUsesRustWorkflowValidation, true);
+  assert.equal(payload.flowIoAvoidsLocalAssert, true);
+  assert.equal(payload.runPayloadAvoidsLocalAssert, true);
+  assert.equal(payload.rustUnavailableFailsClosed, true);
 });

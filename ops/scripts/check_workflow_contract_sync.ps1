@@ -29,10 +29,17 @@ function fail(message) {
   const schemaPath = path.join(repoRoot, "contracts", "workflow", "workflow.schema.json");
   const defaultsPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "defaults.js");
   const storeSupportPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "store-support.js");
-  const runPayloadPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "run-payload-support.js");
-  const workflowGraphPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_graph.js");
+  const runPayloadSupportPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "run-payload-support.js");
   const paletteUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "palette-ui.js");
   const preflightUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "preflight-ui.js");
+  const validationServicePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_validation_service.js");
+  const workflowIpcStorePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_store.js");
+  const workflowIpcRunPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_run.js");
+  const workflowIpcQueueAppsPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_queue_apps.js");
+  const workflowEnginePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_engine.js");
+  const preflightControllerUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "preflight-controller-ui.js");
+  const flowIoUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "flow-io-ui.js");
+  const runPayloadUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "run-payload-ui.js");
 
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
   const required = Array.isArray(schema.required) ? schema.required : [];
@@ -42,10 +49,10 @@ function fail(message) {
 
   const defaults = await import(pathToFileURL(defaultsPath).href);
   const storeSupport = await import(pathToFileURL(storeSupportPath).href);
-  const runPayloadSupport = await import(pathToFileURL(runPayloadPath).href);
+  const runPayloadSupport = await import(pathToFileURL(runPayloadSupportPath).href);
   const paletteUi = await import(pathToFileURL(paletteUiPath).href);
   const preflightUi = await import(pathToFileURL(preflightUiPath).href);
-  const workflowGraph = require(workflowGraphPath);
+  const { createWorkflowValidationSupport } = require(validationServicePath);
 
   const defaultGraph = defaults.defaultWorkflowGraph();
   const missingDefault = required.filter((field) => !(field in defaultGraph));
@@ -71,45 +78,15 @@ function fail(message) {
     fail("normalizeImportedGraphWithContract did not record missing-version migration");
   }
 
-  let importRejectedUnknownType = false;
-  try {
-    storeSupport.normalizeImportedGraphWithContract({
-      workflow_id: "wf_import_unknown_gate",
-      version: "1.0.0",
-      nodes: [{ id: "n1", type: "unknown_future_node" }],
-      edges: [],
-    });
-  } catch (error) {
-    importRejectedUnknownType = /unregistered node types in import/i.test(String(error?.message || error));
-  }
-  if (!importRejectedUnknownType) {
-    fail("normalizeImportedGraphWithContract did not reject unregistered node types");
-  }
-
-  const payload = runPayloadSupport.buildBaseRunPayload({}, defaultGraph, 42);
-  if (payload.workflow_id !== defaultGraph.workflow_id) {
-    fail("run payload workflow_id drifted from graph.workflow_id");
-  }
-  if (payload.workflow_version !== defaultGraph.version) {
-    fail("run payload workflow_version drifted from graph.version");
-  }
-  if (payload?.workflow?.version !== defaultGraph.version) {
-    fail("run payload nested workflow.version drifted from graph.version");
-  }
-
-  let payloadRejectedUnknownType = false;
-  try {
-    runPayloadSupport.buildBaseRunPayload({}, {
-      workflow_id: "wf_payload_unknown_gate",
-      version: "1.0.0",
-      nodes: [{ id: "n1", type: "unknown_future_node" }],
-      edges: [],
-    }, 42);
-  } catch (error) {
-    payloadRejectedUnknownType = /unregistered node types in run_payload/i.test(String(error?.message || error));
-  }
-  if (!payloadRejectedUnknownType) {
-    fail("buildBaseRunPayload did not reject unregistered node types");
+  const payload = runPayloadSupport.buildBaseRunPayload({}, {
+    workflow_id: "wf_payload_unknown_gate",
+    version: "1.0.0",
+    nodes: [{ id: "n1", type: "unknown_future_node" }],
+    edges: [],
+  }, 42);
+  const runPayloadDefersUnknownType = payload?.workflow?.nodes?.[0]?.type === "unknown_future_node";
+  if (!runPayloadDefersUnknownType) {
+    fail("buildBaseRunPayload no longer preserves unknown node types for authoritative runtime validation");
   }
 
   const nodeType = {
@@ -130,7 +107,7 @@ function fail(message) {
     btnAdd,
   }, {
     nodeCatalog: [
-      { type: "ai_refine", name: "AI 提炼", group: "AI 编排", policy_section: "local_ai", policy_source: "local_policy" },
+      { type: "ai_refine", name: "AI", group: "AI", policy_section: "local_ai", policy_source: "local_policy" },
     ],
   });
   palette.renderNodeTypePolicyHint();
@@ -181,6 +158,9 @@ function fail(message) {
         kind: "unknown_node_type",
         node_id: "n1",
         message: "workflow contains unregistered node types: unknown_future_node",
+        contract_boundary: "node_catalog_truth",
+        resolution_hint: "replace node type or sync Rust manifest / local node policy",
+        action_text: "定位节点",
       },
     ],
   });
@@ -196,27 +176,72 @@ function fail(message) {
     fail("preflight ui did not render explicit unknown node type guidance");
   }
 
-  const normalized = workflowGraph.normalizeWorkflow({
-    workflow: {
-      workflow_id: "wf_main_gate",
-      nodes: [{ id: "n1", type: "ingest_files" }],
-      edges: [],
+  const validationSupport = createWorkflowValidationSupport({
+    fetchImpl: async () => {
+      throw new Error("connect ECONNREFUSED");
     },
   });
-  if (!String(normalized?.graph?.version || "").trim()) {
-    fail("main workflow normalization did not fill workflow.version");
+  let rustUnavailableFailsClosed = false;
+  try {
+    await validationSupport.validateWorkflowDefinitionAuthoritatively({
+      workflowDefinition: {
+        workflow_id: "wf_unavailable",
+        version: "1.0.0",
+        nodes: [{ id: "n1", type: "ingest_files" }],
+        edges: [],
+      },
+      validationScope: "run",
+    });
+  } catch (error) {
+    rustUnavailableFailsClosed = /workflow validation unavailable/i.test(String(error?.message || error));
   }
-  if (!normalized?.contract?.migrated) {
-    fail("main workflow normalization did not record missing-version migration");
+  if (!rustUnavailableFailsClosed) {
+    fail("workflow validation service no longer fails closed when Rust is unavailable");
   }
 
-  const invalid = workflowGraph.validateGraph({
-    workflow_id: "wf_invalid_gate",
-    nodes: [{ id: "n1", type: "ingest_files" }],
-    edges: [],
-  });
-  if (invalid.ok) {
-    fail("workflow graph validation accepted a graph without top-level version");
+  const workflowIpcStoreText = fs.readFileSync(workflowIpcStorePath, "utf8");
+  const workflowIpcRunText = fs.readFileSync(workflowIpcRunPath, "utf8");
+  const workflowIpcQueueAppsText = fs.readFileSync(workflowIpcQueueAppsPath, "utf8");
+  const workflowEngineText = fs.readFileSync(workflowEnginePath, "utf8");
+  const preflightControllerUiText = fs.readFileSync(preflightControllerUiPath, "utf8");
+  const flowIoUiText = fs.readFileSync(flowIoUiPath, "utf8");
+  const runPayloadUiText = fs.readFileSync(runPayloadUiPath, "utf8");
+
+  const importRejectedUnknownType =
+    /validateWorkflowDefinitionAuthoritatively/.test(workflowIpcStoreText)
+    && !/assertWorkflowContract\(graph/.test(workflowIpcStoreText);
+  if (!importRejectedUnknownType) {
+    fail("workflow_ipc_store.js no longer routes import/save authority through Rust validation");
+  }
+
+  const payloadRejectedUnknownType =
+    /validateWorkflowDefinitionAuthoritatively/.test(workflowIpcRunText)
+    && /validateWorkflowDefinitionAuthoritatively/.test(workflowIpcQueueAppsText);
+  if (!payloadRejectedUnknownType) {
+    fail("run authoritative paths no longer route workflow validation through Rust");
+  }
+
+  const engineUsesRustValidation =
+    /createWorkflowValidationSupport/.test(workflowEngineText)
+    && /validateWorkflowDefinitionAuthoritatively/.test(workflowEngineText);
+  if (!engineUsesRustValidation) {
+    fail("workflow_engine.js no longer routes local engine validation through Rust");
+  }
+
+  const preflightUsesRustWorkflowValidation =
+    /\/operators\/workflow_contract_v1\/validate/.test(preflightControllerUiText);
+  if (!preflightUsesRustWorkflowValidation) {
+    fail("preflight controller no longer calls Rust workflow contract validation");
+  }
+
+  const flowIoAvoidsLocalAssert = !/assertWorkflowContract/.test(flowIoUiText);
+  if (!flowIoAvoidsLocalAssert) {
+    fail("flow-io-ui still performs local authoritative workflow contract assert");
+  }
+
+  const runPayloadAvoidsLocalAssert = !/assertWorkflowContract/.test(runPayloadUiText);
+  if (!runPayloadAvoidsLocalAssert) {
+    fail("run-payload-ui still performs local authoritative workflow contract assert");
   }
 
   console.log(JSON.stringify({
@@ -227,7 +252,13 @@ function fail(message) {
     payloadRejectedUnknownType,
     authoringRejectedUnknownType,
     preflightUnknownTypeGuided,
-    normalizedVersion: normalized.graph.version,
+    normalizedVersion: imported.graph.version,
+    runPayloadDefersUnknownType,
+    engineUsesRustValidation,
+    preflightUsesRustWorkflowValidation,
+    flowIoAvoidsLocalAssert,
+    runPayloadAvoidsLocalAssert,
+    rustUnavailableFailsClosed,
   }));
 })().catch((error) => {
   console.error(error && error.stack ? error.stack : String(error));

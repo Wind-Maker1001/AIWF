@@ -26,7 +26,7 @@
         "schema_version",
         "id",
         "name",
-        "graph"
+        "workflow_definition"
       ],
       "properties": {
         "schema_version": {
@@ -43,6 +43,9 @@
         "template_spec_version": {
           "type": "integer",
           "minimum": 1
+        },
+        "workflow_definition": {
+          "type": "object"
         },
         "graph": {
           "type": "object"

@@ -1,18 +1,13 @@
 const { DESKTOP_RUST_OPERATOR_TYPES } = require("./workflow_chiplets/domains/rust_operator_manifest.generated");
+const { LOCAL_NODE_TYPES } = require("./renderer/workflow/local-node-palette-policy.js");
 
-const LOCAL_WORKFLOW_NODE_TYPES = Object.freeze([
-  "ingest_files",
-  "clean_md",
-  "compute_rust",
-  "manual_review",
-  "sql_chart_v1",
-  "office_slot_fill_v1",
-  "ai_strategy_v1",
-  "ds_refine",
-  "ai_refine",
-  "ai_audit",
-  "md_output",
-]);
+const LOCAL_WORKFLOW_NODE_TYPES = Object.freeze(
+  Array.from(new Set(
+    (Array.isArray(LOCAL_NODE_TYPES) ? LOCAL_NODE_TYPES : [])
+      .map((type) => String(type || "").trim())
+      .filter(Boolean),
+  )).sort(),
+);
 
 const REGISTERED_WORKFLOW_NODE_TYPES = Object.freeze(
   Array.from(new Set([

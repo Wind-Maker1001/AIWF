@@ -37,4 +37,6 @@ test("local template storage contract sync gate passes", () => {
   assert.equal(payload.localStorageNormalizedOnLoad, true);
   assert.equal(payload.localSaveVersioned, true);
   assert.ok(payload.savedEntryCount >= 1);
+  assert.equal(payload.savedTemplateField, "workflow_definition");
+  assert.equal(payload.savedLegacyGraphFieldPresent, false);
 });
