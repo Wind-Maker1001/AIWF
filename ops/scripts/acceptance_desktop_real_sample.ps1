@@ -42,6 +42,11 @@ $payloadObj = @{
     office_lang = "zh"
     office_theme = "assignment"
     office_quality_mode = "high"
+    md_only = $false
+    strict_output_gate = $false
+    content_quality_gate_enabled = $false
+    office_quality_gate_enabled = $false
+    xlsx_embed_charts = $true
   }
   output_root = $runDir
 }
