@@ -155,6 +155,13 @@ def validate_cleaning_rules_impl(
         "min_output_rows",
         "max_invalid_ratio",
         "max_required_missing_ratio",
+        "quality_rules",
+        "image_rules",
+        "xlsx_rules",
+        "sheet_profiles",
+        "sheet_allowlist",
+        "include_hidden_sheets",
+        "canonical_profile",
         "force_local_cleaning",
         "use_rust_v2",
         "rust_v2_timeout_seconds",
@@ -178,10 +185,15 @@ def validate_cleaning_rules_impl(
         errors.append("casts must be an object")
     if "default_values" in rules and not isinstance(rules.get("default_values"), dict):
         errors.append("default_values must be an object")
+    for key in ["quality_rules", "image_rules", "xlsx_rules", "sheet_profiles"]:
+        if key in rules and not isinstance(rules.get(key), dict):
+            errors.append(f"{key} must be an object")
 
-    for key in ["required_fields", "include_fields", "exclude_fields", "deduplicate_by", "lowercase_fields", "uppercase_fields", "null_values"]:
+    for key in ["required_fields", "include_fields", "exclude_fields", "deduplicate_by", "lowercase_fields", "uppercase_fields", "null_values", "sheet_allowlist"]:
         if key in rules and not isinstance(rules.get(key), list):
             errors.append(f"{key} must be an array")
+    if "include_hidden_sheets" in rules and not isinstance(rules.get("include_hidden_sheets"), bool):
+        errors.append("include_hidden_sheets must be boolean")
 
     if "filters" in rules:
         filters = rules.get("filters")

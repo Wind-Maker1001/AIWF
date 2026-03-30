@@ -9,6 +9,7 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
     to_int = hooks["to_int"]
     to_bool = hooks["to_bool"]
     rule_param = hooks["rule_param"]
+    rules_dict = hooks["rules_dict"]
     to_decimal = hooks["to_decimal"]
     normalize_key = hooks["normalize_key"]
     quantize_decimal = hooks["quantize_decimal"]
@@ -85,12 +86,38 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
     if sort_by_id:
         cleaned = sorted(cleaned, key=lambda x: x["id"])
 
+    rules = rules_dict(params)
+    quality_rules = params.get("quality_rules") if isinstance(params.get("quality_rules"), dict) else {}
+    required_fields = quality_rules.get("required_fields")
+    if not isinstance(required_fields, list):
+        required_fields = rules.get("required_fields") if isinstance(rules.get("required_fields"), list) else ["id", "amount"]
+    required_missing_cells = 0
+    required_missing_by_field: Dict[str, int] = {}
+    for field in [str(item) for item in required_fields]:
+        missing = 0
+        for row in cleaned:
+            value = row.get(field)
+            if value is None or str(value).strip() == "":
+                missing += 1
+        required_missing_cells += missing
+        required_missing_by_field[field] = missing
+    required_total_cells = len(cleaned) * len(required_fields) if required_fields else 0
+    required_missing_ratio = (
+        float(required_missing_cells) / float(required_total_cells)
+        if required_total_cells > 0
+        else 0.0
+    )
+
     quality = {
         "input_rows": len(raw_rows),
         "output_rows": len(cleaned),
         "invalid_rows": invalid_rows,
         "filtered_rows": filtered_rows,
         "duplicate_rows_removed": duplicate_rows_removed,
+        "required_fields": [str(item) for item in required_fields],
+        "required_missing_cells": required_missing_cells,
+        "required_missing_by_field": required_missing_by_field,
+        "required_missing_ratio": required_missing_ratio,
         "rule_hits": {
             "invalid_id": invalid_id_rows,
             "invalid_amount": invalid_amount_rows,

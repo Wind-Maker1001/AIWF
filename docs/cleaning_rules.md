@@ -90,7 +90,8 @@ One-click mixed-format evidence ingest:
   - OCR quality knobs (preprocess spec): `ocr_lang` (e.g. `chi_sim+eng`), `ocr_config` (e.g. `--oem 1 --psm 6`), `ocr_preprocess` (`adaptive|gray|none`)
 
 Preprocess-specific generic keys:
-- `xlsx_all_sheets` (boolean, default `false`)
+- `xlsx_all_sheets` (boolean, default `true`)
+- `include_hidden_sheets` (boolean, default `false`)
 - `ocr_lang` (string, optional; default uses env `AIWF_OCR_LANG` or `eng+chi_sim`)
 - `ocr_config` (string, optional; default uses env `AIWF_OCR_CONFIG` or `--oem 1 --psm 6`)
 - `ocr_preprocess` (string, optional; `adaptive|gray|none`, default env `AIWF_OCR_PREPROCESS` or `adaptive`)
@@ -105,6 +106,12 @@ Preprocess-specific generic keys:
 - `chunk_max_chars` (used by `fixed` mode)
 - `detect_conflicts` (boolean, marks `conflict_flag/conflict_topic/conflict_polarity`)
 - `conflict_*` keys (topic/stance/text fields and positive/negative keyword lists)
+- `canonical_profile` (`finance_statement|customer_contact|debate_evidence`)
+- `quality_rules` (top-level authority for shared quality gates)
+- `image_rules` (image/OCR specific quality overrides)
+- `xlsx_rules` (xlsx specific quality overrides)
+- `sheet_profiles` (header alias/profile hints for workbook extraction)
+
 
 Rule validation script:
 ```powershell

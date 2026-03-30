@@ -339,6 +339,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             "to_int": _to_int,
             "to_bool": _to_bool,
             "rule_param": _rule_param,
+            "rules_dict": _rules_dict,
             "to_decimal": _to_decimal,
             "normalize_key": _normalize_key,
             "quantize_decimal": _quantize_decimal,

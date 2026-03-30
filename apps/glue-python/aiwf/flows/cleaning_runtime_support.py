@@ -16,6 +16,27 @@ from aiwf.flows.cleaning_transport import (
 )
 
 
+def _quality_gate_value(
+    params: Dict[str, Any],
+    rules: Dict[str, Any],
+    rule_param: Callable[[Dict[str, Any], str, Any], Any],
+    key: str,
+    default: Any = None,
+) -> Any:
+    quality_rules = params.get("quality_rules") if isinstance(params.get("quality_rules"), dict) else {}
+    if key in quality_rules:
+        return quality_rules.get(key)
+    if key == "required_fields" and "required_columns" in quality_rules:
+        return quality_rules.get("required_columns")
+    if key == "required_fields" and isinstance(params.get("xlsx_rules"), dict) and "required_columns" in params["xlsx_rules"]:
+        return params["xlsx_rules"].get("required_columns")
+    if key == "max_required_missing_ratio" and "max_required_missing_ratio" in quality_rules:
+        return quality_rules.get("max_required_missing_ratio")
+    if key in rules:
+        return rules.get(key)
+    return rule_param(params, key, default)
+
+
 def sha256_file(path: str) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -90,11 +111,18 @@ def try_rust_transform_rows_v2(
         params=params,
         rules=rules,
         quality_gates={
-            "max_invalid_rows": rule_param(params, "max_invalid_rows", None),
-            "min_output_rows": rule_param(params, "min_output_rows", None),
-            "max_invalid_ratio": rule_param(params, "max_invalid_ratio", None),
-            "required_fields": rule_param(params, "required_fields", None),
-            "max_required_missing_ratio": rule_param(params, "max_required_missing_ratio", None),
+            "max_invalid_rows": _quality_gate_value(params, rules, rule_param, "max_invalid_rows", None),
+            "max_filtered_rows": _quality_gate_value(params, rules, rule_param, "max_filtered_rows", None),
+            "min_output_rows": _quality_gate_value(params, rules, rule_param, "min_output_rows", None),
+            "max_invalid_ratio": _quality_gate_value(params, rules, rule_param, "max_invalid_ratio", None),
+            "required_fields": _quality_gate_value(params, rules, rule_param, "required_fields", None),
+            "max_required_missing_ratio": _quality_gate_value(params, rules, rule_param, "max_required_missing_ratio", None),
+            "max_duplicate_rows_removed": _quality_gate_value(params, rules, rule_param, "max_duplicate_rows_removed", None),
+            "allow_empty_output": _quality_gate_value(params, rules, rule_param, "allow_empty_output", None),
+            "numeric_parse_rate_min": _quality_gate_value(params, rules, rule_param, "numeric_parse_rate_min", None),
+            "date_parse_rate_min": _quality_gate_value(params, rules, rule_param, "date_parse_rate_min", None),
+            "duplicate_key_ratio_max": _quality_gate_value(params, rules, rule_param, "duplicate_key_ratio_max", None),
+            "blank_row_ratio_max": _quality_gate_value(params, rules, rule_param, "blank_row_ratio_max", None),
         },
         schema_hint={"source": "glue-python.cleaning"},
     )

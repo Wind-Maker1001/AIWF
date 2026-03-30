@@ -865,6 +865,37 @@ class CleaningFlowTests(unittest.TestCase):
                     )
                 self.assertIn("quality gate failed", str(ctx.exception))
 
+    def test_run_cleaning_fails_on_required_missing_ratio_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ):
+                with self.assertRaises(RuntimeError) as ctx:
+                    cleaning.run_cleaning(
+                        job_id="job-required-gate",
+                        actor="test",
+                        params=with_job_context(
+                            local_job_root,
+                            rows=[{"name": "alice"}],
+                            rules={
+                                "platform_mode": "generic",
+                            },
+                            quality_rules={
+                                "required_fields": ["name", "phone"],
+                                "max_required_missing_ratio": 0.4,
+                            },
+                            office_outputs_enabled=False,
+                        ),
+                    )
+                self.assertIn("required_missing_ratio", str(ctx.exception))
+
     def test_run_cleaning_generic_mode_skips_accel(self):
         with tempfile.TemporaryDirectory() as tmp:
             local_job_root = os.path.join(tmp, "job")

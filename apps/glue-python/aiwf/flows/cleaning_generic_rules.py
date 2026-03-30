@@ -90,6 +90,10 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
     casts = rules.get("casts") if isinstance(rules.get("casts"), dict) else {}
     defaults = rules.get("default_values") if isinstance(rules.get("default_values"), dict) else {}
     required_fields = rules.get("required_fields") if isinstance(rules.get("required_fields"), list) else []
+    quality_rules = params.get("quality_rules") if isinstance(params.get("quality_rules"), dict) else {}
+    gate_required_fields = quality_rules.get("required_fields")
+    if not isinstance(gate_required_fields, list):
+        gate_required_fields = required_fields
     include_fields = rules.get("include_fields") if isinstance(rules.get("include_fields"), list) else []
     exclude_fields = rules.get("exclude_fields") if isinstance(rules.get("exclude_fields"), list) else []
     filters = rules.get("filters") if isinstance(rules.get("filters"), list) else []
@@ -190,12 +194,34 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
             if field:
                 out.sort(key=lambda x: (x.get(field) is None, x.get(field)), reverse=reverse)
 
+    required_missing_cells = 0
+    required_missing_by_field: Dict[str, int] = {}
+    if gate_required_fields:
+        for field in [str(item) for item in gate_required_fields]:
+            missing = 0
+            for row in out:
+                value = row.get(field)
+                if value is None or str(value).strip() == "":
+                    missing += 1
+            required_missing_cells += missing
+            required_missing_by_field[field] = missing
+    required_total_cells = len(out) * len(gate_required_fields) if gate_required_fields else 0
+    required_missing_ratio = (
+        float(required_missing_cells) / float(required_total_cells)
+        if required_total_cells > 0
+        else 0.0
+    )
+
     quality = {
         "input_rows": len(raw_rows),
         "output_rows": len(out),
         "invalid_rows": invalid_rows,
         "filtered_rows": filtered_rows,
         "duplicate_rows_removed": duplicate_rows_removed,
+        "required_fields": [str(item) for item in gate_required_fields],
+        "required_missing_cells": required_missing_cells,
+        "required_missing_by_field": required_missing_by_field,
+        "required_missing_ratio": required_missing_ratio,
         "rule_hits": {
             "cast_failed": cast_failed_rows,
             "required_failed": required_failed_rows,
