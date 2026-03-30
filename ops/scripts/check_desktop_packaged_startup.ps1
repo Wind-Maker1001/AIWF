@@ -72,6 +72,15 @@ try {
     throw "desktop process did not complete startup boot marker handshake"
   }
 
+  $boot = Get-Content -Raw -Encoding UTF8 $bootMarker | ConvertFrom-Json
+  $stage = [string]($boot.stage)
+  if ($stage -eq "boot_failed" -or $stage -eq "uncaught_exception") {
+    throw ("desktop process reported startup failure stage=" + $stage + ": " + [string]($boot.error))
+  }
+  if ($stage -ne "bootstrapped" -and $stage -ne "app_ready") {
+    throw ("desktop process boot marker stage is unexpected: " + $stage)
+  }
+
   Stop-Process -Id $proc.Id -Force
   Ok "desktop packaged startup check passed"
 }
