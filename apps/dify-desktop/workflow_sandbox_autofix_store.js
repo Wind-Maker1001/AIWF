@@ -8,7 +8,7 @@ const {
 const {
   workflowStoreRemoteErrorResult,
 } = require("./workflow_store_remote_error");
-const WORKFLOW_SANDBOX_AUTOFIX_STATE_SCHEMA_VERSION = GOVERNANCE_CAPABILITIES.WORKFLOW_SANDBOX_AUTOFIX.schema_version;
+const WORKFLOW_SANDBOX_AUTOFIX_STATE_SCHEMA_VERSION = "workflow_sandbox_autofix_state.v1";
 const WORKFLOW_SANDBOX_AUTOFIX_ACTION_SCHEMA_VERSION = "workflow_sandbox_autofix_action.v1";
 
 function createWorkflowSandboxAutoFixStore(deps = {}) {

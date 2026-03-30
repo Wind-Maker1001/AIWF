@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   GLUE_PROVIDER,
+  WORKFLOW_VERSION_SCHEMA_VERSION,
   compareVersionItems,
   createWorkflowVersionStore,
 } = require("../workflow_version_store");
@@ -84,7 +85,6 @@ test("workflow version store uses glue provider for backend-owned snapshots", as
         assert.equal(typeof body.version.workflow_definition, "object");
         assert.equal(body.version.graph, undefined);
         remote.set(id, {
-          schema_version: "workflow_version_snapshot.v1",
           owner: "glue-python",
           source_of_truth: "glue-python.governance.workflow_versions",
           ...body.version,
@@ -115,6 +115,7 @@ test("workflow version store uses glue provider for backend-owned snapshots", as
 
   const saved = await store.recordVersion(makeVersion("ver_a", graphA()), { mode: "base_api" });
   assert.equal(saved.provider, GLUE_PROVIDER);
+  assert.equal(saved.item.schema_version, WORKFLOW_VERSION_SCHEMA_VERSION);
   assert.equal(saved.item.workflow_definition.workflow_id, "wf_finance");
   assert.equal(saved.item.graph, undefined);
   await store.recordVersion(makeVersion("ver_b", graphB()), { mode: "base_api" });
@@ -122,10 +123,12 @@ test("workflow version store uses glue provider for backend-owned snapshots", as
   const listed = await store.listVersions(100, "", { mode: "base_api" });
   assert.equal(listed.provider, GLUE_PROVIDER);
   assert.equal(listed.items.length, 2);
+  assert.equal(listed.items[0].schema_version, WORKFLOW_VERSION_SCHEMA_VERSION);
   assert.equal(listed.items[0].workflow_definition.workflow_id, "wf_finance");
   assert.equal(listed.items[0].graph, undefined);
 
   const restored = await store.getVersion("ver_b", { mode: "base_api" });
+  assert.equal(restored.schema_version, WORKFLOW_VERSION_SCHEMA_VERSION);
   assert.equal(restored.owner, "glue-python");
   assert.equal(restored.workflow_definition.workflow_id, "wf_finance");
   assert.equal(restored.graph, undefined);

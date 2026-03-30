@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   GLUE_PROVIDER,
+  QUALITY_RULE_SET_SCHEMA_VERSION,
   createWorkflowQualityRuleSetSupport,
 } = require("../workflow_quality_rule_store");
 const {
@@ -57,7 +58,6 @@ test("workflow quality rule store uses glue http provider for remote governance"
       if (method === "PUT") {
         const body = JSON.parse(String(init.body || "{}"));
         const next = {
-          schema_version: "quality_rule_set.v1",
           owner: "glue-python",
           source_of_truth: "glue-python.governance.quality_rule_sets",
           id: key,
@@ -90,12 +90,15 @@ test("workflow quality rule store uses glue http provider for remote governance"
   }, { mode: "base_api" });
   assert.equal(saved.ok, true);
   assert.equal(saved.provider, GLUE_PROVIDER);
+  assert.equal(saved.set.schema_version, QUALITY_RULE_SET_SCHEMA_VERSION);
 
   const fetched = await support.getQualityRuleSet("finance_remote", { mode: "base_api" });
   assert.equal(fetched.provider, GLUE_PROVIDER);
+  assert.equal(fetched.schema_version, QUALITY_RULE_SET_SCHEMA_VERSION);
   assert.equal(fetched.owner, "glue-python");
 
   const listed = await support.listQualityRuleSets({ mode: "base_api" });
+  assert.equal(listed.sets[0].schema_version, QUALITY_RULE_SET_SCHEMA_VERSION);
   assert.deepEqual(listed.sets.map((item) => item.id), ["finance_remote"]);
 
   const removed = await support.removeQualityRuleSet({ id: "finance_remote" }, { mode: "base_api" });

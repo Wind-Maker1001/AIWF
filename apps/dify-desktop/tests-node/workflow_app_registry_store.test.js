@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   GLUE_PROVIDER,
+  WORKFLOW_APP_SCHEMA_VERSION,
   createWorkflowAppRegistryStore,
 } = require("../workflow_app_registry_store");
 const {
@@ -53,7 +54,6 @@ test("workflow app registry store uses glue provider for backend-owned registry"
       if (method === "PUT") {
         const body = JSON.parse(String(init.body || "{}"));
         const item = {
-          schema_version: "workflow_app_registry_entry.v1",
           owner: "glue-python",
           source_of_truth: "glue-python.governance.workflow_apps",
           app_id: appId,
@@ -82,6 +82,7 @@ test("workflow app registry store uses glue provider for backend-owned registry"
   }, { mode: "base_api" });
   assert.equal(published.ok, true);
   assert.equal(published.provider, GLUE_PROVIDER);
+  assert.equal(published.item.schema_version, WORKFLOW_APP_SCHEMA_VERSION);
   assert.equal(remoteItems.get("finance_app_remote").template_policy.version, 1);
   assert.equal(remoteItems.get("finance_app_remote").published_version_id, "wf_finance_published_001");
   assert.equal(remoteItems.get("finance_app_remote").graph, undefined);
@@ -90,11 +91,13 @@ test("workflow app registry store uses glue provider for backend-owned registry"
   const listed = await store.listApps(100, { mode: "base_api" });
   assert.equal(listed.provider, GLUE_PROVIDER);
   assert.deepEqual(listed.items.map((item) => item.app_id), ["finance_app_remote"]);
+  assert.equal(listed.items[0].schema_version, WORKFLOW_APP_SCHEMA_VERSION);
   assert.equal(listed.items[0].graph, undefined);
   assert.equal(listed.items[0].workflow_definition, undefined);
 
   const fetched = await store.getApp("finance_app_remote", { mode: "base_api" });
   assert.equal(fetched.provider, GLUE_PROVIDER);
+  assert.equal(fetched.schema_version, WORKFLOW_APP_SCHEMA_VERSION);
   assert.equal(fetched.owner, "glue-python");
   assert.equal(fetched.graph, undefined);
   assert.equal(fetched.workflow_definition, undefined);

@@ -4,7 +4,7 @@ const {
   GOVERNANCE_CAPABILITIES,
   GOVERNANCE_DEFAULT_GLUE_URL,
 } = require("./workflow_governance");
-const WORKFLOW_VERSION_SCHEMA_VERSION = GOVERNANCE_CAPABILITIES.WORKFLOW_VERSIONS.schema_version;
+const WORKFLOW_VERSION_SCHEMA_VERSION = "workflow_version_snapshot.v1";
 const {
   workflowStoreRemoteErrorResult,
 } = require("./workflow_store_remote_error");
