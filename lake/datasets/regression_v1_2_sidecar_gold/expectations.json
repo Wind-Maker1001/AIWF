@@ -1,0 +1,8 @@
+{
+  "schema_version": "sidecar_gold.v1",
+  "scenarios": [
+    { "id": "xlsx_customer_multi_sheet", "dir": "xlsx_customer_multi_sheet" },
+    { "id": "xlsx_finance_units", "dir": "xlsx_finance_units" },
+    { "id": "image_blank_blocked", "dir": "image_blank_blocked" }
+  ]
+}

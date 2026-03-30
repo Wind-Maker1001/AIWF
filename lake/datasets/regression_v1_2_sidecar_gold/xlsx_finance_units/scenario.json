@@ -1,0 +1,27 @@
+{
+  "id": "xlsx_finance_units",
+  "input_files": ["input.xlsx"],
+  "canonical_profile": "finance_statement",
+  "xlsx_all_sheets": true,
+  "sheet_allowlist": ["Finance"],
+  "include_hidden_sheets": false,
+  "quality_rules": {
+    "canonical_profile": "finance_statement",
+    "required_fields": ["id", "amount"],
+    "unique_keys": ["id"],
+    "max_required_missing_ratio": 0.0,
+    "duplicate_key_ratio_max": 0.0,
+    "numeric_parse_rate_min": 1.0,
+    "date_parse_rate_min": 0.0
+  },
+  "xlsx_rules": {
+    "required_columns": ["id", "amount"],
+    "header_confidence_min": 0.8,
+    "sheet_row_count_min": 1,
+    "cross_sheet_required_coverage_min": 1.0,
+    "numeric_parse_rate_min": 1.0,
+    "date_parse_rate_min": 0.0
+  },
+  "expected_row_fields": ["id", "amount"],
+  "consistency_compare": true
+}

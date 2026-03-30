@@ -1,0 +1,17 @@
+{
+  "id": "image_blank_blocked",
+  "input_files": ["input.png"],
+  "canonical_profile": "debate_evidence",
+  "ocr_enabled": true,
+  "quality_rules": {
+    "canonical_profile": "debate_evidence",
+    "required_fields": ["claim_text"],
+    "max_required_missing_ratio": 0.0
+  },
+  "image_rules": {
+    "ocr_confidence_avg_min": 0.8,
+    "empty_text_block_ratio_max": 0.0,
+    "duplicate_line_ratio_max": 0.2
+  },
+  "expected_row_fields": ["claim_text"]
+}

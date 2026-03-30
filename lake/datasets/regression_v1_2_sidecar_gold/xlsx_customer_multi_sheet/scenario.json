@@ -1,0 +1,22 @@
+{
+  "id": "xlsx_customer_multi_sheet",
+  "input_files": ["input.xlsx"],
+  "canonical_profile": "customer_contact",
+  "xlsx_all_sheets": true,
+  "include_hidden_sheets": false,
+  "quality_rules": {
+    "canonical_profile": "customer_contact",
+    "required_fields": ["customer_name", "phone"],
+    "max_required_missing_ratio": 0.0,
+    "unique_keys": ["phone"],
+    "duplicate_key_ratio_max": 0.34,
+    "blank_row_ratio_max": 0.4
+  },
+  "xlsx_rules": {
+    "required_columns": ["customer_name", "phone"],
+    "header_confidence_min": 0.8,
+    "sheet_row_count_min": 1,
+    "cross_sheet_required_coverage_min": 1.0
+  },
+  "expected_row_fields": ["customer_name", "phone", "sheet_name"]
+}

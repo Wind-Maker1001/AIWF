@@ -141,6 +141,22 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\validate_cleaning_rules.p
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\validate_preprocess_spec.ps1 -SpecFile .\rules\templates\preprocess_debate_evidence.json
 ```
 
+Enhanced sidecar ingest contract:
+
+- `contracts/glue/ingest_extract.schema.json`
+
+Sidecar regression:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_regression_quality.ps1
+```
+
+Sidecar Python/Rust consistency:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_python_rust_consistency.ps1 -RequireAccel
+```
+
 ## Related Docs
 
 - [verification.md](verification.md)
