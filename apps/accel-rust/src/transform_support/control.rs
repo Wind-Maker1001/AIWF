@@ -20,7 +20,7 @@ pub(crate) use common::{can_cancel_status, collapse_ws};
 mod tenant;
 pub(crate) use tenant::{
     enforce_tenant_payload_quota, operator_allowed_for_tenant, release_tenant_slot,
-    tenant_max_payload_bytes, tenant_max_rows, tenant_max_workflow_steps_for,
+    tenant_max_concurrency, tenant_max_payload_bytes, tenant_max_rows, tenant_max_workflow_steps_for,
     try_acquire_tenant_slot,
 };
 

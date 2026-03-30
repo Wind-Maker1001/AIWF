@@ -9,6 +9,8 @@ pub(super) fn execute_transform_rows(
     let mut rule_hits: HashMap<String, usize> = HashMap::new();
     let mut rows: Vec<Map<String, Value>> = Vec::new();
     let mut prepared_rows: Vec<Map<String, Value>> = Vec::new();
+    let mut numeric_cells_total = 0usize;
+    let mut numeric_cells_parsed = 0usize;
 
     for row in prepared.rows_in.clone() {
         if is_cancelled(cancel_flag) {
@@ -64,8 +66,19 @@ pub(super) fn execute_transform_rows(
 
         for (field, cast_type) in &prepared.casts {
             if let Some(value) = out.get(field).cloned() {
+                let normalized_cast = cast_type.trim().to_ascii_lowercase();
+                let is_numeric_cast = matches!(
+                    normalized_cast.as_str(),
+                    "int" | "integer" | "float" | "double" | "number" | "decimal"
+                );
+                if is_numeric_cast && !is_missing(Some(&value)) {
+                    numeric_cells_total += 1;
+                }
                 match cast_value(value, cast_type) {
                     Some(casted) => {
+                        if is_numeric_cast {
+                            numeric_cells_parsed += 1;
+                        }
                         out.insert(field.clone(), casted);
                     }
                     None => {
@@ -164,7 +177,39 @@ pub(super) fn execute_transform_rows(
     }
 
     apply_expression_fields(&mut rows, &prepared.rules, &mut rule_hits);
+
+    let date_ops = rule_get(&prepared.rules, "date_ops")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut date_cells_total = 0usize;
+    for row in &rows {
+        for op in &date_ops {
+            let Some(obj) = op.as_object() else { continue };
+            let field = obj.get("field").and_then(|v| v.as_str()).unwrap_or("");
+            if field.is_empty() {
+                continue;
+            }
+            if !is_missing(row.get(field)) {
+                date_cells_total += 1;
+            }
+        }
+    }
     apply_string_and_date_ops(&mut rows, &prepared.rules, &mut rule_hits);
+    let mut date_cells_parsed = 0usize;
+    for row in &rows {
+        for op in &date_ops {
+            let Some(obj) = op.as_object() else { continue };
+            let field = obj.get("field").and_then(|v| v.as_str()).unwrap_or("");
+            let out_field = obj.get("as").and_then(|v| v.as_str()).unwrap_or(field);
+            if out_field.is_empty() {
+                continue;
+            }
+            if !is_missing(row.get(out_field)) {
+                date_cells_parsed += 1;
+            }
+        }
+    }
 
     let mut duplicate_rows_removed = 0usize;
     if prepared.use_columnar {
@@ -212,6 +257,10 @@ pub(super) fn execute_transform_rows(
         invalid_rows,
         filtered_rows,
         duplicate_rows_removed,
+        numeric_cells_total,
+        numeric_cells_parsed,
+        date_cells_total,
+        date_cells_parsed,
         rule_hits,
     })
 }

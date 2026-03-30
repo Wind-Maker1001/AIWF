@@ -448,6 +448,15 @@ cd .\apps\dify-desktop
 npm run bench:routing
 ```
 
+Async benchmark trend gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_async_bench_trend.ps1
+```
+
+This gate now runs against tenant `bench_async` by default and uses quota-respecting submission with `AIWF_ASYNC_BENCH_MAX_IN_FLIGHT=4`.
+If you raise `AIWF_TENANT_MAX_CONCURRENCY` locally for accel-rust benchmark runs, raise `AIWF_ASYNC_BENCH_MAX_IN_FLIGHT` to the same value so trend samples stay comparable.
+
 ## GitHub Workflows
 
 GitHub-hosted quick workflow:

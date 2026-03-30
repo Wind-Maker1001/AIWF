@@ -3,7 +3,9 @@ param(
   [int]$Tasks = 30,
   [int]$RowsPerTask = 2000,
   [int]$PollIntervalMs = 200,
-  [int]$TimeoutSeconds = 180
+  [int]$TimeoutSeconds = 180,
+  [string]$TenantId = "bench_async",
+  [int]$MaxInFlight = 4
 )
 
 Set-StrictMode -Version Latest
@@ -11,6 +13,19 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
+function EnvOr([string]$name, [string]$defaultVal) {
+  $v = [System.Environment]::GetEnvironmentVariable($name, "Process")
+  if ([string]::IsNullOrWhiteSpace($v)) { return $defaultVal }
+  return $v
+}
+
+if (-not $PSBoundParameters.ContainsKey("TenantId")) {
+  $TenantId = EnvOr "AIWF_ASYNC_BENCH_TENANT_ID" $TenantId
+}
+if (-not $PSBoundParameters.ContainsKey("MaxInFlight")) {
+  $MaxInFlight = [int](EnvOr "AIWF_ASYNC_BENCH_MAX_IN_FLIGHT" ([string]$MaxInFlight))
+}
+$MaxInFlight = [Math]::Max(1, $MaxInFlight)
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $logDir = Join-Path $root "ops\logs\perf"
@@ -37,6 +52,8 @@ tasks = int(sys.argv[2])
 rows_per_task = int(sys.argv[3])
 poll_ms = int(sys.argv[4])
 timeout_s = int(sys.argv[5])
+tenant_id = str(sys.argv[6] or "").strip() or "bench_async"
+max_in_flight = max(1, int(sys.argv[7]))
 
 submit_url = base + "/operators/transform_rows_v2/submit"
 task_url = base + "/tasks/{}"
@@ -53,13 +70,20 @@ def pct(arr, p):
         return float(arr[f])
     return float(arr[f] + (arr[c]-arr[f]) * (k-f))
 
+deadline = time.time() + timeout_s
 submit_lat_ms = []
 task_records = []
-for i in range(tasks):
+pending = {}
+submitted = 0
+rejected_submissions = 0
+
+def submit_one(index):
+    global rejected_submissions
     rows = [{"id": str(j), "amount": str(randint(1, 9999)), "g": f"g{j%17}"} for j in range(rows_per_task)]
-    run_id = f"bench_async_{i}_{uuid.uuid4().hex[:12]}"
+    run_id = f"bench_async_{index}_{uuid.uuid4().hex[:12]}"
     payload = {
       "run_id": run_id,
+      "tenant_id": tenant_id,
       "idempotency_key": f"{run_id}_submit",
       "rows": rows,
       "rules": {
@@ -73,17 +97,28 @@ for i in range(tasks):
     r = session.post(submit_url, json=payload, timeout=60)
     t1 = time.perf_counter()
     if r.status_code >= 400:
-        raise RuntimeError(f"submit failed {r.status_code}: {r.text[:300]}")
+        body = (r.text or "")[:300]
+        if r.status_code == 429 and "tenant concurrency exceeded" in body.lower():
+            rejected_submissions += 1
+            raise RuntimeError(
+                f"submit failed 429: benchmark max_in_flight={max_in_flight} exceeds active tenant capacity "
+                f"for tenant_id={tenant_id}; response={body}"
+            )
+        raise RuntimeError(f"submit failed {r.status_code}: {body}")
     j = r.json()
     task_id = str(j.get("task_id") or "")
     if not task_id:
         raise RuntimeError("submit missing task_id")
+    rec = {"task_id": task_id, "submit_t": time.time(), "status": "queued", "done_t": 0.0}
     submit_lat_ms.append((t1-t0)*1000.0)
-    task_records.append({"task_id": task_id, "submit_t": time.time(), "status": "queued", "done_t": 0.0})
+    task_records.append(rec)
+    pending[task_id] = rec
 
-deadline = time.time() + timeout_s
-pending = {x["task_id"]: x for x in task_records}
-while pending and time.time() < deadline:
+while (submitted < tasks or pending) and time.time() < deadline:
+    while submitted < tasks and len(pending) < max_in_flight:
+        submit_one(submitted)
+        submitted += 1
+
     done_ids = []
     poll_t = time.time()
     for tid, rec in list(pending.items()):
@@ -100,7 +135,7 @@ while pending and time.time() < deadline:
             done_ids.append(tid)
     for tid in done_ids:
         pending.pop(tid, None)
-    if pending:
+    if pending or submitted < tasks:
         time.sleep(max(0.05, poll_ms/1000.0))
 
 dur_ms = []
@@ -124,6 +159,10 @@ for r in task_records:
 summary = {
   "ok": True,
   "accel_url": base,
+  "tenant_id": tenant_id,
+  "max_in_flight": max_in_flight,
+  "submission_mode": "quota_respecting",
+  "rejected_submissions": rejected_submissions,
   "tasks": tasks,
   "rows_per_task": rows_per_task,
   "timeout_seconds": timeout_s,
@@ -151,8 +190,8 @@ print(json.dumps(summary, ensure_ascii=False))
 
 Set-Content -Path $tmp -Encoding UTF8 -Value $py
 try {
-  Info "running async benchmark: tasks=$Tasks rows_per_task=$RowsPerTask"
-  $raw = & python $tmp $AccelUrl $Tasks $RowsPerTask $PollIntervalMs $TimeoutSeconds
+  Info "running async benchmark: tasks=$Tasks rows_per_task=$RowsPerTask tenant_id=$TenantId max_in_flight=$MaxInFlight"
+  $raw = & python $tmp $AccelUrl $Tasks $RowsPerTask $PollIntervalMs $TimeoutSeconds $TenantId $MaxInFlight
   if ($LASTEXITCODE -ne 0) { throw "async benchmark failed" }
   $res = $raw | ConvertFrom-Json
   $res | ConvertTo-Json -Depth 8 | Set-Content -Path $jsonOut -Encoding UTF8
@@ -163,6 +202,9 @@ try {
     "",
     ("- time: {0}" -f (Get-Date).ToString("s")),
     ("- accel_url: {0}" -f $res.accel_url),
+    ("- tenant_id: {0}" -f $res.tenant_id),
+    ("- max_in_flight: {0}" -f $res.max_in_flight),
+    ("- submission_mode: {0}" -f $res.submission_mode),
     ("- tasks: {0}" -f $res.tasks),
     ("- rows_per_task: {0}" -f $res.rows_per_task),
     "",
@@ -182,12 +224,13 @@ try {
     ("- done: {0}" -f $res.result.done),
     ("- failed: {0}" -f $res.result.failed),
     ("- cancelled: {0}" -f $res.result.cancelled),
-    ("- timeout: {0}" -f $res.result.timeout)
+    ("- timeout: {0}" -f $res.result.timeout),
+    ("- rejected_submissions: {0}" -f $res.rejected_submissions)
   ) -join "`r`n"
   Set-Content -Path $mdOut -Encoding UTF8 -Value $md
   Copy-Item -Path $mdOut -Destination $latestMd -Force
 
-  Ok ("async benchmark done: p50_submit={0}ms p50_e2e={1}ms done={2} timeout={3}" -f $res.submit_ms.p50, $res.end_to_end_ms.p50, $res.result.done, $res.result.timeout)
+  Ok ("async benchmark done: p50_submit={0}ms p50_e2e={1}ms done={2} timeout={3} rejected={4}" -f $res.submit_ms.p50, $res.end_to_end_ms.p50, $res.result.done, $res.result.timeout, $res.rejected_submissions)
   Ok ("json: {0}" -f $jsonOut)
   Ok ("md: {0}" -f $mdOut)
 }

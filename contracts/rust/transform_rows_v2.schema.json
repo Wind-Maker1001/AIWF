@@ -40,10 +40,17 @@
       "type": "object",
       "properties": {
         "max_invalid_rows": { "type": "integer", "minimum": 0 },
+        "max_filtered_rows": { "type": "integer", "minimum": 0 },
         "min_output_rows": { "type": "integer", "minimum": 0 },
         "max_invalid_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
         "required_fields": { "type": "array", "items": { "type": "string" } },
-        "max_required_missing_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+        "max_required_missing_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "max_duplicate_rows_removed": { "type": "integer", "minimum": 0 },
+        "allow_empty_output": { "type": "boolean" },
+        "numeric_parse_rate_min": { "type": "number", "minimum": 0, "maximum": 1 },
+        "date_parse_rate_min": { "type": "number", "minimum": 0, "maximum": 1 },
+        "duplicate_key_ratio_max": { "type": "number", "minimum": 0, "maximum": 1 },
+        "blank_row_ratio_max": { "type": "number", "minimum": 0, "maximum": 1 }
       },
       "additionalProperties": true
     },

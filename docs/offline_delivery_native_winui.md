@@ -128,6 +128,8 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Compatibility
 ```
 
+The shared async benchmark gate used by release verification now runs under tenant `bench_async`; if you change accel-rust tenant concurrency locally, keep `AIWF_ASYNC_BENCH_MAX_IN_FLIGHT` aligned with it.
+
 ## Install From Bundle
 
 On the target machine:

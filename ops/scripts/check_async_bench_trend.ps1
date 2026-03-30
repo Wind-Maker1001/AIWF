@@ -3,7 +3,9 @@ param(
   [int]$Tasks = 12,
   [int]$RowsPerTask = 600,
   [int]$PollIntervalMs = 150,
-  [int]$TimeoutSeconds = 120
+  [int]$TimeoutSeconds = 120,
+  [string]$TenantId = "bench_async",
+  [int]$MaxInFlight = 4
 )
 
 Set-StrictMode -Version Latest
@@ -18,6 +20,14 @@ function EnvOr([string]$name, [string]$defaultVal) {
   return $v
 }
 
+if (-not $PSBoundParameters.ContainsKey("TenantId")) {
+  $TenantId = EnvOr "AIWF_ASYNC_BENCH_TENANT_ID" $TenantId
+}
+if (-not $PSBoundParameters.ContainsKey("MaxInFlight")) {
+  $MaxInFlight = [int](EnvOr "AIWF_ASYNC_BENCH_MAX_IN_FLIGHT" ([string]$MaxInFlight))
+}
+$MaxInFlight = [Math]::Max(1, $MaxInFlight)
+
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $benchScript = Join-Path $PSScriptRoot "bench_rust_async_tasks.ps1"
 if (-not (Test-Path $benchScript)) {
@@ -25,7 +35,7 @@ if (-not (Test-Path $benchScript)) {
 }
 
 Info "running async benchmark for trend gate"
-powershell -ExecutionPolicy Bypass -File $benchScript -AccelUrl $AccelUrl -Tasks $Tasks -RowsPerTask $RowsPerTask -PollIntervalMs $PollIntervalMs -TimeoutSeconds $TimeoutSeconds
+powershell -ExecutionPolicy Bypass -File $benchScript -AccelUrl $AccelUrl -Tasks $Tasks -RowsPerTask $RowsPerTask -PollIntervalMs $PollIntervalMs -TimeoutSeconds $TimeoutSeconds -TenantId $TenantId -MaxInFlight $MaxInFlight
 if ($LASTEXITCODE -ne 0) { throw "async benchmark failed" }
 
 $perfDir = Join-Path $root "ops\logs\perf"
@@ -38,6 +48,9 @@ $obj = Get-Content $latest -Raw | ConvertFrom-Json
 $historyPath = Join-Path $perfDir "async_tasks_bench_history.jsonl"
 $sample = [ordered]@{
   ts = (Get-Date).ToString("s")
+  tenant_id = if ($obj.PSObject.Properties.Name -contains "tenant_id") { [string]$obj.tenant_id } else { $TenantId }
+  max_in_flight = if ($obj.PSObject.Properties.Name -contains "max_in_flight") { [int]$obj.max_in_flight } else { $MaxInFlight }
+  submission_mode = if ($obj.PSObject.Properties.Name -contains "submission_mode") { [string]$obj.submission_mode } else { "legacy_unbounded" }
   submit_p50 = [double]$obj.submit_ms.p50
   submit_p90 = [double]$obj.submit_ms.p90
   e2e_p50 = [double]$obj.end_to_end_ms.p50
@@ -55,10 +68,22 @@ $maxTimeout = [int](EnvOr "AIWF_ASYNC_BENCH_TIMEOUT_MAX" "0")
 
 $lines = @(Get-Content $historyPath | Where-Object { $_ -match "\S" })
 $records = $lines | ForEach-Object { $_ | ConvertFrom-Json }
-$recent = @($records | Select-Object -Last $window)
+$currentTenantId = [string]$sample.tenant_id
+$currentSubmissionMode = [string]$sample.submission_mode
+$currentMaxInFlight = [int]$sample.max_in_flight
+$recent = @(
+  $records |
+    Where-Object {
+      $recordTenantId = if ($_.PSObject.Properties.Name -contains "tenant_id") { [string]$_.tenant_id } else { "default" }
+      $recordSubmissionMode = if ($_.PSObject.Properties.Name -contains "submission_mode") { [string]$_.submission_mode } else { "legacy_unbounded" }
+      $recordMaxInFlight = if ($_.PSObject.Properties.Name -contains "max_in_flight") { [int]$_.max_in_flight } else { 0 }
+      $recordTenantId -eq $currentTenantId -and $recordSubmissionMode -eq $currentSubmissionMode -and $recordMaxInFlight -eq $currentMaxInFlight
+    } |
+    Select-Object -Last $window
+)
 
 if ($recent.Count -lt $minSamples) {
-  Warn "async trend warm-up: samples=$($recent.Count), required=$minSamples"
+  Warn "async trend warm-up: samples=$($recent.Count), required=$minSamples, tenant_id=$currentTenantId, submission_mode=$currentSubmissionMode, max_in_flight=$currentMaxInFlight"
   exit 0
 }
 
@@ -85,4 +110,4 @@ if ($maxTimeoutSeen -gt $maxTimeout) {
   throw "async trend gate failed: timeout max=$maxTimeoutSeen > $maxTimeout"
 }
 
-Ok "async trend gate passed (median e2e_p50=$medE2eP50, median submit_p50=$medSubmitP50, timeout_max=$maxTimeoutSeen)"
+Ok "async trend gate passed (median e2e_p50=$medE2eP50, median submit_p50=$medSubmitP50, timeout_max=$maxTimeoutSeen, tenant_id=$currentTenantId, max_in_flight=$currentMaxInFlight)"

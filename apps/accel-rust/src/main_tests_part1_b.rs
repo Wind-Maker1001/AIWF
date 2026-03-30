@@ -35,6 +35,50 @@ fn validate_where_clause_blocks_injection_tokens() {
 }
 
 #[test]
+fn tenant_max_concurrency_falls_back_to_four() {
+    let _env_lock = test_env_lock().lock().expect("env lock");
+    let _env_guard = TestEnvGuard::set(&[("AIWF_TENANT_MAX_CONCURRENCY", "".to_string())]);
+    assert_eq!(crate::tenant_max_concurrency(), 4);
+}
+
+#[test]
+fn try_acquire_tenant_slot_rejects_when_limit_reached() {
+    let _env_lock = test_env_lock().lock().expect("env lock");
+    let _env_guard = TestEnvGuard::set(&[("AIWF_TENANT_MAX_CONCURRENCY", "2".to_string())]);
+    let state = AppState {
+        service: "accel-rust".to_string(),
+        tasks: Arc::new(Mutex::new(HashMap::<String, TaskState>::new())),
+        metrics: Arc::new(Mutex::new(ServiceMetrics::default())),
+        task_cfg: Arc::new(Mutex::new(TaskStoreConfig {
+            ttl_sec: 3600,
+            max_tasks: 1000,
+            store_path: None,
+            remote_enabled: false,
+            backend: "memory".to_string(),
+            base_api_url: None,
+            base_api_key: None,
+            sql_host: "localhost".to_string(),
+            sql_port: 1433,
+            sql_db: "master".to_string(),
+            sql_user: None,
+            sql_password: None,
+            sql_use_windows_auth: true,
+        })),
+        cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+        tenant_running: Arc::new(Mutex::new(HashMap::new())),
+        idempotency_index: Arc::new(Mutex::new(HashMap::new())),
+        transform_cache: Arc::new(Mutex::new(HashMap::new())),
+        schema_registry: Arc::new(Mutex::new(HashMap::new())),
+    };
+    assert!(crate::try_acquire_tenant_slot(&state, "bench_async").is_ok());
+    assert!(crate::try_acquire_tenant_slot(&state, "bench_async").is_ok());
+    let err = crate::try_acquire_tenant_slot(&state, "bench_async")
+        .err()
+        .unwrap_or_default();
+    assert!(err.contains("tenant concurrency exceeded"));
+}
+
+#[test]
 fn transform_rows_v2_honors_cancel_flag() {
     let req = TransformRowsReq {
         run_id: Some("cancel-1".to_string()),
@@ -408,6 +452,85 @@ fn quality_gates_support_filtered_and_empty_constraints() {
         .join(";");
     assert!(errors.contains("max_filtered_rows"));
     assert!(errors.contains("allow_empty_output"));
+}
+
+#[test]
+fn transform_rows_v2_reports_extended_quality_metrics_and_gates() {
+    let req = TransformRowsReq {
+        run_id: Some("quality-metrics-1".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!({"id":"1","amount":"10.5","biz_date":"2026-03-01"}),
+            json!({"id":"1","amount":"bad","biz_date":"bad-date"}),
+            json!({}),
+        ]),
+        rules: Some(json!({
+            "casts":{"id":"int","amount":"float"},
+            "deduplicate_by":["id"],
+            "deduplicate_keep":"last",
+            "date_ops":[{"field":"biz_date","op":"parse_ymd","as":"biz_date_norm"}]
+        })),
+        quality_gates: Some(json!({
+            "numeric_parse_rate_min": 0.5,
+            "date_parse_rate_min": 0.5,
+            "duplicate_key_ratio_max": 0.6,
+            "blank_row_ratio_max": 0.6
+        })),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("transform rows with extended quality metrics");
+    assert!(out
+        .quality
+        .get("numeric_parse_rate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(-1.0)
+        >= 0.0);
+    assert!(out
+        .quality
+        .get("date_parse_rate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(-1.0)
+        >= 0.0);
+    assert!(out
+        .quality
+        .get("duplicate_key_ratio")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) >= 0.0);
+    assert!(out.quality.get("blank_row_ratio").and_then(|v| v.as_f64()).unwrap_or(1.0) <= 1.0);
+
+    let req_fail = TransformRowsReq {
+        run_id: Some("quality-metrics-fail".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!({"id":"1","amount":"10.5","biz_date":"2026-03-01"}),
+            json!({"id":"2","amount":"bad","biz_date":"bad-date"}),
+        ]),
+        rules: Some(json!({
+            "casts":{"id":"int","amount":"float"},
+            "date_ops":[{"field":"biz_date","op":"parse_ymd","as":"biz_date_norm"}]
+        })),
+        quality_gates: Some(json!({
+            "numeric_parse_rate_min": 0.9,
+            "date_parse_rate_min": 0.9
+        })),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let err = run_transform_rows_v2(req_fail).err().unwrap_or_default();
+    assert!(err.contains("numeric_parse_rate") || err.contains("date_parse_rate"));
 }
 
 #[test]

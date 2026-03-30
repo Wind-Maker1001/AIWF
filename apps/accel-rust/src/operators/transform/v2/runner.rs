@@ -33,6 +33,10 @@ struct TransformExecution {
     invalid_rows: usize,
     filtered_rows: usize,
     duplicate_rows_removed: usize,
+    numeric_cells_total: usize,
+    numeric_cells_parsed: usize,
+    date_cells_total: usize,
+    date_cells_parsed: usize,
     rule_hits: HashMap<String, usize>,
 }
 

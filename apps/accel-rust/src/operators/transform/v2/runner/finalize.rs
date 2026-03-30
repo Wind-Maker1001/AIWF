@@ -11,6 +11,10 @@ pub(super) fn finalize_transform_response(
         invalid_rows,
         filtered_rows,
         duplicate_rows_removed,
+        numeric_cells_total,
+        numeric_cells_parsed,
+        date_cells_total,
+        date_cells_parsed,
         rule_hits,
     } = executed;
 
@@ -44,6 +48,30 @@ pub(super) fn finalize_transform_response(
     } else {
         0.0
     };
+    let numeric_parse_rate = if numeric_cells_total > 0 {
+        numeric_cells_parsed as f64 / numeric_cells_total as f64
+    } else {
+        1.0
+    };
+    let date_parse_rate = if date_cells_total > 0 {
+        date_cells_parsed as f64 / date_cells_total as f64
+    } else {
+        1.0
+    };
+    let duplicate_key_ratio = if output_rows + duplicate_rows_removed > 0 {
+        duplicate_rows_removed as f64 / (output_rows + duplicate_rows_removed) as f64
+    } else {
+        0.0
+    };
+    let blank_output_rows = rows
+        .iter()
+        .filter(|row| row.values().all(|value| is_missing(Some(value))))
+        .count();
+    let blank_row_ratio = if output_rows > 0 {
+        blank_output_rows as f64 / output_rows as f64
+    } else {
+        0.0
+    };
 
     let quality = json!({
         "input_rows": prepared.input_rows,
@@ -51,6 +79,15 @@ pub(super) fn finalize_transform_response(
         "invalid_rows": invalid_rows,
         "filtered_rows": filtered_rows,
         "duplicate_rows_removed": duplicate_rows_removed,
+        "numeric_cells_total": numeric_cells_total,
+        "numeric_cells_parsed": numeric_cells_parsed,
+        "numeric_parse_rate": numeric_parse_rate,
+        "date_cells_total": date_cells_total,
+        "date_cells_parsed": date_cells_parsed,
+        "date_parse_rate": date_parse_rate,
+        "duplicate_key_ratio": duplicate_key_ratio,
+        "blank_output_rows": blank_output_rows,
+        "blank_row_ratio": blank_row_ratio,
         "required_fields": gate_required_fields,
         "required_missing_cells": required_missing_cells,
         "required_missing_by_field": required_missing_by_field,

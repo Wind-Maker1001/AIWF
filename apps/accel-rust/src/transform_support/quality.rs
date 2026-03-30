@@ -25,6 +25,22 @@ pub(crate) fn evaluate_quality_gates(quality: &Value, gates: &Value) -> Value {
         .get("required_missing_ratio")
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0);
+    let numeric_parse_rate = quality
+        .get("numeric_parse_rate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.0);
+    let date_parse_rate = quality
+        .get("date_parse_rate")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(1.0);
+    let duplicate_key_ratio = quality
+        .get("duplicate_key_ratio")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
+    let blank_row_ratio = quality
+        .get("blank_row_ratio")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
     let mut errors: Vec<String> = Vec::new();
 
     if let Some(max_invalid_rows) = gates.get("max_invalid_rows").and_then(|v| v.as_u64())
@@ -89,6 +105,46 @@ pub(crate) fn evaluate_quality_gates(quality: &Value, gates: &Value) -> Value {
         && output_rows == 0
     {
         errors.push("output_rows=0 while allow_empty_output=false".to_string());
+    }
+    if let Some(min_numeric_parse_rate) = gates
+        .get("numeric_parse_rate_min")
+        .and_then(|v| v.as_f64())
+        && numeric_parse_rate < min_numeric_parse_rate
+    {
+        errors.push(format!(
+            "numeric_parse_rate={:.6} below numeric_parse_rate_min={:.6}",
+            numeric_parse_rate, min_numeric_parse_rate
+        ));
+    }
+    if let Some(min_date_parse_rate) = gates
+        .get("date_parse_rate_min")
+        .and_then(|v| v.as_f64())
+        && date_parse_rate < min_date_parse_rate
+    {
+        errors.push(format!(
+            "date_parse_rate={:.6} below date_parse_rate_min={:.6}",
+            date_parse_rate, min_date_parse_rate
+        ));
+    }
+    if let Some(max_duplicate_key_ratio) = gates
+        .get("duplicate_key_ratio_max")
+        .and_then(|v| v.as_f64())
+        && duplicate_key_ratio > max_duplicate_key_ratio
+    {
+        errors.push(format!(
+            "duplicate_key_ratio={:.6} exceeds duplicate_key_ratio_max={:.6}",
+            duplicate_key_ratio, max_duplicate_key_ratio
+        ));
+    }
+    if let Some(max_blank_row_ratio) = gates
+        .get("blank_row_ratio_max")
+        .and_then(|v| v.as_f64())
+        && blank_row_ratio > max_blank_row_ratio
+    {
+        errors.push(format!(
+            "blank_row_ratio={:.6} exceeds blank_row_ratio_max={:.6}",
+            blank_row_ratio, max_blank_row_ratio
+        ));
     }
     json!({
         "passed": errors.is_empty(),

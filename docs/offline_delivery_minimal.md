@@ -89,6 +89,8 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Q
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Compatibility
 ```
 
+The shared async benchmark gate used by release verification now submits against tenant `bench_async` and keeps `AIWF_ASYNC_BENCH_MAX_IN_FLIGHT` aligned to the default accel-rust tenant concurrency limit.
+
 ## 4. Copy To Target Machine
 
 Copy:
