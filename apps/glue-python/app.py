@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 import re
 import time
@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from aiwf.runtime_catalog import get_runtime_catalog
+from aiwf.dependency_status import dependency_status
 from aiwf.flow_context import LegacyFlowPathParamsError, attach_job_context, normalize_job_context
 from aiwf.paths import resolve_jobs_root
 from aiwf.governance_quality_rule_sets import (
@@ -415,6 +416,7 @@ class RunBaselineEnvelope(BaseModel):
     baseline: RunBaselineReq
 
 
+
 def _call_compatible(callable_obj, candidates):
     try:
         callable_signature = inspect.signature(callable_obj)
@@ -706,7 +708,10 @@ app = FastAPI(title="AIWF glue-python", version="0.1.0")
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    return {
+        "ok": True,
+        "dependencies": dependency_status(),
+    }
 
 
 @app.get("/capabilities")

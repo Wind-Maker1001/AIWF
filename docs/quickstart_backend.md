@@ -44,6 +44,14 @@ First-time `glue-python` setup can create a local venv:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_glue_python.ps1 -CreateVenv
 ```
 
+`run_glue_python.ps1` now prints optional extraction dependency status for `pandera` / `python-calamine` / `paddleocr` / `docling`. Image and XLSX enhanced ingest depends on the local `glue-python` sidecar being available.
+
+If you want startup to fail fast when enhanced ingest dependencies are missing, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_glue_python.ps1 -RequireEnhancedIngest
+```
+
 Normal startup:
 
 ```powershell

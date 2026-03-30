@@ -35,6 +35,7 @@ from aiwf.preprocess import (
     list_row_filter_domains,
     list_row_filters,
 )
+from aiwf.dependency_status import dependency_status
 from aiwf.registry_events import list_registry_events
 from aiwf.registry_policy import default_conflict_policy
 from aiwf.runtime_state import create_runtime_state, use_runtime_state
@@ -97,6 +98,7 @@ class GlueRuntimeCatalog:
                     },
                 },
                 "extensions": extension_status(),
+                "dependencies": dependency_status(),
                 "registry": {
                     "default_conflict_policy": default_conflict_policy(),
                     "events": list_registry_events(),

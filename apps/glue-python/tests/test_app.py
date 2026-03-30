@@ -59,8 +59,9 @@ class AppRouteTests(unittest.TestCase):
     def test_health(self):
         resp = self.client.get("/health")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {"ok": True})
-
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        self.assertIn("dependencies", payload)
     def test_capabilities_route_reports_registered_components(self):
         resp = self.client.get("/capabilities")
         self.assertEqual(resp.status_code, 200)
@@ -70,6 +71,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("cleaning", caps["flows"])
         self.assertNotIn("workflow_reference", caps["flows"])
         self.assertIn("txt", caps["input_formats"])
+        self.assertIn("dependencies", caps)
+        self.assertIn("docling", caps["dependencies"])
         self.assertEqual(caps["input_domains"][0]["name"], "ingest")
         self.assertIn("trim", caps["preprocess"]["field_transforms"])
         self.assertEqual(caps["preprocess"]["field_transform_domains"][0]["name"], "preprocess")
