@@ -109,6 +109,13 @@
       ]
     },
     {
+      "from": "../../contracts/glue",
+      "to": "contracts/glue",
+      "filter": [
+        "*.schema.json"
+      ]
+    },
+    {
       "from": "tools",
       "to": "tools",
       "filter": [

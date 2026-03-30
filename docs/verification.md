@@ -387,6 +387,21 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_desktop_lite_packag
 
 These Electron package checks are compatibility-only. Keep them in full validation or run them explicitly when you are changing Electron packaging paths.
 
+Sidecar release verification:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_regression_quality.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_python_rust_consistency.ps1 -RequireAccel
+```
+
+Release wrappers and offline bundle packaging now consume those reports directly:
+
+- `ops/scripts/release_frontend_productize.ps1`
+- `ops/scripts/release_electron_compatibility.ps1`
+- `ops/scripts/package_offline_bundle.ps1`
+
+For local desktop fixture verification, `offline_ingest_fixture_assets.test.js` may skip the real XLSX fixture path if `exceljs` is not installed. That is expected locally; use `ops/scripts/check_desktop_fixture_deps.ps1` before treating it as a regression.
+
 ## Backend Smoke and Fallback
 
 Restart the full local backend:

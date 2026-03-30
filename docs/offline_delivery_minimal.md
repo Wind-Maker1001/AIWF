@@ -19,9 +19,13 @@ Compatibility release audit:
 - `release\release_gate_audit_<version>.json`
 - includes `frontend_verification.primary` and `frontend_verification.compatibility`
 - includes `architecture_scorecard`
+- includes `sidecar_regression` and `sidecar_python_rust_consistency`
 - references the latest `ops\logs\frontend_verification\frontend_primary_verification_latest.json` and `frontend_compatibility_verification_latest.json`
 - references `ops\logs\architecture\architecture_scorecard_release_ready_latest.json` and `architecture_scorecard_release_ready_latest.md`
+- references `ops\logs\regression\sidecar_regression_quality_report.json` and `sidecar_python_rust_consistency_report.json`
 - release is now blocked unless `architecture_scorecard_release_ready_latest.json` reports `overall_status = passed`
+- release is now blocked unless `sidecar_regression_quality_report.json` reports `ok = true`
+- release is now blocked unless `sidecar_python_rust_consistency_report.json` reports `ok = true` and contains no `skipped` entries
 
 Output example:
 
@@ -55,6 +59,7 @@ Bundle content:
 - `contracts/desktop/`
 - `contracts/workflow/`
 - `contracts/rust/`
+- `contracts/glue/`
 - `contracts/governance/`
 - `contracts/desktop/template_pack_artifact.schema.json`
 - `contracts/desktop/local_template_storage.schema.json`
@@ -67,7 +72,14 @@ Bundle content:
 - `contracts/workflow/minimal_workflow.v1.json`
 - `contracts/rust/operators_manifest.v1.json`
 - `contracts/rust/operators_manifest.schema.json`
+- `contracts/glue/ingest_extract.schema.json`
 - `contracts/governance/governance_capabilities.v1.json`
+
+Bundle/package gate notes:
+
+- `package_offline_bundle.ps1` now blocks packaging unless the latest sidecar regression report is `ok=true`
+- the same package step also blocks if the latest Python/Rust consistency report contains any `skipped` entries
+- if you claim image/XLSX enhanced ingest support for the bundle, start local `glue-python` with `-RequireEnhancedIngest`
 
 Generate a zip for copying:
 
@@ -87,6 +99,8 @@ Recommended before a compatibility release:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Quick
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Compatibility
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_regression_quality.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_python_rust_consistency.ps1 -RequireAccel
 ```
 
 The shared async benchmark gate used by release verification now submits against tenant `bench_async` and keeps `AIWF_ASYNC_BENCH_MAX_IN_FLIGHT` aligned to the default accel-rust tenant concurrency limit.

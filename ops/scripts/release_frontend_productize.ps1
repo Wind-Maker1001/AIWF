@@ -125,6 +125,48 @@ function Assert-ArchitectureScorecardReleaseReady($Summary) {
     throw ("release blocked by architecture scorecard gate: overall_status={0}. Refresh ci_check.ps1 -CiProfile Quick and ci_check.ps1 -CiProfile Compatibility before release." -f ([string]$Summary.overall_status))
   }
 }
+function Get-SidecarReportSummary([string]$Root, [string]$Name) {
+  $dir = Join-Path $Root "ops\logs\regression"
+  $jsonPath = Join-Path $dir ("{0}.json" -f $Name)
+  $summary = [ordered]@{
+    evidence_path = $jsonPath
+    exists = $false
+    ok = $false
+    generated_at = ""
+    failed = @()
+    skipped = @()
+  }
+  if (-not (Test-Path $jsonPath)) {
+    return $summary
+  }
+  try {
+    $raw = Get-Content -Raw -Encoding UTF8 $jsonPath | ConvertFrom-Json
+    $summary.exists = $true
+    $summary.ok = [bool]$raw.ok
+    $summary.generated_at = [string]($raw.generated_at)
+    if ($raw.PSObject.Properties.Name -contains "failed") {
+      $summary.failed = @($raw.failed | ForEach-Object { [string]$_ })
+    }
+    if ($raw.PSObject.Properties.Name -contains "skipped") {
+      $summary.skipped = @($raw.skipped | ForEach-Object { [string]$_ })
+    }
+  } catch {
+    $summary.exists = $true
+    $summary.ok = $false
+  }
+  return $summary
+}
+function Assert-SidecarReportReady($Summary, [string]$Label, [switch]$RequireNoSkipped) {
+  if (-not $Summary.exists) {
+    throw ("release blocked by {0}: missing report {1}. Run the sidecar regression verification first." -f $Label, [string]$Summary.evidence_path)
+  }
+  if (-not $Summary.ok) {
+    throw ("release blocked by {0}: report not ok ({1})" -f $Label, [string]$Summary.evidence_path)
+  }
+  if ($RequireNoSkipped -and @($Summary.skipped).Count -gt 0) {
+    throw ("release blocked by {0}: skipped entries present ({1})" -f $Label, (@($Summary.skipped) -join ", "))
+  }
+}
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
@@ -188,14 +230,28 @@ $offlineTemplateCatalogSyncGateStatus = "skipped"
 $sqlGateStatus = "skipped"
 $personalSideloadCertStatus = "skipped"
 $architectureScorecardGateStatus = "skipped"
+$sidecarRegressionGateStatus = "skipped"
+$sidecarConsistencyGateStatus = "skipped"
 $bundleRoot = ""
 $msixPath = ""
 $architectureScorecardSummary = Get-ArchitectureScorecardSummary -Root $root
+$sidecarRegressionSummary = Get-SidecarReportSummary -Root $root -Name "sidecar_regression_quality_report"
+$sidecarConsistencySummary = Get-SidecarReportSummary -Root $root -Name "sidecar_python_rust_consistency_report"
 
 Info "running architecture scorecard release gate"
 Assert-ArchitectureScorecardReleaseReady $architectureScorecardSummary
 $architectureScorecardGateStatus = "passed"
 Ok "architecture scorecard release gate passed"
+
+Info "running sidecar regression release gate"
+Assert-SidecarReportReady $sidecarRegressionSummary "sidecar regression release gate"
+$sidecarRegressionGateStatus = "passed"
+Ok "sidecar regression release gate passed"
+
+Info "running sidecar python/rust consistency release gate"
+Assert-SidecarReportReady $sidecarConsistencySummary "sidecar python/rust consistency release gate" -RequireNoSkipped
+$sidecarConsistencyGateStatus = "passed"
+Ok "sidecar python/rust consistency release gate passed"
 
 if (-not $SkipFrontendConvergenceGate) {
   Info "running frontend convergence release gate"
@@ -214,7 +270,9 @@ if (-not $SkipWorkflowContractSyncGate) {
 }
 
 $governanceCapabilityExportResult = Invoke-GovernanceCapabilityExportStep -ScriptPath $governanceCapabilityExportScript -FailureScope "release"
-if (-not $governanceCapabilityExportResult.ok) { throw [string]$governanceCapabilityExportResult.failure_message }
+if (-not [bool]$governanceCapabilityExportResult["ok"]) {
+  throw [string]$governanceCapabilityExportResult["failure_message"]
+}
 $governanceCapabilityExportStatus = "passed"
 
 if (-not $SkipGovernanceControlPlaneBoundaryGate) {
@@ -348,8 +406,12 @@ $audit = [ordered]@{
   bundle_root = $bundleRoot
   frontend_verification = Get-FrontendVerificationSummary -Root $root
   architecture_scorecard = $architectureScorecardSummary
+  sidecar_regression = $sidecarRegressionSummary
+  sidecar_python_rust_consistency = $sidecarConsistencySummary
   gates = [ordered]@{
     architecture_scorecard = $architectureScorecardGateStatus
+    sidecar_regression = $sidecarRegressionGateStatus
+    sidecar_python_rust_consistency = $sidecarConsistencyGateStatus
     frontend_convergence = $frontendGateStatus
     workflow_contract_sync = $workflowGateStatus
     governance_capability_export = $governanceCapabilityExportStatus

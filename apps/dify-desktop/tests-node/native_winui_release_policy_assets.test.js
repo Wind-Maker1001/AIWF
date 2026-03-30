@@ -19,6 +19,8 @@ test("native winui release wrapper enforces trusted msix on stable by default", 
   assert.match(releaseWrapper, /architecture scorecard release gate passed/i);
   assert.match(releaseWrapper, /frontend_primary_verification_latest\.json/);
   assert.match(releaseWrapper, /frontend_compatibility_verification_latest\.json/);
+  assert.match(releaseWrapper, /Get-SidecarReportSummary -Root \$root -Name "sidecar_regression_quality_report"/);
+  assert.match(releaseWrapper, /Get-SidecarReportSummary -Root \$root -Name "sidecar_python_rust_consistency_report"/);
   assert.match(releaseWrapper, /governance_store_schema_versions/);
   assert.match(releaseWrapper, /governance_control_plane_boundary/);
   assert.match(releaseWrapper, /governance_capability_export/);
@@ -46,6 +48,8 @@ test("native winui release wrapper enforces trusted msix on stable by default", 
   assert.match(deliveryDoc, /frontend_compatibility_verification_latest\.json/);
   assert.match(deliveryDoc, /architecture_scorecard/i);
   assert.match(deliveryDoc, /architecture_scorecard_release_ready_latest\.json/i);
+  assert.match(deliveryDoc, /sidecar_regression_quality_report\.json/i);
+  assert.match(deliveryDoc, /sidecar_python_rust_consistency_report\.json/i);
   assert.match(deliveryDoc, /overall_status = passed/i);
   assert.match(deliveryDoc, /ci_check\.ps1 -CiProfile Compatibility/i);
 });

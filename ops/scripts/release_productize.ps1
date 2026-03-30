@@ -105,6 +105,48 @@ function Assert-ArchitectureScorecardReleaseReady($Summary) {
     throw ("release blocked by architecture scorecard gate: overall_status={0}. Refresh ci_check.ps1 -CiProfile Quick and ci_check.ps1 -CiProfile Compatibility before release." -f ([string]$Summary.overall_status))
   }
 }
+function Get-SidecarReportSummary([string]$Root, [string]$Name) {
+  $dir = Join-Path $Root "ops\logs\regression"
+  $jsonPath = Join-Path $dir ("{0}.json" -f $Name)
+  $summary = [ordered]@{
+    evidence_path = $jsonPath
+    exists = $false
+    ok = $false
+    generated_at = ""
+    failed = @()
+    skipped = @()
+  }
+  if (-not (Test-Path $jsonPath)) {
+    return $summary
+  }
+  try {
+    $raw = Get-Content -Raw -Encoding UTF8 $jsonPath | ConvertFrom-Json
+    $summary.exists = $true
+    $summary.ok = [bool]$raw.ok
+    $summary.generated_at = [string]($raw.generated_at)
+    if ($raw.PSObject.Properties.Name -contains "failed") {
+      $summary.failed = @($raw.failed | ForEach-Object { [string]$_ })
+    }
+    if ($raw.PSObject.Properties.Name -contains "skipped") {
+      $summary.skipped = @($raw.skipped | ForEach-Object { [string]$_ })
+    }
+  } catch {
+    $summary.exists = $true
+    $summary.ok = $false
+  }
+  return $summary
+}
+function Assert-SidecarReportReady($Summary, [string]$Label, [switch]$RequireNoSkipped) {
+  if (-not $Summary.exists) {
+    throw ("release blocked by {0}: missing report {1}. Run the sidecar regression verification first." -f $Label, [string]$Summary.evidence_path)
+  }
+  if (-not $Summary.ok) {
+    throw ("release blocked by {0}: report not ok ({1})" -f $Label, [string]$Summary.evidence_path)
+  }
+  if ($RequireNoSkipped -and @($Summary.skipped).Count -gt 0) {
+    throw ("release blocked by {0}: skipped entries present ({1})" -f $Label, (@($Summary.skipped) -join ", "))
+  }
+}
 
 Warn "release_productize.ps1 is the legacy Electron compatibility release path. Use release_frontend_productize.ps1 for the primary WinUI frontend."
 
@@ -161,12 +203,20 @@ $offlineTemplateCatalogSyncGateError = ""
 $architectureScorecardGateStatus = "skipped"
 $architectureScorecardGateCheckedAt = ""
 $architectureScorecardGateError = ""
+$sidecarRegressionGateStatus = "skipped"
+$sidecarRegressionGateCheckedAt = ""
+$sidecarRegressionGateError = ""
+$sidecarConsistencyGateStatus = "skipped"
+$sidecarConsistencyGateCheckedAt = ""
+$sidecarConsistencyGateError = ""
 $outRoot = Join-Path $root "release"
 New-Item -ItemType Directory -Path $outRoot -Force | Out-Null
 if (-not $EnvFile) {
   $EnvFile = Join-Path $root "ops\config\dev.env"
 }
 $architectureScorecardSummary = Get-ArchitectureScorecardSummary -Root $root
+$sidecarRegressionSummary = Get-SidecarReportSummary -Root $root -Name "sidecar_regression_quality_report"
+$sidecarConsistencySummary = Get-SidecarReportSummary -Root $root -Name "sidecar_python_rust_consistency_report"
 
 Info "running architecture scorecard release gate"
 try {
@@ -178,6 +228,32 @@ try {
   $architectureScorecardGateStatus = "failed"
   $architectureScorecardGateCheckedAt = (Get-Date).ToString("s")
   $architectureScorecardGateError = [string]$_.Exception.Message
+  throw
+}
+
+Info "running sidecar regression release gate"
+try {
+  Assert-SidecarReportReady $sidecarRegressionSummary "sidecar regression release gate"
+  $sidecarRegressionGateStatus = "passed"
+  $sidecarRegressionGateCheckedAt = (Get-Date).ToString("s")
+  Ok "sidecar regression release gate passed"
+} catch {
+  $sidecarRegressionGateStatus = "failed"
+  $sidecarRegressionGateCheckedAt = (Get-Date).ToString("s")
+  $sidecarRegressionGateError = [string]$_.Exception.Message
+  throw
+}
+
+Info "running sidecar python/rust consistency release gate"
+try {
+  Assert-SidecarReportReady $sidecarConsistencySummary "sidecar python/rust consistency release gate" -RequireNoSkipped
+  $sidecarConsistencyGateStatus = "passed"
+  $sidecarConsistencyGateCheckedAt = (Get-Date).ToString("s")
+  Ok "sidecar python/rust consistency release gate passed"
+} catch {
+  $sidecarConsistencyGateStatus = "failed"
+  $sidecarConsistencyGateCheckedAt = (Get-Date).ToString("s")
+  $sidecarConsistencyGateError = [string]$_.Exception.Message
   throw
 }
 
@@ -485,12 +561,26 @@ $audit = [ordered]@{
   generated_at = (Get-Date).ToString("s")
   frontend_verification = Get-FrontendVerificationSummary -Root $root
   architecture_scorecard = $architectureScorecardSummary
+  sidecar_regression = $sidecarRegressionSummary
+  sidecar_python_rust_consistency = $sidecarConsistencySummary
   gates = [ordered]@{
     architecture_scorecard = [ordered]@{
       status = $architectureScorecardGateStatus
       checked_at = $architectureScorecardGateCheckedAt
       script = "ops/logs/architecture/architecture_scorecard_release_ready_latest.json"
       error = $architectureScorecardGateError
+    }
+    sidecar_regression = [ordered]@{
+      status = $sidecarRegressionGateStatus
+      checked_at = $sidecarRegressionGateCheckedAt
+      script = "ops/logs/regression/sidecar_regression_quality_report.json"
+      error = $sidecarRegressionGateError
+    }
+    sidecar_python_rust_consistency = [ordered]@{
+      status = $sidecarConsistencyGateStatus
+      checked_at = $sidecarConsistencyGateCheckedAt
+      script = "ops/logs/regression/sidecar_python_rust_consistency_report.json"
+      error = $sidecarConsistencyGateError
     }
     openapi_sdk_sync = [ordered]@{
       status = $openApiSdkSyncGateStatus

@@ -10,6 +10,8 @@ param(
   [switch]$SkipRustTests,
   [switch]$SkipPythonTests,
   [switch]$SkipRegressionQuality,
+  [switch]$SkipSidecarRegressionQuality,
+  [switch]$SkipSidecarPythonRustConsistency,
   [switch]$SkipDesktopUiTests,
   [switch]$SkipDesktopRealSampleAcceptance,
   [switch]$SkipDesktopFinanceTemplateAcceptance,
@@ -87,6 +89,8 @@ function ApplyCiProfile([string]$ProfileName, [hashtable]$BoundParams) {
   if ($normalized -eq "quick") {
   $quickSkipParams = @(
     "SkipRegressionQuality",
+    "SkipSidecarRegressionQuality",
+    "SkipSidecarPythonRustConsistency",
     "SkipDesktopRealSampleAcceptance",
     "SkipDesktopFinanceTemplateAcceptance",
     "SkipDesktopStress",
@@ -108,6 +112,8 @@ function ApplyCiProfile([string]$ProfileName, [hashtable]$BoundParams) {
     "SkipRustTests",
     "SkipPythonTests",
     "SkipRegressionQuality",
+    "SkipSidecarRegressionQuality",
+    "SkipSidecarPythonRustConsistency",
     "SkipDesktopUiTests",
     "SkipDesktopRealSampleAcceptance",
     "SkipDesktopFinanceTemplateAcceptance",
@@ -1027,15 +1033,15 @@ function New-NodeConfigSchemaCoverageDetails($Summary) {
     required_nested_node_types = @(Get-StringArrayProperty $Summary "requiredNestedNodeTypes")
     required_nested_satisfied = @(Get-StringArrayProperty $Summary "requiredNestedSatisfied")
     required_nested_missing = @(Get-StringArrayProperty $Summary "requiredNestedMissing")
-    python_runtime_contract_authority = [string]($Summary.pythonRuntimeContractAuthority)
-    python_runtime_schema_version = [string]($Summary.pythonRuntimeSchemaVersion)
-    python_runtime_covered_count = [int]($Summary.pythonRuntimeCoveredCount)
-    python_runtime_supported_validator_kind_count = [int]($Summary.pythonRuntimeSupportedValidatorKindCount)
+    python_runtime_contract_authority = Get-OptionalPropertyValue $Summary "pythonRuntimeContractAuthority"
+    python_runtime_schema_version = Get-OptionalPropertyValue $Summary "pythonRuntimeSchemaVersion"
+    python_runtime_covered_count = [int](Get-OptionalPropertyValue $Summary "pythonRuntimeCoveredCount")
+    python_runtime_supported_validator_kind_count = [int](Get-OptionalPropertyValue $Summary "pythonRuntimeSupportedValidatorKindCount")
     python_runtime_supported_validator_kinds = @(Get-StringArrayProperty $Summary "pythonRuntimeSupportedValidatorKinds")
     quality_counts = [ordered]@{
-      typed = [int]($qualityCounts.typed)
-      enum_constrained = [int]($qualityCounts.enum_constrained)
-      nested_shape_constrained = [int]($qualityCounts.nested_shape_constrained)
+      typed = [int](Get-OptionalPropertyValue $qualityCounts "typed")
+      enum_constrained = [int](Get-OptionalPropertyValue $qualityCounts "enum_constrained")
+      nested_shape_constrained = [int](Get-OptionalPropertyValue $qualityCounts "nested_shape_constrained")
     }
     drift = [ordered]@{
       missing_from_catalog = @(Get-StringArrayProperty $drift "missingFromCatalog")
@@ -1741,6 +1747,8 @@ $desktopLitePkgCheckScript = Join-Path $PSScriptRoot "check_desktop_lite_package
 $desktopRealSampleScript = Join-Path $PSScriptRoot "acceptance_desktop_real_sample.ps1"
 $desktopFinanceTemplateScript = Join-Path $PSScriptRoot "acceptance_desktop_finance_template.ps1"
 $regressionQualityScript = Join-Path $PSScriptRoot "run_regression_quality.ps1"
+$sidecarRegressionQualityScript = Join-Path $PSScriptRoot "run_sidecar_regression_quality.ps1"
+$sidecarPythonRustConsistencyScript = Join-Path $PSScriptRoot "run_sidecar_python_rust_consistency.ps1"
 $regressionBaselineScript = Join-Path $PSScriptRoot "check_regression_baseline.ps1"
 $rustTransformBenchGateSelfTestScript = Join-Path $PSScriptRoot "test_rust_transform_bench_gate.ps1"
 $asyncBenchTrendScript = Join-Path $PSScriptRoot "check_async_bench_trend.ps1"
@@ -1785,6 +1793,7 @@ $templatePackContractSyncCheckState = New-FrontendCheckState $(if ($SkipTemplate
 $localTemplateStorageContractSyncCheckState = New-FrontendCheckState $(if ($SkipLocalTemplateStorageContractSync) { "skipped" } else { "pending" }) $(if ($SkipLocalTemplateStorageContractSync) { "skipped by SkipLocalTemplateStorageContractSync" } else { "awaiting local template storage contract sync gate" })
 $offlineTemplateCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOfflineTemplateCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOfflineTemplateCatalogSync) { "skipped by SkipOfflineTemplateCatalogSync" } else { "awaiting offline template catalog sync gate" })
 $nodeConfigSchemaCoverageCheckState = New-FrontendCheckState $(if ($SkipNodeConfigSchemaCoverage) { "skipped" } else { "pending" }) $(if ($SkipNodeConfigSchemaCoverage) { "skipped by SkipNodeConfigSchemaCoverage" } else { "awaiting node config schema coverage gate" })
+$nodeConfigRuntimeParityCheckState = New-FrontendCheckState "skipped" "node config runtime parity gate not configured in this ci profile"
 $localNodeCatalogPolicyCheckState = New-FrontendCheckState $(if ($SkipLocalNodeCatalogPolicy) { "skipped" } else { "pending" }) $(if ($SkipLocalNodeCatalogPolicy) { "skipped by SkipLocalNodeCatalogPolicy" } else { "awaiting local node catalog policy gate" })
 $operatorCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOperatorCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOperatorCatalogSync) { "skipped by SkipOperatorCatalogSync" } else { "awaiting operator catalog sync gate" })
 $fallbackGovernanceCheckState = New-FrontendCheckState $(if ($SkipFallbackGovernance) { "skipped" } else { "pending" }) $(if ($SkipFallbackGovernance) { "skipped by SkipFallbackGovernance" } else { "awaiting fallback governance gate" })
@@ -2472,6 +2481,41 @@ if (-not $SkipRegressionQuality) {
   }
 } else {
   Warn "skip regression quality checks"
+}
+
+if (-not $SkipSidecarRegressionQuality) {
+  if (-not (Test-Path $sidecarRegressionQualityScript)) {
+    throw "sidecar regression quality script not found: $sidecarRegressionQualityScript"
+  }
+  Info "running sidecar regression quality checks"
+  powershell -ExecutionPolicy Bypass -File $sidecarRegressionQualityScript
+  if ($LASTEXITCODE -ne 0) {
+    throw "sidecar regression quality checks failed"
+  }
+  Ok "sidecar regression quality checks passed"
+} else {
+  Warn "skip sidecar regression quality checks"
+}
+
+if (-not $SkipSidecarPythonRustConsistency) {
+  if (-not (Test-Path $sidecarPythonRustConsistencyScript)) {
+    throw "sidecar python/rust consistency script not found: $sidecarPythonRustConsistencyScript"
+  }
+  Info "running sidecar python/rust consistency checks"
+  $sidecarConsistencyServiceState = $null
+  try {
+    $sidecarConsistencyServiceState = Ensure-AccelRustService -RustDir $rustDir -AccelUrl "http://127.0.0.1:18082"
+    powershell -ExecutionPolicy Bypass -File $sidecarPythonRustConsistencyScript -RequireAccel -AccelUrl "http://127.0.0.1:18082"
+    if ($LASTEXITCODE -ne 0) {
+      throw "sidecar python/rust consistency checks failed"
+    }
+  }
+  finally {
+    Stop-AccelRustService $sidecarConsistencyServiceState
+  }
+  Ok "sidecar python/rust consistency checks passed"
+} else {
+  Warn "skip sidecar python/rust consistency checks"
 }
 
 if (-not (Test-Path $rustTransformBenchGateSelfTestScript)) {

@@ -26,6 +26,8 @@ test("electron compatibility release wrapper is explicit and secondary", () => {
   assert.match(legacy, /architecture scorecard release gate passed/i);
   assert.match(legacy, /frontend_primary_verification_latest\.json/);
   assert.match(legacy, /frontend_compatibility_verification_latest\.json/);
+  assert.match(legacy, /sidecar_regression_quality_report\.json/);
+  assert.match(legacy, /sidecar_python_rust_consistency_report\.json/);
   assert.match(legacy, /governance_store_schema_versions/);
   assert.match(legacy, /governance_control_plane_boundary/);
   assert.match(legacy, /governance_capability_export/);
@@ -41,6 +43,8 @@ test("electron compatibility release wrapper is explicit and secondary", () => {
   assert.match(minimalDelivery, /frontend_verification\.compatibility/);
   assert.match(minimalDelivery, /architecture_scorecard/i);
   assert.match(minimalDelivery, /architecture_scorecard_release_ready_latest\.json/i);
+  assert.match(minimalDelivery, /sidecar_regression_quality_report\.json/i);
+  assert.match(minimalDelivery, /sidecar_python_rust_consistency_report\.json/i);
   assert.match(minimalDelivery, /overall_status = passed/i);
   assert.match(minimalDelivery, /ci_check\.ps1 -CiProfile Quick/i);
   assert.match(minimalDelivery, /ci_check\.ps1 -CiProfile Compatibility/);

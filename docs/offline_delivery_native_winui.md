@@ -69,9 +69,13 @@ Primary release audit:
 - `release\release_frontend_audit_<version>.json`
 - includes `frontend_verification.primary` and `frontend_verification.compatibility`
 - includes `architecture_scorecard`
+- includes `sidecar_regression` and `sidecar_python_rust_consistency`
 - references the latest `ops\logs\frontend_verification\frontend_primary_verification_latest.json` and `frontend_compatibility_verification_latest.json`
 - references `ops\logs\architecture\architecture_scorecard_release_ready_latest.json` and `architecture_scorecard_release_ready_latest.md`
+- references `ops\logs\regression\sidecar_regression_quality_report.json` and `sidecar_python_rust_consistency_report.json`
 - release is now blocked unless `architecture_scorecard_release_ready_latest.json` reports `overall_status = passed`
+- release is now blocked unless `sidecar_regression_quality_report.json` reports `ok = true`
+- release is now blocked unless `sidecar_python_rust_consistency_report.json` reports `ok = true` and contains no `skipped` entries
 
 Optional MSIX preview:
 
@@ -126,8 +130,11 @@ If you want the release audit to carry fresh frontend verification state, run:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile Compatibility
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_regression_quality.ps1
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_python_rust_consistency.ps1 -RequireAccel
 ```
 
+If you ship image/XLSX enhanced ingest as part of the release story, keep local `glue-python` startup on `-RequireEnhancedIngest` so missing `docling/paddleocr/python-calamine/pandera` dependencies fail before release packaging.
 The shared async benchmark gate used by release verification now runs under tenant `bench_async`; if you change accel-rust tenant concurrency locally, keep `AIWF_ASYNC_BENCH_MAX_IN_FLIGHT` aligned with it.
 
 ## Install From Bundle

@@ -26,8 +26,52 @@ $ErrorActionPreference = "Stop"
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 . (Join-Path $PSScriptRoot "governance_capability_export_support.ps1")
+function Get-SidecarReportSummary([string]$Root, [string]$Name) {
+  $dir = Join-Path $Root "ops\logs\regression"
+  $jsonPath = Join-Path $dir ("{0}.json" -f $Name)
+  $summary = [ordered]@{
+    evidence_path = $jsonPath
+    exists = $false
+    ok = $false
+    generated_at = ""
+    failed = @()
+    skipped = @()
+  }
+  if (-not (Test-Path $jsonPath)) {
+    return $summary
+  }
+  try {
+    $raw = Get-Content -Raw -Encoding UTF8 $jsonPath | ConvertFrom-Json
+    $summary.exists = $true
+    $summary.ok = [bool]$raw.ok
+    $summary.generated_at = [string]($raw.generated_at)
+    if ($raw.PSObject.Properties.Name -contains "failed") {
+      $summary.failed = @($raw.failed | ForEach-Object { [string]$_ })
+    }
+    if ($raw.PSObject.Properties.Name -contains "skipped") {
+      $summary.skipped = @($raw.skipped | ForEach-Object { [string]$_ })
+    }
+  } catch {
+    $summary.exists = $true
+    $summary.ok = $false
+  }
+  return $summary
+}
+function Assert-SidecarReportReady($Summary, [string]$Label, [switch]$RequireNoSkipped) {
+  if (-not $Summary.exists) {
+    throw ("package blocked by {0}: missing report {1}. Run the sidecar regression verification first." -f $Label, [string]$Summary.evidence_path)
+  }
+  if (-not $Summary.ok) {
+    throw ("package blocked by {0}: report not ok ({1})" -f $Label, [string]$Summary.evidence_path)
+  }
+  if ($RequireNoSkipped -and @($Summary.skipped).Count -gt 0) {
+    throw ("package blocked by {0}: skipped entries present ({1})" -f $Label, (@($Summary.skipped) -join ", "))
+  }
+}
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$sidecarRegressionSummary = Get-SidecarReportSummary -Root $root -Name "sidecar_regression_quality_report"
+$sidecarConsistencySummary = Get-SidecarReportSummary -Root $root -Name "sidecar_python_rust_consistency_report"
 $openApiSdkSyncGate = Join-Path $PSScriptRoot "check_openapi_sdk_sync.ps1"
 $workflowContractSyncGate = Join-Path $PSScriptRoot "check_workflow_contract_sync.ps1"
 $governanceCapabilityExportScript = Join-Path $PSScriptRoot "export_governance_capabilities.ps1"
@@ -72,6 +116,12 @@ $localTemplateStorageContractSyncGateError = ""
 $offlineTemplateCatalogSyncGateStatus = "skipped"
 $offlineTemplateCatalogSyncGateCheckedAt = ""
 $offlineTemplateCatalogSyncGateError = ""
+$sidecarRegressionGateStatus = "skipped"
+$sidecarRegressionGateCheckedAt = ""
+$sidecarRegressionGateError = ""
+$sidecarConsistencyGateStatus = "skipped"
+$sidecarConsistencyGateCheckedAt = ""
+$sidecarConsistencyGateError = ""
 $distDir = Join-Path $root "apps\dify-desktop\dist"
 $exePattern = if ($PackageType -eq "installer") { "AIWF Dify Desktop Setup *.exe" } else { "AIWF Dify Desktop *.exe" }
 $exe = Get-ChildItem $distDir -File -Filter $exePattern |
@@ -95,6 +145,32 @@ if (-not $Version) {
 
 if (-not $OutDir) {
   $OutDir = Join-Path $root ("release\offline_bundle_{0}_{1}" -f $Version, $PackageType)
+}
+
+Info "running sidecar regression package gate"
+try {
+  Assert-SidecarReportReady $sidecarRegressionSummary "sidecar regression package gate"
+  $sidecarRegressionGateStatus = "passed"
+  $sidecarRegressionGateCheckedAt = (Get-Date).ToString("s")
+  Ok "sidecar regression package gate passed"
+} catch {
+  $sidecarRegressionGateStatus = "failed"
+  $sidecarRegressionGateCheckedAt = (Get-Date).ToString("s")
+  $sidecarRegressionGateError = [string]$_.Exception.Message
+  throw
+}
+
+Info "running sidecar python/rust consistency package gate"
+try {
+  Assert-SidecarReportReady $sidecarConsistencySummary "sidecar python/rust consistency package gate" -RequireNoSkipped
+  $sidecarConsistencyGateStatus = "passed"
+  $sidecarConsistencyGateCheckedAt = (Get-Date).ToString("s")
+  Ok "sidecar python/rust consistency package gate passed"
+} catch {
+  $sidecarConsistencyGateStatus = "failed"
+  $sidecarConsistencyGateCheckedAt = (Get-Date).ToString("s")
+  $sidecarConsistencyGateError = [string]$_.Exception.Message
+  throw
 }
 
 if (-not $SkipOpenApiSdkSyncGate) {
@@ -281,6 +357,7 @@ $docsOut = Join-Path $bundleRoot "docs"
 $contractsOut = Join-Path $bundleRoot "contracts\desktop"
 $workflowContractsOut = Join-Path $bundleRoot "contracts\workflow"
 $rustContractsOut = Join-Path $bundleRoot "contracts\rust"
+$glueContractsOut = Join-Path $bundleRoot "contracts\glue"
 $governanceContractsOut = Join-Path $bundleRoot "contracts\governance"
 if ($CleanOldReleases) {
   $releaseRoot = Join-Path $root "release"
@@ -299,6 +376,7 @@ New-Item -ItemType Directory -Path $docsOut -Force | Out-Null
 New-Item -ItemType Directory -Path $contractsOut -Force | Out-Null
 New-Item -ItemType Directory -Path $workflowContractsOut -Force | Out-Null
 New-Item -ItemType Directory -Path $rustContractsOut -Force | Out-Null
+New-Item -ItemType Directory -Path $glueContractsOut -Force | Out-Null
 New-Item -ItemType Directory -Path $governanceContractsOut -Force | Out-Null
 
 Info "copy desktop exe"
@@ -362,6 +440,16 @@ foreach ($contractRel in $rustContractFiles) {
   }
 }
 
+$glueContractFiles = @(
+  "contracts\glue\ingest_extract.schema.json"
+)
+foreach ($contractRel in $glueContractFiles) {
+  $src = Join-Path $root $contractRel
+  if (Test-Path $src) {
+    Copy-Item $src (Join-Path $glueContractsOut (Split-Path $src -Leaf))
+  }
+}
+
 $governanceContractFiles = @(
   "contracts\governance\governance_capabilities.v1.json"
 )
@@ -407,8 +495,12 @@ $lines = @(
   "- 契约目录: contracts/desktop/",
   "- 工作流契约目录: contracts/workflow/",
   "- Rust 契约目录: contracts/rust/",
+  "- Glue 契约目录: contracts/glue/",
   "- Governance 契约目录: contracts/governance/",
   "- 版本目录: $(Split-Path $OutDir -Leaf)",
+  "- Sidecar regression report: $([string]$sidecarRegressionSummary.evidence_path)",
+  "- Sidecar consistency report: $([string]$sidecarConsistencySummary.evidence_path)",
+  "- 打包前会校验 sidecar regression 报告 ok=true，且 Python/Rust consistency 报告不允许存在 skipped。",
   "",
   "## 安装与使用",
   "1. 双击运行 exe。",
@@ -416,6 +508,7 @@ $lines = @(
   "3. 保持在 离线本地模式。",
   "4. 将生肉文件拖入任务队列后点击 开始生成。",
   "5. 若包含 tools/，应用会优先使用内置 OCR 依赖（tesseract/pdftoppm）。",
+  "6. 若要启用 image/xlsx 增强清洗，请确保本地 glue-python sidecar 以 -RequireEnhancedIngest 方式启动并满足 docling/paddleocr/python-calamine/pandera 依赖。",
   "",
   "## 默认输出目录",
   "- 若存在 E:\\Desktop_Real，则默认输出到 E:\\Desktop_Real\\AIWF\\<job_id>\\artifacts",
@@ -438,8 +531,25 @@ $manifest = [ordered]@{
   contract_schemas = @((Get-ChildItem $contractsOut -File | ForEach-Object { ("contracts/desktop/" + $_.Name) }))
   workflow_contracts = @((Get-ChildItem $workflowContractsOut -File | ForEach-Object { ("contracts/workflow/" + $_.Name) }))
   rust_contracts = @((Get-ChildItem $rustContractsOut -File | ForEach-Object { ("contracts/rust/" + $_.Name) }))
+  glue_contracts = @((Get-ChildItem $glueContractsOut -File | ForEach-Object { ("contracts/glue/" + $_.Name) }))
   governance_contracts = @((Get-ChildItem $governanceContractsOut -File | ForEach-Object { ("contracts/governance/" + $_.Name) }))
+  regression_reports = [ordered]@{
+    sidecar_regression = $sidecarRegressionSummary
+    sidecar_python_rust_consistency = $sidecarConsistencySummary
+  }
   gates = [ordered]@{
+    sidecar_regression = [ordered]@{
+      status = $sidecarRegressionGateStatus
+      checked_at = $sidecarRegressionGateCheckedAt
+      script = "ops/logs/regression/sidecar_regression_quality_report.json"
+      error = $sidecarRegressionGateError
+    }
+    sidecar_python_rust_consistency = [ordered]@{
+      status = $sidecarConsistencyGateStatus
+      checked_at = $sidecarConsistencyGateCheckedAt
+      script = "ops/logs/regression/sidecar_python_rust_consistency_report.json"
+      error = $sidecarConsistencyGateError
+    }
     openapi_sdk_sync = [ordered]@{
       status = $openApiSdkSyncGateStatus
       checked_at = $openApiSdkSyncGateCheckedAt
