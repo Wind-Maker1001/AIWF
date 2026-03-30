@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from aiwf.ingest_image_pipeline import extract_image_rows
+from aiwf.ingest_xlsx_pipeline import extract_xlsx_rows
+
 
 def split_text_to_rows(text: str, path: str, source_type: str, by_line: bool = False) -> List[Dict[str, Any]]:
     if by_line:
@@ -81,62 +84,22 @@ def read_image(
     ocr_try_modes: Callable[[Optional[str]], List[str]],
     ocr_extract_text: Callable[[Any, Any, str, str, List[str]], str],
 ) -> List[Dict[str, Any]]:
-    try:
-        from PIL import Image  # type: ignore
-    except Exception as exc:
-        raise RuntimeError(f"image support requires Pillow: {exc}")
-    try:
-        import pytesseract  # type: ignore
-    except Exception as exc:
-        raise RuntimeError(f"image OCR support requires pytesseract: {exc}")
-    cmd = resolve_tesseract_cmd()
-    if cmd:
-        pytesseract.pytesseract.tesseract_cmd = cmd
-    lang = str(ocr_lang or os.environ.get("AIWF_OCR_LANG") or "eng+chi_sim").strip()
-    config = str(ocr_config or os.environ.get("AIWF_OCR_CONFIG") or "--oem 1 --psm 6").strip()
-    modes = ocr_try_modes(ocr_preprocess)
-    with Image.open(path) as image:
-        text = ocr_extract_text(pytesseract, image, lang, config, modes)
-    return split_text_to_rows(text, path, "image", by_line=by_line)
+    del resolve_tesseract_cmd
+    del ocr_try_modes
+    del ocr_extract_text
+    rows, _meta = extract_image_rows(
+        path,
+        by_line=by_line,
+        ocr_lang=ocr_lang,
+        ocr_config=ocr_config,
+        ocr_preprocess=ocr_preprocess,
+    )
+    return rows
 
 
-def read_xlsx(path: str, *, include_all_sheets: bool = False) -> List[Dict[str, Any]]:
-    try:
-        from openpyxl import load_workbook  # type: ignore
-    except Exception as exc:
-        raise RuntimeError(f"xlsx support requires openpyxl: {exc}")
-    workbook = load_workbook(path, read_only=True, data_only=True)
-    try:
-        out: List[Dict[str, Any]] = []
-        sheet_names = workbook.sheetnames if include_all_sheets else [workbook.sheetnames[0]]
-        for sheet_name in sheet_names:
-            ws = workbook[sheet_name]
-            rows_iter = ws.iter_rows(values_only=True)
-            try:
-                header_raw = next(rows_iter)
-            except StopIteration:
-                continue
-            headers = [
-                str(header).strip() if header is not None and str(header).strip() else f"col_{index + 1}"
-                for index, header in enumerate(header_raw)
-            ]
-            for row_idx, row in enumerate(rows_iter, start=2):
-                obj: Dict[str, Any] = {}
-                non_empty = False
-                for index, value in enumerate(row):
-                    obj[headers[index]] = value
-                    if value is not None and str(value).strip() != "":
-                        non_empty = True
-                if non_empty:
-                    obj["source_file"] = os.path.basename(path)
-                    obj["source_path"] = path
-                    obj["source_type"] = "xlsx"
-                    obj["sheet_name"] = sheet_name
-                    obj["row_index"] = row_idx
-                    out.append(obj)
-        return out
-    finally:
-        workbook.close()
+def read_xlsx(path: str, *, include_all_sheets: bool = True, spec: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    rows, _meta = extract_xlsx_rows(path, include_all_sheets=include_all_sheets, spec=spec)
+    return rows
 
 
 def load_txt_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -159,20 +122,21 @@ def load_image_input(
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     if not bool(options.get("ocr_enabled", True)):
         return [], {"input_format": "image", "skipped": True, "reason": "ocr disabled"}
-    return (
-        read_image_fn(
-            path,
-            by_line=bool(options.get("text_by_line", False)),
-            ocr_lang=options.get("ocr_lang"),
-            ocr_config=options.get("ocr_config"),
-            ocr_preprocess=options.get("ocr_preprocess"),
-        ),
-        {"input_format": "image"},
+    rows, meta = extract_image_rows(
+        path,
+        by_line=bool(options.get("text_by_line", False)),
+        ocr_lang=options.get("ocr_lang"),
+        ocr_config=options.get("ocr_config"),
+        ocr_preprocess=options.get("ocr_preprocess"),
+        spec=options,
     )
+    return rows, meta
 
 
 def load_xlsx_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    return (
-        read_xlsx(path, include_all_sheets=bool(options.get("xlsx_all_sheets", False))),
-        {"input_format": "xlsx"},
+    rows, meta = extract_xlsx_rows(
+        path,
+        include_all_sheets=bool(options.get("xlsx_all_sheets", True)),
+        spec=options,
     )
+    return rows, meta

@@ -391,8 +391,8 @@ def read_image(
     )
 
 
-def read_xlsx(path: str, *, include_all_sheets: bool = False) -> List[Dict[str, Any]]:
-    return _read_xlsx_impl(path, include_all_sheets=include_all_sheets)
+def read_xlsx(path: str, *, include_all_sheets: bool = True, spec: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    return _read_xlsx_impl(path, include_all_sheets=include_all_sheets, spec=spec)
 
 
 def _load_txt_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -427,21 +427,22 @@ def load_rows_from_file(
     ocr_lang: Optional[str] = None,
     ocr_config: Optional[str] = None,
     ocr_preprocess: Optional[str] = None,
-    xlsx_all_sheets: bool = False,
+    xlsx_all_sheets: bool = True,
+    extra_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     _ensure_builtin_input_readers()
     registration = get_input_reader(path)
-    return registration.loader(
-        path,
-        {
-            "text_by_line": text_by_line,
-            "ocr_enabled": ocr_enabled,
-            "ocr_lang": ocr_lang,
-            "ocr_config": ocr_config,
-            "ocr_preprocess": ocr_preprocess,
-            "xlsx_all_sheets": xlsx_all_sheets,
-        },
-    )
+    options = {
+        "text_by_line": text_by_line,
+        "ocr_enabled": ocr_enabled,
+        "ocr_lang": ocr_lang,
+        "ocr_config": ocr_config,
+        "ocr_preprocess": ocr_preprocess,
+        "xlsx_all_sheets": xlsx_all_sheets,
+    }
+    if isinstance(extra_options, dict):
+        options.update(extra_options)
+    return registration.loader(path, options)
 
 
 def load_rows_from_files(
@@ -452,15 +453,18 @@ def load_rows_from_files(
     ocr_lang: Optional[str] = None,
     ocr_config: Optional[str] = None,
     ocr_preprocess: Optional[str] = None,
-    xlsx_all_sheets: bool = False,
+    xlsx_all_sheets: bool = True,
     max_retries: int = 0,
     on_file_error: str = "skip",
+    extra_options: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     _ensure_builtin_input_readers()
     all_rows: List[Dict[str, Any]] = []
     formats: List[str] = []
     skipped_files: List[Dict[str, Any]] = []
     failed_files: List[Dict[str, Any]] = []
+    file_results: List[Dict[str, Any]] = []
+    blocked_inputs: List[Dict[str, Any]] = []
     for p in paths:
         last_err: Optional[str] = None
         loaded = False
@@ -474,13 +478,28 @@ def load_rows_from_files(
                     ocr_config=ocr_config,
                     ocr_preprocess=ocr_preprocess,
                     xlsx_all_sheets=xlsx_all_sheets,
+                    extra_options=extra_options,
                 )
                 fmt = str(meta.get("input_format"))
                 formats.append(fmt)
+                file_results.append({
+                    "path": p,
+                    "input_format": fmt,
+                    "meta": meta,
+                })
                 if meta.get("skipped"):
                     skipped_files.append({"path": p, "reason": str(meta.get("reason") or "skipped")})
                 else:
                     all_rows.extend(rows)
+                if bool(meta.get("quality_blocked")):
+                    blocked_inputs.append(
+                        {
+                            "path": p,
+                            "input_format": fmt,
+                            "error": str(meta.get("quality_error") or "quality blocked"),
+                            "quality_report": meta.get("quality_report"),
+                        }
+                    )
                 loaded = True
                 break
             except Exception as e:
@@ -494,4 +513,8 @@ def load_rows_from_files(
         "file_count": len(paths),
         "skipped_files": skipped_files,
         "failed_files": failed_files,
+        "file_results": file_results,
+        "blocked_inputs": blocked_inputs,
+        "quality_blocked": len(blocked_inputs) > 0,
+        "quality_error": "; ".join(str(item.get("error") or "") for item in blocked_inputs if str(item.get("error") or "").strip()),
     }
