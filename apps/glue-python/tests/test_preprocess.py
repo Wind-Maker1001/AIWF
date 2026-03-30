@@ -309,6 +309,30 @@ class PreprocessTests(unittest.TestCase):
             rows = preprocess._read_jsonl(out)
             self.assertEqual({r["sheet_name"] for r in rows}, {"S1", "S2"})
 
+    def test_preprocess_blocks_xlsx_input_when_quality_rules_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            xlsx = os.path.join(tmp, "a.xlsx")
+            out = os.path.join(tmp, "out.jsonl")
+            from openpyxl import Workbook  # type: ignore
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "S1"
+            ws.append(["id", "note"])
+            ws.append([1, "hello"])
+            wb.save(xlsx)
+
+            with self.assertRaisesRegex(RuntimeError, "required_columns"):
+                preprocess.preprocess_file(
+                    xlsx,
+                    out,
+                    {
+                        "input_files": [xlsx],
+                        "output_format": "jsonl",
+                        "xlsx_rules": {"required_columns": ["id", "amount"]},
+                    },
+                )
+
     def test_preprocess_standardize_evidence_and_quality_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = os.path.join(tmp, "raw.jsonl")

@@ -89,9 +89,10 @@ def _read_rows(path: str, spec: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], D
             ocr_lang=str(spec.get("ocr_lang") or "").strip() or None,
             ocr_config=str(spec.get("ocr_config") or "").strip() or None,
             ocr_preprocess=str(spec.get("ocr_preprocess") or "").strip() or None,
-            xlsx_all_sheets=bool(spec.get("xlsx_all_sheets", False)),
+            xlsx_all_sheets=bool(spec.get("xlsx_all_sheets", True)),
             max_retries=int(spec.get("max_retries", 0)),
             on_file_error=str(spec.get("on_file_error", "skip")).strip().lower(),
+            extra_options=spec,
         )
         return rows, meta
 

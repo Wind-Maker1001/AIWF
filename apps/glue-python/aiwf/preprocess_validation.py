@@ -14,7 +14,7 @@ def validate_preprocess_spec_impl(
     if not isinstance(spec, dict):
         return {"ok": False, "errors": ["preprocess spec must be object"], "warnings": []}
 
-    for key in ["header_map", "default_values"]:
+    for key in ["header_map", "default_values", "quality_rules", "image_rules", "xlsx_rules", "sheet_profiles"]:
         if key in spec and not isinstance(spec.get(key), dict):
             errors.append(f"{key} must be an object")
     for key in [
@@ -29,6 +29,7 @@ def validate_preprocess_spec_impl(
         "quality_required_fields",
         "conflict_positive_words",
         "conflict_negative_words",
+        "sheet_allowlist",
     ]:
         if key in spec and not isinstance(spec.get(key), list):
             errors.append(f"{key} must be an array")
@@ -46,6 +47,8 @@ def validate_preprocess_spec_impl(
             errors.append("ocr_preprocess must be adaptive|gray|none|off")
     if "xlsx_all_sheets" in spec and not isinstance(spec.get("xlsx_all_sheets"), bool):
         errors.append("xlsx_all_sheets must be boolean")
+    if "include_hidden_sheets" in spec and not isinstance(spec.get("include_hidden_sheets"), bool):
+        errors.append("include_hidden_sheets must be boolean")
     if "standardize_evidence" in spec and not isinstance(spec.get("standardize_evidence"), bool):
         errors.append("standardize_evidence must be boolean")
     if "generate_quality_report" in spec and not isinstance(spec.get("generate_quality_report"), bool):
@@ -58,6 +61,8 @@ def validate_preprocess_spec_impl(
         errors.append("canonical_bundle_dir must be string")
     if "canonical_title" in spec and not isinstance(spec.get("canonical_title"), str):
         errors.append("canonical_title must be string")
+    if "canonical_profile" in spec and not isinstance(spec.get("canonical_profile"), str):
+        errors.append("canonical_profile must be string")
     if "evidence_schema" in spec and not isinstance(spec.get("evidence_schema"), dict):
         errors.append("evidence_schema must be object")
     if "detect_conflicts" in spec and not isinstance(spec.get("detect_conflicts"), bool):
@@ -137,6 +142,7 @@ def validate_preprocess_spec_impl(
         "ocr_config",
         "ocr_preprocess",
         "xlsx_all_sheets",
+        "include_hidden_sheets",
         "max_retries",
         "on_file_error",
         "standardize_evidence",
@@ -146,7 +152,13 @@ def validate_preprocess_spec_impl(
         "export_canonical_bundle",
         "canonical_bundle_dir",
         "canonical_title",
+        "canonical_profile",
         "quality_required_fields",
+        "quality_rules",
+        "image_rules",
+        "xlsx_rules",
+        "sheet_profiles",
+        "sheet_allowlist",
         "chunk_mode",
         "chunk_field",
         "chunk_max_chars",

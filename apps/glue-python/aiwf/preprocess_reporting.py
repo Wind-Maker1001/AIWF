@@ -115,6 +115,7 @@ def export_canonical_bundle(
 
 
 def _build_quality_report(rows: List[Dict[str, Any]], summary: Dict[str, Any], spec: Dict[str, Any]) -> Dict[str, Any]:
+    input_meta = spec.get("_input_meta") if isinstance(spec.get("_input_meta"), dict) else {}
     row_count = len(rows)
     all_fields: List[str] = []
     seen = set()
@@ -184,4 +185,10 @@ def _build_quality_report(rows: List[Dict[str, Any]], summary: Dict[str, Any], s
         "field_coverage": coverage,
         "required_field_missing": required_missing,
         "claim_length": claim_stats,
+        "input_quality": {
+            "blocked": bool(input_meta.get("quality_blocked")),
+            "error": str(input_meta.get("quality_error") or ""),
+            "file_results": input_meta.get("file_results") if isinstance(input_meta.get("file_results"), list) else [],
+            "blocked_inputs": input_meta.get("blocked_inputs") if isinstance(input_meta.get("blocked_inputs"), list) else [],
+        },
     }

@@ -19,6 +19,8 @@ def preprocess_file_impl(
     export_canonical_bundle: Callable[..., Dict[str, Any]],
 ) -> Dict[str, Any]:
     rows, meta = read_rows(input_path, spec)
+    if bool(meta.get("quality_blocked")):
+        raise RuntimeError(str(meta.get("quality_error") or "input quality blocked"))
     out_rows, summary = preprocess_rows(rows, spec)
     out_fmt = write_rows(output_path, out_rows, spec)
     output_dir = resolve_path_within_root(
@@ -31,7 +33,7 @@ def preprocess_file_impl(
             output_dir,
             str(spec.get("quality_report_path") or f"{os.path.basename(output_path)}.quality.json"),
         )
-        report = build_quality_report(out_rows, summary, spec)
+        report = build_quality_report(out_rows, summary, {**spec, "_input_meta": meta})
         write_json(quality_report_path, report)
     canonical_bundle = None
     if bool(spec.get("export_canonical_bundle", False)):
@@ -50,6 +52,8 @@ def preprocess_file_impl(
         "delimiter": meta.get("delimiter"),
         "skipped_files": meta.get("skipped_files"),
         "failed_files": meta.get("failed_files"),
+        "file_results": meta.get("file_results"),
+        "blocked_inputs": meta.get("blocked_inputs"),
         "quality_report_path": quality_report_path,
         "canonical_bundle": canonical_bundle,
         "summary": summary,
