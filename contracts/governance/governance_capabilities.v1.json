@@ -5,7 +5,6 @@
     {
       "constant": "QUALITY_RULE_SETS",
       "capability": "quality_rule_sets",
-      "schema_version": "quality_rule_set.v1",
       "route_prefix": "/governance/quality-rule-sets",
       "owned_route_prefixes": [
         "/governance/quality-rule-sets"
@@ -14,7 +13,6 @@
     {
       "constant": "WORKFLOW_SANDBOX_RULES",
       "capability": "workflow_sandbox_rules",
-      "schema_version": "workflow_sandbox_alert_rules.v1",
       "route_prefix": "/governance/workflow-sandbox/rules",
       "owned_route_prefixes": [
         "/governance/workflow-sandbox/rules",
@@ -24,7 +22,6 @@
     {
       "constant": "WORKFLOW_SANDBOX_AUTOFIX",
       "capability": "workflow_sandbox_autofix",
-      "schema_version": "workflow_sandbox_autofix_state.v1",
       "route_prefix": "/governance/workflow-sandbox/autofix-state",
       "owned_route_prefixes": [
         "/governance/workflow-sandbox/autofix-state",
@@ -34,7 +31,6 @@
     {
       "constant": "WORKFLOW_APPS",
       "capability": "workflow_apps",
-      "schema_version": "workflow_app_registry_entry.v1",
       "route_prefix": "/governance/workflow-apps",
       "owned_route_prefixes": [
         "/governance/workflow-apps"
@@ -43,7 +39,6 @@
     {
       "constant": "WORKFLOW_VERSIONS",
       "capability": "workflow_versions",
-      "schema_version": "workflow_version_snapshot.v1",
       "route_prefix": "/governance/workflow-versions",
       "owned_route_prefixes": [
         "/governance/workflow-versions"
@@ -52,7 +47,6 @@
     {
       "constant": "MANUAL_REVIEWS",
       "capability": "manual_reviews",
-      "schema_version": "manual_review_item.v1",
       "route_prefix": "/governance/manual-reviews",
       "owned_route_prefixes": [
         "/governance/manual-reviews"
@@ -61,7 +55,6 @@
     {
       "constant": "RUN_BASELINES",
       "capability": "run_baselines",
-      "schema_version": "run_baseline_entry.v1",
       "route_prefix": "/governance/run-baselines",
       "owned_route_prefixes": [
         "/governance/run-baselines"

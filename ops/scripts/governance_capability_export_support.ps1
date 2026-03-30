@@ -6,7 +6,7 @@ function Invoke-GovernanceCapabilityExportStep {
 
   $checkedAt = (Get-Date).ToString("s")
   if (-not (Test-Path $ScriptPath)) {
-    return [ordered]@{
+    return [pscustomobject][ordered]@{
       ok = $false
       checked_at = $checkedAt
       error = "governance capability export script missing: $ScriptPath"
@@ -15,10 +15,13 @@ function Invoke-GovernanceCapabilityExportStep {
   }
 
   Info "refreshing governance capability generated assets"
-  powershell -ExecutionPolicy Bypass -File $ScriptPath
+  $scriptOutput = & powershell -ExecutionPolicy Bypass -File $ScriptPath 2>&1
+  foreach ($entry in @($scriptOutput)) {
+    Write-Host ([string]$entry)
+  }
   $checkedAt = (Get-Date).ToString("s")
   if ($LASTEXITCODE -ne 0) {
-    return [ordered]@{
+    return [pscustomobject][ordered]@{
       ok = $false
       checked_at = $checkedAt
       error = "export_governance_capabilities.ps1 exit code $LASTEXITCODE"
@@ -27,7 +30,7 @@ function Invoke-GovernanceCapabilityExportStep {
   }
 
   Ok "governance capability generated assets refreshed"
-  return [ordered]@{
+  return [pscustomobject][ordered]@{
     ok = $true
     checked_at = $checkedAt
     error = ""

@@ -37,13 +37,9 @@ node --test `
   tests-node/local_workflow_store_schema_gate.test.js
 ```
 
-```powershell
-python -m pytest apps\glue-python\tests\test_node_config_contract_parity.py -q
-```
-
 Observed result during reassessment:
 
-- targeted gate and parity paths pass
+- targeted gate and Rust-authoritative validation paths pass
 - no evidence was found that the repo has reverted to handwritten node-config type maps or local-legacy governance defaults on the main path
 
 ## Executive Judgment

@@ -4,7 +4,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
   {
     "constant": "QUALITY_RULE_SETS",
     "capability": "quality_rule_sets",
-    "schema_version": "quality_rule_set.v1",
     "route_prefix": "/governance/quality-rule-sets",
     "owned_route_prefixes": [
       "/governance/quality-rule-sets"
@@ -17,7 +16,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
   {
     "constant": "WORKFLOW_SANDBOX_RULES",
     "capability": "workflow_sandbox_rules",
-    "schema_version": "workflow_sandbox_alert_rules.v1",
     "route_prefix": "/governance/workflow-sandbox/rules",
     "owned_route_prefixes": [
       "/governance/workflow-sandbox/rules",
@@ -32,7 +30,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
   {
     "constant": "WORKFLOW_SANDBOX_AUTOFIX",
     "capability": "workflow_sandbox_autofix",
-    "schema_version": "workflow_sandbox_autofix_state.v1",
     "route_prefix": "/governance/workflow-sandbox/autofix-state",
     "owned_route_prefixes": [
       "/governance/workflow-sandbox/autofix-state",
@@ -47,7 +44,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
   {
     "constant": "WORKFLOW_APPS",
     "capability": "workflow_apps",
-    "schema_version": "workflow_app_registry_entry.v1",
     "route_prefix": "/governance/workflow-apps",
     "owned_route_prefixes": [
       "/governance/workflow-apps"
@@ -60,7 +56,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
   {
     "constant": "WORKFLOW_VERSIONS",
     "capability": "workflow_versions",
-    "schema_version": "workflow_version_snapshot.v1",
     "route_prefix": "/governance/workflow-versions",
     "owned_route_prefixes": [
       "/governance/workflow-versions"
@@ -73,7 +68,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
   {
     "constant": "MANUAL_REVIEWS",
     "capability": "manual_reviews",
-    "schema_version": "manual_review_item.v1",
     "route_prefix": "/governance/manual-reviews",
     "owned_route_prefixes": [
       "/governance/manual-reviews"
@@ -86,7 +80,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
   {
     "constant": "RUN_BASELINES",
     "capability": "run_baselines",
-    "schema_version": "run_baseline_entry.v1",
     "route_prefix": "/governance/run-baselines",
     "owned_route_prefixes": [
       "/governance/run-baselines"
@@ -100,7 +93,6 @@ const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze([
 const GOVERNANCE_CAPABILITIES = Object.freeze({
   "QUALITY_RULE_SETS": {
     "capability": "quality_rule_sets",
-    "schema_version": "quality_rule_set.v1",
     "route_prefix": "/governance/quality-rule-sets",
     "owned_route_prefixes": [
       "/governance/quality-rule-sets"
@@ -108,7 +100,6 @@ const GOVERNANCE_CAPABILITIES = Object.freeze({
   },
   "WORKFLOW_SANDBOX_RULES": {
     "capability": "workflow_sandbox_rules",
-    "schema_version": "workflow_sandbox_alert_rules.v1",
     "route_prefix": "/governance/workflow-sandbox/rules",
     "owned_route_prefixes": [
       "/governance/workflow-sandbox/rules",
@@ -117,7 +108,6 @@ const GOVERNANCE_CAPABILITIES = Object.freeze({
   },
   "WORKFLOW_SANDBOX_AUTOFIX": {
     "capability": "workflow_sandbox_autofix",
-    "schema_version": "workflow_sandbox_autofix_state.v1",
     "route_prefix": "/governance/workflow-sandbox/autofix-state",
     "owned_route_prefixes": [
       "/governance/workflow-sandbox/autofix-state",
@@ -126,7 +116,6 @@ const GOVERNANCE_CAPABILITIES = Object.freeze({
   },
   "WORKFLOW_APPS": {
     "capability": "workflow_apps",
-    "schema_version": "workflow_app_registry_entry.v1",
     "route_prefix": "/governance/workflow-apps",
     "owned_route_prefixes": [
       "/governance/workflow-apps"
@@ -134,7 +123,6 @@ const GOVERNANCE_CAPABILITIES = Object.freeze({
   },
   "WORKFLOW_VERSIONS": {
     "capability": "workflow_versions",
-    "schema_version": "workflow_version_snapshot.v1",
     "route_prefix": "/governance/workflow-versions",
     "owned_route_prefixes": [
       "/governance/workflow-versions"
@@ -142,7 +130,6 @@ const GOVERNANCE_CAPABILITIES = Object.freeze({
   },
   "MANUAL_REVIEWS": {
     "capability": "manual_reviews",
-    "schema_version": "manual_review_item.v1",
     "route_prefix": "/governance/manual-reviews",
     "owned_route_prefixes": [
       "/governance/manual-reviews"
@@ -150,7 +137,6 @@ const GOVERNANCE_CAPABILITIES = Object.freeze({
   },
   "RUN_BASELINES": {
     "capability": "run_baselines",
-    "schema_version": "run_baseline_entry.v1",
     "route_prefix": "/governance/run-baselines",
     "owned_route_prefixes": [
       "/governance/run-baselines"
