@@ -112,6 +112,8 @@ Preprocess-specific generic keys:
 - `xlsx_rules` (xlsx specific quality overrides)
 - `sheet_profiles` (header alias/profile hints for workbook extraction)
 
+Sidecar ingest contract:
+- `contracts/glue/ingest_extract.schema.json`
 
 Rule validation script:
 ```powershell

@@ -62,12 +62,48 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertTrue(payload["ok"])
         self.assertIn("dependencies", payload)
+        self.assertIn("ingest_sidecar", payload)
+        self.assertEqual(payload["ingest_sidecar"]["contract"], "contracts/glue/ingest_extract.schema.json")
+
+    def test_ingest_extract_route_returns_rows_and_quality_state(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [{"source_type": "image", "text": "claim"}],
+                {
+                    "input_format": "image",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "image_blocks": [{"block_id": "img_blk_1"}],
+                    "quality_metrics": {"ocr_confidence_avg": 0.95},
+                },
+            )
+            resp = self.client.post(
+                "/ingest/extract",
+                json={
+                    "input_path": r"D:\data\sample.png",
+                    "image_rules": {"ocr_confidence_avg_min": 0.8},
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["quality_blocked"])
+        self.assertEqual(payload["contract"], "contracts/glue/ingest_extract.schema.json")
+        self.assertEqual(len(payload["rows"]), 1)
+        self.assertEqual(payload["file_results"][0]["path"], r"D:\data\sample.png")
+        self.assertEqual(payload["file_results"][0]["rows"][0]["text"], "claim")
+        self.assertEqual(payload["file_results"][0]["row_count"], 1)
+        self.assertIn("image_blocks", payload["file_results"][0])
+        self.assertIn("quality_report", payload["file_results"][0])
+
     def test_capabilities_route_reports_registered_components(self):
         resp = self.client.get("/capabilities")
         self.assertEqual(resp.status_code, 200)
         payload = resp.json()
         self.assertTrue(payload["ok"])
         caps = payload["capabilities"]
+        self.assertEqual(caps["ingest_sidecar"]["contract"], "contracts/glue/ingest_extract.schema.json")
         self.assertIn("cleaning", caps["flows"])
         self.assertNotIn("workflow_reference", caps["flows"])
         self.assertIn("txt", caps["input_formats"])

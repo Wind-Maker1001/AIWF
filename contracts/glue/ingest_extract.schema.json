@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiwf.local/contracts/glue/ingest_extract.schema.json",
+  "title": "AIWF Glue Ingest Extract Contract",
+  "type": "object",
+  "properties": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "input_path": { "type": "string" },
+        "input_files": { "type": "array", "items": { "type": "string" } },
+        "text_split_by_line": { "type": "boolean" },
+        "ocr_enabled": { "type": "boolean" },
+        "ocr_lang": { "type": "string" },
+        "ocr_config": { "type": "string" },
+        "ocr_preprocess": { "type": "string" },
+        "xlsx_all_sheets": { "type": "boolean" },
+        "include_hidden_sheets": { "type": "boolean" },
+        "sheet_allowlist": { "type": "array", "items": { "type": "string" } },
+        "quality_rules": { "type": "object" },
+        "image_rules": { "type": "object" },
+        "xlsx_rules": { "type": "object" },
+        "sheet_profiles": { "type": "object" },
+        "canonical_profile": {
+          "type": "string",
+          "enum": ["finance_statement", "customer_contact", "debate_evidence"]
+        },
+        "on_file_error": { "type": "string", "enum": ["raise", "skip"] }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "ok",
+        "rows",
+        "file_results",
+        "image_blocks",
+        "table_cells",
+        "sheet_frames",
+        "contract",
+        "quality_blocked",
+        "blocked_inputs",
+        "engine_trace"
+      ],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "rows": { "type": "array", "items": { "type": "object" } },
+        "file_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "ok",
+              "input_format",
+              "rows",
+              "row_count",
+              "quality_blocked",
+              "quality_report",
+              "quality_metrics",
+              "image_blocks",
+              "table_cells",
+              "sheet_frames",
+              "engine_trace"
+            ],
+            "properties": {
+              "path": { "type": "string" },
+              "ok": { "type": "boolean" },
+              "input_format": { "type": "string" },
+              "rows": { "type": "array", "items": { "type": "object" } },
+              "row_count": { "type": "integer", "minimum": 0 },
+              "quality_blocked": { "type": "boolean" },
+              "quality_report": { "type": ["object", "null"] },
+              "quality_metrics": { "type": ["object", "null"] },
+              "image_blocks": { "type": "array", "items": { "type": "object" } },
+              "table_cells": { "type": "array", "items": { "type": "object" } },
+              "sheet_frames": { "type": "array", "items": { "type": "object" } },
+              "engine_trace": { "type": "array", "items": { "type": "object" } }
+            },
+            "additionalProperties": true
+          }
+        },
+        "image_blocks": { "type": "array", "items": { "type": "object" } },
+        "table_cells": { "type": "array", "items": { "type": "object" } },
+        "sheet_frames": { "type": "array", "items": { "type": "object" } },
+        "contract": { "type": "string" },
+        "quality_metrics": { "type": "array", "items": { "type": ["object", "null"] } },
+        "engine_trace": { "type": "array", "items": { "type": "object" } },
+        "quality_blocked": { "type": "boolean" },
+        "blocked_inputs": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

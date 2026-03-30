@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from aiwf import ingest
 from aiwf.runtime_catalog import get_runtime_catalog
 from aiwf.dependency_status import dependency_status
 from aiwf.flow_context import LegacyFlowPathParamsError, attach_job_context, normalize_job_context
@@ -130,6 +131,7 @@ settings = Settings()
 runtime_catalog = get_runtime_catalog()
 
 WORKFLOW_GRAPH_CONTRACT_AUTHORITY = "contracts/workflow/workflow.schema.json"
+INGEST_EXTRACT_CONTRACT_AUTHORITY = "contracts/glue/ingest_extract.schema.json"
 WORKFLOW_GRAPH_ERROR_CODE = "workflow_graph_invalid"
 GOVERNANCE_VALIDATION_ERROR_CODE = "governance_validation_invalid"
 
@@ -415,6 +417,24 @@ class RunBaselineReq(BaseModel):
 class RunBaselineEnvelope(BaseModel):
     baseline: RunBaselineReq
 
+
+class IngestExtractReq(BaseModel):
+    input_files: list[str] = Field(default_factory=list)
+    input_path: str = ""
+    text_split_by_line: bool = False
+    ocr_enabled: bool = True
+    ocr_lang: Optional[str] = None
+    ocr_config: Optional[str] = None
+    ocr_preprocess: Optional[str] = None
+    xlsx_all_sheets: bool = True
+    include_hidden_sheets: bool = False
+    sheet_allowlist: list[str] = Field(default_factory=list)
+    quality_rules: Dict[str, Any] = Field(default_factory=dict)
+    image_rules: Dict[str, Any] = Field(default_factory=dict)
+    xlsx_rules: Dict[str, Any] = Field(default_factory=dict)
+    sheet_profiles: Dict[str, Any] = Field(default_factory=dict)
+    canonical_profile: str = ""
+    on_file_error: str = "raise"
 
 
 def _call_compatible(callable_obj, candidates):
@@ -711,12 +731,22 @@ def health():
     return {
         "ok": True,
         "dependencies": dependency_status(),
+        "ingest_sidecar": {
+            "extract_route": "/ingest/extract",
+            "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
+            "supported_modalities": ["image", "xlsx"],
+        },
     }
 
 
 @app.get("/capabilities")
 def capabilities():
     caps = runtime_catalog.capabilities()
+    caps["ingest_sidecar"] = {
+        "extract_route": "/ingest/extract",
+        "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
+        "supported_modalities": ["image", "xlsx"],
+    }
     caps["governance"] = build_governance_capability_map()
     caps["governance_surface"] = {
         "schema_version": GOVERNANCE_SURFACE_SCHEMA_VERSION,
@@ -733,6 +763,105 @@ def governance_control_plane_meta():
     return {
         "ok": True,
         "boundary": build_governance_control_plane_boundary(),
+    }
+
+
+@app.post("/ingest/extract")
+def ingest_extract(req: IngestExtractReq):
+    raw_paths = []
+    if str(req.input_path or "").strip():
+        raw_paths.append(str(req.input_path).strip())
+    raw_paths.extend([str(item).strip() for item in req.input_files if str(item).strip()])
+    paths = list(dict.fromkeys(raw_paths))
+    if not paths:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "input_path or input_files is required"})
+
+    options = req.model_dump()
+    file_results = []
+    all_rows: list[dict[str, Any]] = []
+    blocked_inputs: list[dict[str, Any]] = []
+    all_image_blocks: list[dict[str, Any]] = []
+    all_table_cells: list[dict[str, Any]] = []
+    all_sheet_frames: list[dict[str, Any]] = []
+    engine_trace: list[dict[str, Any]] = []
+    for path in paths:
+        try:
+            rows, meta = ingest.load_rows_from_file(
+                path,
+                text_by_line=req.text_split_by_line,
+                ocr_enabled=req.ocr_enabled,
+                ocr_lang=req.ocr_lang,
+                ocr_config=req.ocr_config,
+                ocr_preprocess=req.ocr_preprocess,
+                xlsx_all_sheets=req.xlsx_all_sheets,
+                extra_options=options,
+            )
+        except Exception as exc:
+            if str(req.on_file_error or "raise").strip().lower() == "raise":
+                return JSONResponse(
+                    status_code=400,
+                    content={"ok": False, "error": str(exc), "path": path},
+                )
+            file_results.append(
+                {
+                    "path": path,
+                    "ok": False,
+                    "error": str(exc),
+                    "input_format": "",
+                    "rows": [],
+                    "row_count": 0,
+                    "quality_blocked": False,
+                    "quality_report": None,
+                    "quality_metrics": None,
+                    "image_blocks": [],
+                    "table_cells": [],
+                    "sheet_frames": [],
+                    "engine_trace": [],
+                }
+            )
+            continue
+        file_results.append(
+            {
+                "path": path,
+                "ok": True,
+                "rows": rows,
+                "row_count": len(rows),
+                "input_format": meta.get("input_format"),
+                "quality_blocked": bool(meta.get("quality_blocked")),
+                "quality_report": meta.get("quality_report"),
+                "quality_metrics": meta.get("quality_metrics"),
+                "image_blocks": meta.get("image_blocks") if isinstance(meta.get("image_blocks"), list) else [],
+                "table_cells": meta.get("table_cells") if isinstance(meta.get("table_cells"), list) else [],
+                "sheet_frames": meta.get("sheet_frames") if isinstance(meta.get("sheet_frames"), list) else [],
+                "engine_trace": meta.get("engine_trace") if isinstance(meta.get("engine_trace"), list) else [],
+            }
+        )
+        all_rows.extend(rows)
+        all_image_blocks.extend(meta.get("image_blocks") if isinstance(meta.get("image_blocks"), list) else [])
+        all_table_cells.extend(meta.get("table_cells") if isinstance(meta.get("table_cells"), list) else [])
+        all_sheet_frames.extend(meta.get("sheet_frames") if isinstance(meta.get("sheet_frames"), list) else [])
+        engine_trace.extend(meta.get("engine_trace") if isinstance(meta.get("engine_trace"), list) else [])
+        if bool(meta.get("quality_blocked")):
+            blocked_inputs.append(
+                {
+                    "path": path,
+                    "error": str(meta.get("quality_error") or "quality blocked"),
+                    "quality_report": meta.get("quality_report"),
+                }
+            )
+
+    return {
+        "ok": True,
+        "rows": all_rows,
+        "file_results": file_results,
+        "image_blocks": all_image_blocks,
+        "table_cells": all_table_cells,
+        "sheet_frames": all_sheet_frames,
+        "quality_metrics": [item.get("quality_metrics") for item in file_results if item.get("quality_metrics")],
+        "engine_trace": engine_trace,
+        "quality_blocked": len(blocked_inputs) > 0,
+        "blocked_inputs": blocked_inputs,
+        "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
     }
 
 
