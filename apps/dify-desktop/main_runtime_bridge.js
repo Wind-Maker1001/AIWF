@@ -11,7 +11,7 @@ function createBridgeSupport({ path, fork }) {
     return h;
   }
 
-  function runOfflineTaskInWorker(task, payload, outRoot) {
+  function runOfflineTaskInWorker(task, payload, outRoot, cfg = {}) {
     return new Promise((resolve, reject) => {
       const workerPath = path.join(__dirname, "offline_worker.js");
       const child = fork(workerPath, [], {
@@ -54,20 +54,27 @@ function createBridgeSupport({ path, fork }) {
         reject(new Error(`offline worker exited unexpectedly: ${code}`));
       });
 
-      child.send({ task, payload: { ...(payload || {}), output_root: outRoot } });
+      child.send({
+        task,
+        payload: {
+          ...(payload || {}),
+          output_root: outRoot,
+          glue_url: String((cfg && cfg.glueUrl) || process.env.AIWF_GLUE_URL || "http://127.0.0.1:18081").trim(),
+        },
+      });
     });
   }
 
-  function runOfflineCleaningInWorker(payload, outRoot) {
-    return runOfflineTaskInWorker("cleaning", payload, outRoot);
+  function runOfflineCleaningInWorker(payload, outRoot, cfg = {}) {
+    return runOfflineTaskInWorker("cleaning", payload, outRoot, cfg);
   }
 
-  function runOfflinePrecheckInWorker(payload, outRoot) {
-    return runOfflineTaskInWorker("precheck", payload, outRoot);
+  function runOfflinePrecheckInWorker(payload, outRoot, cfg = {}) {
+    return runOfflineTaskInWorker("precheck", payload, outRoot, cfg);
   }
 
-  function runOfflinePreviewInWorker(payload, outRoot) {
-    return runOfflineTaskInWorker("preview", payload, outRoot);
+  function runOfflinePreviewInWorker(payload, outRoot, cfg = {}) {
+    return runOfflineTaskInWorker("preview", payload, outRoot, cfg);
   }
 
   async function runViaBaseApi(payload, cfg) {
@@ -98,6 +105,25 @@ function createBridgeSupport({ path, fork }) {
       actuator: a.ok ? await a.json() : { ok: false, status: a.status },
       dify_bridge: b.ok ? await b.json() : { ok: false, status: b.status },
     };
+  }
+
+  async function glueHealth(cfg) {
+    const glue = String((cfg && cfg.glueUrl) || process.env.AIWF_GLUE_URL || "http://127.0.0.1:18081").replace(/\/$/, "");
+    try {
+      const resp = await fetch(`${glue}/health`, { headers: headers(cfg && cfg.apiKey) });
+      const payload = await resp.json().catch(() => ({}));
+      return {
+        ok: resp.ok && !!payload.ok,
+        glueUrl: glue,
+        health: payload,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        glueUrl: glue,
+        error: String(error && error.message ? error.message : error),
+      };
+    }
   }
 
   function parsePrometheusMetrics(text) {
@@ -139,6 +165,7 @@ function createBridgeSupport({ path, fork }) {
     runOfflinePreviewInWorker,
     runViaBaseApi,
     baseHealth,
+    glueHealth,
     getTaskStoreStatus,
   };
 }

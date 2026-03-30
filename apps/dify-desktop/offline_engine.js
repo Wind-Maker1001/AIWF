@@ -67,6 +67,8 @@ const OFFLINE_INGEST = createOfflineIngest({
   normalizeCell,
   normalizeAmount,
   IMG_EXT,
+  fetch: global.fetch,
+  glueSidecarUrl: () => String(process.env.AIWF_GLUE_URL || "http://127.0.0.1:18081").trim(),
 });
 
 async function readInputRows(params, warnings, runtime = {}) {
@@ -145,6 +147,7 @@ async function writeFilteredNoiseMarkdown(filePath, rows) {
 
 async function runOfflinePrecheck(payload) {
   const params = resolveCleaningTemplateParams(payload?.params || {});
+  if (payload?.glue_url && !params.glue_sidecar_url) params.glue_sidecar_url = payload.glue_url;
   const warnings = [];
   const runtime = {};
   let rawRows = [];
@@ -180,6 +183,7 @@ async function runOfflinePrecheck(payload) {
 
 async function runOfflineDebatePreview(payload) {
   const params = resolveCleaningTemplateParams(payload?.params || {});
+  if (payload?.glue_url && !params.glue_sidecar_url) params.glue_sidecar_url = payload.glue_url;
   const warnings = [];
   const runtime = {};
   let rawRows = [];
@@ -212,6 +216,7 @@ async function runOfflineDebatePreview(payload) {
 async function runOfflineCleaning(payload) {
   const t0 = Date.now();
   const params = resolveCleaningTemplateParams(payload?.params || {});
+  if (payload?.glue_url && !params.glue_sidecar_url) params.glue_sidecar_url = payload.glue_url;
   const reportTitle = normalizeReportTitle(params.report_title || payload?.report_title || "", "辩论资料库");
   let mdOnly = params.md_only === true || String(params.output_format || "").toLowerCase() === "md";
 

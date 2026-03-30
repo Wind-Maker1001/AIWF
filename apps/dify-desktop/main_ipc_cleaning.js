@@ -4,6 +4,7 @@ function registerCleaningIpc(ctx, deps) {
     loadConfig,
     saveConfig,
     baseHealth,
+    glueHealth,
     runOfflineCleaningInWorker,
     runOfflinePrecheckInWorker,
     runOfflinePreviewInWorker,
@@ -27,7 +28,13 @@ function registerCleaningIpc(ctx, deps) {
   ipcMain.handle("aiwf:health", async (_evt, cfg) => {
     const merged = { ...loadConfig(), ...(cfg || {}) };
     if ((merged.mode || "offline_local") === "offline_local") {
-      return { ok: true, mode: "offline_local", message: "离线本地模式可用" };
+      const glue = await glueHealth(merged);
+      return {
+        ok: true,
+        mode: "offline_local",
+        message: glue.ok ? "离线本地模式可用" : "离线本地模式可用（图片/XLSX 需要 glue sidecar）",
+        glue_sidecar: glue,
+      };
     }
     return await baseHealth(merged);
   });
@@ -37,7 +44,7 @@ function registerCleaningIpc(ctx, deps) {
     const outRoot = resolveOutputRoot(merged);
     const startedAt = Date.now();
     if ((merged.mode || "offline_local") === "offline_local") {
-      const local = await runOfflineCleaningInWorker(payload, outRoot);
+      const local = await runOfflineCleaningInWorker(payload, outRoot, merged);
       appendRunModeAudit({
         ts: new Date().toISOString(),
         mode: "offline_local",
@@ -89,7 +96,7 @@ function registerCleaningIpc(ctx, deps) {
     const merged = { ...loadConfig(), ...(cfg || {}) };
     if ((merged.mode || "offline_local") === "offline_local") {
       const outRoot = resolveOutputRoot(merged);
-      return await runOfflinePrecheckInWorker(payload, outRoot);
+      return await runOfflinePrecheckInWorker(payload, outRoot, merged);
     }
     return { ok: false, error: "当前仅离线本地模式支持模板预检" };
   });
@@ -98,7 +105,7 @@ function registerCleaningIpc(ctx, deps) {
     const merged = { ...loadConfig(), ...(cfg || {}) };
     if ((merged.mode || "offline_local") === "offline_local") {
       const outRoot = resolveOutputRoot(merged);
-      return await runOfflinePreviewInWorker(payload, outRoot);
+      return await runOfflinePreviewInWorker(payload, outRoot, merged);
     }
     return { ok: false, error: "当前仅离线本地模式支持样式预览" };
   });
