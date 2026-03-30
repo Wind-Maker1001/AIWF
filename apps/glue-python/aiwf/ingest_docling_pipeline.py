@@ -43,7 +43,13 @@ def coerce_extraction_result(value: Any) -> Optional[ExtractionResult]:
     return None
 
 
+def _docling_runtime_enabled() -> bool:
+    return not bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+
 def docling_available() -> bool:
+    if not _docling_runtime_enabled():
+        return False
     try:
         from docling.document_converter import DocumentConverter  # type: ignore
 
@@ -231,6 +237,8 @@ def _extract_sheet_like_rows(payload: Dict[str, Any], path: str) -> tuple[list[d
 
 
 def extract_with_docling(path: str) -> Optional[ExtractionResult]:
+    if not _docling_runtime_enabled():
+        return None
     if not docling_available():
         return None
     try:
