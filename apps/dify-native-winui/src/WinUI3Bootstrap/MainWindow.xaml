@@ -35,6 +35,35 @@
                 <Setter Property="CornerRadius" Value="14" />
                 <Setter Property="Padding" Value="12" />
             </Style>
+            <Style x:Key="SqlLabelStyle" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="#FF374151" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Margin" Value="0,4,0,0" />
+            </Style>
+            <Style x:Key="SqlSectionTitleStyle" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="#FF111827" />
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="Bold" />
+            </Style>
+            <Style x:Key="SqlActionButtonStyle" TargetType="Button">
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Padding" Value="14,6" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Background" Value="#FFE5E7EB" />
+                <Setter Property="Foreground" Value="#FF1F2937" />
+                <Setter Property="BorderBrush" Value="#FFD1D5DB" />
+            </Style>
+            <Style x:Key="SqlPrimaryButtonStyle" TargetType="Button">
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Padding" Value="14,6" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Background" Value="#FF2563EB" />
+                <Setter Property="Foreground" Value="#FFFFFFFF" />
+                <Setter Property="BorderBrush" Value="#FF1D4ED8" />
+            </Style>
             <Style TargetType="Button">
                 <Setter Property="CornerRadius" Value="9" />
                 <Setter Property="MinHeight" Value="40" />
@@ -329,10 +358,10 @@
 
                         <Border Grid.Column="0" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="连接与数据源" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                <TextBlock Text="Accel URL" />
+                                <TextBlock Text="连接与数据源" Style="{StaticResource SqlSectionTitleStyle}" />
+                                <TextBlock Text="Accel URL" Style="{StaticResource SqlLabelStyle}" />
                                 <TextBox x:Name="SqlAccelUrlTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="http://127.0.0.1:18082" />
-                                <TextBlock Text="数据源类型" />
+                                <TextBlock Text="数据源类型" Style="{StaticResource SqlLabelStyle}" />
                                 <ComboBox x:Name="SqlSourceTypeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectionChanged="OnSqlSourceTypeSelectionChanged" SelectedIndex="0">
                                     <ComboBoxItem Content="sqlite" />
                                     <ComboBoxItem Content="sqlserver" />
@@ -340,49 +369,49 @@
                                 </ComboBox>
 
                                 <StackPanel x:Name="SqliteSourcePanel" Spacing="8">
-                                    <TextBlock Text="SQLite 文件路径" />
+                                    <TextBlock Text="SQLite 文件路径" Style="{StaticResource SqlLabelStyle}" />
                                     <TextBox x:Name="SqlitePathTextBox" Style="{StaticResource TouchTextBoxStyle}" />
                                 </StackPanel>
 
                                 <StackPanel x:Name="SqlServerSourcePanel" Spacing="8" Visibility="Collapsed">
-                                    <TextBlock Text="SQL Server Host" />
+                                    <TextBlock Text="SQL Server Host" Style="{StaticResource SqlLabelStyle}" />
                                     <TextBox x:Name="SqlServerHostTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="127.0.0.1" />
-                                    <TextBlock Text="端口" />
+                                    <TextBlock Text="端口" Style="{StaticResource SqlLabelStyle}" />
                                     <TextBox x:Name="SqlServerPortTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="1433" />
-                                    <TextBlock Text="数据库" />
+                                    <TextBlock Text="数据库" Style="{StaticResource SqlLabelStyle}" />
                                     <TextBox x:Name="SqlServerDatabaseTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="AIWF" />
                                     <CheckBox x:Name="SqlWindowsAuthCheckBox" Content="Windows Auth" IsChecked="True" />
-                                    <TextBlock Text="用户名" />
+                                    <TextBlock Text="用户名" Style="{StaticResource SqlLabelStyle}" />
                                     <TextBox x:Name="SqlServerUserTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                    <TextBlock Text="密码（仅会话保留）" />
+                                    <TextBlock Text="密码（仅会话保留）" Style="{StaticResource SqlLabelStyle}" />
                                     <PasswordBox x:Name="SqlServerPasswordBox" MinHeight="44" UseSystemFocusVisuals="True" />
                                 </StackPanel>
 
-                                <Button x:Name="SqlValidateConnectionButton" Click="OnSqlValidateConnectionClick" Content="验证连接并加载 Schema" />
+                                <Button x:Name="SqlValidateConnectionButton" Click="OnSqlValidateConnectionClick" Content="验证连接并加载 Schema" Style="{StaticResource SqlPrimaryButtonStyle}" />
                             </StackPanel>
                         </Border>
 
                         <Border Grid.Column="1" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="Schema 浏览器" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                <TextBlock Text="Schemas" />
+                                <TextBlock Text="Schema 浏览器" Style="{StaticResource SqlSectionTitleStyle}" />
+                                <TextBlock Text="Schemas" Style="{StaticResource SqlLabelStyle}" />
                                 <ListView x:Name="SqlSchemaListView" Height="120" SelectionChanged="OnSqlSchemaSelectionChanged" />
-                                <TextBlock Text="Tables" />
+                                <TextBlock Text="Tables" Style="{StaticResource SqlLabelStyle}" />
                                 <ListView x:Name="SqlTableListView" Height="160" SelectionChanged="OnSqlTableSelectionChanged" />
-                                <TextBlock Text="Columns" />
+                                <TextBlock Text="Columns" Style="{StaticResource SqlLabelStyle}" />
                                 <ListView x:Name="SqlColumnsListView" Height="220" />
-                                <Button x:Name="SqlUseSelectedTableButton" Click="OnSqlUseSelectedTableClick" Content="使用选中表" />
+                                <Button x:Name="SqlUseSelectedTableButton" Click="OnSqlUseSelectedTableClick" Content="使用选中表" Style="{StaticResource SqlPrimaryButtonStyle}" />
                             </StackPanel>
                         </Border>
 
                         <Border Grid.Column="2" Grid.Row="0" Grid.RowSpan="2" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="结果预览" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
-                                <TextBlock x:Name="SqlPreviewStatusTextBlock" Text="No preview yet." Foreground="#FF4B5563" TextWrapping="Wrap" />
+                                <TextBlock Text="结果预览" Style="{StaticResource SqlSectionTitleStyle}" />
+                                <TextBlock x:Name="SqlPreviewStatusTextBlock" Text="No preview yet." Foreground="#FF6B7280" TextWrapping="Wrap" />
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Button x:Name="SqlExportCsvButton" Click="OnSqlExportCsvClick" Content="导出 CSV" />
-                                    <Button x:Name="SqlExportJsonButton" Click="OnSqlExportJsonClick" Content="导出 JSON" />
-                                    <Button x:Name="SqlColumnStatsButton" Click="OnSqlColumnStatsClick" Content="列分析" />
+                                    <Button x:Name="SqlExportCsvButton" Click="OnSqlExportCsvClick" Content="导出 CSV" Style="{StaticResource SqlActionButtonStyle}" />
+                                    <Button x:Name="SqlExportJsonButton" Click="OnSqlExportJsonClick" Content="导出 JSON" Style="{StaticResource SqlActionButtonStyle}" />
+                                    <Button x:Name="SqlColumnStatsButton" Click="OnSqlColumnStatsClick" Content="列分析" Style="{StaticResource SqlActionButtonStyle}" />
                                 </StackPanel>
                                 <Pivot>
                                     <PivotItem Header="表格">
@@ -420,7 +449,7 @@
 
                         <Border Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="Builder + SQL 文本" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock Text="Builder + SQL 文本" Style="{StaticResource SqlSectionTitleStyle}" />
                                 <TextBlock x:Name="SqlDraftModeTextBlock" Text="Mode: builder-owned" Foreground="#FF4B5563" />
                                 <Grid ColumnSpacing="10">
                                     <Grid.ColumnDefinitions>
@@ -429,18 +458,18 @@
                                     </Grid.ColumnDefinitions>
 
                                     <StackPanel Grid.Column="0" Spacing="8">
-                                        <TextBlock Text="Schema" />
+                                        <TextBlock Text="Schema" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlSelectedSchemaTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Base Table" />
+                                        <TextBlock Text="Base Table" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlSelectedTableTextBox" Style="{StaticResource TouchTextBoxStyle}" />
                                         <TextBlock Text="子查询 (可选，填写后覆盖 Base Table)" Foreground="#FF6B7280" FontSize="11" />
                                         <TextBox x:Name="SqlSubqueryTextBox" Style="{StaticResource TouchTextBoxStyle}"
                                                  PlaceholderText="SELECT id, SUM(amount) AS total FROM orders GROUP BY id"
                                                  AcceptsReturn="True" Height="80" TextWrapping="Wrap" />
-                                        <TextBlock Text="Select Fields (csv)" />
+                                        <TextBlock Text="Select Fields (csv)" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlSelectFieldsTextBox" Style="{StaticResource TouchTextBoxStyle}" />
 
-                                        <TextBlock Text="Filter 1" FontWeight="SemiBold" />
+                                        <TextBlock Text="Filter 1" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlFilterFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
                                         <ComboBox x:Name="SqlFilterOperatorComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="=" />
@@ -453,7 +482,7 @@
                                         </ComboBox>
                                         <TextBox x:Name="SqlFilterValueTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="value" />
 
-                                        <TextBlock Text="Filter 2" FontWeight="SemiBold" />
+                                        <TextBlock Text="Filter 2" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlFilter2FieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
                                         <ComboBox x:Name="SqlFilter2OperatorComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="=" />
@@ -466,7 +495,7 @@
                                         </ComboBox>
                                         <TextBox x:Name="SqlFilter2ValueTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="value" />
 
-                                        <TextBlock Text="Filter 3" FontWeight="SemiBold" />
+                                        <TextBlock Text="Filter 3" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlFilter3FieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
                                         <ComboBox x:Name="SqlFilter3OperatorComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="=" />
@@ -479,10 +508,10 @@
                                         </ComboBox>
                                         <TextBox x:Name="SqlFilter3ValueTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="value" />
 
-                                        <TextBlock Text="Group By (csv)" />
+                                        <TextBlock Text="Group By (csv)" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlGroupByTextBox" Style="{StaticResource TouchTextBoxStyle}" />
 
-                                        <TextBlock Text="Aggregate 1" FontWeight="SemiBold" />
+                                        <TextBlock Text="Aggregate 1" Style="{StaticResource SqlLabelStyle}" />
                                         <ComboBox x:Name="SqlAggregateFunctionComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="count" />
                                             <ComboBoxItem Content="sum" />
@@ -493,7 +522,7 @@
                                         <TextBox x:Name="SqlAggregateFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
                                         <TextBox x:Name="SqlAggregateAliasTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="alias" />
 
-                                        <TextBlock Text="Aggregate 2" FontWeight="SemiBold" />
+                                        <TextBlock Text="Aggregate 2" Style="{StaticResource SqlLabelStyle}" />
                                         <ComboBox x:Name="SqlAggregate2FunctionComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="count" />
                                             <ComboBoxItem Content="sum" />
@@ -504,84 +533,84 @@
                                         <TextBox x:Name="SqlAggregate2FieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
                                         <TextBox x:Name="SqlAggregate2AliasTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="alias" />
 
-                                        <TextBlock Text="HAVING" />
+                                        <TextBlock Text="HAVING" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlHavingTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="e.g. COUNT(*) > 5" />
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="1" Spacing="8">
                                         <CheckBox x:Name="SqlJoin1EnabledCheckBox" Content="启用 Join 1" />
-                                        <TextBlock Text="Join 1 Schema" />
+                                        <TextBlock Text="Join 1 Schema" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlJoin1SchemaTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="dbo" />
-                                        <TextBlock Text="Join 1 Table" />
+                                        <TextBlock Text="Join 1 Table" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlJoin1TableTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Join 1 Type" />
+                                        <TextBlock Text="Join 1 Type" Style="{StaticResource SqlLabelStyle}" />
                                         <ComboBox x:Name="SqlJoin1TypeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="inner" />
                                             <ComboBoxItem Content="left" />
                                             <ComboBoxItem Content="right" />
                                             <ComboBoxItem Content="full" />
                                         </ComboBox>
-                                        <TextBlock Text="Join 1 Left Field" />
+                                        <TextBlock Text="Join 1 Left Field" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlJoin1LeftFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Join 1 Right Field" />
+                                        <TextBlock Text="Join 1 Right Field" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlJoin1RightFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
 
                                         <CheckBox x:Name="SqlJoin2EnabledCheckBox" Content="启用 Join 2" />
-                                        <TextBlock Text="Join 2 Schema" />
+                                        <TextBlock Text="Join 2 Schema" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlJoin2SchemaTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="dbo" />
-                                        <TextBlock Text="Join 2 Table" />
+                                        <TextBlock Text="Join 2 Table" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlJoin2TableTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Join 2 Type" />
+                                        <TextBlock Text="Join 2 Type" Style="{StaticResource SqlLabelStyle}" />
                                         <ComboBox x:Name="SqlJoin2TypeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="inner" />
                                             <ComboBoxItem Content="left" />
                                             <ComboBoxItem Content="right" />
                                             <ComboBoxItem Content="full" />
                                         </ComboBox>
-                                        <TextBlock Text="Join 2 Left Field" />
+                                        <TextBlock Text="Join 2 Left Field" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlJoin2LeftFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Join 2 Right Field" />
+                                        <TextBlock Text="Join 2 Right Field" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlJoin2RightFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
 
-                                        <TextBlock Text="Order By Field" />
+                                        <TextBlock Text="Order By Field" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlOrderByFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
                                         <CheckBox x:Name="SqlOrderByDescCheckBox" Content="Descending" />
-                                        <TextBlock Text="Limit" />
+                                        <TextBlock Text="Limit" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlLimitTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="100" />
                                         <CheckBox x:Name="SqlChartEnabledCheckBox" Content="追加 SQL 图表节点" />
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Text="图表类型" VerticalAlignment="Center" />
+                                            <TextBlock Text="图表类型" VerticalAlignment="Center" Style="{StaticResource SqlLabelStyle}" />
                                             <ComboBox x:Name="SqlChartTypeComboBox" Width="120">
                                                 <ComboBoxItem Content="bar" IsSelected="True" />
                                                 <ComboBoxItem Content="line" />
                                                 <ComboBoxItem Content="pie" />
                                             </ComboBox>
                                         </StackPanel>
-                                        <TextBlock Text="Category 字段" />
+                                        <TextBlock Text="Category 字段" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlChartCategoryFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="category" />
-                                        <TextBlock Text="Value 字段" />
+                                        <TextBlock Text="Value 字段" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlChartValueFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="value" />
-                                        <TextBlock Text="Series 字段" />
+                                        <TextBlock Text="Series 字段" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlChartSeriesFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="series" />
-                                        <TextBlock Text="Top N" />
+                                        <TextBlock Text="Top N" Style="{StaticResource SqlLabelStyle}" />
                                         <TextBox x:Name="SqlChartTopNTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="20" />
                                     </StackPanel>
                                 </Grid>
 
-                                <TextBlock Text="SQL 文本" />
+                                <TextBlock Text="SQL 文本" Style="{StaticResource SqlLabelStyle}" />
                                 <TextBox x:Name="SqlTextEditorTextBox" Height="220" AcceptsReturn="True" TextWrapping="Wrap" TextChanged="OnSqlTextEditorTextChanged" />
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Button x:Name="SqlGenerateSqlButton" Click="OnSqlGenerateSqlClick" Content="生成 SQL" />
-                                    <Button x:Name="SqlResetBuilderButton" Click="OnSqlResetBuilderClick" Content="重建为结构化草稿" />
-                                    <Button x:Name="SqlPreviewButton" Click="OnSqlPreviewClick" Content="预览结果" />
-                                    <Button x:Name="SqlExplainButton" Click="OnSqlExplainClick" Content="EXPLAIN" />
-                                    <Button x:Name="SqlSendToCanvasButton" Click="OnSqlSendToCanvasClick" Content="发送到画布" />
-                                    <Button x:Name="SqlSaveQueryButton" Click="OnSqlSaveQueryClick" Content="保存查询" />
+                                    <Button x:Name="SqlGenerateSqlButton" Click="OnSqlGenerateSqlClick" Content="生成 SQL" Style="{StaticResource SqlActionButtonStyle}" />
+                                    <Button x:Name="SqlResetBuilderButton" Click="OnSqlResetBuilderClick" Content="重建为结构化草稿" Style="{StaticResource SqlActionButtonStyle}" />
+                                    <Button x:Name="SqlPreviewButton" Click="OnSqlPreviewClick" Content="预览结果" Style="{StaticResource SqlPrimaryButtonStyle}" />
+                                    <Button x:Name="SqlExplainButton" Click="OnSqlExplainClick" Content="EXPLAIN" Style="{StaticResource SqlActionButtonStyle}" />
+                                    <Button x:Name="SqlSendToCanvasButton" Click="OnSqlSendToCanvasClick" Content="发送到画布" Style="{StaticResource SqlPrimaryButtonStyle}" />
+                                    <Button x:Name="SqlSaveQueryButton" Click="OnSqlSaveQueryClick" Content="保存查询" Style="{StaticResource SqlActionButtonStyle}" />
                                 </StackPanel>
 
                                 <Border Style="{StaticResource CardBorderStyle}" Margin="0,8,0,0">
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="查询历史 / 收藏" FontSize="14" FontWeight="SemiBold" Foreground="#FF111111" />
+                                        <TextBlock Text="查询历史 / 收藏" FontSize="14" FontWeight="SemiBold" Foreground="#FF374151" />
                                         <ListView x:Name="SqlHistoryListView" Height="140"
                                                   SelectionChanged="OnSqlHistorySelectionChanged" />
                                     </StackPanel>
