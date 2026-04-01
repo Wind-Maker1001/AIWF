@@ -70,12 +70,14 @@ Primary release audit:
 - includes `frontend_verification.primary` and `frontend_verification.compatibility`
 - includes `architecture_scorecard`
 - includes `sidecar_regression` and `sidecar_python_rust_consistency`
+- includes `cleaning_rust_v2_rollout`
 - references the latest `ops\logs\frontend_verification\frontend_primary_verification_latest.json` and `frontend_compatibility_verification_latest.json`
 - references `ops\logs\architecture\architecture_scorecard_release_ready_latest.json` and `architecture_scorecard_release_ready_latest.md`
 - references `ops\logs\regression\sidecar_regression_quality_report.json` and `sidecar_python_rust_consistency_report.json`
 - release is now blocked unless `architecture_scorecard_release_ready_latest.json` reports `overall_status = passed`
 - release is now blocked unless `sidecar_regression_quality_report.json` reports `ok = true`
 - release is now blocked unless `sidecar_python_rust_consistency_report.json` reports `ok = true` and contains no `skipped` entries
+- release is now blocked unless the latest default+verify acceptance evidence for `desktop_real_sample` and `desktop_finance_template` is present and rollout-gate clean
 
 Optional MSIX preview:
 
@@ -133,6 +135,12 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\ci_check.ps1 -CiProfile C
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_regression_quality.ps1
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_python_rust_consistency.ps1 -RequireAccel
 ```
+
+Release and package paths do not auto-run acceptance. They consume the latest default+verify acceptance evidence:
+
+- `ops\logs\acceptance\desktop_real_sample\cleaning_shadow_rollout.json`
+- `ops\logs\acceptance\desktop_finance_template\cleaning_shadow_rollout.json`
+- both files must come from glue `run_cleaning` and report `requested_rust_v2_mode = default`, `verify_on_default = true`, and `shadow_compare.status = matched`
 
 If you ship image/XLSX enhanced ingest as part of the release story, keep local `glue-python` startup on `-RequireEnhancedIngest` so missing `docling/paddleocr/python-calamine/pandera` dependencies fail before release packaging.
 The shared async benchmark gate used by release verification now runs under tenant `bench_async`; if you change accel-rust tenant concurrency locally, keep `AIWF_ASYNC_BENCH_MAX_IN_FLIGHT` aligned with it.

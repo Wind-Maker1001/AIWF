@@ -6,6 +6,8 @@
 ## 启用方式
 - GUI: 在“数据模板”选择 `财报模板 v1（资产/利润/现金流）`。
 - API payload: `params.cleaning_template = "finance_report_v1"`。
+- 模板主入口：`rules/templates/finance_report_v1.cleaning_spec_v2.json`。
+- 兼容入口：`rules/templates/generic_finance_strict.json` 仍保留，但会先编译为 `cleaning_spec.v2` 再执行。
 
 ## 运行前预检（GUI）
 - 点击 `模板预检`，会先做必填字段检查、金额可转换率检查、质量门槛预判。
@@ -18,7 +20,9 @@
 - 点击 `打开样本` 可直接打开对应源文件，并提示建议定位行号。
 
 ## 内置规则（当前版本）
-来源：`rules/templates/generic_finance_strict.json`
+来源：`rules/templates/finance_report_v1.cleaning_spec_v2.json`
+
+兼容来源：`rules/templates/generic_finance_strict.json`
 
 - 字段重命名：`Amt -> amount`，`ID -> id`
 - 类型转换：`id:int`，`amount:float`，`currency:string`
@@ -46,7 +50,8 @@
 - 输出为空被拒绝：说明过滤条件过严或输入数据异常，先检查 `amount` 范围。
 
 ## 扩展方式
-- 如需按你自己的财报字段命名，新增模板 JSON（建议复制 `generic_finance_strict.json` 后修改）。
+- 如需按你自己的财报字段命名，优先新增 `cleaning_spec.v2` 模板 JSON。
+- 若复制 legacy `generic_finance_strict.json`，运行时也会先编译成 `cleaning_spec.v2`。
 - 如需更多规则（分组汇总、跨表一致性校验），可在 `offline_ingest.js` 的规则执行链继续扩展。
 
 ## 模板注册表（可插拔）

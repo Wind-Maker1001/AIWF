@@ -126,6 +126,23 @@ Useful generated files:
 - `logs/route_metrics_summary.json`
 - `workflow_store/`
 
+`run_mode_audit.jsonl` now records both transport mode and local cleaning execution details. Current high-signal fields include:
+
+- `mode`
+- `execution_mode`
+- `execution_eligibility_reason`
+- `requested_rust_v2_mode`
+- `effective_rust_v2_mode`
+- `verify_on_default`
+- `shadow_compare_status`
+- `shadow_compare_mismatch_count`
+- `rust_v2_used`
+
+Cleaning rollout envs remain request-override friendly:
+
+- `AIWF_CLEANING_RUST_V2_MODE=off|shadow|default`
+- `AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT=true|false`
+
 ## Related Docs
 
 - [quickstart_desktop_offline.md](quickstart_desktop_offline.md)

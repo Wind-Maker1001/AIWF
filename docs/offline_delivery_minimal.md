@@ -20,12 +20,14 @@ Compatibility release audit:
 - includes `frontend_verification.primary` and `frontend_verification.compatibility`
 - includes `architecture_scorecard`
 - includes `sidecar_regression` and `sidecar_python_rust_consistency`
+- includes `cleaning_rust_v2_rollout`
 - references the latest `ops\logs\frontend_verification\frontend_primary_verification_latest.json` and `frontend_compatibility_verification_latest.json`
 - references `ops\logs\architecture\architecture_scorecard_release_ready_latest.json` and `architecture_scorecard_release_ready_latest.md`
 - references `ops\logs\regression\sidecar_regression_quality_report.json` and `sidecar_python_rust_consistency_report.json`
 - release is now blocked unless `architecture_scorecard_release_ready_latest.json` reports `overall_status = passed`
 - release is now blocked unless `sidecar_regression_quality_report.json` reports `ok = true`
 - release is now blocked unless `sidecar_python_rust_consistency_report.json` reports `ok = true` and contains no `skipped` entries
+- release is now blocked unless the latest default+verify acceptance evidence for `desktop_real_sample` and `desktop_finance_template` is present and passes rollout gate validation
 
 Output example:
 
@@ -79,6 +81,12 @@ Bundle/package gate notes:
 
 - `package_offline_bundle.ps1` now blocks packaging unless the latest sidecar regression report is `ok=true`
 - the same package step also blocks if the latest Python/Rust consistency report contains any `skipped` entries
+- package now also blocks unless the latest default+verify acceptance evidence exists for both `desktop_real_sample` and `desktop_finance_template`
+- required evidence files live at:
+  - `ops\logs\acceptance\desktop_real_sample\cleaning_shadow_rollout.json`
+  - `ops\logs\acceptance\desktop_finance_template\cleaning_shadow_rollout.json`
+- package/release consume those latest evidence files and do not auto-run acceptance on your behalf
+- both evidence files must represent real glue `run_cleaning` compare results with `requested_rust_v2_mode = default`, `verify_on_default = true`, and `shadow_compare.status = matched`
 - if you claim image/XLSX enhanced ingest support for the bundle, start local `glue-python` with `-RequireEnhancedIngest`
 
 Generate a zip for copying:

@@ -400,6 +400,36 @@ Release wrappers and offline bundle packaging now consume those reports directly
 - `ops/scripts/release_electron_compatibility.ps1`
 - `ops/scripts/package_offline_bundle.ps1`
 
+Cleaning Rust v2 rollout gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_cleaning_rust_v2_rollout.ps1
+```
+
+This gate consumes:
+
+- the latest `run_mode_audit.jsonl` evidence produced for cleaning rollout validation
+- `ops/logs/regression/sidecar_python_rust_consistency_report.json`
+- a stable sample result with `execution.shadow_compare`
+- in release/package mode, the latest acceptance evidence such as `ops/logs/acceptance/desktop_real_sample/cleaning_shadow_rollout.json`
+
+It blocks when:
+
+- `execution.shadow_compare` is missing required structure
+- `run_mode_audit.jsonl` is missing rollout fields such as `execution_mode`, `requested_rust_v2_mode`, `effective_rust_v2_mode`, `verify_on_default`, or `shadow_compare_status`
+- the sidecar Python/Rust consistency report contains any `reason_counts` mismatch
+
+`run_sidecar_python_rust_consistency.ps1` remains the source that produces the consistency report; the rollout gate only consumes that evidence for release and readiness decisions.
+
+Current default release expectation:
+
+- release/package do not auto-run acceptance
+- they require the latest default+verify acceptance evidence for `desktop_real_sample` and `desktop_finance_template`
+- those evidence files must point to real `run_mode_audit.jsonl` and `cleaning_result.json`, not synthetic gate samples
+- those evidence files must come from glue `run_cleaning`
+- release-readiness rule: `requested_rust_v2_mode == "default"` and `verify_on_default == true`
+- release-readiness rule: `execution_mode == "rust_v2"` and `shadow_compare.status == "matched"`
+
 For local desktop fixture verification, `offline_ingest_fixture_assets.test.js` may skip the real XLSX fixture path if `exceljs` is not installed. That is expected locally; use `ops/scripts/check_desktop_fixture_deps.ps1` before treating it as a regression.
 
 ## Backend Smoke and Fallback

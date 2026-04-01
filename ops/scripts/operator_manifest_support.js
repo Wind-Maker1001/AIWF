@@ -7,6 +7,15 @@ const DEFAULT_MANIFEST_RELATIVE_PATH = path.join("contracts", "rust", "operators
 const DEFAULT_MANIFEST_SCHEMA_RELATIVE_PATH = path.join("contracts", "rust", "operators_manifest.schema.json");
 const DEFAULT_DESKTOP_MODULE_RELATIVE_PATH = path.join("apps", "dify-desktop", "workflow_chiplets", "domains", "rust_operator_manifest.generated.js");
 const DEFAULT_RENDERER_MODULE_RELATIVE_PATH = path.join("apps", "dify-desktop", "renderer", "workflow", "rust_operator_manifest.generated.js");
+const OPERATOR_CONTRACT_OVERRIDES = Object.freeze({
+  transform_rows_v2: Object.freeze({
+    request_schema: "#/components/schemas/TransformRowsReq",
+    response_schema: "#/components/schemas/TransformRowsResp",
+    rules_schema: "#/components/schemas/TransformRowsRuleSet",
+    schema_hint_schema: "#/components/schemas/TransformRowsSchemaHint",
+    audit_schema: "#/components/schemas/TransformRowsAudit",
+  }),
+});
 
 function readText(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -106,6 +115,15 @@ function normalizeManifest(manifest) {
       desktop_exposable: Boolean(item?.desktop_exposable),
       direct_http_only: Boolean(item?.direct_http_only),
       internal_only: Boolean(item?.internal_only),
+      contracts: item?.contracts && typeof item.contracts === "object" && !Array.isArray(item.contracts)
+        ? {
+            request_schema: item.contracts.request_schema ? String(item.contracts.request_schema) : undefined,
+            response_schema: item.contracts.response_schema ? String(item.contracts.response_schema) : undefined,
+            rules_schema: item.contracts.rules_schema ? String(item.contracts.rules_schema) : undefined,
+            schema_hint_schema: item.contracts.schema_hint_schema ? String(item.contracts.schema_hint_schema) : undefined,
+            audit_schema: item.contracts.audit_schema ? String(item.contracts.audit_schema) : undefined,
+          }
+        : undefined,
       capabilities: {
         streaming: Boolean(item?.capabilities?.streaming),
         cache: Boolean(item?.capabilities?.cache),
@@ -194,6 +212,18 @@ function validateOperatorManifest(manifest) {
     }
     if (item.internal_only && item.published) {
       push(`${prefix}.internal_only cannot be true when published is true`);
+    }
+    if (item.contracts !== undefined) {
+      if (!item.contracts || typeof item.contracts !== "object" || Array.isArray(item.contracts)) {
+        push(`${prefix}.contracts must be an object when provided`);
+      } else {
+        for (const contractName of ["request_schema", "response_schema", "rules_schema", "schema_hint_schema", "audit_schema"]) {
+          const value = item.contracts[contractName];
+          if (value !== undefined && !String(value || "").trim()) {
+            push(`${prefix}.contracts.${contractName} must not be empty when provided`);
+          }
+        }
+      }
     }
     if (!item.capabilities || typeof item.capabilities !== "object" || Array.isArray(item.capabilities)) {
       push(`${prefix}.capabilities must be an object`);
@@ -399,6 +429,7 @@ function buildOperatorManifest(repoRoot) {
       desktop_exposable: desktopExposable,
       direct_http_only: published && !workflowExposable,
       internal_only: !desktopExposable && !(published && !workflowExposable),
+      contracts: OPERATOR_CONTRACT_OVERRIDES[operator],
       capabilities: publishedCapabilities || {
         streaming: streaming.has(operator),
         cache: cache.has(operator),

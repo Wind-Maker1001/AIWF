@@ -12,6 +12,7 @@ param(
   [switch]$SkipGovernanceControlPlaneBoundaryGate,
   [switch]$SkipOperatorCatalogSyncGate,
   [switch]$SkipFallbackGovernanceGate,
+  [switch]$SkipCleaningRustV2RolloutGate,
   [switch]$SkipGovernanceStoreSchemaVersionsGate,
   [switch]$SkipLocalWorkflowStoreSchemaVersionsGate,
   [switch]$SkipTemplatePackContractSyncGate,
@@ -32,6 +33,73 @@ function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
 . (Join-Path $PSScriptRoot "governance_capability_export_support.ps1")
+function Get-CleaningRustV2RolloutSettings() {
+  return [ordered]@{
+    mode = "default"
+    verify_on_default = $true
+  }
+}
+function Get-CleaningShadowAcceptanceTargets([string]$Root, [string]$GateScope) {
+  return @(
+    [ordered]@{
+      name = "desktop_real_sample"
+      evidence_path = Join-Path $Root "ops\logs\acceptance\desktop_real_sample\cleaning_shadow_rollout.json"
+      gate_out_dir = Join-Path $Root ("ops\logs\cleaning_rollout\{0}\desktop_real_sample" -f $GateScope)
+    },
+    [ordered]@{
+      name = "desktop_finance_template"
+      evidence_path = Join-Path $Root "ops\logs\acceptance\desktop_finance_template\cleaning_shadow_rollout.json"
+      gate_out_dir = Join-Path $Root ("ops\logs\cleaning_rollout\{0}\desktop_finance_template" -f $GateScope)
+    }
+  )
+}
+function Get-CleaningShadowAcceptanceEvidence([string]$Path) {
+  $summary = [ordered]@{
+    evidence_path = $Path
+    exists = $false
+    acceptance = ""
+    ok = $false
+    generated_at = ""
+    requested_rust_v2_mode = ""
+    effective_rust_v2_mode = ""
+    verify_on_default = $false
+    run_mode_audit_path = ""
+    sample_result_path = ""
+    acceptance_report_path = ""
+    execution_mode = ""
+    rust_v2_used = $false
+    shadow_compare = [ordered]@{
+      status = ""
+      matched = $false
+      mismatch_count = 0
+      skipped_reason = ""
+      compare_fields = @()
+    }
+  }
+  if (-not (Test-Path $Path)) {
+    return $summary
+  }
+  try {
+    $raw = Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
+    $summary.exists = $true
+    $summary.acceptance = [string]($raw.acceptance)
+    $summary.ok = [bool]$raw.ok
+    $summary.generated_at = [string]($raw.generated_at)
+    $summary.requested_rust_v2_mode = [string]($raw.requested_rust_v2_mode)
+    $summary.effective_rust_v2_mode = [string]($raw.effective_rust_v2_mode)
+    $summary.verify_on_default = [bool]$raw.verify_on_default
+    $summary.run_mode_audit_path = [string]($raw.run_mode_audit_path)
+    $summary.sample_result_path = [string]($raw.sample_result_path)
+    $summary.acceptance_report_path = [string]($raw.acceptance_report_path)
+    $summary.execution_mode = [string]($raw.execution.execution_mode)
+    $summary.rust_v2_used = [bool]$raw.quality.rust_v2_used
+    $summary.shadow_compare = if ($raw.shadow_compare) { $raw.shadow_compare } else { $summary.shadow_compare }
+  } catch {
+    $summary.exists = $true
+    $summary.acceptance = "unreadable"
+  }
+  return $summary
+}
 function Read-FrontendVerificationEvidence([string]$Path, [string]$Role, [string]$Frontend) {
   $summary = [ordered]@{
     frontend_role = $Role
@@ -162,6 +230,8 @@ $governanceCapabilityExportScript = Join-Path $PSScriptRoot "export_governance_c
 $governanceControlPlaneBoundaryGate = Join-Path $PSScriptRoot "check_governance_control_plane_boundary.ps1"
 $operatorCatalogSyncGate = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
 $fallbackGovernanceGate = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
+$cleaningRustV2RolloutGate = Join-Path $PSScriptRoot "check_cleaning_rust_v2_rollout.ps1"
+$cleaningRustV2RolloutSummaryScript = Join-Path $PSScriptRoot "summarize_cleaning_rust_v2_rollout.ps1"
 $governanceStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_governance_store_schema_versions.ps1"
 $localWorkflowStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_local_workflow_store_schema_versions.ps1"
 $templatePackContractSyncGate = Join-Path $PSScriptRoot "check_template_pack_contract_sync.ps1"
@@ -185,6 +255,9 @@ $operatorCatalogSyncGateError = ""
 $fallbackGovernanceGateStatus = "skipped"
 $fallbackGovernanceGateCheckedAt = ""
 $fallbackGovernanceGateError = ""
+$cleaningRustV2RolloutGateStatus = "skipped"
+$cleaningRustV2RolloutGateCheckedAt = ""
+$cleaningRustV2RolloutGateError = ""
 $governanceStoreSchemaVersionsGateStatus = "skipped"
 $governanceStoreSchemaVersionsGateCheckedAt = ""
 $governanceStoreSchemaVersionsGateError = ""
@@ -209,6 +282,13 @@ $sidecarRegressionGateError = ""
 $sidecarConsistencyGateStatus = "skipped"
 $sidecarConsistencyGateCheckedAt = ""
 $sidecarConsistencyGateError = ""
+$cleaningRustV2RolloutSettings = Get-CleaningRustV2RolloutSettings
+$cleaningShadowAcceptanceTargets = Get-CleaningShadowAcceptanceTargets -Root $root -GateScope "release_productize"
+$cleaningShadowAcceptanceEvidence = [ordered]@{}
+$cleaningRustV2RunModeAuditPaths = @()
+$cleaningRustV2ShadowCompareSummary = [ordered]@{}
+$cleaningRustV2SummaryPath = Join-Path $root "ops\logs\cleaning_rollout\summary\cleaning_rust_v2_rollout_summary_latest.json"
+$cleaningRustV2Summary = $null
 $outRoot = Join-Path $root "release"
 New-Item -ItemType Directory -Path $outRoot -Force | Out-Null
 if (-not $EnvFile) {
@@ -349,6 +429,44 @@ if (-not $SkipFallbackGovernanceGate) {
 } else {
   $fallbackGovernanceGateCheckedAt = (Get-Date).ToString("s")
   Write-Host "[WARN] skip fallback governance release gate" -ForegroundColor Yellow
+}
+
+if (-not $SkipCleaningRustV2RolloutGate) {
+  if (-not (Test-Path $cleaningRustV2RolloutGate)) { throw "cleaning rust v2 rollout gate script missing: $cleaningRustV2RolloutGate" }
+  foreach ($target in $cleaningShadowAcceptanceTargets) {
+    Info ("running cleaning rust v2 rollout release gate ({0})" -f [string]$target.name)
+    powershell -ExecutionPolicy Bypass -File $cleaningRustV2RolloutGate `
+      -OutDir $target.gate_out_dir `
+      -EvidencePath $target.evidence_path `
+      -ConsistencyReportPath $sidecarConsistencySummary.evidence_path `
+      -RequestedMode $cleaningRustV2RolloutSettings.mode `
+      -VerifyOnDefault:$cleaningRustV2RolloutSettings.verify_on_default `
+      -RequireRealEvidence `
+      -RequireNoSkipped
+    $cleaningRustV2RolloutGateCheckedAt = (Get-Date).ToString("s")
+    if ($LASTEXITCODE -ne 0) {
+      $cleaningRustV2RolloutGateStatus = "failed"
+      $cleaningRustV2RolloutGateError = "check_cleaning_rust_v2_rollout.ps1 exit code $LASTEXITCODE ($([string]$target.name))"
+      throw ("release blocked by cleaning rust v2 rollout gate ({0})" -f [string]$target.name)
+    }
+    $evidence = Get-CleaningShadowAcceptanceEvidence -Path $target.evidence_path
+    $cleaningShadowAcceptanceEvidence[$target.name] = $evidence
+    if (-not [string]::IsNullOrWhiteSpace([string]$evidence.run_mode_audit_path)) {
+      $cleaningRustV2RunModeAuditPaths += [string]$evidence.run_mode_audit_path
+    }
+    $cleaningRustV2ShadowCompareSummary[$target.name] = $evidence.shadow_compare
+  }
+  $cleaningRustV2RolloutGateStatus = "passed"
+  if (Test-Path $cleaningRustV2RolloutSummaryScript) {
+    powershell -ExecutionPolicy Bypass -File $cleaningRustV2RolloutSummaryScript -RepoRoot $root | Out-Null
+    if (Test-Path $cleaningRustV2SummaryPath) {
+      $cleaningRustV2Summary = Get-Content -Raw -Encoding UTF8 $cleaningRustV2SummaryPath | ConvertFrom-Json
+    }
+  }
+  Ok "cleaning rust v2 rollout release gate passed"
+} else {
+  $cleaningRustV2RolloutGateCheckedAt = (Get-Date).ToString("s")
+  Write-Host "[WARN] skip cleaning rust v2 rollout release gate" -ForegroundColor Yellow
 }
 
 if (-not $SkipGovernanceStoreSchemaVersionsGate) {
@@ -526,6 +644,7 @@ foreach ($type in @("installer", "portable")) {
     SkipGovernanceControlPlaneBoundaryGate = $true
     SkipOperatorCatalogSyncGate = $true
     SkipFallbackGovernanceGate = $true
+    SkipCleaningRustV2RolloutGate = $true
     SkipGovernanceStoreSchemaVersionsGate = $true
     SkipLocalWorkflowStoreSchemaVersionsGate = $true
     SkipTemplatePackContractSyncGate = $true
@@ -563,6 +682,17 @@ $audit = [ordered]@{
   architecture_scorecard = $architectureScorecardSummary
   sidecar_regression = $sidecarRegressionSummary
   sidecar_python_rust_consistency = $sidecarConsistencySummary
+  cleaning_rust_v2_rollout = [ordered]@{
+    mode = [string]$cleaningRustV2RolloutSettings.mode
+    verify_on_default = [bool]$cleaningRustV2RolloutSettings.verify_on_default
+    gate_status = $cleaningRustV2RolloutGateStatus
+    acceptance_evidence = $cleaningShadowAcceptanceEvidence
+    run_mode_audit_paths = @($cleaningRustV2RunModeAuditPaths | Select-Object -Unique)
+    sidecar_consistency_report_path = [string]$sidecarConsistencySummary.evidence_path
+    latest_shadow_compare_summary = $cleaningRustV2ShadowCompareSummary
+    summary_path = $cleaningRustV2SummaryPath
+    summary = $cleaningRustV2Summary
+  }
   gates = [ordered]@{
     architecture_scorecard = [ordered]@{
       status = $architectureScorecardGateStatus
@@ -617,6 +747,12 @@ $audit = [ordered]@{
       checked_at = $fallbackGovernanceGateCheckedAt
       script = "ops/scripts/check_fallback_governance.ps1"
       error = $fallbackGovernanceGateError
+    }
+    cleaning_rust_v2_rollout = [ordered]@{
+      status = $cleaningRustV2RolloutGateStatus
+      checked_at = $cleaningRustV2RolloutGateCheckedAt
+      script = "ops/scripts/check_cleaning_rust_v2_rollout.ps1"
+      error = $cleaningRustV2RolloutGateError
     }
     governance_store_schema_versions = [ordered]@{
       status = $governanceStoreSchemaVersionsGateStatus

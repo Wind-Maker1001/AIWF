@@ -118,6 +118,11 @@ Contract notes:
 
 - `job_context` is the canonical transport contract between `base-java` and `glue-python`
 - legacy path fields under `params` are not supported
+- preferred cleaning config contract is `contracts/glue/cleaning_spec.v2.schema.json`
+- legacy `params.rules` / `params.preprocess` are still accepted, but they are compiled into `cleaning_spec.v2` before execution
+- local cleaning default switch controls:
+  - `AIWF_CLEANING_RUST_V2_MODE=off|shadow|default`
+  - `AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT=true|false`
 
 ## 5. Smoke and Validation
 
@@ -145,6 +150,10 @@ Enhanced sidecar ingest contract:
 
 - `contracts/glue/ingest_extract.schema.json`
 
+Unified cleaning contract:
+
+- `contracts/glue/cleaning_spec.v2.schema.json`
+
 Sidecar regression:
 
 ```powershell
@@ -156,6 +165,14 @@ Sidecar Python/Rust consistency:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_sidecar_python_rust_consistency.ps1 -RequireAccel
 ```
+
+Cleaning rollout governance gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_cleaning_rust_v2_rollout.ps1
+```
+
+This gate consumes the latest cleaning rollout `run_mode_audit.jsonl`, validates `execution.shadow_compare`, and checks that the sidecar Python/Rust consistency report stays free of `reason_counts` mismatches before package or release paths proceed.
 
 ## Related Docs
 

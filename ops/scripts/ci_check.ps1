@@ -35,6 +35,7 @@ param(
   [switch]$SkipLocalNodeCatalogPolicy,
   [switch]$SkipOperatorCatalogSync,
   [switch]$SkipFallbackGovernance,
+  [switch]$SkipCleaningRustV2RolloutGate,
   [switch]$SkipSecretScan,
   [switch]$SkipContractTests,
   [switch]$SkipChaosChecks,
@@ -185,6 +186,7 @@ function Get-ArchitectureScorecardMarkdownLines($Payload) {
     @{ name = "local_node_catalog_policy"; item = $Payload.boundaries.local_node_catalog_policy },
     @{ name = "operator_catalog_sync"; item = $Payload.boundaries.operator_catalog_sync },
     @{ name = "fallback_governance"; item = $Payload.boundaries.fallback_governance },
+    @{ name = "cleaning_rust_v2_rollout"; item = $Payload.boundaries.cleaning_rust_v2_rollout },
     @{ name = "frontend_convergence"; item = $Payload.boundaries.frontend_convergence },
     @{ name = "frontend_primary_verification"; item = $Payload.frontend.primary },
     @{ name = "frontend_compatibility_verification"; item = $Payload.frontend.compatibility }
@@ -1412,6 +1414,85 @@ function Get-OperatorCatalogReleaseReadyIssues($Item) {
 
   return @($issues | Sort-Object -Unique)
 }
+function New-CleaningRustV2RolloutDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  $shadow = Get-OptionalObjectProperty $Summary "latest_shadow_compare_summary"
+  $runModeAudit = Get-OptionalObjectProperty $Summary "run_mode_audit"
+  return [ordered]@{
+    mode = Get-OptionalPropertyValue $Summary "mode"
+    verify_on_default = (Get-OptionalBooleanProperty $Summary "verify_on_default")
+    run_mode_audit_path = Get-OptionalPropertyValue $Summary "run_mode_audit_path"
+    sidecar_consistency_report_path = Get-OptionalPropertyValue $Summary "sidecar_consistency_report_path"
+    reason_counts_mismatch_scenarios = @(Get-StringArrayProperty $Summary "reason_counts_mismatch_scenarios")
+    skipped = @(Get-StringArrayProperty $Summary "skipped")
+    latest_shadow_compare_summary = [ordered]@{
+      status = Get-OptionalPropertyValue $shadow "status"
+      matched = (Get-OptionalBooleanProperty $shadow "matched")
+      mismatch_count = [int](Get-OptionalPropertyValue $shadow "mismatch_count")
+      compare_fields = @(Get-StringArrayProperty $shadow "compare_fields")
+    }
+    run_mode_audit = [ordered]@{
+      required_fields = @(Get-StringArrayProperty $runModeAudit "required_fields")
+      missing_fields = @(Get-StringArrayProperty $runModeAudit "missing_fields")
+    }
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-CleaningRustV2RolloutReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "cleaning rust v2 rollout checks failed" }
+    return "cleaning rust v2 rollout checks passed"
+  }
+
+  $details = New-CleaningRustV2RolloutDetails $Summary
+  $shadow = Get-OptionalObjectProperty $details "latest_shadow_compare_summary"
+  $base = "cleaning rust v2 rollout checks {0} (mode={1}; verify_on_default={2}; shadow_compare={3}; reason_count_mismatches={4}; skipped={5})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [string]$details.mode,
+    [string]$details.verify_on_default,
+    [string](Get-OptionalPropertyValue $shadow "status"),
+    [int](@($details.reason_counts_mismatch_scenarios).Count),
+    [int](@($details.skipped).Count)
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  $missingAuditFields = @(Get-StringArrayProperty (Get-OptionalObjectProperty $details "run_mode_audit") "missing_fields")
+  if ($missingAuditFields.Count -gt 0) {
+    $fragments += "run_mode_audit missing fields: $($missingAuditFields -join ', ')"
+  }
+  $reasonMismatches = @($details.reason_counts_mismatch_scenarios)
+  if ($reasonMismatches.Count -gt 0) {
+    $fragments += "reason_counts mismatches: $($reasonMismatches -join ', ')"
+  }
+  if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-CleaningRustV2RolloutReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  $missingAuditFields = @(Get-StringArrayProperty (Get-OptionalObjectProperty $details "run_mode_audit") "missing_fields")
+  if ($missingAuditFields.Count -gt 0) {
+    $issues += "cleaning_rust_v2_rollout run_mode_audit missing fields: $($missingAuditFields -join ', ')"
+  }
+  $reasonMismatches = @(Get-StringArrayProperty $details "reason_counts_mismatch_scenarios")
+  if ($reasonMismatches.Count -gt 0) {
+    $issues += "cleaning_rust_v2_rollout sidecar consistency reason_counts mismatch: $($reasonMismatches -join ', ')"
+  }
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+  return @($issues | Sort-Object -Unique)
+}
 function Get-ReleaseReadyBoundaryIssues([string]$Name, $Item) {
   if ($Name -eq "workflow_contract_sync") {
     return @(Get-WorkflowContractReleaseReadyIssues $Item)
@@ -1442,6 +1523,9 @@ function Get-ReleaseReadyBoundaryIssues([string]$Name, $Item) {
   }
   if ($Name -eq "operator_catalog_sync") {
     return @(Get-OperatorCatalogReleaseReadyIssues $Item)
+  }
+  if ($Name -eq "cleaning_rust_v2_rollout") {
+    return @(Get-CleaningRustV2RolloutReleaseReadyIssues $Item)
   }
   return @()
 }
@@ -1540,6 +1624,7 @@ function Write-ArchitectureReleaseReadyScorecard([string]$Directory, [string]$St
     local_node_catalog_policy = Select-MergedBoundarySummary -Name "local_node_catalog_policy" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "local_node_catalog_policy" } -StaleAfterHours $staleAfterHours
     operator_catalog_sync = Select-MergedBoundarySummary -Name "operator_catalog_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "operator_catalog_sync" } -StaleAfterHours $staleAfterHours
     fallback_governance = Select-MergedBoundarySummary -Name "fallback_governance" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "fallback_governance" } -StaleAfterHours $staleAfterHours
+    cleaning_rust_v2_rollout = Select-MergedBoundarySummary -Name "cleaning_rust_v2_rollout" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "cleaning_rust_v2_rollout" } -StaleAfterHours $staleAfterHours
     frontend_convergence = Select-MergedBoundarySummary -Name "frontend_convergence" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "frontend_convergence" } -StaleAfterHours $staleAfterHours
     frontend_primary_verification = Select-MergedBoundarySummary -Name "frontend_primary_verification" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardFrontendItem $payload "primary" } -StaleAfterHours $staleAfterHours
     frontend_compatibility_verification = Select-MergedBoundarySummary -Name "frontend_compatibility_verification" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardFrontendItem $payload "compatibility" } -StaleAfterHours $staleAfterHours
@@ -1767,6 +1852,7 @@ $nodeConfigSchemaCoverageScript = Join-Path $PSScriptRoot "check_node_config_sch
 $localNodeCatalogPolicyScript = Join-Path $PSScriptRoot "check_local_node_catalog_policy.ps1"
 $operatorCatalogSyncScript = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
 $fallbackGovernanceScript = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
+$cleaningRustV2RolloutScript = Join-Path $PSScriptRoot "check_cleaning_rust_v2_rollout.ps1"
 $secretScanScript = Join-Path $PSScriptRoot "secret_scan.ps1"
 $contractRustApiScript = Join-Path $PSScriptRoot "contract_test_rust_api.ps1"
 $chaosTaskStoreScript = Join-Path $PSScriptRoot "chaos_task_store.ps1"
@@ -1797,6 +1883,7 @@ $nodeConfigRuntimeParityCheckState = New-FrontendCheckState "skipped" "node conf
 $localNodeCatalogPolicyCheckState = New-FrontendCheckState $(if ($SkipLocalNodeCatalogPolicy) { "skipped" } else { "pending" }) $(if ($SkipLocalNodeCatalogPolicy) { "skipped by SkipLocalNodeCatalogPolicy" } else { "awaiting local node catalog policy gate" })
 $operatorCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOperatorCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOperatorCatalogSync) { "skipped by SkipOperatorCatalogSync" } else { "awaiting operator catalog sync gate" })
 $fallbackGovernanceCheckState = New-FrontendCheckState $(if ($SkipFallbackGovernance) { "skipped" } else { "pending" }) $(if ($SkipFallbackGovernance) { "skipped by SkipFallbackGovernance" } else { "awaiting fallback governance gate" })
+$cleaningRustV2RolloutCheckState = New-FrontendCheckState $(if ($SkipCleaningRustV2RolloutGate) { "skipped" } else { "pending" }) $(if ($SkipCleaningRustV2RolloutGate) { "skipped by SkipCleaningRustV2RolloutGate" } else { "awaiting cleaning rust v2 rollout gate" })
 $frontendConvergenceCheckState = New-FrontendCheckState $(if ($SkipFrontendConvergence) { "skipped" } else { "pending" }) $(if ($SkipFrontendConvergence) { "skipped by SkipFrontendConvergence" } else { "awaiting frontend convergence gate" })
 $frontendPrimarySmokeCheckState = New-FrontendCheckState $(if ($SkipNativeWinuiSmoke) { "skipped" } else { "pending" }) $(if ($SkipNativeWinuiSmoke) { "skipped by SkipNativeWinuiSmoke" } else { "awaiting native winui smoke" })
 $frontendCompatibilityPackagedCheckState = New-FrontendCheckState $(if ($SkipDesktopPackageTests) { "skipped" } else { "pending" }) $(if ($SkipDesktopPackageTests) { "moved out of current ci profile or skipped explicitly" } else { "awaiting Electron compatibility packaged startup check" })
@@ -1878,6 +1965,7 @@ function Publish-ArchitectureScorecard() {
       $localNodeCatalogPolicyCheckState,
       $operatorCatalogSyncCheckState,
       $fallbackGovernanceCheckState,
+      $cleaningRustV2RolloutCheckState,
       $frontendConvergenceCheckState,
       [ordered]@{ status = $primarySummary.status },
       [ordered]@{ status = $compatibilitySummary.status }
@@ -1894,6 +1982,7 @@ function Publish-ArchitectureScorecard() {
       local_node_catalog_policy = $localNodeCatalogPolicyCheckState
       operator_catalog_sync = $operatorCatalogSyncCheckState
       fallback_governance = $fallbackGovernanceCheckState
+      cleaning_rust_v2_rollout = $cleaningRustV2RolloutCheckState
       frontend_convergence = $frontendConvergenceCheckState
     }
     frontend = [ordered]@{
@@ -2342,6 +2431,40 @@ if (-not $SkipFallbackGovernance) {
   Set-FrontendCheckState $fallbackGovernanceCheckState "skipped" "skipped by SkipFallbackGovernance"
   Publish-ArchitectureScorecard
   Warn "skip fallback governance checks"
+}
+
+if (-not $SkipCleaningRustV2RolloutGate) {
+  if (-not (Test-Path $cleaningRustV2RolloutScript)) {
+    Set-FrontendCheckState $cleaningRustV2RolloutCheckState "failed" "cleaning rust v2 rollout script missing"
+    Publish-ArchitectureScorecard
+    throw "cleaning rust v2 rollout script not found: $cleaningRustV2RolloutScript"
+  }
+  Info "running cleaning rust v2 rollout checks"
+  $cleaningRustV2RolloutOutput = powershell -ExecutionPolicy Bypass -File $cleaningRustV2RolloutScript 2>&1
+  $cleaningRustV2RolloutSummary = Parse-JsonLineFromOutput $cleaningRustV2RolloutOutput
+  $cleaningRustV2RolloutDetails = New-CleaningRustV2RolloutDetails $cleaningRustV2RolloutSummary
+  if ($cleaningRustV2RolloutDetails) {
+    $cleaningRustV2RolloutCheckState.details = $cleaningRustV2RolloutDetails
+  }
+  if ($null -ne $cleaningRustV2RolloutOutput) {
+    $cleaningRustV2RolloutOutput | ForEach-Object { $_ }
+  }
+  if ($LASTEXITCODE -ne 0) {
+    Set-FrontendCheckState $cleaningRustV2RolloutCheckState "failed" (Get-CleaningRustV2RolloutReason -Summary $cleaningRustV2RolloutSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "cleaning rust v2 rollout checks failed"
+  }
+  if ($cleaningRustV2RolloutSummary) {
+    Set-FrontendCheckState $cleaningRustV2RolloutCheckState "passed" (Get-CleaningRustV2RolloutReason -Summary $cleaningRustV2RolloutSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $cleaningRustV2RolloutCheckState "passed" "cleaning rust v2 rollout checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "cleaning rust v2 rollout checks passed"
+} else {
+  Set-FrontendCheckState $cleaningRustV2RolloutCheckState "skipped" "skipped by SkipCleaningRustV2RolloutGate"
+  Publish-ArchitectureScorecard
+  Warn "skip cleaning rust v2 rollout checks"
 }
 
 if (-not $SkipSecretScan) {

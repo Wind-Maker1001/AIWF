@@ -120,6 +120,11 @@ $staticSections = @(
     Title = '1. workflow.version migration on import / normalization'
     File = "apps\dify-desktop\renderer\workflow\workflow-contract.js"
     RequireLocalLegacy = $false
+  },
+  @{
+    Title = 'cleaning default rust_v2 fallback to python_legacy'
+    File = "apps\glue-python\aiwf\flows\cleaning.py"
+    RequireLocalLegacy = $false
   }
 )
 $sections = @($staticSections + (Get-TitleManagedFallbackSections))

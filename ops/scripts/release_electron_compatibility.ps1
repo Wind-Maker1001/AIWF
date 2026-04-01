@@ -12,6 +12,7 @@ param(
   [switch]$SkipGovernanceControlPlaneBoundaryGate,
   [switch]$SkipOperatorCatalogSyncGate,
   [switch]$SkipFallbackGovernanceGate,
+  [switch]$SkipCleaningRustV2RolloutGate,
   [switch]$SkipGovernanceStoreSchemaVersionsGate,
   [switch]$SkipLocalWorkflowStoreSchemaVersionsGate,
   [switch]$SkipTemplatePackContractSyncGate,
@@ -47,6 +48,7 @@ Warn "Electron compatibility release path invoked. WinUI is the primary frontend
   -SkipGovernanceControlPlaneBoundaryGate:$SkipGovernanceControlPlaneBoundaryGate `
   -SkipOperatorCatalogSyncGate:$SkipOperatorCatalogSyncGate `
   -SkipFallbackGovernanceGate:$SkipFallbackGovernanceGate `
+  -SkipCleaningRustV2RolloutGate:$SkipCleaningRustV2RolloutGate `
   -SkipGovernanceStoreSchemaVersionsGate:$SkipGovernanceStoreSchemaVersionsGate `
   -SkipLocalWorkflowStoreSchemaVersionsGate:$SkipLocalWorkflowStoreSchemaVersionsGate `
   -SkipTemplatePackContractSyncGate:$SkipTemplatePackContractSyncGate `

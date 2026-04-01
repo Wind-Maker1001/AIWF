@@ -1,6 +1,7 @@
 # Cleaning Flow Data Rules
 
 `glue-python` local cleaning fallback now supports structured input loading and configurable cleaning rules.
+Current mainline behavior is `cleaning_spec.v2` first: legacy `params.rules`, `params.preprocess`, and legacy template JSON are still accepted, but they are compiled into `contracts/glue/cleaning_spec.v2.schema.json` before execution.
 
 ## Input Priority
 
@@ -13,9 +14,8 @@
    - `params.input_uri` (local path or `file://...`)
 4. Built-in sample rows (only if no input is provided)
 
-`glue-python` now passes cleaned rows and rule config to `accel-rust` (`params` payload),
-so accel/fallback output semantics are aligned for the same request.
-For complex generic rules, flow defaults to local engine mode (`accel` is skipped).
+`glue-python` now compiles the effective cleaning config into `cleaning_spec.v2`, then passes the normalized transform/quality sections to `accel-rust`.
+This keeps accel/local output semantics aligned for the same request.
 
 ## Required Fields
 
@@ -60,9 +60,27 @@ Office output theming:
 Environment fallback:
 - `AIWF_GLUE_LOCAL_PARQUET_STRICT=true|false` (used when `params.local_parquet_strict` is not provided)
 
-You can put rules under either:
+You can put legacy rules under either:
 - top-level `params.<rule_key>`
 - `params.rules.<rule_key>` (recommended declarative style)
+
+Preferred modern entry:
+- `params.cleaning_spec_v2`
+- template file payloads with top-level `schema_version = "cleaning_spec.v2"`
+
+Cleaning local execution mode:
+- `AIWF_CLEANING_RUST_V2_MODE=off|shadow|default`
+  - `off`: always return Python legacy result
+  - `shadow`: return Python legacy result, but run Rust v2 compare in the background and emit `execution.shadow_compare`
+  - `default`: prefer Rust v2 result, fallback to Python legacy only when Rust execution fails
+- `AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT=true|false`
+  - when `true`, `default` mode also emits a `shadow_compare` report instead of always skipping compare
+- request-level override still has highest priority:
+  - `params.rules.use_rust_v2 = true`
+  - `params.rules.use_rust_v2 = false`
+- release/readiness governance entry:
+  - `ops/scripts/check_cleaning_rust_v2_rollout.ps1`
+  - consumes `run_mode_audit.jsonl`, `execution.shadow_compare`, and `sidecar_python_rust_consistency_report.json`
 
 Generic rule keys (`params.rules`) for universal row cleaning:
 - `platform_mode: "generic"`
@@ -76,12 +94,15 @@ Generic rule keys (`params.rules`) for universal row cleaning:
 - `deduplicate_by: ["field1", ...]` + `deduplicate_keep`
 - `sort_by: [{"field":"x","order":"asc|desc"}]`
 
-Rule templates:
+Legacy rule templates:
 - `rules/templates/generic_minimal.json`
 - `rules/templates/generic_finance_strict.json`
 - `rules/templates/generic_customer_standardize.json`
 - `rules/templates/preprocess_finance_basic.json` (raw-to-cooked CSV preprocessing template)
 - `rules/templates/preprocess_debate_evidence.json` (raw-to-cooked debate evidence template)
+
+Spec-first template example:
+- `rules/templates/finance_report_v1.cleaning_spec_v2.json`
 
 One-click mixed-format evidence ingest:
 - `ops/scripts/ingest_evidence_pack.ps1`
@@ -114,6 +135,9 @@ Preprocess-specific generic keys:
 
 Sidecar ingest contract:
 - `contracts/glue/ingest_extract.schema.json`
+
+Unified cleaning contract:
+- `contracts/glue/cleaning_spec.v2.schema.json`
 
 Rule validation script:
 ```powershell

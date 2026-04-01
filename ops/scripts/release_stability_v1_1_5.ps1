@@ -11,6 +11,7 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
+. (Join-Path $PSScriptRoot "cleaning_shadow_acceptance_support.ps1")
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $releaseScript = Join-Path $PSScriptRoot "release_productize.ps1"
@@ -74,7 +75,7 @@ for ($i = 1; $i -le [Math]::Max(1, $Rounds); $i += 1) {
       "-OutputRoot", (Join-Path $roundRoot "acceptance_real")
     )
     if ($CopyArtifactsToDesktop) { $argsReal += "-CopyArtifactsToDesktop" }
-    powershell @argsReal
+    Invoke-ShadowCleaningMode { powershell @argsReal }
     if ($LASTEXITCODE -ne 0) { throw "acceptance real failed" }
     $item.acceptance_real = "passed"
 
@@ -85,7 +86,7 @@ for ($i = 1; $i -le [Math]::Max(1, $Rounds); $i += 1) {
       "-OutputRoot", (Join-Path $roundRoot "acceptance_finance")
     )
     if ($CopyArtifactsToDesktop) { $argsFin += "-CopyArtifactsToDesktop" }
-    powershell @argsFin
+    Invoke-ShadowCleaningMode { powershell @argsFin }
     if ($LASTEXITCODE -ne 0) { throw "acceptance finance failed" }
     $item.acceptance_finance = "passed"
 

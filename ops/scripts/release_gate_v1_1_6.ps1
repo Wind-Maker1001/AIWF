@@ -12,6 +12,7 @@ $ErrorActionPreference = "Stop"
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
 function Warn($m){ Write-Host "[WARN] $m" -ForegroundColor Yellow }
+. (Join-Path $PSScriptRoot "cleaning_shadow_acceptance_support.ps1")
 
 function Invoke-Step([string]$Name, [scriptblock]$Action) {
   Info $Name
@@ -92,12 +93,12 @@ $results += Invoke-Step "fallback scenario check" {
 
 if ($WithAcceptance) {
   $results += Invoke-Step "acceptance real sample" {
-    powershell -ExecutionPolicy Bypass -File $acceptReal -OutputRoot (Join-Path $runDir "acceptance_real")
+    Invoke-ShadowCleaningMode { powershell -ExecutionPolicy Bypass -File $acceptReal -OutputRoot (Join-Path $runDir "acceptance_real") }
     $code = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
     if ($code -ne 0) { throw "acceptance_desktop_real_sample.ps1 exit code $code" }
   }
   $results += Invoke-Step "acceptance finance template" {
-    powershell -ExecutionPolicy Bypass -File $acceptFinance -OutputRoot (Join-Path $runDir "acceptance_finance")
+    Invoke-ShadowCleaningMode { powershell -ExecutionPolicy Bypass -File $acceptFinance -OutputRoot (Join-Path $runDir "acceptance_finance") }
     $code = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
     if ($code -ne 0) { throw "acceptance_desktop_finance_template.ps1 exit code $code" }
   }

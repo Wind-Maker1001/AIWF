@@ -98,3 +98,12 @@
 - `workflow sandbox rule local mirror` 已于 2026-03-23 退役；后续不应重新引入本地 rule mirror。
 - 不在 2026-03-22 直接删除 `workflow.version migration`，因为历史未版本化 graph 仍未完成清点。
 - 不在这一轮硬删 `manual review local_legacy`，因为 `offline_local` 审核状态机还没切到统一 owner。
+## Rollout Governance Addendum
+
+### cleaning default rust_v2 fallback to python_legacy
+
+- current_status: active compatibility fallback during cleaning default rollout governance
+- owner: cleaning/runtime convergence
+- target_remove_by: 2026-06-30
+- removal_result: default mode no longer depends on Python legacy fallback for normal release traffic; fallback becomes exception-only or is removed entirely
+- residual_risk: rollout thresholds may stay noisy if shadow compare mismatch rate or rust error rate is not stable enough across release and package audits

@@ -10,6 +10,7 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
+. (Join-Path $PSScriptRoot "cleaning_shadow_acceptance_support.ps1")
 
 if (-not $Root) { $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
 if (-not $SampleDir) { $SampleDir = Join-Path $Root "examples\evidence_raw_demo" }
@@ -33,52 +34,124 @@ $sampleFiles = @(
 ) | Where-Object { Test-Path $_ }
 if ($sampleFiles.Count -lt 3) { throw "not enough sample files in $SampleDir" }
 
-Info "running desktop offline cleaning on real sample set"
+Info "checking glue/accel health for shadow acceptance"
+$deps = Assert-CleaningShadowDependencies
+$glueUrl = Get-AiwfGlueUrl
 
-$payloadObj = @{
-  params = @{
-    report_title = "AIWF assignment template v1 acceptance"
-    input_files = ($sampleFiles | ConvertTo-Json -Compress)
-    office_lang = "zh"
-    office_theme = "assignment"
-    office_quality_mode = "high"
-    md_only = $false
-    strict_output_gate = $false
-    content_quality_gate_enabled = $false
-    office_quality_gate_enabled = $false
-    xlsx_embed_charts = $true
-  }
-  output_root = $runDir
+$jobId = [guid]::NewGuid().ToString("N")
+$jobContext = New-AcceptanceJobContext -RunDir $runDir
+$extractBody = [ordered]@{
+  input_files = $sampleFiles
+  ocr_enabled = $true
+  xlsx_all_sheets = $true
+  on_file_error = "raise"
 }
-$payloadJson = $payloadObj | ConvertTo-Json -Depth 8 -Compress
+$extract = Invoke-RestMethod -Uri ("{0}/ingest/extract" -f $glueUrl.TrimEnd("/")) -Method Post -ContentType "application/json" -Body ($extractBody | ConvertTo-Json -Depth 12) -TimeoutSec 300
+if (-not [bool]$extract.ok) { throw "glue ingest extract returned ok=false" }
+if ([bool]$extract.quality_blocked) {
+  throw ("glue ingest extract quality_blocked=true: {0}" -f (($extract.blocked_reason_codes | ConvertTo-Json -Compress)))
+}
+if (-not ($extract.rows) -or @($extract.rows).Count -lt 1) { throw "glue ingest extract returned no rows" }
+$params = [ordered]@{
+  local_standalone = $true
+  report_title = "AIWF assignment template v1 acceptance"
+  rows = @($extract.rows)
+  office_lang = "zh"
+  office_theme = "assignment"
+  office_quality_mode = "high"
+  md_only = $false
+  strict_output_gate = $false
+  content_quality_gate_enabled = $false
+  office_quality_gate_enabled = $false
+  xlsx_embed_charts = $true
+}
+$payloadObj = [ordered]@{
+  actor = "acceptance"
+  ruleset_version = "v1"
+  params = $params
+  job_context = $jobContext
+}
+$payloadJson = $payloadObj | ConvertTo-Json -Depth 16 -Compress
 $payloadPath = Join-Path $runDir "payload.json"
+$resultPath = Join-Path $runDir "cleaning_result.json"
+$runModeAuditPath = Join-Path $runDir "run_mode_audit.jsonl"
+$evidencePath = Join-Path $runDir "cleaning_shadow_rollout.json"
+$latestResultPath = Join-Path $OutputRoot "cleaning_result.json"
+$latestRunModeAuditPath = Join-Path $OutputRoot "run_mode_audit.jsonl"
+$latestEvidencePath = Join-Path $OutputRoot "cleaning_shadow_rollout.json"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($payloadPath, $payloadJson, $utf8NoBom)
 
 $nodeScript = @'
-const { runOfflineCleaning } = require("./offline_engine");
+const { appendRunModeAuditEntry } = require("./cleaning_execution_audit");
 const fs = require("fs");
+const path = require("path");
+(() => {
+  const resultPath = process.argv[2];
+  const runModeAuditPath = process.argv[3];
+  const startedAt = Number(process.argv[4] || Date.now());
+  const out = JSON.parse(fs.readFileSync(resultPath, "utf8"));
+  appendRunModeAuditEntry({
+    fs,
+    path,
+    filePath: runModeAuditPath,
+    mode: "glue_acceptance",
+    result: out,
+    startedAt,
+  });
+})();
+'@
+
+$evidenceNodeScript = @'
+const fs = require("fs");
+const path = require("path");
+const {
+  buildCleaningShadowRolloutEvidence,
+} = require("./cleaning_execution_audit");
 (async()=>{
-  const payload = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-  const out = await runOfflineCleaning(payload);
-  process.stdout.write(JSON.stringify(out));
+  const resultPath = process.argv[2];
+  const runModeAuditPath = process.argv[3];
+  const reportPath = process.argv[4];
+  const evidencePath = process.argv[5];
+  const result = JSON.parse(fs.readFileSync(resultPath, "utf8"));
+  const evidence = buildCleaningShadowRolloutEvidence({
+    acceptance: "desktop_real_sample",
+    result,
+    runModeAuditPath,
+    reportPath,
+    sampleResultPath: resultPath,
+  });
+  fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
+  fs.writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
 })().catch((e)=>{
   process.stderr.write(String(e && e.stack ? e.stack : e));
   process.exit(1);
 });
 '@
 
+Info "running glue cleaning on real sample set"
+$startedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+$result = Invoke-ShadowCleaningMode {
+  Invoke-GlueRunCleaningAcceptance `
+    -GlueUrl $glueUrl `
+    -JobId $jobId `
+    -Actor "acceptance" `
+    -RulesetVersion "v1" `
+    -Params $params `
+    -JobContext $jobContext `
+    -TimeoutSec 300
+}
+Assert-ShadowCompareMatched -Result $result -Label "desktop_real_sample acceptance"
+[System.IO.File]::WriteAllText($resultPath, (($result | ConvertTo-Json -Depth 20) + "`n"), $utf8NoBom)
+
 Push-Location $desktopDir
 try {
-  $json = $nodeScript | node - $payloadPath
-  if ($LASTEXITCODE -ne 0) { throw "desktop offline cleaning failed" }
+  $null = $nodeScript | node - $resultPath $runModeAuditPath $startedAt
+  if ($LASTEXITCODE -ne 0) { throw "desktop real sample run mode audit write failed" }
 }
 finally {
   Pop-Location
 }
-
-$result = $json | ConvertFrom-Json
-if (-not $result.ok) { throw "desktop offline cleaning result not ok" }
 
 $xlsx = $result.artifacts | Where-Object { $_.kind -eq "xlsx" } | Select-Object -First 1
 $docx = $result.artifacts | Where-Object { $_.kind -eq "docx" } | Select-Object -First 1
@@ -120,6 +193,18 @@ $lines += "~~~"
 $joined = [string]::Join([Environment]::NewLine, $lines)
 Set-Content -Path $reportPath -Value $joined -Encoding UTF8
 Copy-Item $reportPath (Join-Path $OutputRoot "desktop_real_sample_latest.md") -Force
+Copy-Item $resultPath $latestResultPath -Force
+Copy-Item $runModeAuditPath $latestRunModeAuditPath -Force
+
+Push-Location $desktopDir
+try {
+  $null = $evidenceNodeScript | node - $resultPath $runModeAuditPath $reportPath $evidencePath
+  if ($LASTEXITCODE -ne 0) { throw "desktop real sample rollout evidence write failed" }
+}
+finally {
+  Pop-Location
+}
+Copy-Item $evidencePath $latestEvidencePath -Force
 
 if ($CopyArtifactsToDesktop) {
   $desktop = [Environment]::GetFolderPath("Desktop")

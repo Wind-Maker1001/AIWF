@@ -10,6 +10,7 @@ $ErrorActionPreference = "Stop"
 
 function Info($m){ Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok($m){ Write-Host "[ OK ] $m" -ForegroundColor Green }
+. (Join-Path $PSScriptRoot "cleaning_shadow_acceptance_support.ps1")
 
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $releaseDir = Join-Path $root ("release\v{0}" -f $Version)
@@ -44,7 +45,7 @@ if (-not $SkipAcceptance) {
     "-OutputRoot", (Join-Path $releaseDir "acceptance_real")
   )
   if ($CopyArtifactsToDesktop) { $argsReal += "-CopyArtifactsToDesktop" }
-  powershell @argsReal
+  Invoke-ShadowCleaningMode { powershell @argsReal }
   if ($LASTEXITCODE -ne 0) { throw "acceptance_desktop_real_sample failed" }
   $summary.acceptance_real = "passed"
 
@@ -55,7 +56,7 @@ if (-not $SkipAcceptance) {
     "-OutputRoot", (Join-Path $releaseDir "acceptance_finance")
   )
   if ($CopyArtifactsToDesktop) { $argsFin += "-CopyArtifactsToDesktop" }
-  powershell @argsFin
+  Invoke-ShadowCleaningMode { powershell @argsFin }
   if ($LASTEXITCODE -ne 0) { throw "acceptance_desktop_finance_template failed" }
   $summary.acceptance_finance = "passed"
   Ok "acceptance baseline passed"
