@@ -125,7 +125,9 @@ pub(super) fn infer_domain_catalog(operator: &str) -> Option<(&'static str, &'st
         | "aggregate_pushdown_v1"
         | "rules_package_publish_v1"
         | "rules_package_get_v1" => Some(("transform", "misc_ops")),
-        "load_rows_v2" | "load_rows_v3" | "save_rows_v1" => Some(("storage", "load_ops")),
+        "load_rows_v2" | "load_rows_v3" | "save_rows_v1" | "data_source_browser_v1" => {
+            Some(("storage", "load_ops"))
+        }
         "join_rows_v1" | "join_rows_v2" | "join_rows_v3" | "join_rows_v4" => {
             Some(("join", "operators.join"))
         }

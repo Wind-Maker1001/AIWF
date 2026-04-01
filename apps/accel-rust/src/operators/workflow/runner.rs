@@ -69,10 +69,10 @@ pub(crate) fn run_workflow_with_state(
         };
         let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("step");
         let op = obj.get("operator").and_then(|v| v.as_str()).unwrap_or("");
-        let input = resolve_context_refs(
+        let input = super::support::prepare_workflow_step_input(resolve_context_refs(
             &obj.get("input").cloned().unwrap_or_else(|| json!({})),
             &ctx,
-        );
+        ));
         let input_summary = summarize_value(&input);
         let resolution = workflow_resolution_metadata(op);
         if !workflow_conditions_satisfied(&input, &ctx) {
@@ -173,11 +173,7 @@ fn resolve_context_refs(input: &Value, ctx: &Value) -> Value {
             if map.len() == 1
                 && let Some(reference) = map.get("$context_ref").and_then(|value| value.as_str())
             {
-                return ctx
-                    .as_object()
-                    .and_then(|context| context.get(reference))
-                    .cloned()
-                    .unwrap_or(Value::Null);
+                return resolve_context_value(reference, ctx).unwrap_or(Value::Null);
             }
             let mut out = serde_json::Map::new();
             for (key, value) in map {
@@ -188,6 +184,24 @@ fn resolve_context_refs(input: &Value, ctx: &Value) -> Value {
         Value::Array(items) => Value::Array(items.iter().map(|item| resolve_context_refs(item, ctx)).collect()),
         _ => input.clone(),
     }
+}
+
+fn resolve_context_value(reference: &str, ctx: &Value) -> Option<Value> {
+    let trimmed = reference.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let mut parts = trimmed.split('.');
+    let head = parts.next()?;
+    let mut current = ctx.as_object()?.get(head)?.clone();
+    for part in parts {
+        current = current
+            .as_object()
+            .and_then(|obj| obj.get(part))
+            .cloned()
+            .unwrap_or(Value::Null);
+    }
+    Some(current)
 }
 
 fn workflow_conditions_satisfied(input: &Value, ctx: &Value) -> bool {
@@ -275,5 +289,31 @@ mod tests {
                 .and_then(|v| v.as_bool()),
             Some(false)
         );
+    }
+
+    #[test]
+    fn resolve_context_refs_supports_dotted_reference_paths() {
+        let ctx = json!({
+            "load_base": {
+                "rows": [
+                    { "id": 1, "name": "books" }
+                ],
+                "stats": { "rows": 1 }
+            }
+        });
+
+        let resolved = resolve_context_refs(
+            &json!({
+                "rows": { "$context_ref": "load_base.rows" },
+                "row_count": { "$context_ref": "load_base.stats.rows" }
+            }),
+            &ctx,
+        );
+
+        assert_eq!(
+            resolved.get("rows").and_then(Value::as_array).map(|items| items.len()),
+            Some(1)
+        );
+        assert_eq!(resolved.get("row_count").and_then(Value::as_i64), Some(1));
     }
 }

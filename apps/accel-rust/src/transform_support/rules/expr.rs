@@ -1,4 +1,5 @@
 use super::*;
+use regex::Regex;
 
 pub(crate) fn parse_expr_arg(token: &str, row: &Map<String, Value>) -> Value {
     let t = token.trim();
@@ -113,25 +114,124 @@ pub(crate) fn apply_expression_fields(
 }
 
 pub(crate) fn parse_ymd_simple(s: &str) -> Option<(i64, i64, i64)> {
-    let t = s.trim();
-    let sep = if t.contains('-') {
-        '-'
-    } else if t.contains('/') {
-        '/'
-    } else {
+    let mut t = s.trim().to_string();
+    if t.is_empty() {
         return None;
-    };
-    let parts = t.split(sep).collect::<Vec<_>>();
+    }
+    t = t
+        .replace('年', "-")
+        .replace('月', "-")
+        .replace('日', "")
+        .replace('.', "-")
+        .replace('/', "-");
+    let digits_only = t.chars().all(|ch| ch.is_ascii_digit());
+    if digits_only && t.len() == 8 {
+        let y = t[0..4].parse::<i64>().ok()?;
+        let m = t[4..6].parse::<i64>().ok()?;
+        let d = t[6..8].parse::<i64>().ok()?;
+        if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+            return None;
+        }
+        return Some((y, m, d));
+    }
+    let parts = t
+        .split('-')
+        .map(|item| item.trim())
+        .filter(|item| !item.is_empty())
+        .collect::<Vec<_>>();
     if parts.len() < 3 {
         return None;
     }
-    let y = parts[0].trim().parse::<i64>().ok()?;
-    let m = parts[1].trim().parse::<i64>().ok()?;
-    let d = parts[2].trim().parse::<i64>().ok()?;
+    let y = parts[0].parse::<i64>().ok()?;
+    let m = parts[1].parse::<i64>().ok()?;
+    let d = parts[2].parse::<i64>().ok()?;
     if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
         return None;
     }
     Some((y, m, d))
+}
+
+fn round_half_up(v: f64, digits: i32) -> f64 {
+    let factor = 10f64.powi(digits.max(0));
+    (v * factor).round() / factor
+}
+
+fn collapse_ws_text(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn apply_field_op(current: &Value, obj: &Map<String, Value>) -> Option<Value> {
+    let kind = obj
+        .get("op")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if kind.is_empty() {
+        return None;
+    }
+    let cur = value_to_string(current);
+    match kind.as_str() {
+        "trim" => Some(Value::String(cur.trim().to_string())),
+        "lower" => Some(Value::String(cur.to_lowercase())),
+        "upper" => Some(Value::String(cur.to_uppercase())),
+        "collapse_whitespace" => Some(Value::String(collapse_ws_text(&cur))),
+        "remove_urls" => Regex::new(r"https?://\S+|www\.\S+")
+            .ok()
+            .map(|re| Value::String(re.replace_all(&cur, "").trim().to_string())),
+        "remove_emails" => Regex::new(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+            .ok()
+            .map(|re| Value::String(re.replace_all(&cur, "").trim().to_string())),
+        "regex_replace" => {
+            let pattern = obj.get("pattern").map(value_to_string).unwrap_or_default();
+            let replacement = obj
+                .get("replace")
+                .or_else(|| obj.get("to"))
+                .map(value_to_string)
+                .unwrap_or_default();
+            Regex::new(&pattern)
+                .ok()
+                .map(|re| Value::String(re.replace_all(&cur, replacement.as_str()).to_string()))
+        }
+        "extract_regex" => {
+            let pattern = obj.get("pattern").map(value_to_string).unwrap_or_default();
+            let group = obj.get("group").and_then(value_to_i64).unwrap_or(0).max(0) as usize;
+            let re = Regex::new(&pattern).ok()?;
+            let captures = re.captures(&cur)?;
+            captures
+                .get(group)
+                .map(|matched| Value::String(matched.as_str().to_string()))
+        }
+        "parse_number" => {
+            let normalized = cur.replace(',', "").replace('，', "").replace('$', "").replace('￥', "").replace('¥', "");
+            normalized
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .and_then(serde_json::Number::from_f64)
+                .map(Value::Number)
+        }
+        "round_number" => {
+            let digits = obj.get("digits").and_then(value_to_i64).unwrap_or(2) as i32;
+            value_to_f64(current)
+                .map(|value| round_half_up(value, digits))
+                .and_then(serde_json::Number::from_f64)
+                .map(Value::Number)
+        }
+        "scale_number" => {
+            let multiplier = obj.get("multiplier").and_then(value_to_f64).unwrap_or(1.0);
+            value_to_f64(current)
+                .map(|value| value * multiplier)
+                .and_then(serde_json::Number::from_f64)
+                .map(Value::Number)
+        }
+        "map_value" => {
+            let mapping = obj.get("mapping").and_then(|v| v.as_object())?;
+            let key = cur.trim().to_string();
+            mapping.get(&key).cloned().or_else(|| Some(current.clone()))
+        }
+        "parse_date" => parse_ymd_simple(&cur).map(|(y, m, d)| Value::String(format!("{y:04}-{m:02}-{d:02}"))),
+        _ => None,
+    }
 }
 
 pub(crate) fn apply_string_and_date_ops(
@@ -147,6 +247,10 @@ pub(crate) fn apply_string_and_date_ops(
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
+    let field_ops = rule_get(rules, "field_ops")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     for r in rows {
         for op in &string_ops {
             let Some(obj) = op.as_object() else { continue };
@@ -157,6 +261,9 @@ pub(crate) fn apply_string_and_date_ops(
                 .unwrap_or("")
                 .to_ascii_lowercase();
             if field.is_empty() || kind.is_empty() {
+                continue;
+            }
+            if !r.contains_key(field) {
                 continue;
             }
             let cur = r.get(field).map(value_to_string).unwrap_or_default();
@@ -186,6 +293,9 @@ pub(crate) fn apply_string_and_date_ops(
             if field.is_empty() || kind.is_empty() {
                 continue;
             }
+            if !r.contains_key(field) {
+                continue;
+            }
             let raw = r.get(field).map(value_to_string).unwrap_or_default();
             let out = match parse_ymd_simple(&raw) {
                 Some((y, m, d)) => match kind.as_str() {
@@ -199,6 +309,21 @@ pub(crate) fn apply_string_and_date_ops(
             };
             r.insert(out_field.to_string(), out);
             *rule_hits.entry("date_ops".to_string()).or_insert(0) += 1;
+        }
+        for op in &field_ops {
+            let Some(obj) = op.as_object() else { continue };
+            let field = obj.get("field").and_then(|v| v.as_str()).unwrap_or("");
+            let out_field = obj.get("as").and_then(|v| v.as_str()).unwrap_or(field);
+            if field.is_empty() || out_field.is_empty() {
+                continue;
+            }
+            if !r.contains_key(field) {
+                continue;
+            }
+            let current = r.get(field).cloned().unwrap_or(Value::Null);
+            let next = apply_field_op(&current, obj).unwrap_or(current);
+            r.insert(out_field.to_string(), next);
+            *rule_hits.entry("field_ops".to_string()).or_insert(0) += 1;
         }
     }
 }

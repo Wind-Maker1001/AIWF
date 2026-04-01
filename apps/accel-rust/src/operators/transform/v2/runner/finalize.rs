@@ -16,6 +16,7 @@ pub(super) fn finalize_transform_response(
         date_cells_total,
         date_cells_parsed,
         rule_hits,
+        mut reason_samples,
     } = executed;
 
     let aggregate = compute_aggregate(&rows, rule_get(&prepared.rules, "aggregate"));
@@ -128,6 +129,27 @@ pub(super) fn finalize_transform_response(
             latency_ms
         ),
     );
+    let cast_failed = rule_hits
+        .iter()
+        .filter(|(key, _)| key.starts_with("cast_fail_"))
+        .map(|(_, value)| *value)
+        .sum::<usize>();
+    let reason_counts = json!({
+        "invalid_object": rule_hits.get("invalid_object").copied().unwrap_or(0),
+        "cast_failed": cast_failed,
+        "required_missing": rule_hits.get("required_missing").copied().unwrap_or(0),
+        "filter_rejected": rule_hits.get("filtered_by_rule").copied().unwrap_or(0),
+        "duplicate_removed": duplicate_rows_removed,
+    });
+    for key in [
+        "invalid_object",
+        "cast_failed",
+        "required_missing",
+        "filter_rejected",
+        "duplicate_removed",
+    ] {
+        reason_samples.entry(key.to_string()).or_default();
+    }
     let resp = TransformRowsResp {
         ok: true,
         operator: "transform_rows_v2".to_string(),
@@ -149,14 +171,18 @@ pub(super) fn finalize_transform_response(
         schema_hint: req.schema_hint,
         aggregate,
         audit: json!({
+            "schema": "transform_rows_v2.audit.v1",
             "rule_hits": rule_hits,
+            "reason_counts": reason_counts,
+            "reason_samples": reason_samples,
             "engine": prepared.engine,
             "engine_requested": prepared.requested_engine,
             "engine_reason": prepared.engine_reason,
             "estimated_input_bytes": prepared.estimated_bytes,
             "limits": {
                 "max_rows": prepared.max_rows,
-                "max_payload_bytes": prepared.max_bytes
+                "max_payload_bytes": prepared.max_bytes,
+                "sample_limit": prepared.audit_sample_limit
             }
         }),
     };

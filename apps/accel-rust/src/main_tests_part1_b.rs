@@ -295,6 +295,96 @@ fn transform_rows_v2_cache_hits_on_same_request() {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     assert!(hit);
+    assert!(second.audit.get("reason_samples").and_then(|v| v.as_object()).is_some());
+}
+
+#[test]
+fn transform_rows_v2_audit_samples_respect_sample_limit() {
+    let req = TransformRowsReq {
+        run_id: Some("audit-samples-1".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!(1),
+            json!({"id":"bad","amount":"oops"}),
+            json!({"id":"also-bad","amount":"oops"}),
+        ]),
+        rules: Some(json!({
+            "casts":{"id":"int","amount":"float"}
+        })),
+        quality_gates: Some(json!({})),
+        schema_hint: Some(json!({"audit":{"sample_limit":1}})),
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("audit sample limit");
+    let counts = out.audit.get("reason_counts").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+    let samples = out.audit.get("reason_samples").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+    assert_eq!(counts.get("invalid_object").and_then(|v| v.as_u64()).unwrap_or(0), 1);
+    assert_eq!(counts.get("cast_failed").and_then(|v| v.as_u64()).unwrap_or(0), 2);
+    assert_eq!(samples.get("invalid_object").and_then(|v| v.as_array()).map(|x| x.len()).unwrap_or(0), 1);
+    assert_eq!(samples.get("cast_failed").and_then(|v| v.as_array()).map(|x| x.len()).unwrap_or(0), 1);
+    let invalid_sample = samples
+        .get("invalid_object")
+        .and_then(|v| v.as_array())
+        .and_then(|items| items.first())
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(invalid_sample.get("reason_code").and_then(|v| v.as_str()).unwrap_or(""), "invalid_object");
+    assert!(invalid_sample.get("raw_row").is_some());
+}
+
+#[test]
+fn transform_rows_v2_audit_samples_cover_required_filter_and_dedup() {
+    let req = TransformRowsReq {
+        run_id: Some("audit-samples-2".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!({"id":"1","amount":"10","tag":"keep"}),
+            json!({"id":"2","tag":"keep"}),
+            json!({"id":"3","amount":"5","tag":"drop"}),
+            json!({"id":"1","amount":"11","tag":"keep"}),
+        ]),
+        rules: Some(json!({
+            "casts":{"id":"int","amount":"float","tag":"string"},
+            "required_fields":["id","amount"],
+            "filters":[{"field":"tag","op":"eq","value":"keep"}],
+            "deduplicate_by":["id"],
+            "deduplicate_keep":"first"
+        })),
+        quality_gates: Some(json!({"min_output_rows":1})),
+        schema_hint: Some(json!({"audit":{"sample_limit":2}})),
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("audit reason coverage");
+    let counts = out.audit.get("reason_counts").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+    let samples = out.audit.get("reason_samples").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+    assert_eq!(counts.get("required_missing").and_then(|v| v.as_u64()).unwrap_or(0), 1);
+    assert_eq!(counts.get("filter_rejected").and_then(|v| v.as_u64()).unwrap_or(0), 1);
+    assert_eq!(counts.get("duplicate_removed").and_then(|v| v.as_u64()).unwrap_or(0), 1);
+    assert_eq!(samples.get("required_missing").and_then(|v| v.as_array()).map(|x| x.len()).unwrap_or(0), 1);
+    assert_eq!(samples.get("filter_rejected").and_then(|v| v.as_array()).map(|x| x.len()).unwrap_or(0), 1);
+    assert_eq!(samples.get("duplicate_removed").and_then(|v| v.as_array()).map(|x| x.len()).unwrap_or(0), 1);
+    let required_sample = samples
+        .get("required_missing")
+        .and_then(|v| v.as_array())
+        .and_then(|items| items.first())
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(required_sample.get("reason_code").and_then(|v| v.as_str()).unwrap_or(""), "required_missing");
+    assert!(required_sample.get("detail").and_then(|v| v.as_str()).unwrap_or("").contains("missing required fields"));
 }
 
 #[test]
@@ -665,6 +755,56 @@ fn transform_rows_v2_supports_computed_fields() {
         6.0
     );
     assert_eq!(row.get("name").and_then(|v| v.as_str()).unwrap_or(""), "A");
+}
+
+#[test]
+fn transform_rows_v2_supports_field_ops() {
+    let req = TransformRowsReq {
+        run_id: Some("field-op-1".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![json!({
+            "speaker":" Alice  ",
+            "biz_date":"20260301",
+            "note":"visit https://example.com",
+            "score":"9.66"
+        })]),
+        rules: Some(json!({
+            "field_ops":[
+                {"field":"speaker","op":"trim"},
+                {"field":"speaker","op":"lower"},
+                {"field":"biz_date","op":"parse_date"},
+                {"field":"note","op":"remove_urls"},
+                {"field":"score","op":"parse_number"},
+                {"field":"score","op":"round_number","digits":1}
+            ]
+        })),
+        quality_gates: Some(json!({"min_output_rows":1})),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("field ops transform");
+    let row = out
+        .rows
+        .first()
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(row.get("speaker").and_then(|v| v.as_str()).unwrap_or(""), "alice");
+    assert_eq!(row.get("biz_date").and_then(|v| v.as_str()).unwrap_or(""), "2026-03-01");
+    assert_eq!(row.get("note").and_then(|v| v.as_str()).unwrap_or(""), "visit");
+    assert_eq!(row.get("score").and_then(|v| v.as_f64()).unwrap_or_default(), 9.7);
+    assert_eq!(
+        out.audit.get("schema").and_then(|v| v.as_str()).unwrap_or(""),
+        "transform_rows_v2.audit.v1"
+    );
+    assert!(out.audit.get("reason_counts").and_then(|v| v.as_object()).is_some());
+    assert!(out.audit.get("reason_samples").and_then(|v| v.as_object()).is_some());
 }
 
 #[test]

@@ -186,6 +186,109 @@ pub(super) fn workflow_md_output_handler(
     }))
 }
 
+pub(super) fn workflow_sql_chart_v1_handler(
+    _: &AppState,
+    input: Value,
+) -> Result<Value, String> {
+    let cfg = input.as_object().cloned().unwrap_or_default();
+    let rows = cfg
+        .get("rows")
+        .and_then(Value::as_array)
+        .cloned()
+        .or_else(|| {
+            cfg.get("workflow_inputs")
+                .and_then(Value::as_object)
+                .and_then(|map| map.values().find_map(|value| value.get("rows").and_then(Value::as_array).cloned()))
+        })
+        .unwrap_or_default();
+    let category_field = cfg
+        .get("category_field")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("category");
+    let value_field = cfg
+        .get("value_field")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("value");
+    let series_field = cfg
+        .get("series_field")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("series");
+    let chart_type = cfg
+        .get("chart_type")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("bar");
+    let top_n = cfg
+        .get("top_n")
+        .and_then(Value::as_u64)
+        .map(|value| value.max(1) as usize)
+        .unwrap_or(100);
+
+    let mut grouped: HashMap<String, HashMap<String, f64>> = HashMap::new();
+    let mut categories = Vec::<String>::new();
+    let mut series_names = Vec::<String>::new();
+    for row in &rows {
+        let Some(obj) = row.as_object() else {
+            continue;
+        };
+        let category = value_to_string(obj.get(category_field).unwrap_or(&Value::Null));
+        if !grouped.contains_key(&category) {
+            categories.push(category.clone());
+            grouped.insert(category.clone(), HashMap::new());
+        }
+        let series = value_to_string(obj.get(series_field).unwrap_or(&Value::Null));
+        if !series_names.iter().any(|item| item == &series) {
+            series_names.push(series.clone());
+        }
+        let value = obj
+            .get(value_field)
+            .and_then(Value::as_f64)
+            .unwrap_or_else(|| {
+                obj.get(value_field)
+                    .map(value_to_string)
+                    .and_then(|text| text.parse::<f64>().ok())
+                    .unwrap_or(0.0)
+            });
+        let entry = grouped
+            .entry(category)
+            .or_default()
+            .entry(series)
+            .or_insert(0.0);
+        *entry += value;
+    }
+
+    categories.truncate(top_n);
+    let series = series_names
+        .into_iter()
+        .map(|name| {
+            json!({
+                "name": name,
+                "data": categories
+                    .iter()
+                    .map(|category| grouped.get(category).and_then(|bucket| bucket.get(&name)).copied().unwrap_or(0.0))
+                    .collect::<Vec<_>>()
+            })
+        })
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "ok": true,
+        "operator": "sql_chart_v1",
+        "status": "done",
+        "chart_type": chart_type,
+        "categories": categories,
+        "series": series,
+        "rows_in": rows.len(),
+    }))
+}
+
 pub(super) fn workflow_manual_review_handler(
     _: &AppState,
     input: Value,

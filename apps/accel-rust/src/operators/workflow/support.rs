@@ -75,8 +75,12 @@ pub(super) fn push_success_workflow_step(
     });
 }
 
+pub(super) fn prepare_workflow_step_input(input: Value) -> Value {
+    apply_workflow_input_map(input)
+}
+
 pub(super) fn parse_workflow_input<T: DeserializeOwned>(input: Value) -> Result<T, String> {
-    serde_json::from_value::<T>(input).map_err(|e| e.to_string())
+    serde_json::from_value::<T>(prepare_workflow_step_input(input)).map_err(|e| e.to_string())
 }
 
 pub(super) fn serialize_workflow_output<T: Serialize>(output: T) -> Result<Value, String> {
@@ -107,4 +111,120 @@ where
     let req = parse_workflow_input::<T>(input)?;
     let resp = runner(state, req)?;
     serialize_workflow_output(resp)
+}
+
+fn apply_workflow_input_map(input: Value) -> Value {
+    let Value::Object(mut root) = input else {
+        return input;
+    };
+    let Some(input_map) = root.get("input_map").and_then(Value::as_object).cloned() else {
+        return Value::Object(root);
+    };
+    let workflow_inputs = root
+        .get("workflow_inputs")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let predecessor_ids = workflow_inputs.keys().cloned().collect::<Vec<_>>();
+    for (target_key, expr) in input_map {
+        if let Some(value) = resolve_workflow_input_map_value(&expr, &workflow_inputs, &predecessor_ids) {
+            root.insert(target_key, value);
+        }
+    }
+    Value::Object(root)
+}
+
+fn resolve_workflow_input_map_value(
+    expr: &Value,
+    workflow_inputs: &serde_json::Map<String, Value>,
+    predecessor_ids: &[String],
+) -> Option<Value> {
+    if let Some(obj) = expr.as_object() {
+        let from = obj
+            .get("from")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| predecessor_ids.first().map(String::as_str).unwrap_or(""));
+        let path = obj
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or("");
+        return workflow_inputs
+            .get(from)
+            .and_then(|value| pick_workflow_value_path(value, path))
+            .cloned();
+    }
+
+    let raw = expr.as_str().map(str::trim).unwrap_or("");
+    if raw.is_empty() {
+        return None;
+    }
+    if let Some(path) = raw.strip_prefix("$prev.") {
+        for predecessor_id in predecessor_ids {
+            if let Some(value) = workflow_inputs
+                .get(predecessor_id)
+                .and_then(|output| pick_workflow_value_path(output, path))
+            {
+                return Some(value.clone());
+            }
+        }
+        return None;
+    }
+    if let Some((node_id, path)) = raw.split_once('.')
+        && let Some(value) = workflow_inputs
+            .get(node_id)
+            .and_then(|output| pick_workflow_value_path(output, path))
+    {
+        return Some(value.clone());
+    }
+    for predecessor_id in predecessor_ids {
+        if let Some(value) = workflow_inputs
+            .get(predecessor_id)
+            .and_then(|output| pick_workflow_value_path(output, raw))
+        {
+            return Some(value.clone());
+        }
+    }
+    None
+}
+
+fn pick_workflow_value_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Some(value);
+    }
+    let mut current = value;
+    for segment in trimmed.split('.') {
+        let obj = current.as_object()?;
+        current = obj.get(segment)?;
+    }
+    Some(current)
+}
+
+#[cfg(test)]
+mod input_map_tests {
+    use super::*;
+
+    #[test]
+    fn parse_workflow_input_applies_input_map_from_predecessors() {
+        #[derive(Deserialize)]
+        struct DummyReq {
+            rows: Vec<Value>,
+        }
+
+        let payload = json!({
+            "rows": [],
+            "input_map": { "rows": "$prev.rows" },
+            "workflow_inputs": {
+                "load_a": {
+                    "rows": [{ "id": 1 }]
+                }
+            }
+        });
+
+        let parsed = parse_workflow_input::<DummyReq>(payload).expect("parse req");
+        assert_eq!(parsed.rows.len(), 1);
+    }
 }

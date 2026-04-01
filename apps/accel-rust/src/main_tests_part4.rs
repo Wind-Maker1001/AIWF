@@ -366,6 +366,106 @@ async fn workflow_draft_run_endpoint_executes_desktop_linear_graph() {
 }
 
 #[tokio::test]
+async fn workflow_draft_run_endpoint_executes_sql_chart_node() {
+    let state = AppState {
+        service: "accel-rust".to_string(),
+        tasks: Arc::new(Mutex::new(HashMap::<String, TaskState>::new())),
+        metrics: Arc::new(Mutex::new(ServiceMetrics::default())),
+        task_cfg: Arc::new(Mutex::new(TaskStoreConfig {
+            ttl_sec: 3600,
+            max_tasks: 1000,
+            store_path: None,
+            remote_enabled: false,
+            backend: "memory".to_string(),
+            base_api_url: None,
+            base_api_key: None,
+            sql_host: "localhost".to_string(),
+            sql_port: 1433,
+            sql_db: "master".to_string(),
+            sql_user: None,
+            sql_password: None,
+            sql_use_windows_auth: true,
+        })),
+        cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+        tenant_running: Arc::new(Mutex::new(HashMap::new())),
+        idempotency_index: Arc::new(Mutex::new(HashMap::new())),
+        transform_cache: Arc::new(Mutex::new(HashMap::new())),
+        schema_registry: Arc::new(Mutex::new(HashMap::new())),
+    };
+    let app = build_router(state);
+    let request = json!({
+        "job_id": "draft_chart_1",
+        "run_id": "draft_chart_1",
+        "workflow_definition": {
+            "workflow_id": "wf_chart",
+            "version": "1.0.0",
+            "nodes": [
+                {
+                    "id": "q1",
+                    "type": "query_lang_v1",
+                    "config": {
+                        "rows": [
+                            { "category": "books", "series": "north", "value": 12 },
+                            { "category": "books", "series": "north", "value": 8 },
+                            { "category": "games", "series": "north", "value": 5 }
+                        ],
+                        "query": "limit 10"
+                    }
+                },
+                {
+                    "id": "chart",
+                    "type": "sql_chart_v1",
+                    "config": {
+                        "rows": [],
+                        "input_map": {
+                            "rows": { "from": "q1", "path": "rows" }
+                        },
+                        "chart_type": "bar",
+                        "category_field": "category",
+                        "value_field": "value",
+                        "series_field": "series",
+                        "top_n": 20
+                    }
+                }
+            ],
+            "edges": [
+                { "from": "q1", "to": "chart" }
+            ]
+        }
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/operators/workflow_draft_run_v1")
+                .header("content-type", "application/json")
+                .body(Body::from(request.to_string()))
+                .expect("workflow draft chart request"),
+        )
+        .await
+        .expect("workflow draft chart response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .expect("workflow draft chart body");
+    let payload: Value = serde_json::from_slice(&body).expect("workflow draft chart json");
+    assert_eq!(payload.get("ok").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(
+        payload.pointer("/final_output/operator").and_then(|v| v.as_str()),
+        Some("sql_chart_v1"),
+    );
+    assert_eq!(
+        payload.pointer("/final_output/categories/0").and_then(|v| v.as_str()),
+        Some("books"),
+    );
+    assert_eq!(
+        payload.pointer("/final_output/series/0/name").and_then(|v| v.as_str()),
+        Some("north"),
+    );
+}
+
+#[tokio::test]
 async fn workflow_reference_run_endpoint_rejects_edge_missing_node() {
     let state = AppState {
         service: "accel-rust".to_string(),

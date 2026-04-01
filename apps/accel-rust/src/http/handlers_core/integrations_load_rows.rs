@@ -1,5 +1,6 @@
 use crate::{
-    api_types::{LoadRowsReq, LoadRowsV2Req, LoadRowsV3Req},
+    api_types::{DataSourceBrowserV1Req, LoadRowsReq, LoadRowsV2Req, LoadRowsV3Req},
+    data_source_browser::run_data_source_browser_v1,
     load_ops::{run_load_rows_v1, run_load_rows_v2, run_load_rows_v3},
 };
 use accel_rust::{app_state::AppState, metrics::observe_operator_latency_v2};
@@ -36,5 +37,14 @@ pub(crate) async fn load_rows_v3_operator(
             support::ok_json(resp)
         }
         Err(error) => support::error_json(StatusCode::BAD_REQUEST, "load_rows_v3", error),
+    }
+}
+
+pub(crate) async fn data_source_browser_v1_operator(
+    Json(req): Json<DataSourceBrowserV1Req>,
+) -> impl IntoResponse {
+    match run_data_source_browser_v1(req) {
+        Ok(resp) => support::ok_json(resp),
+        Err(error) => support::error_json(StatusCode::BAD_REQUEST, "data_source_browser_v1", error),
     }
 }

@@ -351,6 +351,23 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+  /operators/data_source_browser_v1:
+    post:
+      summary: Browse sqlite/sqlserver metadata and preview sample rows
+      operationId: dataSourceBrowserV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DataSourceBrowserV1Req"
+      responses:
+        "200":
+          description: browser result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataSourceBrowserV1Resp"
   /operators/plugin_operator_v1:
     post:
       summary: Execute plugin operator through plugin ABI wrapper
@@ -661,6 +678,134 @@ components:
           minimum: 0
         sha256:
           type: string
+    TransformRowsRuleSet:
+      type: object
+      additionalProperties: true
+      properties:
+        rename_map:
+          type: object
+          additionalProperties:
+            type: string
+        casts:
+          type: object
+          additionalProperties:
+            type: string
+        required_fields:
+          type: array
+          items:
+            type: string
+        default_values:
+          type: object
+          additionalProperties: true
+        include_fields:
+          type: array
+          items:
+            type: string
+        exclude_fields:
+          type: array
+          items:
+            type: string
+        filters:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        deduplicate_by:
+          type: array
+          items:
+            type: string
+        deduplicate_keep:
+          type: string
+        sort_by:
+          type: array
+          items:
+            anyOf:
+              - type: string
+              - type: object
+                additionalProperties: true
+        aggregate:
+          type: object
+          additionalProperties: true
+        null_values:
+          type: array
+          items:
+            type: string
+        trim_strings:
+          type: boolean
+        computed_fields:
+          type: object
+          additionalProperties:
+            type: string
+        string_ops:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        date_ops:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        field_ops:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    TransformRowsQualityGates:
+      type: object
+      additionalProperties: true
+      properties:
+        max_invalid_rows:
+          type: integer
+        max_filtered_rows:
+          type: integer
+        min_output_rows:
+          type: integer
+        max_invalid_ratio:
+          type: number
+        required_fields:
+          type: array
+          items:
+            type: string
+        max_required_missing_ratio:
+          type: number
+        max_duplicate_rows_removed:
+          type: integer
+        allow_empty_output:
+          type: boolean
+        numeric_parse_rate_min:
+          type: number
+        date_parse_rate_min:
+          type: number
+        duplicate_key_ratio_max:
+          type: number
+        blank_row_ratio_max:
+          type: number
+    TransformRowsSchemaHint:
+      type: object
+      additionalProperties: true
+      properties:
+        schema_version:
+          type: string
+        contract:
+          type: string
+        canonical_profile:
+          type: string
+        fields:
+          type: object
+          additionalProperties: true
+        defaults:
+          type: object
+          additionalProperties: true
+        unique_keys:
+          type: array
+          items:
+            type: string
+        audit:
+          type: object
+          additionalProperties: true
+        source:
+          type: string
     TransformRowsReq:
       type: object
       additionalProperties: false
@@ -679,16 +824,13 @@ components:
             type: object
             additionalProperties: true
         rules:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/TransformRowsRuleSet"
         rules_dsl:
           type: string
         quality_gates:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/TransformRowsQualityGates"
         schema_hint:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/TransformRowsSchemaHint"
         input_uri:
           type: string
         output_uri:
@@ -718,13 +860,11 @@ components:
           type: integer
           minimum: 1
         rules:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/TransformRowsRuleSet"
         rules_dsl:
           type: string
         quality_gates:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/TransformRowsQualityGates"
         checkpoint_key:
           type: string
         resume:
@@ -866,6 +1006,76 @@ components:
           items:
             type: object
             additionalProperties: true
+    DataSourceBrowserV1Req:
+      type: object
+      additionalProperties: false
+      required: [source_type, source, op]
+      properties:
+        source_type:
+          type: string
+          enum: [sqlite, sqlserver]
+        source:
+          type: string
+        op:
+          type: string
+          enum: [validate_connection, list_schemas, list_tables, describe_table, sample_rows]
+        schema:
+          type: string
+        table:
+          type: string
+        limit:
+          type: integer
+    DataSourceBrowserItem:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+        schema:
+          type: string
+        kind:
+          type: string
+    DataSourceBrowserColumn:
+      type: object
+      additionalProperties: false
+      required: [name, data_type, nullable]
+      properties:
+        name:
+          type: string
+        data_type:
+          type: string
+        nullable:
+          type: boolean
+    DataSourceBrowserV1Resp:
+      type: object
+      additionalProperties: false
+      required: [ok, operator, status, op, items, columns, rows, stats]
+      properties:
+        ok:
+          type: boolean
+        operator:
+          type: string
+        status:
+          type: string
+        op:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DataSourceBrowserItem"
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/DataSourceBrowserColumn"
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        stats:
+          type: object
+          additionalProperties: true
     AggregateRowsReq:
       type: object
       additionalProperties: false
@@ -1155,12 +1365,45 @@ components:
         rust_v2_used:
           type: boolean
         schema_hint:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/TransformRowsSchemaHint"
         aggregate:
           type: object
           additionalProperties: true
         audit:
+          $ref: "#/components/schemas/TransformRowsAudit"
+    TransformRowsAudit:
+      type: object
+      additionalProperties: true
+      properties:
+        schema:
+          type: string
+        rule_hits:
+          type: object
+          additionalProperties:
+            type: integer
+        reason_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        reason_samples:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              additionalProperties: true
+        engine:
+          type: string
+        engine_requested:
+          type: string
+        engine_reason:
+          type: string
+        estimated_input_bytes:
+          type: integer
+        limits:
+          type: object
+          additionalProperties: true
+        cache:
           type: object
           additionalProperties: true
     TaskSubmitResp:

@@ -26,6 +26,7 @@ struct TransformPrepared {
     engine: String,
     engine_reason: String,
     use_columnar: bool,
+    audit_sample_limit: usize,
 }
 
 struct TransformExecution {
@@ -38,6 +39,7 @@ struct TransformExecution {
     date_cells_total: usize,
     date_cells_parsed: usize,
     rule_hits: HashMap<String, usize>,
+    reason_samples: HashMap<String, Vec<Value>>,
 }
 
 #[path = "runner/execute.rs"]

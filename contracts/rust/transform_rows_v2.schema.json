@@ -23,6 +23,10 @@
         "deduplicate_by": { "type": "array", "items": { "type": "string" } },
         "deduplicate_keep": { "type": "string", "enum": ["first", "last"] },
         "sort_by": { "type": "array", "items": { "type": ["string", "object"] } },
+        "computed_fields": { "type": "object", "additionalProperties": { "type": "string" } },
+        "string_ops": { "type": "array", "items": { "type": "object" } },
+        "date_ops": { "type": "array", "items": { "type": "object" } },
+        "field_ops": { "type": "array", "items": { "type": "object" } },
         "aggregate": {
           "type": "object",
           "properties": {

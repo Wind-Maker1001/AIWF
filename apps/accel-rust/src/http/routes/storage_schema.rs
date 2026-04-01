@@ -6,6 +6,10 @@ pub(super) fn storage_schema_routes() -> Router<AppState> {
         .route("/operators/load_rows_v1", post(crate::http::load_rows_v1_operator))
         .route("/operators/load_rows_v2", post(crate::http::load_rows_v2_operator))
         .route("/operators/load_rows_v3", post(crate::http::load_rows_v3_operator))
+        .route(
+            "/operators/data_source_browser_v1",
+            post(crate::http::data_source_browser_v1_operator),
+        )
         .route("/operators/save_rows_v1", post(crate::http::save_rows_v1_operator))
         .route(
             "/operators/schema_registry_v1/register",

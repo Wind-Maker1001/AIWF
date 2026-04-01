@@ -127,6 +127,7 @@ fn resolve_workflow_only_operator_metadata(operator: &str) -> Option<OperatorMet
         "ai_refine" => Some(OperatorMetadata::new(operator, "intelligence", "workflow.local_ai")),
         "ai_audit" => Some(OperatorMetadata::new(operator, "governance", "workflow.local_ai")),
         "md_output" => Some(OperatorMetadata::new(operator, "execution", "workflow.local_output")),
+        "sql_chart_v1" => Some(OperatorMetadata::new(operator, "analysis", "workflow.local_output")),
         _ => None,
     }
 }

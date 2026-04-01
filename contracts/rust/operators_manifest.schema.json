@@ -99,6 +99,17 @@
         "desktop_exposable": { "type": "boolean" },
         "direct_http_only": { "type": "boolean" },
         "internal_only": { "type": "boolean" },
+        "contracts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "request_schema": { "type": "string", "minLength": 1 },
+            "response_schema": { "type": "string", "minLength": 1 },
+            "rules_schema": { "type": "string", "minLength": 1 },
+            "schema_hint_schema": { "type": "string", "minLength": 1 },
+            "audit_schema": { "type": "string", "minLength": 1 }
+          }
+        },
         "capabilities": {
           "$ref": "#/$defs/capabilities"
         }

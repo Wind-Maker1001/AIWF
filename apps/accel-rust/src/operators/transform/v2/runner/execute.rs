@@ -1,4 +1,74 @@
 use super::*;
+use crate::FilterOp;
+
+fn reason_sample_keys() -> [&'static str; 5] {
+    [
+        "invalid_object",
+        "cast_failed",
+        "required_missing",
+        "filter_rejected",
+        "duplicate_removed",
+    ]
+}
+
+fn empty_reason_samples() -> HashMap<String, Vec<Value>> {
+    let mut out = HashMap::new();
+    for key in reason_sample_keys() {
+        out.insert(key.to_string(), Vec::new());
+    }
+    out
+}
+
+fn row_excerpt(row: &Map<String, Value>) -> Value {
+    Value::Object(row.clone())
+}
+
+fn push_reason_sample(
+    reason_samples: &mut HashMap<String, Vec<Value>>,
+    reason_code: &str,
+    sample_limit: usize,
+    sample: Value,
+) {
+    let items = reason_samples
+        .entry(reason_code.to_string())
+        .or_default();
+    if items.len() < sample_limit {
+        items.push(sample);
+    }
+}
+
+fn filter_detail(filter: &CompiledFilter) -> String {
+    let field = filter.field.trim();
+    let op = match &filter.op {
+        FilterOp::Exists => "exists",
+        FilterOp::NotExists => "not_exists",
+        FilterOp::Eq(_) => "eq",
+        FilterOp::Ne(_) => "ne",
+        FilterOp::Contains(_) => "contains",
+        FilterOp::In(_) => "in",
+        FilterOp::NotIn(_) => "not_in",
+        FilterOp::Regex(_) => "regex",
+        FilterOp::NotRegex(_) => "not_regex",
+        FilterOp::Gt(_) => "gt",
+        FilterOp::Gte(_) => "gte",
+        FilterOp::Lt(_) => "lt",
+        FilterOp::Lte(_) => "lte",
+        FilterOp::Invalid => "invalid",
+        FilterOp::Passthrough => "passthrough",
+    };
+    if field.is_empty() {
+        op.to_string()
+    } else {
+        format!("{field}:{op}")
+    }
+}
+
+fn null_or_string(value: Option<&str>) -> Value {
+    match value {
+        Some(text) if !text.trim().is_empty() => Value::String(text.to_string()),
+        _ => Value::Null,
+    }
+}
 
 pub(super) fn execute_transform_rows(
     prepared: &TransformPrepared,
@@ -7,18 +77,32 @@ pub(super) fn execute_transform_rows(
     let mut invalid_rows = 0usize;
     let mut filtered_rows = 0usize;
     let mut rule_hits: HashMap<String, usize> = HashMap::new();
+    let mut reason_samples = empty_reason_samples();
     let mut rows: Vec<Map<String, Value>> = Vec::new();
     let mut prepared_rows: Vec<Map<String, Value>> = Vec::new();
     let mut numeric_cells_total = 0usize;
     let mut numeric_cells_parsed = 0usize;
 
-    for row in prepared.rows_in.clone() {
+    for (row_index, row) in prepared.rows_in.clone().into_iter().enumerate() {
         if is_cancelled(cancel_flag) {
             return Err("task cancelled".to_string());
         }
         let Some(obj) = row.as_object() else {
             invalid_rows += 1;
             *rule_hits.entry("invalid_object".to_string()).or_insert(0) += 1;
+            push_reason_sample(
+                &mut reason_samples,
+                "invalid_object",
+                prepared.audit_sample_limit,
+                json!({
+                    "reason_code": "invalid_object",
+                    "row_index": row_index + 1,
+                    "field": Value::Null,
+                    "key": Value::Null,
+                    "raw_row": row,
+                    "detail": "row is not an object"
+                }),
+            );
             continue;
         };
         let mut out: Map<String, Value> = Map::new();
@@ -84,6 +168,19 @@ pub(super) fn execute_transform_rows(
                     None => {
                         invalid_rows += 1;
                         *rule_hits.entry(format!("cast_fail_{field}")).or_insert(0) += 1;
+                        push_reason_sample(
+                            &mut reason_samples,
+                            "cast_failed",
+                            prepared.audit_sample_limit,
+                            json!({
+                                "reason_code": "cast_failed",
+                                "row_index": row_index + 1,
+                                "field": field,
+                                "key": Value::Null,
+                                "raw_row": row,
+                                "detail": format!("cast failed for {field} as {cast_type}")
+                            }),
+                        );
                         out.clear();
                         break;
                     }
@@ -105,19 +202,52 @@ pub(super) fn execute_transform_rows(
             if missing {
                 invalid_rows += 1;
                 *rule_hits.entry("required_missing".to_string()).or_insert(0) += 1;
+                let missing_fields = prepared
+                    .required_fields
+                    .iter()
+                    .filter(|field| is_missing(out.get(field.as_str())))
+                    .cloned()
+                    .collect::<Vec<String>>();
+                push_reason_sample(
+                    &mut reason_samples,
+                    "required_missing",
+                    prepared.audit_sample_limit,
+                    json!({
+                        "reason_code": "required_missing",
+                        "row_index": row_index + 1,
+                        "field": null_or_string(missing_fields.first().map(|s| s.as_str())),
+                        "key": Value::Null,
+                        "row_excerpt": row_excerpt(&out),
+                        "detail": format!("missing required fields: {}", missing_fields.join(","))
+                    }),
+                );
                 continue;
             }
         }
 
-        if !prepared.compiled_filters.is_empty()
-            && !prepared
+        if !prepared.compiled_filters.is_empty() {
+            let failed_filter = prepared
                 .compiled_filters
                 .iter()
-                .all(|filter| filter_match_compiled(&out, filter))
-        {
-            filtered_rows += 1;
-            *rule_hits.entry("filtered_by_rule".to_string()).or_insert(0) += 1;
-            continue;
+                .find(|filter| !filter_match_compiled(&out, filter));
+            if let Some(filter) = failed_filter {
+                filtered_rows += 1;
+                *rule_hits.entry("filtered_by_rule".to_string()).or_insert(0) += 1;
+                push_reason_sample(
+                    &mut reason_samples,
+                    "filter_rejected",
+                    prepared.audit_sample_limit,
+                    json!({
+                    "reason_code": "filter_rejected",
+                    "row_index": row_index + 1,
+                    "field": filter.field.clone(),
+                    "key": Value::Null,
+                    "row_excerpt": row_excerpt(&out),
+                        "detail": filter_detail(filter)
+                    }),
+                );
+                continue;
+            }
         }
 
         if !prepared.include_fields.is_empty() {
@@ -232,11 +362,42 @@ pub(super) fn execute_transform_rows(
             if prepared.dedup_keep == "first" {
                 for row in rows {
                     let key = dedup_key(&row, &prepared.deduplicate_by);
-                    deduped.entry(key).or_insert(row);
+                    if deduped.contains_key(&key) {
+                        push_reason_sample(
+                            &mut reason_samples,
+                            "duplicate_removed",
+                            prepared.audit_sample_limit,
+                            json!({
+                                "reason_code": "duplicate_removed",
+                                "row_index": Value::Null,
+                                "field": Value::Null,
+                                "key": key.clone(),
+                                "row_excerpt": row_excerpt(&row),
+                                "detail": "duplicate removed while keeping first"
+                            }),
+                        );
+                    } else {
+                        deduped.insert(key, row);
+                    }
                 }
             } else {
                 for row in rows {
                     let key = dedup_key(&row, &prepared.deduplicate_by);
+                    if let Some(previous) = deduped.get(&key) {
+                        push_reason_sample(
+                            &mut reason_samples,
+                            "duplicate_removed",
+                            prepared.audit_sample_limit,
+                            json!({
+                                "reason_code": "duplicate_removed",
+                                "row_index": Value::Null,
+                                "field": Value::Null,
+                                "key": key.clone(),
+                                "row_excerpt": row_excerpt(previous),
+                                "detail": "duplicate removed while keeping last"
+                            }),
+                        );
+                    }
                     deduped.insert(key, row);
                 }
             }
@@ -262,5 +423,6 @@ pub(super) fn execute_transform_rows(
         date_cells_total,
         date_cells_parsed,
         rule_hits,
+        reason_samples,
     })
 }

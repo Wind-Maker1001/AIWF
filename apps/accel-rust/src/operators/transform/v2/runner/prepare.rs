@@ -94,6 +94,14 @@ pub(super) fn prepare_transform_request(
         )
     };
     let use_columnar = engine == "columnar_v1" || engine == "columnar_arrow_v1";
+    let audit_sample_limit = req
+        .schema_hint
+        .as_ref()
+        .and_then(|v| v.get("audit"))
+        .and_then(|v| v.get("sample_limit"))
+        .and_then(|v| v.as_u64())
+        .map(|v| v.min(100) as usize)
+        .unwrap_or(5);
 
     Ok(TransformPrepared {
         rows_in,
@@ -119,5 +127,6 @@ pub(super) fn prepare_transform_request(
         engine,
         engine_reason,
         use_columnar,
+        audit_sample_limit,
     })
 }

@@ -16,6 +16,7 @@ use accel_rust::app_state::{AppState, ServiceMetrics, TaskState, TaskStoreConfig
 mod analysis_ops;
 mod api_types;
 mod cleaning_runtime;
+mod data_source_browser;
 mod execution_ops;
 mod governance_ops;
 mod http;
@@ -35,6 +36,8 @@ use analysis_ops::*;
 use api_types::*;
 #[allow(unused_imports)]
 use cleaning_runtime::*;
+#[allow(unused_imports)]
+use data_source_browser::*;
 #[allow(unused_imports)]
 use execution_ops::*;
 #[allow(unused_imports)]

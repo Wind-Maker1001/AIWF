@@ -157,3 +157,39 @@ pub(crate) struct LoadRowsV3Req {
     pub(crate) resume_token: Option<String>,
     pub(crate) connector_options: Option<Value>,
 }
+
+#[derive(Deserialize)]
+pub(crate) struct DataSourceBrowserV1Req {
+    pub(crate) source_type: String,
+    pub(crate) source: String,
+    pub(crate) op: String,
+    pub(crate) schema: Option<String>,
+    pub(crate) table: Option<String>,
+    pub(crate) limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataSourceBrowserItem {
+    pub(crate) name: String,
+    pub(crate) schema: Option<String>,
+    pub(crate) kind: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataSourceBrowserColumn {
+    pub(crate) name: String,
+    pub(crate) data_type: String,
+    pub(crate) nullable: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DataSourceBrowserV1Resp {
+    pub(crate) ok: bool,
+    pub(crate) operator: String,
+    pub(crate) status: String,
+    pub(crate) op: String,
+    pub(crate) items: Vec<DataSourceBrowserItem>,
+    pub(crate) columns: Vec<DataSourceBrowserColumn>,
+    pub(crate) rows: Vec<Value>,
+    pub(crate) stats: Value,
+}
