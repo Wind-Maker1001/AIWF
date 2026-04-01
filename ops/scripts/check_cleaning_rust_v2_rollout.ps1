@@ -324,7 +324,8 @@ async function main() {
   const requestedMode = normalizeMode(process.argv[7]);
   const verifyOnDefault = toBool(process.argv[8], false);
   const requireNoSkipped = toBool(process.argv[9], false);
-  const evidencePath = process.argv[10] ? path.resolve(process.argv[10]) : "";
+  const rawEvidencePath = process.argv[10] || "";
+  const evidencePath = rawEvidencePath === "__none__" ? "" : rawEvidencePath ? path.resolve(rawEvidencePath) : "";
   const requireRealEvidence = toBool(process.argv[11], false);
 
   fs.mkdirSync(outDir, { recursive: true });
@@ -536,7 +537,8 @@ main().catch((error) => {
 });
 '@
 
-$nodeScript | node - $RepoRoot $OutDir $RunModeAuditPath $ConsistencyReportPath $SampleResultPath $RequestedMode $VerifyOnDefault $RequireNoSkipped $EvidencePath $RequireRealEvidence
+$safeEvidencePath = if ($EvidencePath) { $EvidencePath } else { "__none__" }
+$nodeScript | node - $RepoRoot $OutDir $RunModeAuditPath $ConsistencyReportPath $SampleResultPath $RequestedMode ($VerifyOnDefault.IsPresent.ToString().ToLower()) ($RequireNoSkipped.IsPresent.ToString().ToLower()) $safeEvidencePath ($RequireRealEvidence.IsPresent.ToString().ToLower())
 if ($LASTEXITCODE -ne 0) {
   throw "cleaning rust v2 rollout checks failed"
 }
