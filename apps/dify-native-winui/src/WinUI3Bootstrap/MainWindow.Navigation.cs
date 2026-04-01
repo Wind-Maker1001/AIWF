@@ -18,6 +18,11 @@ public sealed partial class MainWindow
         SetActiveSection(NavSection.Results);
     }
 
+    private void OnSqlStudioNavClick(object sender, RoutedEventArgs e)
+    {
+        SetActiveSection(NavSection.SqlStudio);
+    }
+
     private void OnCanvasNavClick(object sender, RoutedEventArgs e)
     {
         SetActiveSection(NavSection.Canvas);
@@ -39,6 +44,9 @@ public sealed partial class MainWindow
         WorkspaceSectionGrid.Visibility = section == NavSection.Workspace
             ? Visibility.Visible
             : Visibility.Collapsed;
+        SqlStudioSectionGrid.Visibility = section == NavSection.SqlStudio
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         CanvasSectionGrid.Visibility = section == NavSection.Canvas
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -50,12 +58,14 @@ public sealed partial class MainWindow
             : Visibility.Collapsed;
 
         ApplyNavButtonState(WorkspaceNavButton, section == NavSection.Workspace);
+        ApplyNavButtonState(SqlStudioNavButton, section == NavSection.SqlStudio);
         ApplyNavButtonState(CanvasNavButton, section == NavSection.Canvas);
         ApplyNavButtonState(ResultNavButton, section == NavSection.Results);
         ApplyNavButtonState(GovernanceNavButton, section == NavSection.Governance);
         var activeElement = section switch
         {
             NavSection.Workspace => WorkspaceSectionGrid,
+            NavSection.SqlStudio => SqlStudioSectionGrid,
             NavSection.Canvas => CanvasSectionGrid,
             NavSection.Results => ResultsSectionGrid,
             _ => GovernanceSectionGrid

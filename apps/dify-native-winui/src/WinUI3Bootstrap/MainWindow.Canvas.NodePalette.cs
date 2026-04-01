@@ -1,4 +1,5 @@
 using System;
+using AIWF.Native.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -135,6 +136,8 @@ public sealed partial class MainWindow
             subtitle,
             x,
             y,
+            workflowNodeType: template.WorkflowNodeType,
+            workflowConfig: SqlCanvasNodeDefaults.Create(template.WorkflowNodeType),
             isUserNode: true,
             select: true,
             dismissHint: true,

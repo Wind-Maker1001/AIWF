@@ -1,7 +1,7 @@
+using AIWF.Native.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using AIWF.Native.Runtime;
 
 namespace AIWF.Native;
 
@@ -150,6 +150,7 @@ public sealed partial class MainWindow
             NodeSubtitleTextBox.IsEnabled = false;
             DeleteNodeButton.IsEnabled = false;
             DeleteConnectionButton.IsEnabled = true;
+            RenderSelectedNodeWorkflowEditor(null);
             return;
         }
 
@@ -162,6 +163,7 @@ public sealed partial class MainWindow
             NodeSubtitleTextBox.IsEnabled = false;
             DeleteNodeButton.IsEnabled = true;
             DeleteConnectionButton.IsEnabled = false;
+            RenderSelectedNodeWorkflowEditor(null);
             return;
         }
 
@@ -174,6 +176,7 @@ public sealed partial class MainWindow
             NodeSubtitleTextBox.IsEnabled = false;
             DeleteNodeButton.IsEnabled = false;
             DeleteConnectionButton.IsEnabled = false;
+            RenderSelectedNodeWorkflowEditor(null);
             return;
         }
 
@@ -184,5 +187,6 @@ public sealed partial class MainWindow
         NodeSubtitleTextBox.IsEnabled = true;
         DeleteNodeButton.IsEnabled = tag.IsUserNode;
         DeleteConnectionButton.IsEnabled = false;
+        RenderSelectedNodeWorkflowEditor(tag);
     }
 }

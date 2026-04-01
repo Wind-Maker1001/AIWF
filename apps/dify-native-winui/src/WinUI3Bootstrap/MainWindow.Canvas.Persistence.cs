@@ -119,6 +119,7 @@ public sealed partial class MainWindow
                 SetInlineStatus("画布无变化，无需保存。", InlineStatusTone.Neutral);
             }
 
+            SaveWorkflowGraphDocumentSidecar();
             return shouldWrite;
         }
         catch (Exception ex)
@@ -303,6 +304,7 @@ public sealed partial class MainWindow
             try
             {
                 ApplyCanvasSnapshot(loadData.Snapshot);
+                TryRestoreWorkflowGraphDocumentSidecar();
                 _lastSavedCanvasSnapshotJson = loadData.Json;
             }
             finally

@@ -118,6 +118,15 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
                         </Button.Resources>
                     </Button>
+                    <Button x:Name="SqlStudioNavButton" AutomationProperties.AutomationId="SqlStudioNavButton" Click="OnSqlStudioNavClick" Content="SQL Studio" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />
+                            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FF111111" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFFBD5D5" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF8E1B1B" />
+                        </Button.Resources>
+                    </Button>
                     <Button x:Name="CanvasNavButton" AutomationProperties.AutomationId="CanvasNavButton" Click="OnCanvasNavClick" Content="画布" UseSystemFocusVisuals="True" IsTabStop="True" MinHeight="40" Padding="16,0" MinWidth="140">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFDECEC" />
@@ -286,6 +295,210 @@
                 </ScrollViewer>
             </Grid>
 
+            <Grid x:Name="SqlStudioSectionGrid" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" BorderBrush="#33222222" BorderThickness="1" Background="{StaticResource PanelAcrylicBrush}" CornerRadius="12" Padding="10">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="4" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Background="#FFC62828" CornerRadius="2" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="SQL Studio" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                            <TextBlock Text="连接数据源、构造查询、预览结果并发送到画布" Foreground="#FF4B5563" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" VerticalScrollMode="Auto" HorizontalScrollMode="Disabled" Margin="0,10,0,0">
+                    <Grid ColumnSpacing="14" RowSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.7*" />
+                            <ColumnDefinition Width="1.4*" />
+                            <ColumnDefinition Width="1.5*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Column="0" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="连接与数据源" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock Text="Accel URL" />
+                                <TextBox x:Name="SqlAccelUrlTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="http://127.0.0.1:18082" />
+                                <TextBlock Text="数据源类型" />
+                                <ComboBox x:Name="SqlSourceTypeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectionChanged="OnSqlSourceTypeSelectionChanged" SelectedIndex="0">
+                                    <ComboBoxItem Content="sqlite" />
+                                    <ComboBoxItem Content="sqlserver" />
+                                </ComboBox>
+
+                                <StackPanel x:Name="SqliteSourcePanel" Spacing="8">
+                                    <TextBlock Text="SQLite 文件路径" />
+                                    <TextBox x:Name="SqlitePathTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="SqlServerSourcePanel" Spacing="8" Visibility="Collapsed">
+                                    <TextBlock Text="SQL Server Host" />
+                                    <TextBox x:Name="SqlServerHostTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="127.0.0.1" />
+                                    <TextBlock Text="端口" />
+                                    <TextBox x:Name="SqlServerPortTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="1433" />
+                                    <TextBlock Text="数据库" />
+                                    <TextBox x:Name="SqlServerDatabaseTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="AIWF" />
+                                    <CheckBox x:Name="SqlWindowsAuthCheckBox" Content="Windows Auth" IsChecked="True" />
+                                    <TextBlock Text="用户名" />
+                                    <TextBox x:Name="SqlServerUserTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBlock Text="密码（仅会话保留）" />
+                                    <PasswordBox x:Name="SqlServerPasswordBox" MinHeight="44" UseSystemFocusVisuals="True" />
+                                </StackPanel>
+
+                                <Button x:Name="SqlValidateConnectionButton" Click="OnSqlValidateConnectionClick" Content="验证连接并加载 Schema" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="1" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Schema 浏览器" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock Text="Schemas" />
+                                <ListView x:Name="SqlSchemaListView" Height="120" SelectionChanged="OnSqlSchemaSelectionChanged" />
+                                <TextBlock Text="Tables" />
+                                <ListView x:Name="SqlTableListView" Height="160" SelectionChanged="OnSqlTableSelectionChanged" />
+                                <TextBlock Text="Columns" />
+                                <ListView x:Name="SqlColumnsListView" Height="220" />
+                                <Button x:Name="SqlUseSelectedTableButton" Click="OnSqlUseSelectedTableClick" Content="使用选中表" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="2" Grid.Row="0" Grid.RowSpan="2" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="结果预览" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock x:Name="SqlPreviewStatusTextBlock" Text="No preview yet." Foreground="#FF4B5563" TextWrapping="Wrap" />
+                                <Pivot>
+                                    <PivotItem Header="表格">
+                                        <ListView x:Name="SqlPreviewRowsListView" Height="520" />
+                                    </PivotItem>
+                                    <PivotItem Header="SQL">
+                                        <TextBox x:Name="SqlGeneratedSqlTextBox" Height="520" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" />
+                                    </PivotItem>
+                                    <PivotItem Header="JSON">
+                                        <TextBox x:Name="SqlRawJsonTextBox" Height="520" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" />
+                                    </PivotItem>
+                                    <PivotItem Header="诊断">
+                                        <TextBox x:Name="SqlDiagnosticsTextBox" Height="520" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" />
+                                    </PivotItem>
+                                </Pivot>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Builder + SQL 文本" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                <TextBlock x:Name="SqlDraftModeTextBlock" Text="Mode: builder-owned" Foreground="#FF4B5563" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Spacing="8">
+                                        <TextBlock Text="Schema" />
+                                        <TextBox x:Name="SqlSelectedSchemaTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Base Table" />
+                                        <TextBox x:Name="SqlSelectedTableTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Select Fields (csv)" />
+                                        <TextBox x:Name="SqlSelectFieldsTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Filter Field" />
+                                        <TextBox x:Name="SqlFilterFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Filter Operator" />
+                                        <ComboBox x:Name="SqlFilterOperatorComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                            <ComboBoxItem Content="=" />
+                                            <ComboBoxItem Content="!=" />
+                                            <ComboBoxItem Content=">" />
+                                            <ComboBoxItem Content=">=" />
+                                            <ComboBoxItem Content="&lt;" />
+                                            <ComboBoxItem Content="&lt;=" />
+                                        </ComboBox>
+                                        <TextBlock Text="Filter Value" />
+                                        <TextBox x:Name="SqlFilterValueTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Group By (csv)" />
+                                        <TextBox x:Name="SqlGroupByTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Aggregate Function" />
+                                        <ComboBox x:Name="SqlAggregateFunctionComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                            <ComboBoxItem Content="count" />
+                                            <ComboBoxItem Content="sum" />
+                                            <ComboBoxItem Content="avg" />
+                                            <ComboBoxItem Content="min" />
+                                            <ComboBoxItem Content="max" />
+                                        </ComboBox>
+                                        <TextBlock Text="Aggregate Field" />
+                                        <TextBox x:Name="SqlAggregateFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Aggregate Alias" />
+                                        <TextBox x:Name="SqlAggregateAliasTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Spacing="8">
+                                        <CheckBox x:Name="SqlJoin1EnabledCheckBox" Content="启用 Join 1" />
+                                        <TextBlock Text="Join 1 Schema" />
+                                        <TextBox x:Name="SqlJoin1SchemaTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="dbo" />
+                                        <TextBlock Text="Join 1 Table" />
+                                        <TextBox x:Name="SqlJoin1TableTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Join 1 Type" />
+                                        <ComboBox x:Name="SqlJoin1TypeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                            <ComboBoxItem Content="inner" />
+                                            <ComboBoxItem Content="left" />
+                                            <ComboBoxItem Content="right" />
+                                            <ComboBoxItem Content="full" />
+                                        </ComboBox>
+                                        <TextBlock Text="Join 1 Left Field" />
+                                        <TextBox x:Name="SqlJoin1LeftFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Join 1 Right Field" />
+                                        <TextBox x:Name="SqlJoin1RightFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+
+                                        <CheckBox x:Name="SqlJoin2EnabledCheckBox" Content="启用 Join 2" />
+                                        <TextBlock Text="Join 2 Schema" />
+                                        <TextBox x:Name="SqlJoin2SchemaTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="dbo" />
+                                        <TextBlock Text="Join 2 Table" />
+                                        <TextBox x:Name="SqlJoin2TableTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Join 2 Type" />
+                                        <ComboBox x:Name="SqlJoin2TypeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                            <ComboBoxItem Content="inner" />
+                                            <ComboBoxItem Content="left" />
+                                            <ComboBoxItem Content="right" />
+                                            <ComboBoxItem Content="full" />
+                                        </ComboBox>
+                                        <TextBlock Text="Join 2 Left Field" />
+                                        <TextBox x:Name="SqlJoin2LeftFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="Join 2 Right Field" />
+                                        <TextBox x:Name="SqlJoin2RightFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+
+                                        <TextBlock Text="Order By Field" />
+                                        <TextBox x:Name="SqlOrderByFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <CheckBox x:Name="SqlOrderByDescCheckBox" Content="Descending" />
+                                        <TextBlock Text="Limit" />
+                                        <TextBox x:Name="SqlLimitTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="100" />
+                                        <CheckBox x:Name="SqlChartEnabledCheckBox" Content="追加 SQL 图表节点" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="SQL 文本" />
+                                <TextBox x:Name="SqlTextEditorTextBox" Height="220" AcceptsReturn="True" TextWrapping="Wrap" TextChanged="OnSqlTextEditorTextChanged" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="SqlGenerateSqlButton" Click="OnSqlGenerateSqlClick" Content="生成 SQL" />
+                                    <Button x:Name="SqlResetBuilderButton" Click="OnSqlResetBuilderClick" Content="重建为结构化草稿" />
+                                    <Button x:Name="SqlPreviewButton" Click="OnSqlPreviewClick" Content="预览结果" />
+                                    <Button x:Name="SqlSendToCanvasButton" Click="OnSqlSendToCanvasClick" Content="发送到画布" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+
             <Grid x:Name="CanvasSectionGrid">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -315,8 +528,9 @@
                                 <Button x:Name="SaveCanvasButton" AutomationProperties.AutomationId="SaveCanvasButton" Click="OnSaveCanvasClick" Content="保存画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
                                 <Button x:Name="LoadCanvasButton" AutomationProperties.AutomationId="LoadCanvasButton" Click="OnLoadCanvasClick" Content="加载画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
                                 <Button x:Name="NewCanvasButton" AutomationProperties.AutomationId="NewCanvasButton" Click="OnNewCanvasClick" Content="新建画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
-                                <Button x:Name="ClearCanvasButton" AutomationProperties.AutomationId="ClearCanvasButton" Click="OnClearCanvasClick" Content="清空画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
-                                <Button x:Name="AddNodeButton" AutomationProperties.AutomationId="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True">
+                                 <Button x:Name="ClearCanvasButton" AutomationProperties.AutomationId="ClearCanvasButton" Click="OnClearCanvasClick" Content="清空画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                 <Button x:Name="RunCanvasWorkflowButton" AutomationProperties.AutomationId="RunCanvasWorkflowButton" Click="OnRunCanvasWorkflowClick" Content="运行画布" Style="{StaticResource CanvasSecondaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True" />
+                                 <Button x:Name="AddNodeButton" AutomationProperties.AutomationId="AddNodeButton" Click="OnAddNodeClick" Content="+ 添加节点" Style="{StaticResource CanvasPrimaryButtonStyle}" IsTabStop="True" UseSystemFocusVisuals="True">
                                     <Button.Resources>
                                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
                                         <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF8E1B1B" />
@@ -542,11 +756,19 @@
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="节点属性" Style="{StaticResource CanvasSectionTitleStyle}" />
                                         <TextBlock x:Name="CanvasSelectionInfoTextBlock" AutomationProperties.AutomationId="CanvasSelectionInfoTextBlock" Text="未选中节点" Style="{StaticResource CanvasSectionSubtitleStyle}" />
-                                        <TextBlock Text="名称" Style="{StaticResource CanvasFieldLabelStyle}" />
-                                        <TextBox x:Name="NodeTitleTextBox" AutomationProperties.AutomationId="NodeTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeTitleChanged" IsEnabled="False" />
-                                        <TextBlock Text="说明" Style="{StaticResource CanvasFieldLabelStyle}" />
-                                        <TextBox x:Name="NodeSubtitleTextBox" AutomationProperties.AutomationId="NodeSubtitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeSubtitleChanged" IsEnabled="False" />
-                                        <Button x:Name="DeleteNodeButton" AutomationProperties.AutomationId="DeleteNodeButton" Click="OnDeleteNodeClick" Content="删除节点" MinHeight="42" IsEnabled="False">
+                                         <TextBlock Text="名称" Style="{StaticResource CanvasFieldLabelStyle}" />
+                                         <TextBox x:Name="NodeTitleTextBox" AutomationProperties.AutomationId="NodeTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeTitleChanged" IsEnabled="False" />
+                                         <TextBlock Text="说明" Style="{StaticResource CanvasFieldLabelStyle}" />
+                                         <TextBox x:Name="NodeSubtitleTextBox" AutomationProperties.AutomationId="NodeSubtitleTextBox" Style="{StaticResource TouchTextBoxStyle}" TextChanged="OnNodeSubtitleChanged" IsEnabled="False" />
+                                         <TextBlock x:Name="NodeTypeInfoTextBlock" Text="类型: -" Style="{StaticResource CanvasSectionSubtitleStyle}" />
+                                         <TextBlock Text="节点配置" Style="{StaticResource CanvasFieldLabelStyle}" />
+                                         <StackPanel x:Name="NodeConfigEditorHost" Spacing="8" />
+                                         <TextBox x:Name="NodeConfigJsonTextBox" AcceptsReturn="True" TextWrapping="Wrap" Height="180" Visibility="Collapsed" />
+                                         <StackPanel Orientation="Horizontal" Spacing="8">
+                                             <Button x:Name="ApplyNodeConfigButton" Click="OnApplyNodeConfigClick" Content="应用配置" MinHeight="42" IsEnabled="False" />
+                                             <Button x:Name="OpenNodeInSqlStudioButton" Click="OnOpenNodeInSqlStudioClick" Content="在 SQL Studio 打开" MinHeight="42" IsEnabled="False" />
+                                         </StackPanel>
+                                         <Button x:Name="DeleteNodeButton" AutomationProperties.AutomationId="DeleteNodeButton" Click="OnDeleteNodeClick" Content="删除节点" MinHeight="42" IsEnabled="False">
                                             <Button.Resources>
                                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFFEE2E2" />
                                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFC62828" />

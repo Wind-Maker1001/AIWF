@@ -134,7 +134,9 @@ public sealed partial class MainWindow
         _copiedNodeTemplate = new CopiedNodeTemplate
         {
             Title = tag.TitleBlock?.Text ?? string.Empty,
-            Subtitle = tag.SubtitleBlock?.Text ?? string.Empty
+            Subtitle = tag.SubtitleBlock?.Text ?? string.Empty,
+            WorkflowNodeType = tag.WorkflowNodeType,
+            WorkflowConfig = CloneJsonObject(tag.WorkflowConfig)
         };
         SetInlineStatus("已复制节点。", InlineStatusTone.Success);
     }
@@ -155,6 +157,8 @@ public sealed partial class MainWindow
             subtitle,
             Math.Max(0, SnapToGrid(_contextCanvasPoint.X - 110)),
             Math.Max(0, SnapToGrid(_contextCanvasPoint.Y - 48)),
+            workflowNodeType: _copiedNodeTemplate.WorkflowNodeType,
+            workflowConfig: CloneJsonObject(_copiedNodeTemplate.WorkflowConfig),
             isUserNode: true,
             select: true,
             dismissHint: true,

@@ -1,0 +1,54 @@
+{
+  "schema_version": "sql_authoring_metadata.v1",
+  "authority": "contracts/desktop/sql_authoring_metadata.v1.json",
+  "nodes": [
+    {
+      "type": "load_rows_v3",
+      "key_prefix": "sql-load",
+      "title": "SQL 读取",
+      "subtitle": "连接 SQLite / SQL Server 并读取数据",
+      "group": "SQL Authoring",
+      "icon": "OpenLocal"
+    },
+    {
+      "type": "columnar_eval_v1",
+      "key_prefix": "sql-project",
+      "title": "列过滤/投影",
+      "subtitle": "选择字段并执行等值过滤",
+      "group": "SQL Authoring",
+      "icon": "Filter"
+    },
+    {
+      "type": "join_rows_v2",
+      "key_prefix": "sql-join",
+      "title": "多键 Join",
+      "subtitle": "关联两路表数据",
+      "group": "SQL Authoring",
+      "icon": "Switch"
+    },
+    {
+      "type": "aggregate_rows_v2",
+      "key_prefix": "sql-aggregate",
+      "title": "聚合",
+      "subtitle": "分组并计算汇总指标",
+      "group": "SQL Authoring",
+      "icon": "AllApps"
+    },
+    {
+      "type": "query_lang_v1",
+      "key_prefix": "sql-query",
+      "title": "查询 DSL",
+      "subtitle": "对上游 rows 执行轻量 where/select/limit",
+      "group": "SQL Authoring",
+      "icon": "Find"
+    },
+    {
+      "type": "sql_chart_v1",
+      "key_prefix": "sql-chart",
+      "title": "SQL 图表",
+      "subtitle": "把 rows 转成 categories/series 图表结构",
+      "group": "SQL Authoring",
+      "icon": "World"
+    }
+  ]
+}

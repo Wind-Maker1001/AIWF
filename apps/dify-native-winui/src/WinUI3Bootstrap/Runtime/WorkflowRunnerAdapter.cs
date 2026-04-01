@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace AIWF.Native.Runtime;
@@ -45,6 +46,44 @@ public sealed class WorkflowRunnerAdapter
         using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         return new WorkflowHttpResult(response.StatusCode, response.IsSuccessStatusCode, body);
+    }
+
+    public async Task<JsonObject> PostJsonAsync(
+        string baseUrl,
+        string? apiKey,
+        string endpointPath,
+        JsonNode payload,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = BuildRequest(HttpMethod.Post, baseUrl, endpointPath, apiKey);
+        request.Content = new StringContent(
+            payload.ToJsonString(),
+            Encoding.UTF8,
+            "application/json");
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        JsonNode? parsed = null;
+        try
+        {
+            parsed = JsonNode.Parse(body);
+        }
+        catch
+        {
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var message = parsed?["error"]?.GetValue<string>()
+                ?? $"HTTP {(int)response.StatusCode}";
+            throw new InvalidOperationException(message);
+        }
+
+        if (parsed is not JsonObject root)
+        {
+            throw new InvalidOperationException("JSON object response expected.");
+        }
+
+        return root;
     }
 
     private static HttpRequestMessage BuildRequest(HttpMethod method, string baseUrl, string endpointPath, string? apiKey)

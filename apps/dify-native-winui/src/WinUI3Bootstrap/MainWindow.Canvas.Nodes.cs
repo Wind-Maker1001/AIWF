@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using AIWF.Native.CanvasRuntime;
 using Microsoft.UI.Xaml.Controls;
 
@@ -13,6 +14,8 @@ public sealed partial class MainWindow
         double top,
         string? artifactPath = null,
         string? artifactKind = null,
+        string? workflowNodeType = null,
+        JsonObject? workflowConfig = null,
         bool isUserNode = false,
         bool isArtifactNode = false,
         bool select = false,
@@ -28,6 +31,8 @@ public sealed partial class MainWindow
             top,
             artifactPath,
             artifactKind,
+            workflowNodeType,
+            workflowConfig,
             isUserNode,
             isArtifactNode);
         return InsertCanvasNode(

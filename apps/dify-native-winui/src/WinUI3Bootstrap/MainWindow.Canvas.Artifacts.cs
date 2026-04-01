@@ -1,5 +1,6 @@
-using System.Numerics;
 using System.Linq;
+using System.Numerics;
+using System.Text.Json.Nodes;
 using AIWF.Native.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -19,6 +20,8 @@ public sealed partial class MainWindow
         double top,
         string? artifactPath = null,
         string? artifactKind = null,
+        string? workflowNodeType = null,
+        JsonObject? workflowConfig = null,
         bool isUserNode = false,
         bool isArtifactNode = false)
     {
@@ -42,6 +45,8 @@ public sealed partial class MainWindow
                 NodeKey = nodeKey,
                 ArtifactPath = artifactPath,
                 ArtifactKind = artifactKind,
+                WorkflowNodeType = workflowNodeType,
+                WorkflowConfig = CloneJsonObject(workflowConfig),
                 IsUserNode = isUserNode,
                 IsArtifactNode = isArtifactNode,
                 TitleBlock = titleBlock,

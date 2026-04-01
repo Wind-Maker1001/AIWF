@@ -28,6 +28,7 @@ public sealed partial class MainWindow : Window
     private enum NavSection
     {
         Workspace,
+        SqlStudio,
         Canvas,
         Results,
         Governance
@@ -205,13 +206,15 @@ public sealed partial class MainWindow : Window
                 Title = x.Title,
                 Subtitle = x.Subtitle,
                 Icon = x.Icon,
-                Group = x.Group
+                Group = x.Group,
+                WorkflowNodeType = x.WorkflowNodeType
             })
             .ToList();
         SyncViewModelFromInputs();
         InitializeWindowMinimumTrackingSize();
         InitializeCanvasContextMenus();
         InitializeNodeLibraryDrawer();
+        InitializeSqlStudioState();
         InitializeKeyboardAccelerators();
         InitializeCanvasKeyStateTracking();
         Canvas.SetZIndex(CanvasSplitHandle, 20);

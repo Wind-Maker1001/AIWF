@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using AIWF.Native.Runtime;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Shapes;
@@ -11,6 +12,8 @@ public sealed partial class MainWindow
         public required string NodeKey { get; init; }
         public string? ArtifactPath { get; set; }
         public string? ArtifactKind { get; init; }
+        public string? WorkflowNodeType { get; set; }
+        public JsonObject? WorkflowConfig { get; set; }
         public bool IsUserNode { get; init; }
         public bool IsArtifactNode { get; init; }
         public TextBlock? TitleBlock { get; set; }
@@ -37,12 +40,15 @@ public sealed partial class MainWindow
         public required string Subtitle { get; init; }
         public Symbol Icon { get; init; } = Symbol.Page;
         public string? Group { get; init; }
+        public string? WorkflowNodeType { get; init; }
     }
 
     private sealed class CopiedNodeTemplate
     {
         public string Title { get; set; } = string.Empty;
         public string Subtitle { get; set; } = string.Empty;
+        public string? WorkflowNodeType { get; set; }
+        public JsonObject? WorkflowConfig { get; set; }
     }
 
     private sealed class GovernanceReviewListEntry
@@ -58,5 +64,12 @@ public sealed partial class MainWindow
                 ? $"{Item.RunId} | {Item.ReviewKey} | {status} | {reviewer}"
                 : $"{Item.RunId} | {Item.ReviewKey} | {status}";
         }
+    }
+
+    private static JsonObject? CloneJsonObject(JsonObject? source)
+    {
+        return source is null
+            ? null
+            : JsonNode.Parse(source.ToJsonString()) as JsonObject;
     }
 }

@@ -40,6 +40,11 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunInputValidator.cs" Link="Source\RunInputValidator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultParser.cs" Link="Source\RunResultParser.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultPresentationMapper.cs" Link="Source\RunResultPresentationMapper.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioModels.cs" Link="Source\SqlStudioModels.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioDraftController.cs" Link="Source\SqlStudioDraftController.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlAuthoringBuilderCompiler.cs" Link="Source\SqlAuthoringBuilderCompiler.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioWorkflowMapper.cs" Link="Source\SqlStudioWorkflowMapper.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioResultMapper.cs" Link="Source\SqlStudioResultMapper.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowRunnerAdapter.cs" Link="Source\WorkflowRunnerAdapter.cs" />
   </ItemGroup>
 </Project>
