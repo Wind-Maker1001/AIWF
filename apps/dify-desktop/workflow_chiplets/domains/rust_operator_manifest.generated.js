@@ -239,6 +239,23 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
       "io_contract": true
     }
   },
+  "data_source_browser_v1": {
+    "operator": "data_source_browser_v1",
+    "version": "v1",
+    "domain": "storage",
+    "source_module": "load_ops",
+    "published": false,
+    "workflow_exposable": false,
+    "desktop_exposable": false,
+    "direct_http_only": false,
+    "internal_only": true,
+    "capabilities": {
+      "streaming": false,
+      "cache": false,
+      "checkpoint": false,
+      "io_contract": false
+    }
+  },
   "diff_audit_v1": {
     "operator": "diff_audit_v1",
     "version": "v1",
