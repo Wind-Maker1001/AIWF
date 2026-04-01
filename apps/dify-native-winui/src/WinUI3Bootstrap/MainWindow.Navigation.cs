@@ -40,6 +40,11 @@ public sealed partial class MainWindow
             EnsureCanvasWorkspaceInitialized(shouldPrewarm: true);
         }
 
+        if (section == NavSection.SqlStudio)
+        {
+            EnsureSqlStudioControlsInitialized();
+        }
+
         _activeSection = section;
         WorkspaceSectionGrid.Visibility = section == NavSection.Workspace
             ? Visibility.Visible

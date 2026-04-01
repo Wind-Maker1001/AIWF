@@ -12,6 +12,21 @@ public partial class App : Application
     {
         NativePerfRecorder.Mark("app_ctor");
         InitializeComponent();
+        UnhandledException += OnUnhandledException;
+    }
+
+    private static void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        var crashLog = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "AIWF", "crash.log");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(crashLog)!);
+            File.AppendAllText(crashLog,
+                $"[{DateTime.Now:O}] {e.Exception?.GetType().Name}: {e.Message}\n{e.Exception}\n---\n");
+        }
+        catch { }
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
