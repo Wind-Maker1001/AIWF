@@ -9,6 +9,7 @@ function readText(relPath) {
 
 test("desktop real sample acceptance keeps office output gates disabled explicitly", () => {
   const psAcceptance = readText("ops/scripts/acceptance_desktop_real_sample.ps1");
+  const financeAcceptance = readText("ops/scripts/acceptance_desktop_finance_template.ps1");
   const jsAcceptance = readText("apps/dify-desktop/scripts/acceptance_real_samples.js");
 
   for (const pattern of [
@@ -30,4 +31,19 @@ test("desktop real sample acceptance keeps office output gates disabled explicit
   ]) {
     assert.match(jsAcceptance, pattern);
   }
+
+  for (const text of [psAcceptance, financeAcceptance]) {
+    assert.match(text, /Assert-CleaningShadowDependencies/i);
+    assert.match(text, /Invoke-GlueRunCleaningAcceptance/i);
+    assert.match(text, /Assert-ShadowCompareMatched/i);
+    assert.match(text, /local_standalone/i);
+    assert.match(text, /run_mode_audit\.jsonl/i);
+    assert.match(text, /cleaning_shadow_rollout\.json/i);
+    assert.match(text, /cleaning_result\.json/i);
+  }
+
+  assert.doesNotMatch(psAcceptance, /runOfflineCleaning\s*\(/);
+  assert.doesNotMatch(financeAcceptance, /runOfflineCleaning\s*\(/);
+  assert.doesNotMatch(psAcceptance, /New-AiwfBaseJob/);
+  assert.doesNotMatch(financeAcceptance, /New-AiwfBaseJob/);
 });

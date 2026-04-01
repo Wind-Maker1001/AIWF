@@ -34,6 +34,8 @@ test("offline bundle includes desktop contract schemas in script and docs", () =
   assert.match(packageOffline, /governance_contracts/);
   assert.match(packageOffline, /sidecar_regression_quality_report\.json/);
   assert.match(packageOffline, /sidecar_python_rust_consistency_report\.json/);
+  assert.match(packageOffline, /cleaning_shadow_rollout\.json/);
+  assert.match(packageOffline, /acceptance_evidence/);
 
   assert.match(deliveryDoc, /contracts\/desktop/i);
   assert.match(deliveryDoc, /contracts\/workflow/i);
@@ -50,6 +52,9 @@ test("offline bundle includes desktop contract schemas in script and docs", () =
   assert.match(deliveryDoc, /operators_manifest\.v1\.json/i);
   assert.match(deliveryDoc, /ingest_extract\.schema\.json/i);
   assert.match(deliveryDoc, /governance_capabilities\.v1\.json/i);
+  assert.match(deliveryDoc, /cleaning_shadow_rollout\.json/i);
+  assert.match(deliveryDoc, /acceptance evidence/i);
+  assert.match(deliveryDoc, /default\+verify/i);
   assert.match(quickstartDoc, /contracts\/desktop/i);
   assert.match(quickstartDoc, /contracts\/workflow/i);
   assert.match(quickstartDoc, /contracts\/rust/i);

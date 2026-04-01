@@ -1354,6 +1354,13 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "desktop_exposable": false,
     "direct_http_only": false,
     "internal_only": true,
+    "contracts": {
+      "request_schema": "#/components/schemas/TransformRowsReq",
+      "response_schema": "#/components/schemas/TransformRowsResp",
+      "rules_schema": "#/components/schemas/TransformRowsRuleSet",
+      "schema_hint_schema": "#/components/schemas/TransformRowsSchemaHint",
+      "audit_schema": "#/components/schemas/TransformRowsAudit"
+    },
     "capabilities": {
       "streaming": true,
       "cache": true,

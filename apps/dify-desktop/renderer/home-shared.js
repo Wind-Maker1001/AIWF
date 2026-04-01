@@ -214,8 +214,13 @@ const payloadFromUi=()=>{
       }
     }
   };
-  if (tpl && tpl.rules && typeof tpl.rules === "object") {
-    p.params.rules = { ...tpl.rules, ...(p.params.rules || {}) };
+  if (tpl && String(tpl.file || "") === "user_import") {
+    if (tpl.cleaning_spec_v2 && typeof tpl.cleaning_spec_v2 === "object") {
+      p.params.cleaning_spec_v2 = JSON.parse(JSON.stringify(tpl.cleaning_spec_v2));
+    }
+    if (tpl.rules && typeof tpl.rules === "object") {
+      p.params.rules = { ...tpl.rules, ...(p.params.rules || {}) };
+    }
   }
   Object.keys(p.params.rules || {}).forEach((k)=>{
     if (p.params.rules[k] === null || p.params.rules[k] === undefined || p.params.rules[k] === "") {

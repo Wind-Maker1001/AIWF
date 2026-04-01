@@ -49,7 +49,7 @@ function renderTemplateDetail(templateId){
   const id = String(tpl.id || "");
   const disabled = getDisabledTemplateSet().has(id.toLowerCase());
   tplManageMetaEl.textContent = `ID: ${id} | 文件: ${tpl.file || "-"} | 状态: ${disabled ? "已停用" : "启用中"}`;
-  tplManageRulesEl.textContent = JSON.stringify(tpl.rules || {}, null, 2);
+  tplManageRulesEl.textContent = JSON.stringify(tpl.cleaning_spec_v2 || tpl.rules || {}, null, 2);
   $("btnTplToggle").textContent = disabled ? "启用当前模板" : "停用当前模板";
 }
 
@@ -73,6 +73,9 @@ async function loadCleaningTemplates(preferred = "default"){
         description: String(tpl.description || "导入模板"),
         file: "user_import",
         rules: tpl.rules && typeof tpl.rules === "object" ? tpl.rules : null,
+        cleaning_spec_v2: tpl.cleaning_spec_v2 && typeof tpl.cleaning_spec_v2 === "object" ? tpl.cleaning_spec_v2 : null,
+        params_schema: tpl.params_schema && typeof tpl.params_schema === "object" ? tpl.params_schema : {},
+        template_format: String(tpl.template_format || (tpl.cleaning_spec_v2 ? "cleaning_spec_v2" : (tpl.rules ? "legacy_rules" : ""))),
       });
     });
     applyTemplateOptions(templateCatalog, preferred);
@@ -81,5 +84,3 @@ async function loadCleaningTemplates(preferred = "default"){
     setStatus("模板列表加载失败，已回退到内置选项。", false);
   }
 }
-
-

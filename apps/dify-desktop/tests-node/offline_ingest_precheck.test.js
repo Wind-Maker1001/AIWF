@@ -80,6 +80,42 @@ test("precheckRows honors configurable amount convert rate threshold", () => {
   assert.equal(out.amount_convert_rate_required, 0.4);
 });
 
+test("precheckRows surfaces sidecar metadata when available", () => {
+  const ingest = createOfflineIngest({ normalizeCell, normalizeAmount });
+  const out = ingest.precheckRows(
+    [{ text: "claim" }],
+    {
+      cleaning_spec_v2: {
+        schema_version: "cleaning_spec.v2",
+        schema: { canonical_profile: "finance_statement" },
+        transform: { required_fields: ["amount"] },
+        quality: { required_fields: ["amount"], gates: { min_output_rows: 1 } },
+      },
+      rules: {},
+    },
+    {
+      sidecarExtractResults: [
+        {
+          path: "D:/sample.xlsx",
+          payload: {
+            quality_blocked: true,
+            header_mapping: [{ raw_header: "金额", canonical_field: "amount", confidence: 0.98 }],
+            candidate_profiles: [{ profile: "finance_statement", score: 0.95 }],
+            quality_decisions: [{ scope: "input_quality", blocked: true, reason_codes: ["header_low_confidence"] }],
+            blocked_reason_codes: ["header_low_confidence"],
+            sample_rows: [{ amount: 100 }],
+          },
+        },
+      ],
+    },
+  );
+  assert.equal(out.source, "glue_sidecar");
+  assert.equal(out.ok, false);
+  assert.equal(out.blocked_reason_codes[0], "header_low_confidence");
+  assert.equal(out.candidate_profiles[0].profile, "finance_statement");
+  assert.equal(out.header_mapping[0].canonical_field, "amount");
+});
+
 test("readInputRows rejects missing input files by default", async () => {
   const ingest = createOfflineIngest({ normalizeCell, normalizeAmount });
 

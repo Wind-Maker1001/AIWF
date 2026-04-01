@@ -1,5 +1,7 @@
 ﻿const { createOfflineIngestParsers } = require("./offline_ingest_parsers");
 
+const { deriveLegacyRulesFromCleaningSpec } = require("./offline_cleaning_spec");
+
 function createOfflineIngest(deps = {}) {
   const {
     normalizeCell,
@@ -120,8 +122,48 @@ function createOfflineIngest(deps = {}) {
   }
 
   function resolveRuleObject(params = {}) {
+    if (params && typeof params.cleaning_spec_v2 === "object" && params.cleaning_spec_v2) {
+      return {
+        ...deriveLegacyRulesFromCleaningSpec(params.cleaning_spec_v2),
+        ...(params.rules && typeof params.rules === "object" ? params.rules : {}),
+      };
+    }
     if (params && typeof params.rules === "object" && params.rules) return params.rules;
     return params || {};
+  }
+
+  function toBool(value, fallback = false) {
+    if (typeof value === "boolean") return value;
+    const text = String(value ?? "").trim().toLowerCase();
+    if (!text) return fallback;
+    return ["1", "true", "yes", "on"].includes(text);
+  }
+
+  function resolveCleaningStrategy(params = {}, ruleObj = {}) {
+    let envMode = String(process.env.AIWF_CLEANING_RUST_V2_MODE || "off").trim().toLowerCase();
+    if (!["off", "shadow", "default"].includes(envMode)) envMode = "off";
+    if (Object.prototype.hasOwnProperty.call(ruleObj || {}, "use_rust_v2")) {
+      const enabled = toBool(ruleObj.use_rust_v2, false);
+      const decision = enabled ? "force_rust" : "force_python";
+      return { decision, requested_mode: envMode, effective_mode: decision };
+    }
+    if (Object.prototype.hasOwnProperty.call(params || {}, "use_rust_v2")) {
+      const enabled = toBool(params.use_rust_v2, false);
+      const decision = enabled ? "force_rust" : "force_python";
+      return { decision, requested_mode: envMode, effective_mode: decision };
+    }
+    return { decision: envMode, requested_mode: envMode, effective_mode: envMode };
+  }
+
+  function buildShadowCompare(status, skippedReason = "", mismatches = []) {
+    return {
+      status,
+      matched: status === "matched",
+      mismatch_count: mismatches.length,
+      mismatches,
+      skipped_reason: skippedReason,
+      compare_fields: ["rows", "quality", "reason_counts"],
+    };
   }
 
   function mapRowByRename(row, renameMap) {
@@ -136,6 +178,8 @@ function createOfflineIngest(deps = {}) {
 
   function cleanRows(rawRows, params = {}) {
     const ruleObj = resolveRuleObject(params);
+    const strategy = resolveCleaningStrategy(params, ruleObj);
+    const verifyOnDefault = false;
     const renameMap = normalizeRuleMap(ruleObj.rename_map);
     const casts = normalizeRuleMap(ruleObj.casts);
     const filters = normalizeRuleArray(ruleObj.filters);
@@ -237,15 +281,58 @@ function createOfflineIngest(deps = {}) {
     const inputRows = rawRows.length;
     const outputRows = finalRows.length;
     const duplicateRemoved = normalized.length - dedup.length;
+    const quality = {
+      input_rows: inputRows,
+      output_rows: outputRows,
+      filtered_rows: filteredRows,
+      invalid_rows: invalidRows,
+      duplicate_rows_removed: duplicateRemoved,
+      rust_v2_used: false,
+    };
+    let eligibilityReason = "eligible";
+    let shadowCompare = buildShadowCompare("skipped", "mode_off");
+    if (strategy.decision === "force_python") {
+      eligibilityReason = "forced_python";
+      shadowCompare = buildShadowCompare("skipped", "forced_python");
+    } else if (strategy.decision === "force_rust") {
+      eligibilityReason = "rust_v2_unavailable";
+      shadowCompare = buildShadowCompare("rust_error", "", ["desktop_local_rust_v2_unavailable"]);
+    } else if (strategy.decision === "off") {
+      eligibilityReason = "mode_off";
+      shadowCompare = buildShadowCompare("skipped", "mode_off");
+    } else if (strategy.decision === "shadow") {
+      eligibilityReason = "eligible";
+      shadowCompare = buildShadowCompare("skipped", "desktop_local_no_compare");
+    } else if (strategy.decision === "default") {
+      eligibilityReason = "rust_v2_unavailable";
+      shadowCompare = buildShadowCompare("skipped", "default_without_verify");
+    }
     return {
       rows: finalRows,
-      quality: {
-        input_rows: inputRows,
-        output_rows: outputRows,
-        filtered_rows: filteredRows,
-        invalid_rows: invalidRows,
-        duplicate_rows_removed: duplicateRemoved,
+      quality,
+      execution_mode: "python_legacy",
+      execution_audit: {
+        schema: "desktop_cleaning.audit.v1",
+        reason_counts: {
+          invalid_object: 0,
+          cast_failed: invalidRows,
+          required_missing: 0,
+          filter_rejected: filteredRows,
+          duplicate_removed: duplicateRemoved,
+        },
+        reason_samples: {
+          invalid_object: [],
+          cast_failed: [],
+          required_missing: [],
+          filter_rejected: [],
+          duplicate_removed: [],
+        },
       },
+      eligibility_reason: eligibilityReason,
+      requested_rust_v2_mode: String(strategy.requested_mode || ""),
+      effective_rust_v2_mode: String(strategy.effective_mode || ""),
+      verify_on_default: verifyOnDefault,
+      shadow_compare: shadowCompare,
     };
   }
 
@@ -269,11 +356,15 @@ function createOfflineIngest(deps = {}) {
     return rows;
   }
 
-  function precheckRows(rawRows, params = {}) {
+  function precheckRows(rawRows, params = {}, runtime = {}) {
     const ruleObj = resolveRuleObject(params);
     const renameMap = normalizeRuleMap(ruleObj.rename_map);
     const requiredFields = normalizeRuleArray(ruleObj.required_fields).map((x) => String(x).trim()).filter(Boolean);
     const mappedRows = rawRows.map((r) => mapRowByRename(r, renameMap));
+    const sidecarExtracts = Array.isArray(runtime?.sidecarExtractResults) ? runtime.sidecarExtractResults : [];
+    const sidecarPayload = sidecarExtracts.length > 0 && sidecarExtracts[0] && typeof sidecarExtracts[0].payload === "object"
+      ? sidecarExtracts[0].payload
+      : null;
     const headers = new Set();
     mappedRows.forEach((r) => Object.keys(r || {}).forEach((k) => headers.add(String(k).trim())));
     const missingRequired = requiredFields.filter((f) => !headers.has(f));
@@ -354,6 +445,18 @@ function createOfflineIngest(deps = {}) {
     if (!qualityGateOk && qualityGateError) {
       issues.push(`质量门禁预检未通过: ${qualityGateError}`);
     }
+    const sidecarBlockedReasonCodes = sidecarPayload && Array.isArray(sidecarPayload.blocked_reason_codes)
+      ? sidecarPayload.blocked_reason_codes.map((x) => String(x)).filter(Boolean)
+      : [];
+    const sidecarQualityBlocked = !!(sidecarPayload && sidecarPayload.quality_blocked);
+    if (sidecarQualityBlocked) {
+      const sidecarBlockedText = sidecarBlockedReasonCodes.length > 0
+        ? sidecarBlockedReasonCodes.join("、")
+        : "输入质量门禁阻断";
+      issues.unshift(`输入质量门禁阻断: ${sidecarBlockedText}`);
+      qualityGateOk = false;
+      if (!qualityGateError) qualityGateError = sidecarBlockedText;
+    }
     const contentGateEnabled = toBool(ruleParam(params, "precheck_content_gate_enabled"), false);
     if (contentGateEnabled && contentPrecheck.long_paragraph_ratio < 0.2) {
       issues.push(`正文段落比例偏低: ${(contentPrecheck.long_paragraph_ratio * 100).toFixed(1)}%`);
@@ -380,8 +483,11 @@ function createOfflineIngest(deps = {}) {
     }
 
     return {
+      source: sidecarPayload ? "glue_sidecar" : "local",
       input_rows: rawRows.length,
-      headers: Array.from(headers).sort(),
+      headers: sidecarPayload && Array.isArray(sidecarPayload.header_mapping)
+        ? sidecarPayload.header_mapping.map((item) => String(item.raw_header || item.canonical_field || "")).filter(Boolean)
+        : Array.from(headers).sort(),
       required_fields: requiredFields,
       missing_required_fields: missingRequired,
       amount_field: amountField,
@@ -398,6 +504,11 @@ function createOfflineIngest(deps = {}) {
       quality_gate_ok: qualityGateOk,
       quality_gate_error: qualityGateError,
       ok: issues.length === 0,
+      header_mapping: sidecarPayload && Array.isArray(sidecarPayload.header_mapping) ? sidecarPayload.header_mapping : [],
+      candidate_profiles: sidecarPayload && Array.isArray(sidecarPayload.candidate_profiles) ? sidecarPayload.candidate_profiles : [],
+      quality_decisions: sidecarPayload && Array.isArray(sidecarPayload.quality_decisions) ? sidecarPayload.quality_decisions : [],
+      blocked_reason_codes: sidecarBlockedReasonCodes,
+      sample_rows: sidecarPayload && Array.isArray(sidecarPayload.sample_rows) ? sidecarPayload.sample_rows : rawRows.slice(0, 5),
       issues,
       suggestions,
     };
@@ -405,6 +516,11 @@ function createOfflineIngest(deps = {}) {
 
   function ruleParam(params, key) {
     const p = (params && typeof params === "object") ? params : {};
+    if (p.cleaning_spec_v2 && typeof p.cleaning_spec_v2 === "object") {
+      const derived = deriveLegacyRulesFromCleaningSpec(p.cleaning_spec_v2);
+      if (derived[key] !== undefined) return derived[key];
+    }
+    if (p.quality_rules && typeof p.quality_rules === "object" && p.quality_rules[key] !== undefined) return p.quality_rules[key];
     if (p.rules && typeof p.rules === "object" && p.rules[key] !== undefined) return p.rules[key];
     return p[key];
   }

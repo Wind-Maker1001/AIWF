@@ -57,4 +57,6 @@ test("fallback governance inventory covers sandbox autofix mirror", () => {
   assert.match(doc, /sandbox autofix/i);
   assert.match(doc, /retired_at/i);
   assert.match(doc, /workflowSandboxAutoFixProvider=local_legacy/i);
+  assert.match(gate, /cleaning default rust_v2 fallback to python_legacy/i);
+  assert.match(doc, /cleaning default rust_v2 fallback to python_legacy/i);
 });

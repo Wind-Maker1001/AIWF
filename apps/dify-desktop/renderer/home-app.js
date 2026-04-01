@@ -430,7 +430,15 @@ $("btnTplExport").onclick=()=>{
   const id = String($("tplManageSelect").value || "").trim();
   const tpl = findTemplateById(id);
   if(!tpl){ setStatus("未找到模板，无法导出", false); return; }
-  const blob = new Blob([JSON.stringify({ id: tpl.id, label: tpl.label, description: tpl.description, rules: tpl.rules || {} }, null, 2)], { type: "application/json" });
+  const exportPayload = {
+    id: tpl.id,
+    label: tpl.label,
+    description: tpl.description,
+    params_schema: tpl.params_schema && typeof tpl.params_schema === "object" ? tpl.params_schema : {},
+  };
+  if (tpl.cleaning_spec_v2 && typeof tpl.cleaning_spec_v2 === "object") exportPayload.cleaning_spec_v2 = tpl.cleaning_spec_v2;
+  else exportPayload.rules = tpl.rules || {};
+  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${tpl.id || "template"}.json`;
@@ -445,13 +453,19 @@ $("tplImportFile").onchange=async(e)=>{
     const txt = await f.text();
     const obj = JSON.parse(txt);
     const id = String(obj.id || obj.template_id || "").trim().toLowerCase();
+    const hasSpec = obj.cleaning_spec_v2 && typeof obj.cleaning_spec_v2 === "object";
+    const hasRules = obj.rules && typeof obj.rules === "object";
+    if (hasSpec && !hasRules) obj.rules = {};
     if(!id){ setStatus("导入失败：模板缺少 id", false); return; }
     if(!obj.rules || typeof obj.rules !== "object"){ setStatus("导入失败：模板缺少 rules", false); return; }
     const entry = {
       id,
       label: String(obj.label || obj.template_label || id),
       description: String(obj.description || obj.template_description || "导入模板"),
-      rules: obj.rules,
+      rules: hasRules ? obj.rules : null,
+      cleaning_spec_v2: hasSpec ? obj.cleaning_spec_v2 : null,
+      params_schema: obj.params_schema && typeof obj.params_schema === "object" ? obj.params_schema : {},
+      template_format: hasSpec ? "cleaning_spec_v2" : "legacy_rules",
     };
     const list = Array.isArray(window.__customTemplates) ? window.__customTemplates : [];
     const next = list.filter(x=>String(x?.id||"").toLowerCase()!==id);

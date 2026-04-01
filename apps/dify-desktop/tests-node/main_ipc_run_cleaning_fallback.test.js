@@ -133,3 +133,38 @@ test("aiwf:runCleaning surfaces client_4xx error directly", async () => {
     /INPUT_INVALID|bad request|http_400/i,
   );
 });
+
+test("aiwf:runCleaning writes execution fields into offline_local run mode audit", async () => {
+  const { ipcMain, runModeAudit } = createCtx({
+    loadConfig: () => ({ mode: "offline_local" }),
+    runOfflineCleaningInWorker: async () => ({
+      ok: true,
+      job_id: "local-shadow-1",
+      quality: { rust_v2_used: false },
+      execution: {
+        execution_mode: "python_legacy",
+        eligibility_reason: "mode_off",
+        requested_rust_v2_mode: "off",
+        effective_rust_v2_mode: "off",
+        verify_on_default: false,
+        shadow_compare: {
+          status: "skipped",
+          mismatch_count: 0,
+        },
+      },
+    }),
+  });
+  const h = ipcMain.handlers.get("aiwf:runCleaning");
+  const out = await h({}, { params: {} }, { mode: "offline_local" });
+  assert.equal(out.ok, true);
+  const last = readLastAuditLine(runModeAudit);
+  assert.equal(last.mode, "offline_local");
+  assert.equal(last.execution_mode, "python_legacy");
+  assert.equal(last.execution_eligibility_reason, "mode_off");
+  assert.equal(last.requested_rust_v2_mode, "off");
+  assert.equal(last.effective_rust_v2_mode, "off");
+  assert.equal(last.verify_on_default, false);
+  assert.equal(last.shadow_compare_status, "skipped");
+  assert.equal(last.shadow_compare_mismatch_count, 0);
+  assert.equal(last.rust_v2_used, false);
+});

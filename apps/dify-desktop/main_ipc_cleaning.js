@@ -1,3 +1,5 @@
+const { executionAuditFields } = require("./cleaning_execution_audit");
+
 function registerCleaningIpc(ctx, deps) {
   const {
     ipcMain,
@@ -51,6 +53,7 @@ function registerCleaningIpc(ctx, deps) {
         ok: !!(local && local.ok),
         job_id: local && local.job_id ? String(local.job_id) : "",
         duration_ms: Date.now() - startedAt,
+        ...executionAuditFields(local),
       });
       return local;
     }
@@ -63,6 +66,7 @@ function registerCleaningIpc(ctx, deps) {
           ok: true,
           job_id: remote && remote.job_id ? String(remote.job_id) : "",
           duration_ms: Date.now() - startedAt,
+          ...executionAuditFields(remote),
         });
         return remote;
       }
@@ -75,6 +79,7 @@ function registerCleaningIpc(ctx, deps) {
         failure_class: failureClass,
         job_id: remote && remote.job_id ? String(remote.job_id) : "",
         duration_ms: Date.now() - startedAt,
+        ...executionAuditFields(remote),
       });
       return remote;
     } catch (error) {
@@ -87,6 +92,7 @@ function registerCleaningIpc(ctx, deps) {
         failure_class: failureClass,
         remote_error: String(error && error.message ? error.message : error),
         duration_ms: Date.now() - startedAt,
+        ...executionAuditFields(null),
       });
       throw error;
     }

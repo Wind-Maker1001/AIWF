@@ -36,9 +36,18 @@
     return env ? env.replace(/\/$/, "") : "";
   }
 
-  async function extractViaGlueSidecar(filePath, warnings, params = {}) {
+  function recordSidecarExtract(filePath, payload, runtime = {}) {
+    if (!runtime || typeof runtime !== "object") return;
+    if (!Array.isArray(runtime.sidecarExtractResults)) runtime.sidecarExtractResults = [];
+    runtime.sidecarExtractResults.push({
+      path: String(filePath || ""),
+      payload: payload && typeof payload === "object" ? payload : {},
+    });
+  }
+
+  async function extractViaGlueSidecar(filePath, warnings, params = {}, runtime = {}) {
     const ext = path.extname(filePath).toLowerCase();
-    if (!(ext === ".xlsx" || IMG_EXT.has(ext))) return null;
+    if (!(ext === ".xlsx" || ext === ".xlsm" || ext === ".txt" || ext === ".docx" || ext === ".pdf" || IMG_EXT.has(ext))) return null;
     if (typeof fetch !== "function") return null;
     const base = resolveGlueSidecarUrl(params);
     if (!base) return null;
@@ -71,6 +80,7 @@
         warnings.push(`glue sidecar 提取失败，已回退本地解析: ${path.basename(filePath)} (${err})`);
         return null;
       }
+      recordSidecarExtract(filePath, payload, runtime);
       if (payload.quality_blocked) {
         const blocked = Array.isArray(payload.blocked_inputs) ? payload.blocked_inputs : [];
         const firstError = blocked.length > 0 ? String(blocked[0].error || "quality blocked") : "quality blocked";
@@ -85,10 +95,6 @@
   }
 
   async function parseCsvOrXlsxFile(filePath, warnings, params = {}) {
-    if (path.extname(filePath).toLowerCase() === ".xlsx") {
-      const sidecar = await extractViaGlueSidecar(filePath, warnings, params);
-      if (sidecar) return sidecar.rows;
-    }
     const wb = new ExcelJS.Workbook();
     if (path.extname(filePath).toLowerCase() === ".csv") {
       const csvText = readTextFileSmart(filePath);
@@ -177,9 +183,7 @@
   }
 
   function parseImageFile(filePath, warnings, params = {}) {
-    const sidecarPromise = extractViaGlueSidecar(filePath, warnings, params);
-    return Promise.resolve(sidecarPromise).then((sidecar) => {
-      if (sidecar) return sidecar.rows;
+    return Promise.resolve().then(() => {
       if (params.ocr_enabled === false) {
         warnings.push(`图片 OCR 已关闭，已跳过: ${path.basename(filePath)}`);
         return [];
@@ -206,6 +210,8 @@
       warnings.push(`文件不存在，已跳过: ${filePath}`);
       return [];
     }
+    const sidecar = await extractViaGlueSidecar(filePath, warnings, params, runtime);
+    if (sidecar) return sidecar.rows;
     if (ext === ".csv" || ext === ".xlsx") return parseCsvOrXlsxFile(filePath, warnings, params);
     if (ext === ".txt") return parseTxtFile(filePath);
     if (ext === ".docx") return parseDocxFile(filePath, params, runtime);

@@ -5,6 +5,10 @@ const {
   normalizeOfficeLayoutCatalog,
   normalizeOfficeThemeCatalog,
 } = require("./offline_template_catalog_contract");
+const {
+  applyCleaningSpecToParams,
+  normalizeCleaningTemplatePayload,
+} = require("./offline_cleaning_spec");
 
 function loadDesktopThemes() {
   const defaults = {
@@ -105,12 +109,12 @@ function normalizeTemplateEntry(entry, templatesDir) {
   const filePath = path.join(templatesDir, file);
   if (!fs.existsSync(filePath)) return null;
 
-  let rules = null;
+  let normalizedPayload = null;
   try {
     const raw = String(fs.readFileSync(filePath, "utf8") || "").replace(/^\uFEFF/, "");
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || typeof parsed.rules !== "object") return null;
-    rules = parsed.rules;
+    normalizedPayload = normalizeCleaningTemplatePayload(parsed);
+    if (!normalizedPayload) return null;
   } catch {
     return null;
   }
@@ -120,12 +124,16 @@ function normalizeTemplateEntry(entry, templatesDir) {
     file,
     label: String(entry.label || "").trim() || toTemplateLabel(id),
     description: String(entry.description || "").trim(),
-    rules,
+    rules: normalizedPayload.rules || null,
+    cleaning_spec_v2: normalizedPayload.cleaning_spec_v2 || null,
+    params_schema: normalizedPayload.params_schema || {},
+    template_format: normalizedPayload.template_format || "",
   };
 }
 
 function loadCleaningTemplates() {
-  const templatesDir = path.join(__dirname, "..", "..", "rules", "templates");
+  const templatesDir = process.env.AIWF_CLEANING_TEMPLATE_DIR
+    || path.join(__dirname, "..", "..", "rules", "templates");
   const list = [];
   const byId = new Map();
   const add = (entry) => {
@@ -140,6 +148,9 @@ function loadCleaningTemplates() {
     label: "通用模板",
     description: "不追加模板规则，沿用通用清洗链路。",
     rules: null,
+    cleaning_spec_v2: null,
+    params_schema: {},
+    template_format: "builtin_default",
   });
 
   const registryPath = path.join(templatesDir, "cleaning_templates_desktop.json");
@@ -165,7 +176,8 @@ function loadCleaningTemplates() {
         } catch {
           return;
         }
-        if (!parsed || typeof parsed !== "object" || typeof parsed.rules !== "object") return;
+        const normalizedPayload = normalizeCleaningTemplatePayload(parsed);
+        if (!normalizedPayload) return;
         const id = String(parsed?.meta?.template_id || path.basename(file, ".json")).trim().toLowerCase();
         if (!id || byId.has(id)) return;
         add({
@@ -173,7 +185,10 @@ function loadCleaningTemplates() {
           file,
           label: String(parsed?.meta?.template_label || "").trim() || toTemplateLabel(id),
           description: String(parsed?.meta?.template_description || "").trim(),
-          rules: parsed.rules,
+          rules: normalizedPayload.rules || null,
+          cleaning_spec_v2: normalizedPayload.cleaning_spec_v2 || null,
+          params_schema: normalizedPayload.params_schema || {},
+          template_format: normalizedPayload.template_format || "",
         });
       });
     }
@@ -186,6 +201,9 @@ function loadCleaningTemplates() {
       description: entry.description,
       file: entry.file,
       rules: entry.rules || null,
+      cleaning_spec_v2: entry.cleaning_spec_v2 || null,
+      params_schema: entry.params_schema || {},
+      template_format: entry.template_format || "",
     })),
     byId,
   };
@@ -230,12 +248,17 @@ function createOfflineEngineConfig() {
 
   function resolveCleaningTemplateParams(params = {}) {
     const nextParams = { ...(params || {}) };
+    if (nextParams.cleaning_spec_v2 && typeof nextParams.cleaning_spec_v2 === "object") {
+      Object.assign(nextParams, applyCleaningSpecToParams(nextParams, nextParams.cleaning_spec_v2));
+    }
     const templateId = String(nextParams.cleaning_template || "").trim().toLowerCase();
     if (!templateId || templateId === "default") return nextParams;
     const template = cleaningTemplates.byId.get(templateId);
-    if (!template || !template.rules) return nextParams;
-    nextParams.rules = { ...template.rules, ...(nextParams.rules || {}) };
-    return nextParams;
+    if (!template) return nextParams;
+    const withSpec = template.cleaning_spec_v2 ? applyCleaningSpecToParams(nextParams, template.cleaning_spec_v2) : nextParams;
+    if (!template.rules) return withSpec;
+    withSpec.rules = { ...template.rules, ...(withSpec.rules || {}) };
+    return withSpec;
   }
 
   function listCleaningTemplates() {
