@@ -102,7 +102,8 @@ function ApplyCiProfile([string]$ProfileName, [hashtable]$BoundParams) {
     "SkipRustNewOpsBenchGate",
     "SkipContractTests",
     "SkipChaosChecks",
-    "SkipSmoke"
+    "SkipSmoke",
+    "SkipCleaningRustV2RolloutGate"
   )
     ApplyProfileSkips -ProfileLabel "quick" -ParamNames $quickSkipParams -BoundParams $BoundParams
     return
