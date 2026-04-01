@@ -15,6 +15,10 @@ public sealed partial class MainWindow
     private SqlPreviewState _sqlPreviewState = SqlPreviewState.Empty;
     private bool _suppressSqlTextEditorChange;
 
+    private int _sortColumnIndex = -1;
+    private bool _sortDescending;
+    private readonly SqlQueryHistoryService _queryHistory = new();
+
     private void InitializeSqlStudioState()
     {
         ApplySqlConnectionProfileToControls(_sqlConnectionProfile);
@@ -23,6 +27,8 @@ public sealed partial class MainWindow
         ApplySqlPreviewState(SqlPreviewState.Empty);
         UpdateSqlSourcePanels();
         UpdateSqlDraftModeText();
+        _queryHistory.Load();
+        RenderQueryHistoryList();
     }
 
     private async void OnSqlValidateConnectionClick(object sender, RoutedEventArgs e)
@@ -215,6 +221,10 @@ public sealed partial class MainWindow
 
             ApplySqlPreviewState(SqlStudioResultMapper.FromLoadRowsResponse(payload, _sqlTextDraft.Text));
             RawResponseTextBox.Text = _sqlPreviewState.RawJson;
+            RenderChartFromPreviewData();
+            _queryHistory.AddHistoryEntry(_sqlTextDraft.Text, _sqlConnectionProfile.NormalizedSourceType,
+                _sqlConnectionProfile.Database, _sqlPreviewState.GridRows.Count, true);
+            RenderQueryHistoryList();
         }
         catch (Exception ex)
         {
@@ -224,7 +234,12 @@ public sealed partial class MainWindow
                 GeneratedSql: _sqlTextDraft.Text,
                 RawJson: string.Empty,
                 Diagnostics: ex.Message,
-                RowDisplayItems: Array.Empty<string>()));
+                RowDisplayItems: Array.Empty<string>(),
+                ColumnHeaders: Array.Empty<string>(),
+                GridRows: Array.Empty<IReadOnlyList<string>>()));
+            _queryHistory.AddHistoryEntry(_sqlTextDraft.Text, _sqlConnectionProfile.NormalizedSourceType,
+                _sqlConnectionProfile.Database, 0, false);
+            RenderQueryHistoryList();
         }
     }
 
@@ -302,6 +317,20 @@ public sealed partial class MainWindow
                 ReadComboText(SqlFilterOperatorComboBox),
                 SqlFilterValueTextBox.Text.Trim()));
         }
+        if (!string.IsNullOrWhiteSpace(SqlFilter2FieldTextBox.Text))
+        {
+            filters.Add(new SqlFilterClause(
+                SqlFilter2FieldTextBox.Text.Trim(),
+                ReadComboText(SqlFilter2OperatorComboBox),
+                SqlFilter2ValueTextBox.Text.Trim()));
+        }
+        if (!string.IsNullOrWhiteSpace(SqlFilter3FieldTextBox.Text))
+        {
+            filters.Add(new SqlFilterClause(
+                SqlFilter3FieldTextBox.Text.Trim(),
+                ReadComboText(SqlFilter3OperatorComboBox),
+                SqlFilter3ValueTextBox.Text.Trim()));
+        }
 
         var aggregates = new List<SqlAggregateClause>();
         if (!string.IsNullOrWhiteSpace(SqlAggregateFieldTextBox.Text)
@@ -312,6 +341,14 @@ public sealed partial class MainWindow
                 ReadComboText(SqlAggregateFunctionComboBox),
                 SqlAggregateFieldTextBox.Text.Trim(),
                 SqlAggregateAliasTextBox.Text.Trim()));
+        }
+        if (!string.IsNullOrWhiteSpace(SqlAggregate2FieldTextBox.Text)
+            || !string.IsNullOrWhiteSpace(SqlAggregate2AliasTextBox.Text))
+        {
+            aggregates.Add(new SqlAggregateClause(
+                ReadComboText(SqlAggregate2FunctionComboBox),
+                SqlAggregate2FieldTextBox.Text.Trim(),
+                SqlAggregate2AliasTextBox.Text.Trim()));
         }
 
         return new SqlBuilderDraft(
@@ -327,11 +364,12 @@ public sealed partial class MainWindow
             Limit: int.TryParse(SqlLimitTextBox.Text.Trim(), out var parsedLimit) && parsedLimit > 0 ? parsedLimit : 100,
             Chart: new SqlChartDraft(
                 Enabled: SqlChartEnabledCheckBox.IsChecked == true,
-                ChartType: "bar",
-                CategoryField: "category",
-                ValueField: "value",
-                SeriesField: "series",
-                TopN: 20));
+                ChartType: ReadComboText(SqlChartTypeComboBox),
+                CategoryField: SqlChartCategoryFieldTextBox.Text.Trim(),
+                ValueField: SqlChartValueFieldTextBox.Text.Trim(),
+                SeriesField: SqlChartSeriesFieldTextBox.Text.Trim(),
+                TopN: int.TryParse(SqlChartTopNTextBox.Text.Trim(), out var chartTopN) && chartTopN > 0 ? chartTopN : 20),
+            Having: new SqlHavingClause(SqlHavingTextBox.Text.Trim()));
     }
 
     private void ApplySqlBuilderDraftToControls(SqlBuilderDraft draft)
@@ -366,20 +404,243 @@ public sealed partial class MainWindow
         SqlOrderByDescCheckBox.IsChecked = draft.OrderByDescending;
         SqlLimitTextBox.Text = draft.Limit.ToString();
         SqlChartEnabledCheckBox.IsChecked = draft.Chart.Enabled;
+        SetComboByText(SqlChartTypeComboBox, draft.Chart.ChartType);
+        SqlChartCategoryFieldTextBox.Text = draft.Chart.CategoryField;
+        SqlChartValueFieldTextBox.Text = draft.Chart.ValueField;
+        SqlChartSeriesFieldTextBox.Text = draft.Chart.SeriesField;
+        SqlChartTopNTextBox.Text = draft.Chart.TopN.ToString();
     }
 
     private void ApplySqlPreviewState(SqlPreviewState state)
     {
         _sqlPreviewState = state;
+        _sortColumnIndex = -1;
+        _sortDescending = false;
         SqlPreviewStatusTextBlock.Text = state.StatusText;
         SqlGeneratedSqlTextBox.Text = state.GeneratedSql;
         SqlRawJsonTextBox.Text = state.RawJson;
         SqlDiagnosticsTextBox.Text = state.Diagnostics;
-        SqlPreviewRowsListView.Items.Clear();
-        foreach (var item in state.RowDisplayItems)
+        RenderDataGrid(state.ColumnHeaders, state.GridRows);
+    }
+
+    private void RenderDataGrid(IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows)
+    {
+        SqlDataGridHost.Children.Clear();
+        if (columns.Count == 0)
         {
-            SqlPreviewRowsListView.Items.Add(item);
+            SqlDataGridHost.Children.Add(new TextBlock
+            {
+                Text = "No data.",
+                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray)
+            });
+            return;
         }
+
+        var headerGrid = new Grid { Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 243, 244, 246)) };
+        for (var i = 0; i < columns.Count; i++)
+        {
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto), MinWidth = 80 });
+        }
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var colIndex = i;
+            var sortIndicator = _sortColumnIndex == i ? (_sortDescending ? " ▼" : " ▲") : "";
+            var headerButton = new Button
+            {
+                Content = columns[i] + sortIndicator,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                FontSize = 12,
+                Padding = new Thickness(8, 6, 8, 6),
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0)),
+                BorderThickness = new Thickness(0),
+            };
+            headerButton.Click += (_, _) => OnDataGridHeaderClick(colIndex);
+            Grid.SetColumn(headerButton, i);
+            headerGrid.Children.Add(headerButton);
+        }
+
+        SqlDataGridHost.Children.Add(headerGrid);
+        SqlDataGridHost.Children.Add(new Border
+        {
+            Height = 1,
+            Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 209, 213, 219))
+        });
+
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var row = rows[rowIndex];
+            var rowGrid = new Grid();
+            if (rowIndex % 2 == 1)
+            {
+                rowGrid.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Windows.UI.Color.FromArgb(255, 249, 250, 251));
+            }
+
+            for (var i = 0; i < columns.Count; i++)
+            {
+                rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto), MinWidth = 80 });
+            }
+
+            for (var i = 0; i < columns.Count; i++)
+            {
+                var cellText = i < row.Count ? row[i] : string.Empty;
+                var cell = new TextBlock
+                {
+                    Text = cellText,
+                    Padding = new Thickness(8, 4, 8, 4),
+                    FontSize = 12,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 300,
+                    IsTextSelectionEnabled = true,
+                };
+                Grid.SetColumn(cell, i);
+                rowGrid.Children.Add(cell);
+            }
+
+            SqlDataGridHost.Children.Add(rowGrid);
+        }
+    }
+
+    private void OnDataGridHeaderClick(int columnIndex)
+    {
+        if (_sqlPreviewState.GridRows.Count == 0 || _sqlPreviewState.ColumnHeaders.Count == 0)
+        {
+            return;
+        }
+
+        if (_sortColumnIndex == columnIndex)
+        {
+            _sortDescending = !_sortDescending;
+        }
+        else
+        {
+            _sortColumnIndex = columnIndex;
+            _sortDescending = false;
+        }
+
+        var sorted = _sqlPreviewState.GridRows
+            .OrderBy(row => columnIndex < row.Count ? row[columnIndex] : string.Empty,
+                _sortDescending ? StringComparer.OrdinalIgnoreCase : StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (_sortDescending)
+        {
+            sorted = _sqlPreviewState.GridRows
+                .OrderByDescending(row => columnIndex < row.Count ? row[columnIndex] : string.Empty,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        RenderDataGrid(_sqlPreviewState.ColumnHeaders, sorted);
+    }
+
+    private void RenderChartFromPreviewData()
+    {
+        if (_sqlPreviewState.ColumnHeaders.Count == 0 || _sqlPreviewState.GridRows.Count == 0)
+        {
+            SqlChartRenderer.Render(SqlChartCanvas, SqlChartData.Empty, 700, 480);
+            return;
+        }
+
+        var chartType = ReadComboText(SqlChartTypeComboBox);
+        var categoryField = SqlChartCategoryFieldTextBox.Text.Trim();
+        var valueField = SqlChartValueFieldTextBox.Text.Trim();
+        var seriesField = SqlChartSeriesFieldTextBox.Text.Trim();
+
+        var catIdx = FindColumnIndex(categoryField);
+        var valIdx = FindColumnIndex(valueField);
+        var serIdx = FindColumnIndex(seriesField);
+
+        if (catIdx < 0 && _sqlPreviewState.ColumnHeaders.Count > 0) catIdx = 0;
+        if (valIdx < 0 && _sqlPreviewState.ColumnHeaders.Count > 1) valIdx = 1;
+
+        var categories = new List<string>();
+        var grouped = new Dictionary<string, Dictionary<string, double>>(StringComparer.Ordinal);
+        var seriesNames = new List<string>();
+
+        foreach (var row in _sqlPreviewState.GridRows)
+        {
+            var cat = catIdx >= 0 && catIdx < row.Count ? row[catIdx] : string.Empty;
+            var ser = serIdx >= 0 && serIdx < row.Count ? row[serIdx] : "value";
+            var valStr = valIdx >= 0 && valIdx < row.Count ? row[valIdx] : "0";
+            if (!double.TryParse(valStr, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var val))
+            {
+                val = 0;
+            }
+
+            if (!grouped.ContainsKey(cat))
+            {
+                categories.Add(cat);
+                grouped[cat] = new Dictionary<string, double>(StringComparer.Ordinal);
+            }
+
+            if (!seriesNames.Contains(ser, StringComparer.Ordinal))
+            {
+                seriesNames.Add(ser);
+            }
+
+            if (!grouped[cat].ContainsKey(ser)) grouped[cat][ser] = 0;
+            grouped[cat][ser] += val;
+        }
+
+        var topN = int.TryParse(SqlChartTopNTextBox.Text.Trim(), out var n) && n > 0 ? n : 20;
+        if (categories.Count > topN) categories = categories.Take(topN).ToList();
+
+        var series = seriesNames.Select(name => new SqlChartSeries(
+            name,
+            categories.Select(cat => grouped.TryGetValue(cat, out var bucket) && bucket.TryGetValue(name, out var v) ? v : 0).ToArray()
+        )).ToArray();
+
+        var data = new SqlChartData(chartType, categories, series);
+        SqlChartRenderer.Render(SqlChartCanvas, data, 700, 480);
+    }
+
+    private void TryRenderChartFromWorkflowResult(JsonObject? response)
+    {
+        if (response is null)
+        {
+            return;
+        }
+
+        // Check node_outputs for sql_chart_v1 results
+        if (response["node_outputs"] is JsonObject nodeOutputs)
+        {
+            foreach (var kv in nodeOutputs)
+            {
+                if (kv.Value is JsonObject nodeOut && nodeOut["chart_type"] is not null)
+                {
+                    var chartData = SqlChartData.FromJson(nodeOut);
+                    SqlChartRenderer.Render(SqlChartCanvas, chartData, 700, 480);
+                    return;
+                }
+            }
+        }
+
+        // Fallback: check final_output
+        if (response["final_output"] is JsonObject final && final["chart_type"] is not null)
+        {
+            var chartData = SqlChartData.FromJson(final);
+            SqlChartRenderer.Render(SqlChartCanvas, chartData, 700, 480);
+            return;
+        }
+
+        // No chart data — render from preview rows
+        RenderChartFromPreviewData();
+    }
+
+    private int FindColumnIndex(string fieldName)
+    {
+        for (var i = 0; i < _sqlPreviewState.ColumnHeaders.Count; i++)
+        {
+            if (string.Equals(_sqlPreviewState.ColumnHeaders[i], fieldName, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private void RenderSchemaBrowserState()
@@ -443,6 +704,110 @@ public sealed partial class MainWindow
         return (comboBox.SelectedItem as ComboBoxItem)?.Content?.ToString()?.Trim()
             ?? comboBox.SelectedValue?.ToString()?.Trim()
             ?? string.Empty;
+    }
+
+    private async void OnSqlSaveQueryClick(object sender, RoutedEventArgs e)
+    {
+        var sqlText = _sqlTextDraft.Text.Trim();
+        if (string.IsNullOrWhiteSpace(sqlText))
+        {
+            SetInlineStatus("没有可保存的查询。", InlineStatusTone.Error);
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "保存查询",
+            Content = new TextBox { PlaceholderText = "输入查询名称", Name = "QueryNameInput" },
+            PrimaryButtonText = "保存",
+            CloseButtonText = "取消",
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary && dialog.Content is TextBox input
+            && !string.IsNullOrWhiteSpace(input.Text))
+        {
+            _queryHistory.SaveQuery(input.Text.Trim(), sqlText,
+                _sqlConnectionProfile.NormalizedSourceType, _sqlConnectionProfile.Database);
+            RenderQueryHistoryList();
+            SetInlineStatus($"查询已保存: {input.Text.Trim()}", InlineStatusTone.Success);
+        }
+    }
+
+    private void OnSqlHistorySelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SqlHistoryListView.SelectedItem is not SqlQueryHistoryEntry entry)
+        {
+            return;
+        }
+
+        SetSqlTextDraft(SqlStudioDraftController.MarkTextOwned(entry.SqlText));
+        UpdateSqlDraftModeText();
+        SqlHistoryListView.SelectedItem = null;
+    }
+
+    private void RenderQueryHistoryList()
+    {
+        SqlHistoryListView.Items.Clear();
+        foreach (var entry in _queryHistory.SavedQueries)
+        {
+            SqlHistoryListView.Items.Add(entry);
+        }
+        foreach (var entry in _queryHistory.History.Take(20))
+        {
+            SqlHistoryListView.Items.Add(entry);
+        }
+    }
+
+    private async void OnSqlExportCsvClick(object sender, RoutedEventArgs e)
+    {
+        if (_sqlPreviewState.ColumnHeaders.Count == 0)
+        {
+            SetInlineStatus("没有可导出的数据。", InlineStatusTone.Error);
+            return;
+        }
+
+        var csv = SqlExportService.ExportCsv(_sqlPreviewState.ColumnHeaders, _sqlPreviewState.GridRows);
+        await SaveExportFile(csv, "csv", "CSV Files", "*.csv");
+    }
+
+    private async void OnSqlExportJsonClick(object sender, RoutedEventArgs e)
+    {
+        if (_sqlPreviewState.ColumnHeaders.Count == 0)
+        {
+            SetInlineStatus("没有可导出的数据。", InlineStatusTone.Error);
+            return;
+        }
+
+        var json = SqlExportService.ExportJson(_sqlPreviewState.ColumnHeaders, _sqlPreviewState.GridRows);
+        await SaveExportFile(json, "json", "JSON Files", "*.json");
+    }
+
+    private async Task SaveExportFile(string content, string defaultExt, string filterName, string filterPattern)
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = $"sql_export_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.FileTypeChoices.Add(filterName, new List<string> { $".{defaultExt}" });
+
+            var file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            await Windows.Storage.FileIO.WriteTextAsync(file, content);
+            SetInlineStatus($"已导出到 {file.Path}", InlineStatusTone.Success);
+        }
+        catch (Exception ex)
+        {
+            SetInlineStatus($"导出失败: {ex.Message}", InlineStatusTone.Error);
+        }
     }
 
     private string ReadSelectedSqlSourceType()

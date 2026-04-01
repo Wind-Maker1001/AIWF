@@ -45,6 +45,9 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlAuthoringBuilderCompiler.cs" Link="Source\SqlAuthoringBuilderCompiler.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioWorkflowMapper.cs" Link="Source\SqlStudioWorkflowMapper.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioResultMapper.cs" Link="Source\SqlStudioResultMapper.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlChartData.cs" Link="Source\SqlChartData.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlExportService.cs" Link="Source\SqlExportService.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlQueryHistoryService.cs" Link="Source\SqlQueryHistoryService.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowRunnerAdapter.cs" Link="Source\WorkflowRunnerAdapter.cs" />
   </ItemGroup>
 </Project>

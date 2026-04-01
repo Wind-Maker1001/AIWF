@@ -27,6 +27,8 @@ public sealed partial class MainWindow
         "sql_chart_v1"
     ];
 
+    private Dictionary<string, JsonObject> _lastNodeOutputs = new(StringComparer.Ordinal);
+
     private async void OnRunCanvasWorkflowClick(object sender, RoutedEventArgs e)
     {
         var document = BuildWorkflowGraphDocumentFromCanvas();
@@ -67,6 +69,10 @@ public sealed partial class MainWindow
             {
                 ApplySqlPreviewState(SqlStudioResultMapper.FromLoadRowsResponse(finalOutput, string.Empty));
             }
+
+            CaptureNodeOutputs(response);
+            ApplyNodeRunStatusToCanvas(response);
+            TryRenderChartFromWorkflowResult(response);
             SetActiveSection(NavSection.Results);
         }
         catch (Exception ex)
@@ -627,5 +633,73 @@ public sealed partial class MainWindow
             && value is Style style
             ? style
             : null;
+    }
+
+    private void CaptureNodeOutputs(JsonObject response)
+    {
+        _lastNodeOutputs.Clear();
+        if (response["node_outputs"] is JsonObject outputs)
+        {
+            foreach (var kv in outputs)
+            {
+                if (kv.Value is JsonObject nodeOutput)
+                {
+                    _lastNodeOutputs[kv.Key] = nodeOutput;
+                }
+            }
+        }
+    }
+
+    private void ApplyNodeRunStatusToCanvas(JsonObject response)
+    {
+        var borders = GetCanvasNodeBorders().ToList();
+        foreach (var border in borders)
+        {
+            if (border.Tag is not CanvasNodeTag tag)
+            {
+                continue;
+            }
+
+            if (_lastNodeOutputs.TryGetValue(tag.NodeKey, out var output))
+            {
+                var ok = output["ok"]?.GetValue<bool?>() == true;
+                border.BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                    ok ? Windows.UI.Color.FromArgb(255, 34, 197, 94)     // green
+                       : Windows.UI.Color.FromArgb(255, 239, 68, 68));   // red
+                border.BorderThickness = new Thickness(2);
+
+                if (tag.SubtitleBlock is not null)
+                {
+                    var status = output["status"]?.GetValue<string>() ?? (ok ? "done" : "error");
+                    var rowCount = output["rows"] is JsonArray rows ? rows.Count : 0;
+                    tag.SubtitleBlock.Text = ok ? $"{status} ({rowCount} rows)" : $"ERR: {status}";
+                }
+            }
+        }
+    }
+
+    public void ShowNodeOutput(string nodeKey)
+    {
+        if (!_lastNodeOutputs.TryGetValue(nodeKey, out var output))
+        {
+            SetInlineStatus($"节点 {nodeKey} 没有输出数据。", InlineStatusTone.Neutral);
+            return;
+        }
+
+        if (output["rows"] is JsonArray)
+        {
+            ApplySqlPreviewState(SqlStudioResultMapper.FromLoadRowsResponse(output, string.Empty));
+        }
+        else
+        {
+            RawResponseTextBox.Text = output.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        if (output["chart_type"] is not null)
+        {
+            SqlChartRenderer.Render(SqlChartCanvas, SqlChartData.FromJson(output), 700, 480);
+        }
+
+        SetActiveSection(NavSection.Results);
     }
 }

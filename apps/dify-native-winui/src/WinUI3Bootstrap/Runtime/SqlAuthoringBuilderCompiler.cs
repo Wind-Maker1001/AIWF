@@ -65,6 +65,12 @@ public static class SqlAuthoringBuilderCompiler
             sql.Append(string.Join(", ", groupBy));
         }
 
+        if (!string.IsNullOrWhiteSpace(draft.Having?.Expression))
+        {
+            sql.Append(" HAVING ");
+            sql.Append(draft.Having.Expression.Trim());
+        }
+
         if (!string.IsNullOrWhiteSpace(draft.OrderByField))
         {
             sql.Append(" ORDER BY ");

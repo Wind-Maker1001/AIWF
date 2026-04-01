@@ -14,12 +14,12 @@ public static class SqlStudioResultMapper
 
         var rawJson = payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
         var rows = payload["rows"] as JsonArray;
-        var rowDisplayItems = rows is null
-            ? Array.Empty<string>()
-            : rows
-                .OfType<JsonObject>()
-                .Select(FormatRow)
-                .ToArray();
+        var rowObjects = rows?.OfType<JsonObject>().ToArray() ?? Array.Empty<JsonObject>();
+
+        var columnHeaders = ExtractColumnHeaders(rowObjects);
+        var gridRows = rowObjects.Select(row => BuildGridRow(row, columnHeaders)).ToArray();
+        var rowDisplayItems = rowObjects.Select(FormatRow).ToArray();
+
         var statsText = payload["stats"] is JsonNode stats
             ? stats.ToJsonString(new JsonSerializerOptions { WriteIndented = true })
             : "{}";
@@ -28,11 +28,13 @@ public static class SqlStudioResultMapper
 
         return new SqlPreviewState(
             Ok: ok,
-            StatusText: ok ? $"Preview ready: {rowDisplayItems.Length} row(s)." : $"Preview failed: {status}",
+            StatusText: ok ? $"Preview ready: {rowDisplayItems.Length} row(s), {columnHeaders.Count} column(s)." : $"Preview failed: {status}",
             GeneratedSql: generatedSql,
             RawJson: rawJson,
             Diagnostics: statsText,
-            RowDisplayItems: rowDisplayItems);
+            RowDisplayItems: rowDisplayItems,
+            ColumnHeaders: columnHeaders,
+            GridRows: gridRows);
     }
 
     public static SchemaBrowserState MergeBrowseResponse(
@@ -77,5 +79,41 @@ public static class SqlStudioResultMapper
     private static string FormatRow(JsonObject row)
     {
         return string.Join(" | ", row.Select(kv => $"{kv.Key}={kv.Value?.ToJsonString() ?? "null"}"));
+    }
+
+    private static IReadOnlyList<string> ExtractColumnHeaders(JsonObject[] rows)
+    {
+        if (rows.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var headers = new List<string>();
+        foreach (var row in rows)
+        {
+            foreach (var kv in row)
+            {
+                if (seen.Add(kv.Key))
+                {
+                    headers.Add(kv.Key);
+                }
+            }
+        }
+
+        return headers;
+    }
+
+    private static IReadOnlyList<string> BuildGridRow(JsonObject row, IReadOnlyList<string> columnHeaders)
+    {
+        var cells = new string[columnHeaders.Count];
+        for (var i = 0; i < columnHeaders.Count; i++)
+        {
+            cells[i] = row[columnHeaders[i]] is JsonNode node
+                ? node is JsonValue jv ? jv.ToString() : node.ToJsonString()
+                : string.Empty;
+        }
+
+        return cells;
     }
 }

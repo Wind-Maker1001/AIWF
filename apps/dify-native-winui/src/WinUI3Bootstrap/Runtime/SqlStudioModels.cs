@@ -31,6 +31,11 @@ public sealed record SqlChartDraft(
         TopN: 20);
 }
 
+public sealed record SqlHavingClause(string Expression)
+{
+    public static SqlHavingClause Empty { get; } = new(string.Empty);
+}
+
 public sealed record SqlBuilderDraft(
     string Schema,
     string Table,
@@ -42,7 +47,8 @@ public sealed record SqlBuilderDraft(
     string OrderByField,
     bool OrderByDescending,
     int Limit,
-    SqlChartDraft Chart)
+    SqlChartDraft Chart,
+    SqlHavingClause Having)
 {
     public static SqlBuilderDraft Empty { get; } = new(
         Schema: string.Empty,
@@ -55,7 +61,8 @@ public sealed record SqlBuilderDraft(
         OrderByField: string.Empty,
         OrderByDescending: false,
         Limit: 100,
-        Chart: SqlChartDraft.Default);
+        Chart: SqlChartDraft.Default,
+        Having: SqlHavingClause.Empty);
 }
 
 public sealed record SqlTextDraft(string Text, bool IsTextOwned)
@@ -102,7 +109,9 @@ public sealed record SqlPreviewState(
     string GeneratedSql,
     string RawJson,
     string Diagnostics,
-    IReadOnlyList<string> RowDisplayItems)
+    IReadOnlyList<string> RowDisplayItems,
+    IReadOnlyList<string> ColumnHeaders,
+    IReadOnlyList<IReadOnlyList<string>> GridRows)
 {
     public static SqlPreviewState Empty { get; } = new(
         Ok: false,
@@ -110,7 +119,9 @@ public sealed record SqlPreviewState(
         GeneratedSql: string.Empty,
         RawJson: string.Empty,
         Diagnostics: string.Empty,
-        RowDisplayItems: Array.Empty<string>());
+        RowDisplayItems: Array.Empty<string>(),
+        ColumnHeaders: Array.Empty<string>(),
+        GridRows: Array.Empty<IReadOnlyList<string>>());
 }
 
 public sealed record WorkflowGraphNodeDocument(

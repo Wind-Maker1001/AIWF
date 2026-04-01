@@ -378,9 +378,18 @@
                             <StackPanel Spacing="8">
                                 <TextBlock Text="结果预览" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
                                 <TextBlock x:Name="SqlPreviewStatusTextBlock" Text="No preview yet." Foreground="#FF4B5563" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="SqlExportCsvButton" Click="OnSqlExportCsvClick" Content="导出 CSV" />
+                                    <Button x:Name="SqlExportJsonButton" Click="OnSqlExportJsonClick" Content="导出 JSON" />
+                                </StackPanel>
                                 <Pivot>
                                     <PivotItem Header="表格">
-                                        <ListView x:Name="SqlPreviewRowsListView" Height="520" />
+                                        <ScrollViewer x:Name="SqlDataGridScrollViewer"
+                                                      Height="520"
+                                                      HorizontalScrollBarVisibility="Auto"
+                                                      VerticalScrollBarVisibility="Auto">
+                                            <StackPanel x:Name="SqlDataGridHost" Spacing="0" />
+                                        </ScrollViewer>
                                     </PivotItem>
                                     <PivotItem Header="SQL">
                                         <TextBox x:Name="SqlGeneratedSqlTextBox" Height="520" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" />
@@ -390,6 +399,11 @@
                                     </PivotItem>
                                     <PivotItem Header="诊断">
                                         <TextBox x:Name="SqlDiagnosticsTextBox" Height="520" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True" />
+                                    </PivotItem>
+                                    <PivotItem Header="图表">
+                                        <ScrollViewer Height="520" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                            <Canvas x:Name="SqlChartCanvas" Width="700" Height="480" />
+                                        </ScrollViewer>
                                     </PivotItem>
                                 </Pivot>
                             </StackPanel>
@@ -412,9 +426,9 @@
                                         <TextBox x:Name="SqlSelectedTableTextBox" Style="{StaticResource TouchTextBoxStyle}" />
                                         <TextBlock Text="Select Fields (csv)" />
                                         <TextBox x:Name="SqlSelectFieldsTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Filter Field" />
-                                        <TextBox x:Name="SqlFilterFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Filter Operator" />
+
+                                        <TextBlock Text="Filter 1" FontWeight="SemiBold" />
+                                        <TextBox x:Name="SqlFilterFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
                                         <ComboBox x:Name="SqlFilterOperatorComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="=" />
                                             <ComboBoxItem Content="!=" />
@@ -422,12 +436,40 @@
                                             <ComboBoxItem Content=">=" />
                                             <ComboBoxItem Content="&lt;" />
                                             <ComboBoxItem Content="&lt;=" />
+                                            <ComboBoxItem Content="LIKE" />
                                         </ComboBox>
-                                        <TextBlock Text="Filter Value" />
-                                        <TextBox x:Name="SqlFilterValueTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBox x:Name="SqlFilterValueTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="value" />
+
+                                        <TextBlock Text="Filter 2" FontWeight="SemiBold" />
+                                        <TextBox x:Name="SqlFilter2FieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
+                                        <ComboBox x:Name="SqlFilter2OperatorComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                            <ComboBoxItem Content="=" />
+                                            <ComboBoxItem Content="!=" />
+                                            <ComboBoxItem Content=">" />
+                                            <ComboBoxItem Content=">=" />
+                                            <ComboBoxItem Content="&lt;" />
+                                            <ComboBoxItem Content="&lt;=" />
+                                            <ComboBoxItem Content="LIKE" />
+                                        </ComboBox>
+                                        <TextBox x:Name="SqlFilter2ValueTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="value" />
+
+                                        <TextBlock Text="Filter 3" FontWeight="SemiBold" />
+                                        <TextBox x:Name="SqlFilter3FieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
+                                        <ComboBox x:Name="SqlFilter3OperatorComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                            <ComboBoxItem Content="=" />
+                                            <ComboBoxItem Content="!=" />
+                                            <ComboBoxItem Content=">" />
+                                            <ComboBoxItem Content=">=" />
+                                            <ComboBoxItem Content="&lt;" />
+                                            <ComboBoxItem Content="&lt;=" />
+                                            <ComboBoxItem Content="LIKE" />
+                                        </ComboBox>
+                                        <TextBox x:Name="SqlFilter3ValueTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="value" />
+
                                         <TextBlock Text="Group By (csv)" />
                                         <TextBox x:Name="SqlGroupByTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Aggregate Function" />
+
+                                        <TextBlock Text="Aggregate 1" FontWeight="SemiBold" />
                                         <ComboBox x:Name="SqlAggregateFunctionComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                             <ComboBoxItem Content="count" />
                                             <ComboBoxItem Content="sum" />
@@ -435,10 +477,22 @@
                                             <ComboBoxItem Content="min" />
                                             <ComboBoxItem Content="max" />
                                         </ComboBox>
-                                        <TextBlock Text="Aggregate Field" />
-                                        <TextBox x:Name="SqlAggregateFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" />
-                                        <TextBlock Text="Aggregate Alias" />
-                                        <TextBox x:Name="SqlAggregateAliasTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBox x:Name="SqlAggregateFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
+                                        <TextBox x:Name="SqlAggregateAliasTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="alias" />
+
+                                        <TextBlock Text="Aggregate 2" FontWeight="SemiBold" />
+                                        <ComboBox x:Name="SqlAggregate2FunctionComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
+                                            <ComboBoxItem Content="count" />
+                                            <ComboBoxItem Content="sum" />
+                                            <ComboBoxItem Content="avg" />
+                                            <ComboBoxItem Content="min" />
+                                            <ComboBoxItem Content="max" />
+                                        </ComboBox>
+                                        <TextBox x:Name="SqlAggregate2FieldTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="field" />
+                                        <TextBox x:Name="SqlAggregate2AliasTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="alias" />
+
+                                        <TextBlock Text="HAVING" />
+                                        <TextBox x:Name="SqlHavingTextBox" Style="{StaticResource TouchTextBoxStyle}" PlaceholderText="e.g. COUNT(*) > 5" />
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="1" Spacing="8">
@@ -482,6 +536,22 @@
                                         <TextBlock Text="Limit" />
                                         <TextBox x:Name="SqlLimitTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="100" />
                                         <CheckBox x:Name="SqlChartEnabledCheckBox" Content="追加 SQL 图表节点" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="图表类型" VerticalAlignment="Center" />
+                                            <ComboBox x:Name="SqlChartTypeComboBox" Width="120">
+                                                <ComboBoxItem Content="bar" IsSelected="True" />
+                                                <ComboBoxItem Content="line" />
+                                                <ComboBoxItem Content="pie" />
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <TextBlock Text="Category 字段" />
+                                        <TextBox x:Name="SqlChartCategoryFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="category" />
+                                        <TextBlock Text="Value 字段" />
+                                        <TextBox x:Name="SqlChartValueFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="value" />
+                                        <TextBlock Text="Series 字段" />
+                                        <TextBox x:Name="SqlChartSeriesFieldTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="series" />
+                                        <TextBlock Text="Top N" />
+                                        <TextBox x:Name="SqlChartTopNTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="20" />
                                     </StackPanel>
                                 </Grid>
 
@@ -492,7 +562,16 @@
                                     <Button x:Name="SqlResetBuilderButton" Click="OnSqlResetBuilderClick" Content="重建为结构化草稿" />
                                     <Button x:Name="SqlPreviewButton" Click="OnSqlPreviewClick" Content="预览结果" />
                                     <Button x:Name="SqlSendToCanvasButton" Click="OnSqlSendToCanvasClick" Content="发送到画布" />
+                                    <Button x:Name="SqlSaveQueryButton" Click="OnSqlSaveQueryClick" Content="保存查询" />
                                 </StackPanel>
+
+                                <Border Style="{StaticResource CardBorderStyle}" Margin="0,8,0,0">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="查询历史 / 收藏" FontSize="14" FontWeight="SemiBold" Foreground="#FF111111" />
+                                        <ListView x:Name="SqlHistoryListView" Height="140"
+                                                  SelectionChanged="OnSqlHistorySelectionChanged" />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
                     </Grid>
