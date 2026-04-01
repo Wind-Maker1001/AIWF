@@ -48,7 +48,8 @@ public sealed record SqlBuilderDraft(
     bool OrderByDescending,
     int Limit,
     SqlChartDraft Chart,
-    SqlHavingClause Having)
+    SqlHavingClause Having,
+    string SubquerySource)
 {
     public static SqlBuilderDraft Empty { get; } = new(
         Schema: string.Empty,
@@ -62,7 +63,10 @@ public sealed record SqlBuilderDraft(
         OrderByDescending: false,
         Limit: 100,
         Chart: SqlChartDraft.Default,
-        Having: SqlHavingClause.Empty);
+        Having: SqlHavingClause.Empty,
+        SubquerySource: string.Empty);
+
+    public bool HasSubquery => !string.IsNullOrWhiteSpace(SubquerySource);
 }
 
 public sealed record SqlTextDraft(string Text, bool IsTextOwned)
@@ -166,6 +170,7 @@ public sealed record SqlConnectionProfile(
 {
     public const string Sqlite = "sqlite";
     public const string SqlServer = "sqlserver";
+    public const string Postgres = "postgres";
 
     public static SqlConnectionProfile Default { get; } = new(
         AccelUrl: "http://127.0.0.1:18082",
@@ -181,7 +186,9 @@ public sealed record SqlConnectionProfile(
     public string NormalizedSourceType =>
         string.Equals(SourceType?.Trim(), SqlServer, StringComparison.OrdinalIgnoreCase)
             ? SqlServer
-            : Sqlite;
+            : string.Equals(SourceType?.Trim(), Postgres, StringComparison.OrdinalIgnoreCase)
+                ? Postgres
+                : Sqlite;
 
     public string ResolveAccelUrl(string? bridgeBaseUrl = null)
     {
@@ -215,7 +222,10 @@ public sealed record SqlConnectionProfile(
 
         var host = (SqlServerHost ?? string.Empty).Trim();
         var db = (Database ?? string.Empty).Trim();
-        var port = int.TryParse(SqlServerPort, out var parsedPort) && parsedPort > 0 ? parsedPort : 1433;
+        var defaultPort = NormalizedSourceType == Postgres ? 5432 : 1433;
+        var port = int.TryParse(SqlServerPort, out var parsedPort) && parsedPort > 0
+            ? (NormalizedSourceType == Postgres && parsedPort == 1433 ? defaultPort : parsedPort)
+            : defaultPort;
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(db))
         {
             return string.Empty;

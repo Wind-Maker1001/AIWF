@@ -7,10 +7,21 @@ public static class SqlAuthoringBuilderCompiler
 {
     public static string BuildSql(SqlBuilderDraft draft, SqlConnectionProfile profile)
     {
-        var table = BuildQualifiedTable(profile.NormalizedSourceType, draft.Schema, draft.Table);
-        if (string.IsNullOrWhiteSpace(table))
+        string table;
+        string tableRef;
+        if (draft.HasSubquery)
         {
-            return string.Empty;
+            tableRef = $"({draft.SubquerySource.Trim()}) AS _sub";
+            table = "_sub";
+        }
+        else
+        {
+            table = BuildQualifiedTable(profile.NormalizedSourceType, draft.Schema, draft.Table);
+            if (string.IsNullOrWhiteSpace(table))
+            {
+                return string.Empty;
+            }
+            tableRef = table;
         }
 
         var selectParts = BuildSelectParts(draft);
@@ -20,7 +31,7 @@ public static class SqlAuthoringBuilderCompiler
         sql.Append(' ');
         sql.Append(selectParts.Count == 0 ? "*" : string.Join(", ", selectParts));
         sql.Append(" FROM ");
-        sql.Append(table);
+        sql.Append(tableRef);
 
         foreach (var join in draft.Joins.Where(static item => item.Enabled && !string.IsNullOrWhiteSpace(item.Table)))
         {

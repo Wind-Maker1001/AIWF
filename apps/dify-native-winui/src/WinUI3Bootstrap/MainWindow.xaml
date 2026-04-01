@@ -336,6 +336,7 @@
                                 <ComboBox x:Name="SqlSourceTypeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectionChanged="OnSqlSourceTypeSelectionChanged" SelectedIndex="0">
                                     <ComboBoxItem Content="sqlite" />
                                     <ComboBoxItem Content="sqlserver" />
+                                    <ComboBoxItem Content="postgres" />
                                 </ComboBox>
 
                                 <StackPanel x:Name="SqliteSourcePanel" Spacing="8">
@@ -381,6 +382,7 @@
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <Button x:Name="SqlExportCsvButton" Click="OnSqlExportCsvClick" Content="导出 CSV" />
                                     <Button x:Name="SqlExportJsonButton" Click="OnSqlExportJsonClick" Content="导出 JSON" />
+                                    <Button x:Name="SqlColumnStatsButton" Click="OnSqlColumnStatsClick" Content="列分析" />
                                 </StackPanel>
                                 <Pivot>
                                     <PivotItem Header="表格">
@@ -405,6 +407,13 @@
                                             <Canvas x:Name="SqlChartCanvas" Width="700" Height="480" />
                                         </ScrollViewer>
                                     </PivotItem>
+                                    <PivotItem Header="执行计划">
+                                        <TextBox x:Name="SqlExplainTextBox" Height="520" AcceptsReturn="True" TextWrapping="Wrap" IsReadOnly="True"
+                                                 FontFamily="Consolas" FontSize="12" />
+                                    </PivotItem>
+                                    <PivotItem Header="列分析">
+                                        <ListView x:Name="SqlColumnStatsListView" Height="520" />
+                                    </PivotItem>
                                 </Pivot>
                             </StackPanel>
                         </Border>
@@ -424,6 +433,10 @@
                                         <TextBox x:Name="SqlSelectedSchemaTextBox" Style="{StaticResource TouchTextBoxStyle}" />
                                         <TextBlock Text="Base Table" />
                                         <TextBox x:Name="SqlSelectedTableTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                        <TextBlock Text="子查询 (可选，填写后覆盖 Base Table)" Foreground="#FF6B7280" FontSize="11" />
+                                        <TextBox x:Name="SqlSubqueryTextBox" Style="{StaticResource TouchTextBoxStyle}"
+                                                 PlaceholderText="SELECT id, SUM(amount) AS total FROM orders GROUP BY id"
+                                                 AcceptsReturn="True" Height="80" TextWrapping="Wrap" />
                                         <TextBlock Text="Select Fields (csv)" />
                                         <TextBox x:Name="SqlSelectFieldsTextBox" Style="{StaticResource TouchTextBoxStyle}" />
 
@@ -561,6 +574,7 @@
                                     <Button x:Name="SqlGenerateSqlButton" Click="OnSqlGenerateSqlClick" Content="生成 SQL" />
                                     <Button x:Name="SqlResetBuilderButton" Click="OnSqlResetBuilderClick" Content="重建为结构化草稿" />
                                     <Button x:Name="SqlPreviewButton" Click="OnSqlPreviewClick" Content="预览结果" />
+                                    <Button x:Name="SqlExplainButton" Click="OnSqlExplainClick" Content="EXPLAIN" />
                                     <Button x:Name="SqlSendToCanvasButton" Click="OnSqlSendToCanvasClick" Content="发送到画布" />
                                     <Button x:Name="SqlSaveQueryButton" Click="OnSqlSaveQueryClick" Content="保存查询" />
                                 </StackPanel>

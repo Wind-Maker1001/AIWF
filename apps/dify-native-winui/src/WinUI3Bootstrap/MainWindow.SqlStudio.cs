@@ -243,6 +243,55 @@ public sealed partial class MainWindow
         }
     }
 
+    private async void OnSqlExplainClick(object sender, RoutedEventArgs e)
+    {
+        _sqlConnectionProfile = CollectSqlConnectionProfileFromControls();
+        _sqlBuilderDraft = CollectSqlBuilderDraftFromControls();
+        if (!_sqlTextDraft.IsTextOwned)
+        {
+            SetSqlTextDraft(SqlStudioDraftController.SyncGeneratedSql(_sqlBuilderDraft, _sqlConnectionProfile, _sqlTextDraft));
+        }
+
+        var explainPrefix = _sqlConnectionProfile.NormalizedSourceType switch
+        {
+            SqlConnectionProfile.SqlServer => "SET SHOWPLAN_TEXT ON; ",
+            SqlConnectionProfile.Postgres => "EXPLAIN ANALYZE ",
+            _ => "EXPLAIN QUERY PLAN ",
+        };
+
+        try
+        {
+            var payload = await _runnerAdapter.PostJsonAsync(
+                _sqlConnectionProfile.ResolveAccelUrl(BridgeUrlTextBox.Text),
+                ApiKeyTextBox.Text.Trim(),
+                "/operators/load_rows_v3",
+                new JsonObject
+                {
+                    ["source_type"] = _sqlConnectionProfile.NormalizedSourceType,
+                    ["source"] = _sqlConnectionProfile.BuildRuntimeSource(),
+                    ["query"] = explainPrefix + _sqlTextDraft.Text,
+                    ["limit"] = 200,
+                    ["max_retries"] = 1,
+                    ["retry_backoff_ms"] = 100,
+                });
+
+            var rows = payload["rows"] as JsonArray;
+            var lines = rows?.OfType<JsonObject>()
+                .Select(row => string.Join(" | ", row.Select(kv => kv.Value?.ToString() ?? "")))
+                .ToArray() ?? Array.Empty<string>();
+
+            SqlExplainTextBox.Text = lines.Length > 0
+                ? string.Join("\n", lines)
+                : payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            SetInlineStatus("执行计划已加载。", InlineStatusTone.Success);
+        }
+        catch (Exception ex)
+        {
+            SqlExplainTextBox.Text = $"EXPLAIN failed: {ex.Message}";
+            SetInlineStatus($"执行计划失败: {ex.Message}", InlineStatusTone.Error);
+        }
+    }
+
     private void OnSqlSendToCanvasClick(object sender, RoutedEventArgs e)
     {
         _sqlConnectionProfile = CollectSqlConnectionProfileFromControls();
@@ -278,7 +327,9 @@ public sealed partial class MainWindow
     private void ApplySqlConnectionProfileToControls(SqlConnectionProfile profile)
     {
         SqlAccelUrlTextBox.Text = profile.AccelUrl;
-        SqlSourceTypeComboBox.SelectedIndex = string.Equals(profile.SourceType, SqlConnectionProfile.SqlServer, StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        SqlSourceTypeComboBox.SelectedIndex = string.Equals(profile.SourceType, SqlConnectionProfile.SqlServer, StringComparison.OrdinalIgnoreCase) ? 1
+            : string.Equals(profile.SourceType, SqlConnectionProfile.Postgres, StringComparison.OrdinalIgnoreCase) ? 2
+            : 0;
         SqlitePathTextBox.Text = profile.SQLitePath;
         SqlServerHostTextBox.Text = profile.SqlServerHost;
         SqlServerPortTextBox.Text = profile.SqlServerPort;
@@ -369,7 +420,8 @@ public sealed partial class MainWindow
                 ValueField: SqlChartValueFieldTextBox.Text.Trim(),
                 SeriesField: SqlChartSeriesFieldTextBox.Text.Trim(),
                 TopN: int.TryParse(SqlChartTopNTextBox.Text.Trim(), out var chartTopN) && chartTopN > 0 ? chartTopN : 20),
-            Having: new SqlHavingClause(SqlHavingTextBox.Text.Trim()));
+            Having: new SqlHavingClause(SqlHavingTextBox.Text.Trim()),
+            SubquerySource: SqlSubqueryTextBox.Text.Trim());
     }
 
     private void ApplySqlBuilderDraftToControls(SqlBuilderDraft draft)
@@ -665,9 +717,11 @@ public sealed partial class MainWindow
 
     private void UpdateSqlSourcePanels()
     {
-        var isSqlServer = string.Equals(ReadSelectedSqlSourceType(), SqlConnectionProfile.SqlServer, StringComparison.OrdinalIgnoreCase);
-        SqliteSourcePanel.Visibility = isSqlServer ? Visibility.Collapsed : Visibility.Visible;
-        SqlServerSourcePanel.Visibility = isSqlServer ? Visibility.Visible : Visibility.Collapsed;
+        var sourceType = ReadSelectedSqlSourceType();
+        var isServerBased = string.Equals(sourceType, SqlConnectionProfile.SqlServer, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(sourceType, SqlConnectionProfile.Postgres, StringComparison.OrdinalIgnoreCase);
+        SqliteSourcePanel.Visibility = isServerBased ? Visibility.Collapsed : Visibility.Visible;
+        SqlServerSourcePanel.Visibility = isServerBased ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateSqlDraftModeText()
@@ -704,6 +758,23 @@ public sealed partial class MainWindow
         return (comboBox.SelectedItem as ComboBoxItem)?.Content?.ToString()?.Trim()
             ?? comboBox.SelectedValue?.ToString()?.Trim()
             ?? string.Empty;
+    }
+
+    private void OnSqlColumnStatsClick(object sender, RoutedEventArgs e)
+    {
+        if (_sqlPreviewState.ColumnHeaders.Count == 0 || _sqlPreviewState.GridRows.Count == 0)
+        {
+            SetInlineStatus("没有数据可分析。", InlineStatusTone.Error);
+            return;
+        }
+
+        var stats = SqlColumnAnalyzer.Analyze(_sqlPreviewState.ColumnHeaders, _sqlPreviewState.GridRows);
+        SqlColumnStatsListView.Items.Clear();
+        foreach (var stat in stats)
+        {
+            SqlColumnStatsListView.Items.Add(stat.Summary);
+        }
+        SetInlineStatus($"已分析 {stats.Count} 列。", InlineStatusTone.Success);
     }
 
     private async void OnSqlSaveQueryClick(object sender, RoutedEventArgs e)

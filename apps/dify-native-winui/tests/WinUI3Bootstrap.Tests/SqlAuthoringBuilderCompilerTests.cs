@@ -115,4 +115,39 @@ public sealed class SqlAuthoringBuilderCompilerTests
         Assert.Contains("COUNT(*) AS cnt", sql, StringComparison.Ordinal);
         Assert.Contains("SUM(amount) AS total", sql, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void BuildSql_RendersSubqueryAsFromSource()
+    {
+        var sql = SqlAuthoringBuilderCompiler.BuildSql(
+            SqlBuilderDraft.Empty with
+            {
+                Table = "ignored",
+                SubquerySource = "SELECT id, SUM(amount) AS total FROM orders GROUP BY id",
+                SelectFields = ["id", "total"],
+                Filters = [new SqlFilterClause("total", ">", "100")],
+            },
+            SqlConnectionProfile.Default with { SourceType = SqlConnectionProfile.Sqlite });
+
+        Assert.Contains("FROM (SELECT id, SUM(amount) AS total FROM orders GROUP BY id) AS _sub", sql, StringComparison.Ordinal);
+        Assert.Contains("_sub.\"total\" > 100", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildSql_SubqueryTakesPrecedenceOverTable()
+    {
+        var sql = SqlAuthoringBuilderCompiler.BuildSql(
+            SqlBuilderDraft.Empty with
+            {
+                Schema = "dbo",
+                Table = "raw_data",
+                SubquerySource = "SELECT * FROM raw_data WHERE active = 1",
+                Limit = 50,
+            },
+            SqlConnectionProfile.Default with { SourceType = SqlConnectionProfile.Sqlite });
+
+        Assert.Contains("FROM (SELECT * FROM raw_data WHERE active = 1) AS _sub", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("[dbo]", sql, StringComparison.Ordinal);
+        Assert.EndsWith("LIMIT 50", sql, StringComparison.Ordinal);
+    }
 }
