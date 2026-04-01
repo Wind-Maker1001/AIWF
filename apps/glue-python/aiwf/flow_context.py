@@ -44,7 +44,11 @@ def normalize_job_context(
         )
 
     job_root_override = context_obj.get("job_root")
-    job_root = resolve_job_root(job_id, override=str(job_root_override) if job_root_override else None)
+    local_standalone = bool(params_obj.get("local_standalone"))
+    if local_standalone and job_root_override and os.path.isabs(str(job_root_override)):
+        job_root = os.path.normpath(os.path.abspath(str(job_root_override)))
+    else:
+        job_root = resolve_job_root(job_id, override=str(job_root_override) if job_root_override else None)
 
     def _child_dir(key: str, default_leaf: str) -> str:
         raw = context_obj.get(key)

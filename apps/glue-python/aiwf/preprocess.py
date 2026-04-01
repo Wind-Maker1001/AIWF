@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from aiwf import ingest
+from aiwf.accel_client import transform_rows_v2_operator
+from aiwf.cleaning_spec_v2 import (
+    CLEANING_SPEC_V2_VERSION,
+    cleaning_spec_to_transform_components,
+    compile_preprocess_spec_to_spec,
+)
 from aiwf.preprocess_cli import parse_args as _parse_args_impl, run_cli as _run_cli_impl
 from aiwf.preprocess_conflicts import (
     _apply_conflict_detection,
@@ -74,6 +81,73 @@ from aiwf.preprocess_registry import (
 )
 
 
+_RUST_V2_PREPROCESS_FILTER_OPS = {
+    "exists",
+    "not_exists",
+    "eq",
+    "ne",
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "in",
+    "not_in",
+    "contains",
+    "regex",
+    "not_regex",
+}
+
+
+def _preprocess_rust_v2_capability_report(spec: Dict[str, Any], compiled_spec: Dict[str, Any]) -> Dict[str, Any]:
+    enabled = str(spec.get("use_rust_v2") or os.getenv("AIWF_PREPROCESS_RUST_V2_ENABLED") or "").strip().lower()
+    postprocess = compiled_spec.get("transform", {}).get("postprocess", {})
+    row_filters = spec.get("row_filters") if isinstance(spec.get("row_filters"), list) else []
+    warnings = compiled_spec.get("audit", {}).get("warnings") if isinstance(compiled_spec.get("audit", {}).get("warnings"), list) else []
+
+    checks = [
+        {
+            "name": "flag_enabled",
+            "ok": enabled in {"1", "true", "yes", "on"},
+            "reason": "flag_disabled",
+        },
+        {
+            "name": "standardize_evidence_disabled",
+            "ok": not bool(postprocess.get("standardize_evidence")),
+            "reason": "standardize_evidence_enabled",
+        },
+        {
+            "name": "detect_conflicts_disabled",
+            "ok": not bool(postprocess.get("detect_conflicts")),
+            "reason": "detect_conflicts_enabled",
+        },
+        {
+            "name": "chunking_disabled",
+            "ok": str(postprocess.get("chunk_mode") or "none").strip().lower() in {"", "none", "off"},
+            "reason": "chunk_mode_enabled",
+        },
+        {
+            "name": "builtin_field_transforms_only",
+            "ok": not any("unsupported field transform" in str(item).lower() for item in warnings),
+            "reason": "unsupported_field_transform",
+        },
+        {
+            "name": "builtin_row_filters_only",
+            "ok": all(
+                isinstance(item, dict)
+                and str(item.get("op") or "").strip().lower() in _RUST_V2_PREPROCESS_FILTER_OPS
+                for item in row_filters
+            ),
+            "reason": "unsupported_row_filter",
+        },
+    ]
+    failing = next((item for item in checks if not item["ok"]), None)
+    return {
+        "eligible": failing is None,
+        "eligibility_reason": "eligible" if failing is None else str(failing["reason"]),
+        "checks": checks,
+    }
+
+
 def register_pipeline_stage(
     name: str,
     *,
@@ -135,6 +209,53 @@ def validate_preprocess_pipeline(pipeline: Dict[str, Any]) -> Dict[str, Any]:
 def _default_pipeline_stage_prepare_config(context: PipelineStageContext) -> Dict[str, Any]:
     return _default_pipeline_stage_prepare_config_impl(context)
 
+
+def _preprocess_execution_report(
+    *,
+    execution_mode: str,
+    execution_audit: Dict[str, Any],
+    eligibility_reason: str,
+    capability_report: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "execution_mode": execution_mode,
+        "execution_audit": execution_audit,
+        "eligibility_reason": eligibility_reason,
+        "capability_matrix": capability_report.get("checks") or [],
+    }
+
+
+def _preprocess_summary_from_quality(
+    quality: Dict[str, Any],
+    _compiled_spec: Dict[str, Any],
+    *,
+    execution_mode: str,
+    execution_audit: Dict[str, Any],
+    eligibility_reason: str,
+    capability_report: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "input_rows": int(quality.get("input_rows", 0)),
+        "output_rows": int(quality.get("output_rows", 0)),
+        "dropped_empty_rows": 0,
+        "dropped_by_filters": int(quality.get("filtered_rows", 0)),
+        "duplicate_rows_removed": int(quality.get("duplicate_rows_removed", 0)),
+        "normalized_amount_cells": int(quality.get("numeric_cells_parsed", 0)),
+        "normalized_date_cells": int(quality.get("date_cells_parsed", 0)),
+        "transformed_cells": 0,
+        "standardized_rows": 0,
+        "chunked_rows_created": 0,
+        "conflict_rows_marked": 0,
+        "rust_v2_used": bool(quality.get("rust_v2_used", False)),
+        "cleaning_spec_version": CLEANING_SPEC_V2_VERSION,
+        **_preprocess_execution_report(
+            execution_mode=execution_mode,
+            execution_audit=execution_audit,
+            eligibility_reason=eligibility_reason,
+            capability_report=capability_report,
+        ),
+    }
+
 def run_preprocess_pipeline(
     *,
     pipeline: Dict[str, Any],
@@ -158,7 +279,45 @@ def run_preprocess_pipeline(
 
 
 def preprocess_rows(rows: List[Dict[str, Any]], spec: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    return preprocess_rows_impl(
+    compiled_spec = compile_preprocess_spec_to_spec(spec)
+    capability_report = _preprocess_rust_v2_capability_report(spec, compiled_spec)
+    rust_v2_error = ""
+    if capability_report["eligible"]:
+        rules, quality_gates, schema_hint = cleaning_spec_to_transform_components(
+            compiled_spec,
+            input_rows=rows,
+        )
+        rust_v2 = transform_rows_v2_operator(
+            raw_rows=rows,
+            params=spec,
+            rules=rules,
+            quality_gates=quality_gates,
+            schema_hint={**schema_hint, "source": "glue-python.preprocess"},
+        )
+        if rust_v2.get("ok"):
+            quality = dict(rust_v2.get("quality") or {})
+            execution_audit = (
+                rust_v2.get("audit")
+                if isinstance(rust_v2.get("audit"), dict)
+                else dict(quality.get("rust_v2_audit") or {})
+            )
+            summary = _preprocess_summary_from_quality(
+                quality,
+                compiled_spec,
+                execution_mode="rust_v2",
+                execution_audit=execution_audit,
+                eligibility_reason=str(capability_report["eligibility_reason"]),
+                capability_report=capability_report,
+            )
+            return rust_v2["rows"], summary
+        rust_v2_error = str(rust_v2.get("error") or "rust_v2_not_ok")
+        capability_report = {
+            **capability_report,
+            "eligible": False,
+            "eligibility_reason": "rust_v2_error",
+        }
+
+    rows_out, summary = preprocess_rows_impl(
         rows,
         spec,
         normalize_header=_normalize_header,
@@ -170,10 +329,28 @@ def preprocess_rows(rows: List[Dict[str, Any]], spec: Dict[str, Any]) -> Tuple[L
         to_canonical_evidence_row=_to_canonical_evidence_row,
         apply_conflict_detection=_apply_conflict_detection,
     )
+    summary.update(
+        _preprocess_execution_report(
+            execution_mode="python_legacy",
+            execution_audit={
+                "schema": "python_preprocess.audit.v1",
+                "rule_hits": {
+                    "filtered_by_rule": int(summary.get("dropped_by_filters", 0)),
+                    "duplicate_removed": int(summary.get("duplicate_rows_removed", 0)),
+                    "transformed_cells": int(summary.get("transformed_cells", 0)),
+                },
+                "rust_v2_error": rust_v2_error,
+            },
+            eligibility_reason=str(capability_report["eligibility_reason"]),
+            capability_report=capability_report,
+        )
+    )
+    return rows_out, summary
 
 
 def preprocess_file(input_path: str, output_path: str, spec: Dict[str, Any]) -> Dict[str, Any]:
-    return preprocess_file_impl(
+    compiled_spec = compile_preprocess_spec_to_spec(spec)
+    result = preprocess_file_impl(
         input_path,
         output_path,
         spec,
@@ -184,6 +361,13 @@ def preprocess_file(input_path: str, output_path: str, spec: Dict[str, Any]) -> 
         write_json=_write_json,
         export_canonical_bundle=export_canonical_bundle,
     )
+    result["cleaning_spec_version"] = CLEANING_SPEC_V2_VERSION
+    result["cleaning_spec"] = compiled_spec
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    result["execution_mode"] = str(summary.get("execution_mode") or "")
+    result["execution_audit"] = dict(summary.get("execution_audit") or {})
+    result["eligibility_reason"] = str(summary.get("eligibility_reason") or "")
+    return result
 
 
 def preprocess_csv_file(input_path: str, output_path: str, spec: Dict[str, Any]) -> Dict[str, Any]:

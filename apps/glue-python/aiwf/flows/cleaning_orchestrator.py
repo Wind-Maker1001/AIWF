@@ -63,20 +63,22 @@ def run_cleaning_flow(
     base_url = resolve_base_url(s, base)
     headers = headers_from_params(params)
     layout = prepare_job_layout(job_id, params, ensure_dirs=ensure_dirs)
+    local_standalone = bool(params.get("local_standalone"))
 
     step_id = "cleaning"
     try:
-        base_step_start(
-            base_url=base_url,
-            job_id=job_id,
-            step_id=step_id,
-            actor=actor,
-            ruleset_version=ruleset_version,
-            input_uri=layout["input_uri"],
-            output_uri=layout["output_uri"],
-            params=params,
-            headers=headers,
-        )
+        if not local_standalone:
+            base_step_start(
+                base_url=base_url,
+                job_id=job_id,
+                step_id=step_id,
+                actor=actor,
+                ruleset_version=ruleset_version,
+                input_uri=layout["input_uri"],
+                output_uri=layout["output_uri"],
+                params=params,
+                headers=headers,
+            )
 
         params_effective, preprocess_result = maybe_preprocess_input(params, layout["job_root"], layout["stage_dir"])
         local_cache = prepare_local_clean_cache(
@@ -129,6 +131,7 @@ def run_cleaning_flow(
                 params_effective=params_effective,
                 rows=local_cache["local_rows"],
                 quality=local_cache["local_quality"],
+                execution_report=local_cache["local_execution"],
                 source=local_cache["source"],
                 preprocess_result=preprocess_result,
                 apply_quality_gates=apply_quality_gates,
@@ -147,23 +150,25 @@ def run_cleaning_flow(
 
         artifacts = collect_materialized_artifacts(materialized)
 
-        register_artifacts(
-            base_artifact_upsert=base_artifact_upsert,
-            base_url=base_url,
-            job_id=job_id,
-            actor=actor,
-            artifacts=artifacts,
-            headers=headers,
-        )
+        if not local_standalone:
+            register_artifacts(
+                base_artifact_upsert=base_artifact_upsert,
+                base_url=base_url,
+                job_id=job_id,
+                actor=actor,
+                artifacts=artifacts,
+                headers=headers,
+            )
 
-        base_step_done(
-            base_url=base_url,
-            job_id=job_id,
-            step_id=step_id,
-            actor=actor,
-            output_hash=materialized["sha_parquet"],
-            headers=headers,
-        )
+        if not local_standalone:
+            base_step_done(
+                base_url=base_url,
+                job_id=job_id,
+                step_id=step_id,
+                actor=actor,
+                output_hash=materialized["sha_parquet"],
+                headers=headers,
+            )
 
         return build_success_result(
             job_id=job_id,
@@ -173,15 +178,16 @@ def run_cleaning_flow(
             started_at=t0,
         )
     except Exception as e:
-        try:
-            base_step_fail(
-                base_url=base_url,
-                job_id=job_id,
-                step_id=step_id,
-                actor=actor,
-                error=str(e),
-                headers=headers,
-            )
-        except Exception:
-            pass
+        if not local_standalone:
+            try:
+                base_step_fail(
+                    base_url=base_url,
+                    job_id=job_id,
+                    step_id=step_id,
+                    actor=actor,
+                    error=str(e),
+                    headers=headers,
+                )
+            except Exception:
+                pass
         raise

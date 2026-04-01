@@ -72,6 +72,15 @@ def prepare_local_clean_cache(
         "source": source,
         "local_rows": local_rows,
         "local_quality": local_quality,
+        "local_execution": {
+            "execution_mode": str(cleaned_local.get("execution_mode") or ""),
+            "execution_audit": dict(cleaned_local.get("execution_audit") or {}),
+            "eligibility_reason": str(cleaned_local.get("eligibility_reason") or ""),
+            "shadow_compare": dict(cleaned_local.get("shadow_compare") or {}),
+            "requested_rust_v2_mode": str(cleaned_local.get("requested_rust_v2_mode") or ""),
+            "effective_rust_v2_mode": str(cleaned_local.get("effective_rust_v2_mode") or ""),
+            "verify_on_default": bool(cleaned_local.get("verify_on_default", False)),
+        },
         "params_for_accel": params_for_accel,
     }
 

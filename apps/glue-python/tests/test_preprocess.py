@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from aiwf import preprocess
 
@@ -141,6 +141,194 @@ class PreprocessTests(unittest.TestCase):
             self.assertEqual(rows[0]["speaker"], "alice")
             self.assertNotIn("https://", rows[0]["text"])
             self.assertEqual(rows[0]["score"], 10.0)
+
+    def test_preprocess_can_use_rust_v2_for_supported_transforms(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "raw.jsonl")
+            dst = os.path.join(tmp, "cooked.jsonl")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"Speaker": " Alice ", "biz_date": "2026/03/01"}) + "\n")
+
+            fake_resp = Mock()
+            fake_resp.status_code = 200
+            fake_resp.json.return_value = {
+                "ok": True,
+                "rows": [{"speaker": "alice", "biz_date": "2026-03-01"}],
+                "quality": {
+                    "input_rows": 1,
+                    "output_rows": 1,
+                    "invalid_rows": 0,
+                    "filtered_rows": 0,
+                    "duplicate_rows_removed": 0,
+                    "numeric_cells_total": 0,
+                    "numeric_cells_parsed": 0,
+                    "date_cells_total": 1,
+                    "date_cells_parsed": 1,
+                },
+                "trace_id": "tp1",
+                "audit": {"schema": "transform_rows_v2.audit.v1"},
+            }
+            with patch("requests.post", return_value=fake_resp):
+                res = preprocess.preprocess_file(
+                    src,
+                    dst,
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "use_rust_v2": True,
+                        "field_transforms": [
+                            {"field": "speaker", "op": "trim"},
+                            {"field": "speaker", "op": "lower"},
+                            {"field": "biz_date", "op": "parse_date"},
+                        ],
+                    },
+                )
+            rows = preprocess._read_jsonl(dst)
+            self.assertEqual(rows[0]["speaker"], "alice")
+            self.assertEqual(rows[0]["biz_date"], "2026-03-01")
+            self.assertEqual(res["summary"]["cleaning_spec_version"], "cleaning_spec.v2")
+            self.assertTrue(res["summary"]["rust_v2_used"])
+            self.assertEqual(res["execution_mode"], "rust_v2")
+            self.assertEqual(res["eligibility_reason"], "eligible")
+            self.assertEqual(res["execution_audit"]["schema"], "transform_rows_v2.audit.v1")
+            self.assertEqual(res["summary"]["execution_mode"], "rust_v2")
+
+    def test_preprocess_rust_v2_blocked_by_chunk_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "raw.jsonl")
+            dst = os.path.join(tmp, "cooked.jsonl")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"text": "a. b."}) + "\n")
+
+            with patch("requests.post") as post:
+                res = preprocess.preprocess_file(
+                    src,
+                    dst,
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "use_rust_v2": True,
+                        "chunk_mode": "sentence",
+                    },
+                )
+            post.assert_not_called()
+            self.assertEqual(res["execution_mode"], "python_legacy")
+            self.assertEqual(res["eligibility_reason"], "chunk_mode_enabled")
+            self.assertEqual(res["summary"]["execution_audit"]["schema"], "python_preprocess.audit.v1")
+
+    def test_preprocess_rust_v2_blocked_by_conflict_detection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "raw.jsonl")
+            dst = os.path.join(tmp, "cooked.jsonl")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"claim_text": "support tax"}) + "\n")
+
+            with patch("requests.post") as post:
+                res = preprocess.preprocess_file(
+                    src,
+                    dst,
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "use_rust_v2": True,
+                        "detect_conflicts": True,
+                    },
+                )
+            post.assert_not_called()
+            self.assertEqual(res["execution_mode"], "python_legacy")
+            self.assertEqual(res["eligibility_reason"], "detect_conflicts_enabled")
+
+    def test_preprocess_rust_v2_blocked_by_standardize_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "raw.jsonl")
+            dst = os.path.join(tmp, "cooked.jsonl")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(json.dumps({"text": "claim"}) + "\n")
+
+            with patch("requests.post") as post:
+                res = preprocess.preprocess_file(
+                    src,
+                    dst,
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "use_rust_v2": True,
+                        "standardize_evidence": True,
+                    },
+                )
+            post.assert_not_called()
+            self.assertEqual(res["execution_mode"], "python_legacy")
+            self.assertEqual(res["eligibility_reason"], "standardize_evidence_enabled")
+
+    def test_preprocess_rust_v2_blocked_by_custom_transform(self):
+        def prefix_transform(value, cfg):
+            if value is None:
+                return value, False
+            return f"{cfg.get('prefix', '')}{value}", True
+
+        preprocess.register_field_transform(
+            "prefix_blocker",
+            prefix_transform,
+            domain="custom-preprocess",
+            domain_metadata={"label": "Custom Preprocess", "backend": "extension", "builtin": False},
+        )
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                src = os.path.join(tmp, "raw.jsonl")
+                dst = os.path.join(tmp, "cooked.jsonl")
+                with open(src, "w", encoding="utf-8") as f:
+                    f.write(json.dumps({"speaker": "alice"}) + "\n")
+
+                with patch("requests.post") as post:
+                    res = preprocess.preprocess_file(
+                        src,
+                        dst,
+                        {
+                            "input_format": "jsonl",
+                            "output_format": "jsonl",
+                            "use_rust_v2": True,
+                            "field_transforms": [{"field": "speaker", "op": "prefix_blocker", "prefix": "team-"}],
+                        },
+                    )
+                post.assert_not_called()
+                self.assertEqual(res["execution_mode"], "python_legacy")
+                self.assertEqual(res["eligibility_reason"], "unsupported_field_transform")
+        finally:
+            preprocess.unregister_field_transform("prefix_blocker")
+
+    def test_preprocess_rust_v2_blocked_by_custom_filter(self):
+        def starts_with_filter(row, cfg):
+            return str(row.get(str(cfg.get("field") or "")) or "").startswith(str(cfg.get("value") or ""))
+
+        preprocess.register_row_filter(
+            "starts_with_blocker",
+            starts_with_filter,
+            domain="custom-preprocess",
+            domain_metadata={"label": "Custom Preprocess", "backend": "extension", "builtin": False},
+        )
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                src = os.path.join(tmp, "raw.jsonl")
+                dst = os.path.join(tmp, "cooked.jsonl")
+                with open(src, "w", encoding="utf-8") as f:
+                    f.write(json.dumps({"speaker": "alice"}) + "\n")
+
+                with patch("requests.post") as post:
+                    res = preprocess.preprocess_file(
+                        src,
+                        dst,
+                        {
+                            "input_format": "jsonl",
+                            "output_format": "jsonl",
+                            "use_rust_v2": True,
+                            "row_filters": [{"field": "speaker", "op": "starts_with_blocker", "value": "a"}],
+                        },
+                    )
+                post.assert_not_called()
+                self.assertEqual(res["execution_mode"], "python_legacy")
+                self.assertEqual(res["eligibility_reason"], "unsupported_row_filter")
+        finally:
+            preprocess.unregister_row_filter("starts_with_blocker")
 
     def test_preprocess_supports_registered_custom_transform_and_filter(self):
         def prefix_transform(value, cfg):

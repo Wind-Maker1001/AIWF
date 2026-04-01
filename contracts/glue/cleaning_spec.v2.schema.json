@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiwf.local/contracts/glue/cleaning_spec.v2.schema.json",
+  "title": "AIWF Cleaning Spec v2",
+  "type": "object",
+  "required": ["schema_version", "ingest", "schema", "transform", "quality", "artifacts", "audit"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "cleaning_spec.v2"
+    },
+    "ingest": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "schema": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

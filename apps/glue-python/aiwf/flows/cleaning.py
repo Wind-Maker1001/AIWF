@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
+from aiwf.cleaning_spec_v2 import CLEANING_SPEC_V2_VERSION, compile_cleaning_params_to_spec
 from aiwf.office_style import (
     office_rows_subset as _office_rows_subset,
     office_theme_settings as _office_theme_settings,
@@ -320,37 +322,313 @@ def _maybe_preprocess_input(params: Dict[str, Any], job_root: str, stage_dir: st
     )
 
 
-def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
-    rust_v2_enabled = _to_bool(_rule_param(params, "use_rust_v2", os.getenv("AIWF_RUST_V2_ENABLED", "false")), default=False)
-    if rust_v2_enabled and not _is_generic_rules_enabled(params):
-        rust_v2 = _try_rust_transform_rows_v2(raw_rows, params)
-        if rust_v2.get("ok"):
-            return {
-                "rows": rust_v2["rows"],
-                "quality": rust_v2["quality"],
-            }
+def _cleaning_rust_v2_strategy(params: Dict[str, Any]) -> Dict[str, str]:
+    env_mode = str(os.getenv("AIWF_CLEANING_RUST_V2_MODE", "off") or "off").strip().lower()
+    if env_mode not in {"off", "shadow", "default"}:
+        env_mode = "off"
+    if bool(params.get("local_standalone")):
+        env_mode = "default"
+    rules = _rules_dict(params)
+    if "use_rust_v2" in rules:
+        enabled = _to_bool(rules.get("use_rust_v2"), default=False)
+        decision = "force_rust" if enabled else "force_python"
+        return {
+            "decision": decision,
+            "mode": "explicit",
+            "requested_mode": env_mode,
+            "effective_mode": decision,
+        }
+    if "use_rust_v2" in params:
+        enabled = _to_bool(params.get("use_rust_v2"), default=False)
+        decision = "force_rust" if enabled else "force_python"
+        return {
+            "decision": decision,
+            "mode": "explicit",
+            "requested_mode": env_mode,
+            "effective_mode": decision,
+        }
+    return {
+        "decision": env_mode,
+        "mode": env_mode,
+        "requested_mode": env_mode,
+        "effective_mode": env_mode,
+    }
 
-    out = _clean_rows_simple(
-        raw_rows,
-        params,
-        hooks={
-            "is_generic_rules_enabled": _is_generic_rules_enabled,
-            "clean_rows_generic": _clean_rows_generic,
-            "to_int": _to_int,
-            "to_bool": _to_bool,
-            "rule_param": _rule_param,
-            "rules_dict": _rules_dict,
-            "to_decimal": _to_decimal,
-            "normalize_key": _normalize_key,
-            "quantize_decimal": _quantize_decimal,
-        },
+
+def _shadow_compare_result(
+    *,
+    status: str,
+    matched: bool,
+    mismatches: List[str],
+    skipped_reason: str = "",
+) -> Dict[str, Any]:
+    return {
+        "status": status,
+        "matched": matched,
+        "mismatch_count": len(mismatches),
+        "mismatches": list(mismatches),
+        "skipped_reason": skipped_reason,
+        "compare_fields": ["rows", "quality", "reason_counts"],
+    }
+
+
+def _stable_rows_for_compare(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return sorted(
+        [dict(item or {}) for item in rows],
+        key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True),
     )
-    if rust_v2_enabled:
-        q = dict(out.get("quality") or {})
-        q["rust_v2_used"] = False
-        q["rust_v2_error"] = str((locals().get("rust_v2") or {}).get("error") or "")
-        out["quality"] = q
+
+
+def _quality_compare_view(quality: Dict[str, Any]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for key in [
+        "input_rows",
+        "output_rows",
+        "invalid_rows",
+        "filtered_rows",
+        "duplicate_rows_removed",
+        "required_missing_ratio",
+    ]:
+        if key in quality:
+            out[key] = quality.get(key)
     return out
+
+
+def _python_reason_counts(quality: Dict[str, Any]) -> Dict[str, int]:
+    rule_hits = quality.get("rule_hits") if isinstance(quality.get("rule_hits"), dict) else {}
+    return {
+        "invalid_object": 0,
+        "cast_failed": int(rule_hits.get("cast_failed", 0)),
+        "required_missing": int(rule_hits.get("required_failed", 0)) + int(rule_hits.get("invalid_id", 0)) + int(rule_hits.get("invalid_amount", 0)),
+        "filter_rejected": int(rule_hits.get("filtered_rules", 0)) + int(rule_hits.get("filtered_negative", 0)) + int(rule_hits.get("filtered_min_amount", 0)) + int(rule_hits.get("filtered_max_amount", 0)),
+        "duplicate_removed": int(rule_hits.get("deduplicate_removed", quality.get("duplicate_rows_removed", 0) or 0)),
+    }
+
+
+def _reason_counts_from_audit(execution_audit: Dict[str, Any], fallback_quality: Dict[str, Any]) -> Dict[str, int]:
+    counts = execution_audit.get("reason_counts") if isinstance(execution_audit.get("reason_counts"), dict) else None
+    if isinstance(counts, dict):
+        return {str(key): int(value or 0) for key, value in counts.items()}
+    return _python_reason_counts(fallback_quality)
+
+
+def _reason_samples_structurally_valid(execution_audit: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    errors: List[str] = []
+    reason_counts = _reason_counts_from_audit(execution_audit, {})
+    samples = execution_audit.get("reason_samples") if isinstance(execution_audit.get("reason_samples"), dict) else {}
+    sample_limit = (
+        execution_audit.get("limits", {}).get("sample_limit")
+        if isinstance(execution_audit.get("limits"), dict)
+        else None
+    )
+    for key in sorted(reason_counts.keys()):
+        if key not in samples:
+            errors.append(f"reason_samples missing key {key}")
+            continue
+        items = samples.get(key)
+        if not isinstance(items, list):
+            errors.append(f"reason_samples[{key}] must be array")
+            continue
+        if sample_limit is not None and len(items) > int(sample_limit):
+            errors.append(f"reason_samples[{key}] exceeds sample_limit")
+        if reason_counts.get(key, 0) < len(items):
+            errors.append(f"reason_samples[{key}] larger than reason_counts[{key}]")
+    return len(errors) == 0, errors
+
+
+def _compare_python_and_rust_cleaning(
+    *,
+    python_rows: List[Dict[str, Any]],
+    python_quality: Dict[str, Any],
+    python_execution_audit: Dict[str, Any],
+    rust_rows: List[Dict[str, Any]],
+    rust_quality: Dict[str, Any],
+    rust_execution_audit: Dict[str, Any],
+) -> Dict[str, Any]:
+    mismatches: List[str] = []
+    if _stable_rows_for_compare(python_rows) != _stable_rows_for_compare(rust_rows):
+        mismatches.append("rows mismatch")
+    python_quality_view = _quality_compare_view(python_quality)
+    rust_quality_view = _quality_compare_view(rust_quality)
+    if python_quality_view != rust_quality_view:
+        mismatches.append(f"quality mismatch: python={python_quality_view} rust={rust_quality_view}")
+    python_reason_counts = _reason_counts_from_audit(python_execution_audit, python_quality)
+    rust_reason_counts = _reason_counts_from_audit(rust_execution_audit, rust_quality)
+    if python_reason_counts != rust_reason_counts:
+        mismatches.append(f"reason_counts mismatch: python={python_reason_counts} rust={rust_reason_counts}")
+    valid_samples, sample_errors = _reason_samples_structurally_valid(rust_execution_audit)
+    if not valid_samples:
+        mismatches.extend(sample_errors)
+    if mismatches:
+        return _shadow_compare_result(status="mismatched", matched=False, mismatches=mismatches)
+    return _shadow_compare_result(status="matched", matched=True, mismatches=[])
+
+
+def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    compiled_spec = compile_cleaning_params_to_spec(params)
+    strategy = _cleaning_rust_v2_strategy(params)
+    verify_on_default = bool(params.get("local_standalone")) or _to_bool(os.getenv("AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT", "false"), default=False)
+
+    def apply_execution_metadata(out: Dict[str, Any]) -> Dict[str, Any]:
+        out["requested_rust_v2_mode"] = str(strategy.get("requested_mode") or "")
+        out["effective_rust_v2_mode"] = str(strategy.get("effective_mode") or "")
+        out["verify_on_default"] = bool(verify_on_default)
+        return out
+
+    def build_python_result(
+        *,
+        rust_error: str = "",
+        shadow_compare: Optional[Dict[str, Any]] = None,
+        skipped_reason: str = "mode_off",
+    ) -> Dict[str, Any]:
+        out = _clean_rows_simple(
+            raw_rows,
+            params,
+            hooks={
+                "is_generic_rules_enabled": _is_generic_rules_enabled,
+                "clean_rows_generic": _clean_rows_generic,
+                "to_int": _to_int,
+                "to_bool": _to_bool,
+                "rule_param": _rule_param,
+                "rules_dict": _rules_dict,
+                "to_decimal": _to_decimal,
+                "normalize_key": _normalize_key,
+                "quantize_decimal": _quantize_decimal,
+            },
+        )
+        q = dict(out.get("quality") or {})
+        q["cleaning_spec_version"] = CLEANING_SPEC_V2_VERSION
+        q["rust_v2_used"] = False
+        if rust_error:
+            q["rust_v2_error"] = rust_error
+        out["quality"] = q
+        out["cleaning_spec"] = compiled_spec
+        out["execution_mode"] = "python_legacy"
+        out["execution_audit"] = {
+            "schema": "python_cleaning.audit.v1",
+            "rule_hits": dict(q.get("rule_hits") or {}),
+            "reason_counts": _python_reason_counts(q),
+            "reason_samples": {
+                "invalid_object": [],
+                "cast_failed": [],
+                "required_missing": [],
+                "filter_rejected": [],
+                "duplicate_removed": [],
+            },
+            "rust_v2_error": rust_error,
+        }
+        if strategy["decision"] == "force_python":
+            out["eligibility_reason"] = "forced_python"
+        elif rust_error:
+            out["eligibility_reason"] = "rust_v2_error"
+        elif strategy["decision"] == "off":
+            out["eligibility_reason"] = "mode_off"
+        else:
+            out["eligibility_reason"] = "eligible"
+        out["shadow_compare"] = shadow_compare or _shadow_compare_result(
+            status="skipped",
+            matched=False,
+            mismatches=[],
+            skipped_reason=skipped_reason,
+        )
+        return apply_execution_metadata(out)
+
+    def build_rust_result(
+        rust_v2: Dict[str, Any],
+        *,
+        shadow_compare: Optional[Dict[str, Any]] = None,
+        skipped_reason: str = "default_without_verify",
+    ) -> Dict[str, Any]:
+        quality = dict(rust_v2["quality"])
+        quality["cleaning_spec_version"] = CLEANING_SPEC_V2_VERSION
+        execution_audit = (
+            rust_v2.get("audit")
+            if isinstance(rust_v2.get("audit"), dict)
+            else dict(quality.get("rust_v2_audit") or {})
+        )
+        return apply_execution_metadata({
+            "rows": rust_v2["rows"],
+            "quality": quality,
+            "cleaning_spec": compiled_spec,
+            "execution_mode": "rust_v2",
+            "execution_audit": execution_audit,
+            "eligibility_reason": "eligible",
+            "shadow_compare": shadow_compare or _shadow_compare_result(
+                status="skipped",
+                matched=False,
+                mismatches=[],
+                skipped_reason=skipped_reason,
+            ),
+        })
+
+    if strategy["decision"] == "force_python":
+        return build_python_result(skipped_reason="forced_python")
+
+    if strategy["decision"] == "off":
+        return build_python_result(skipped_reason="mode_off")
+
+    rust_v2 = _try_rust_transform_rows_v2(raw_rows, params)
+
+    if strategy["decision"] == "force_rust":
+        if rust_v2.get("ok"):
+            return build_rust_result(rust_v2, skipped_reason="explicit_force_rust")
+        return build_python_result(
+            rust_error=str(rust_v2.get("error") or ""),
+            shadow_compare=_shadow_compare_result(
+                status="rust_error",
+                matched=False,
+                mismatches=[str(rust_v2.get("error") or "rust_v2_error")],
+            ),
+        )
+
+    if strategy["decision"] == "shadow":
+        python_result = build_python_result(skipped_reason="shadow_not_attempted")
+        if rust_v2.get("ok"):
+            python_result["shadow_compare"] = _compare_python_and_rust_cleaning(
+                python_rows=python_result["rows"],
+                python_quality=python_result["quality"],
+                python_execution_audit=python_result["execution_audit"],
+                rust_rows=rust_v2["rows"],
+                rust_quality=dict(rust_v2.get("quality") or {}),
+                rust_execution_audit=rust_v2.get("audit") if isinstance(rust_v2.get("audit"), dict) else {},
+            )
+            return python_result
+        python_result["shadow_compare"] = _shadow_compare_result(
+            status="rust_error",
+            matched=False,
+            mismatches=[str(rust_v2.get("error") or "rust_v2_error")],
+        )
+        python_result["eligibility_reason"] = "rust_v2_error"
+        return python_result
+
+    if strategy["decision"] == "default":
+        if rust_v2.get("ok"):
+            if verify_on_default:
+                python_result = build_python_result(skipped_reason="default_verify_baseline")
+                shadow_compare = _compare_python_and_rust_cleaning(
+                    python_rows=python_result["rows"],
+                    python_quality=python_result["quality"],
+                    python_execution_audit=python_result["execution_audit"],
+                    rust_rows=rust_v2["rows"],
+                    rust_quality=dict(rust_v2.get("quality") or {}),
+                    rust_execution_audit=rust_v2.get("audit") if isinstance(rust_v2.get("audit"), dict) else {},
+                )
+                if shadow_compare.get("status") == "matched":
+                    return build_rust_result(rust_v2, shadow_compare=shadow_compare, skipped_reason="")
+                python_result["shadow_compare"] = shadow_compare
+                python_result["eligibility_reason"] = "shadow_compare_mismatch"
+                return python_result
+            return build_rust_result(rust_v2, skipped_reason="default_without_verify")
+        return build_python_result(
+            rust_error=str(rust_v2.get("error") or ""),
+            shadow_compare=_shadow_compare_result(
+                status="rust_error",
+                matched=False,
+                mismatches=[str(rust_v2.get("error") or "rust_v2_error")],
+            ),
+        )
+
+    return build_python_result(skipped_reason="mode_off")
 
 
 def _clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:

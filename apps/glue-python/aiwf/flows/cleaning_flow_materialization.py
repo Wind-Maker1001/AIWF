@@ -91,12 +91,30 @@ def materialize_accel_outputs(
     accel_profile: Dict[str, Any],
     sha256_file: Callable[..., str],
 ) -> Dict[str, Any]:
+    execution = {
+        "execution_mode": "accel_operator",
+        "execution_audit": {},
+        "eligibility_reason": "accel_outputs",
+        "requested_rust_v2_mode": "",
+        "effective_rust_v2_mode": "",
+        "verify_on_default": False,
+        "shadow_compare": {
+            "status": "skipped",
+            "matched": False,
+            "mismatch_count": 0,
+            "mismatches": [],
+            "skipped_reason": "accel_outputs",
+            "compare_fields": ["rows", "quality", "reason_counts"],
+        },
+    }
     out = {
         "profile": {
             "rows": int((accel_profile or {}).get("rows", 0)),
             "cols": int((accel_profile or {}).get("cols", 2)),
             "source": "accel",
+            "execution": execution,
         },
+        "execution": execution,
     }
     out.update(
         materialize_accel_cleaning_artifacts(
@@ -124,6 +142,7 @@ def materialize_local_outputs(
     params_effective: Dict[str, Any],
     rows: List[Dict[str, Any]],
     quality: Dict[str, Any],
+    execution_report: Dict[str, Any],
     source: str,
     preprocess_result: Optional[Dict[str, Any]],
     apply_quality_gates: Callable[..., Any],
@@ -148,7 +167,8 @@ def materialize_local_outputs(
     profile = build_profile(rows, quality, source)
     profile["quality_gate"] = quality_gate
     profile["preprocess"] = preprocess_result
-    out = {"profile": profile}
+    profile["execution"] = execution_report
+    out = {"profile": profile, "execution": execution_report}
     out.update(
         materialize_local_cleaning_artifacts(
             CleaningArtifactContext(

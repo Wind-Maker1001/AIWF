@@ -83,6 +83,7 @@ class TransformRowsV2OperatorResponse:
     rows: list[dict[str, Any]] = field(default_factory=list)
     quality: Dict[str, Any] = field(default_factory=dict)
     trace_id: str = ""
+    audit: Dict[str, Any] = field(default_factory=dict)
     raw: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -95,6 +96,7 @@ class TransformRowsV2OperatorResponse:
             rows=rows,
             quality=quality,
             trace_id=str(body.get("trace_id") or ""),
+            audit=body.get("audit") if isinstance(body.get("audit"), dict) else {},
             raw=dict(body),
         )
 
@@ -246,12 +248,15 @@ def transform_rows_v2_operator(
         quality2 = dict(response.quality)
         quality2["rust_v2_used"] = True
         quality2["rust_v2_trace_id"] = response.trace_id
+        if response.audit:
+            quality2["rust_v2_audit"] = response.audit
         return {
             "attempted": True,
             "ok": True,
             "url": url,
             "rows": response.rows,
             "quality": quality2,
+            "audit": response.audit,
             "response": response.raw,
         }
     except Exception as exc:

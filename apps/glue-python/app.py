@@ -13,6 +13,14 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from aiwf import ingest
+from aiwf.cleaning_spec_v2 import (
+    CLEANING_SPEC_V2_CONTRACT,
+    build_header_mapping,
+    build_quality_decisions,
+    candidate_profiles_from_headers,
+    get_canonical_profile_registry,
+    reason_codes_from_quality_errors,
+)
 from aiwf.runtime_catalog import get_runtime_catalog
 from aiwf.dependency_status import dependency_status
 from aiwf.flow_context import LegacyFlowPathParamsError, attach_job_context, normalize_job_context
@@ -734,7 +742,7 @@ def health():
         "ingest_sidecar": {
             "extract_route": "/ingest/extract",
             "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
-            "supported_modalities": ["image", "xlsx"],
+            "supported_modalities": ["txt", "docx", "pdf", "image", "xlsx"],
         },
     }
 
@@ -745,7 +753,11 @@ def capabilities():
     caps["ingest_sidecar"] = {
         "extract_route": "/ingest/extract",
         "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
-        "supported_modalities": ["image", "xlsx"],
+        "supported_modalities": ["txt", "docx", "pdf", "image", "xlsx"],
+    }
+    caps["cleaning_spec_v2"] = {
+        "contract": CLEANING_SPEC_V2_CONTRACT,
+        "profiles": sorted(get_canonical_profile_registry().keys()),
     }
     caps["governance"] = build_governance_capability_map()
     caps["governance_surface"] = {
@@ -763,6 +775,44 @@ def governance_control_plane_meta():
     return {
         "ok": True,
         "boundary": build_governance_control_plane_boundary(),
+    }
+
+
+def _ingest_extract_metadata(rows: list[dict[str, Any]], meta: Dict[str, Any], req: IngestExtractReq) -> Dict[str, Any]:
+    sheet_frames = meta.get("sheet_frames") if isinstance(meta.get("sheet_frames"), list) else []
+    header_labels: list[str] = []
+    for frame in sheet_frames:
+        if not isinstance(frame, dict):
+            continue
+        labels = frame.get("header_labels")
+        if isinstance(labels, list):
+            header_labels.extend([str(item) for item in labels if str(item).strip()])
+    if not header_labels and rows:
+        sample = rows[0] if isinstance(rows[0], dict) else {}
+        header_labels.extend([str(item) for item in sample.keys() if str(item).strip()])
+    canonical_profile = str(req.canonical_profile or "").strip().lower()
+    header_mapping = build_header_mapping(
+        header_labels,
+        canonical_profile=canonical_profile,
+        sheet_profiles=req.sheet_profiles,
+    )
+    candidate_profiles = candidate_profiles_from_headers(
+        header_labels,
+        sheet_profiles=req.sheet_profiles,
+    )
+    quality_report = meta.get("quality_report") if isinstance(meta.get("quality_report"), dict) else {}
+    quality_blocked = bool(meta.get("quality_blocked"))
+    quality_decisions = build_quality_decisions(
+        quality_report=quality_report,
+        quality_blocked=quality_blocked,
+    )
+    blocked_reason_codes = reason_codes_from_quality_errors(quality_report.get("errors") or [])
+    return {
+        "header_mapping": header_mapping,
+        "candidate_profiles": candidate_profiles,
+        "quality_decisions": quality_decisions,
+        "blocked_reason_codes": blocked_reason_codes,
+        "sample_rows": rows[: min(5, len(rows))],
     }
 
 
@@ -817,6 +867,11 @@ def ingest_extract(req: IngestExtractReq):
                     "table_cells": [],
                     "sheet_frames": [],
                     "engine_trace": [],
+                    "header_mapping": [],
+                    "candidate_profiles": [],
+                    "quality_decisions": [],
+                    "blocked_reason_codes": [],
+                    "sample_rows": [],
                 }
             )
             continue
@@ -834,6 +889,7 @@ def ingest_extract(req: IngestExtractReq):
                 "table_cells": meta.get("table_cells") if isinstance(meta.get("table_cells"), list) else [],
                 "sheet_frames": meta.get("sheet_frames") if isinstance(meta.get("sheet_frames"), list) else [],
                 "engine_trace": meta.get("engine_trace") if isinstance(meta.get("engine_trace"), list) else [],
+                **_ingest_extract_metadata(rows, meta, req),
             }
         )
         all_rows.extend(rows)
@@ -861,6 +917,24 @@ def ingest_extract(req: IngestExtractReq):
         "engine_trace": engine_trace,
         "quality_blocked": len(blocked_inputs) > 0,
         "blocked_inputs": blocked_inputs,
+        "header_mapping": file_results[0].get("header_mapping") if file_results else [],
+        "candidate_profiles": file_results[0].get("candidate_profiles") if file_results else [],
+        "quality_decisions": [
+            decision
+            for item in file_results
+            if isinstance(item, dict)
+            for decision in (item.get("quality_decisions") if isinstance(item.get("quality_decisions"), list) else [])
+        ],
+        "blocked_reason_codes": sorted(
+            {
+                str(code)
+                for item in file_results
+                if isinstance(item, dict)
+                for code in (item.get("blocked_reason_codes") if isinstance(item.get("blocked_reason_codes"), list) else [])
+                if str(code).strip()
+            }
+        ),
+        "sample_rows": all_rows[: min(5, len(all_rows))],
         "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
     }
 

@@ -41,7 +41,12 @@
         "contract",
         "quality_blocked",
         "blocked_inputs",
-        "engine_trace"
+        "engine_trace",
+        "header_mapping",
+        "candidate_profiles",
+        "quality_decisions",
+        "blocked_reason_codes",
+        "sample_rows"
       ],
       "properties": {
         "ok": { "type": "boolean" },
@@ -62,7 +67,12 @@
               "image_blocks",
               "table_cells",
               "sheet_frames",
-              "engine_trace"
+              "engine_trace",
+              "header_mapping",
+              "candidate_profiles",
+              "quality_decisions",
+              "blocked_reason_codes",
+              "sample_rows"
             ],
             "properties": {
               "path": { "type": "string" },
@@ -76,7 +86,12 @@
               "image_blocks": { "type": "array", "items": { "type": "object" } },
               "table_cells": { "type": "array", "items": { "type": "object" } },
               "sheet_frames": { "type": "array", "items": { "type": "object" } },
-              "engine_trace": { "type": "array", "items": { "type": "object" } }
+              "engine_trace": { "type": "array", "items": { "type": "object" } },
+              "header_mapping": { "type": "array", "items": { "type": "object" } },
+              "candidate_profiles": { "type": "array", "items": { "type": "object" } },
+              "quality_decisions": { "type": "array", "items": { "type": "object" } },
+              "blocked_reason_codes": { "type": "array", "items": { "type": "string" } },
+              "sample_rows": { "type": "array", "items": { "type": "object" } }
             },
             "additionalProperties": true
           }
@@ -88,7 +103,12 @@
         "quality_metrics": { "type": "array", "items": { "type": ["object", "null"] } },
         "engine_trace": { "type": "array", "items": { "type": "object" } },
         "quality_blocked": { "type": "boolean" },
-        "blocked_inputs": { "type": "array", "items": { "type": "object" } }
+        "blocked_inputs": { "type": "array", "items": { "type": "object" } },
+        "header_mapping": { "type": "array", "items": { "type": "object" } },
+        "candidate_profiles": { "type": "array", "items": { "type": "object" } },
+        "quality_decisions": { "type": "array", "items": { "type": "object" } },
+        "blocked_reason_codes": { "type": "array", "items": { "type": "string" } },
+        "sample_rows": { "type": "array", "items": { "type": "object" } }
       },
       "additionalProperties": true
     }

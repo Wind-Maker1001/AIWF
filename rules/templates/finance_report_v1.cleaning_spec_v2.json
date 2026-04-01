@@ -1,0 +1,68 @@
+{
+  "schema_version": "cleaning_spec.v2",
+  "ingest": {},
+  "schema": {
+    "canonical_profile": "finance_statement",
+    "defaults": {
+      "currency": "CNY"
+    },
+    "unique_keys": ["id"],
+    "header_aliases": {},
+    "auto_normalize_headers": false,
+    "header_normalizer": "none"
+  },
+  "transform": {
+    "rename_map": {
+      "Amt": "amount",
+      "ID": "id"
+    },
+    "casts": {
+      "id": "int",
+      "amount": "float",
+      "currency": "string"
+    },
+    "required_fields": ["id", "amount"],
+    "default_values": {
+      "currency": "CNY"
+    },
+    "include_fields": [],
+    "exclude_fields": [],
+    "filters": [
+      { "field": "amount", "op": "gte", "value": 0 },
+      { "field": "amount", "op": "lte", "value": 100000000 }
+    ],
+    "deduplicate_by": ["id"],
+    "deduplicate_keep": "last",
+    "sort_by": [
+      { "field": "id", "order": "asc" }
+    ],
+    "aggregate": {},
+    "null_values": [],
+    "trim_strings": true,
+    "computed_fields": {},
+    "string_ops": [
+      { "field": "currency", "op": "upper" }
+    ],
+    "date_ops": [],
+    "field_ops": []
+  },
+  "quality": {
+    "required_fields": ["id", "amount"],
+    "gates": {
+      "max_invalid_rows": 0,
+      "max_invalid_ratio": 0.01,
+      "max_filtered_rows": 100,
+      "min_output_rows": 1,
+      "allow_empty_output": false
+    },
+    "image_rules": {},
+    "xlsx_rules": {}
+  },
+  "artifacts": {},
+  "audit": {
+    "enabled": true,
+    "sample_limit": 5,
+    "lineage": true,
+    "warnings": []
+  }
+}

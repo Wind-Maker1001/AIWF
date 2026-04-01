@@ -5,6 +5,13 @@ import re
 import unicodedata
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
+from aiwf.canonical_profiles import (
+    get_default_header_aliases,
+    get_profile_header_aliases,
+    get_profile_registry,
+    get_profile_spec,
+)
+
 
 _DEFAULT_HEADER_ALIASES: dict[str, list[str]] = {
     "id": ["id", "record_id", "row_id", "identifier", "编号", "序号", "单号", "记录编号"],
@@ -63,6 +70,16 @@ _PROFILE_SPECS: dict[str, dict[str, Any]] = {
         "numeric_fields": ["confidence"],
         "date_fields": ["published_at"],
     },
+}
+
+_DEFAULT_HEADER_ALIASES = get_default_header_aliases()
+_PROFILE_HEADER_ALIASES = {
+    name: get_profile_header_aliases(name)
+    for name in get_profile_registry().keys()
+}
+_PROFILE_SPECS = {
+    name: get_profile_spec(name)
+    for name in get_profile_registry().keys()
 }
 
 

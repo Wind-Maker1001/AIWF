@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from aiwf.accel_client import run_cleaning_operator, transform_rows_v2_operator
+from aiwf.cleaning_spec_v2 import (
+    cleaning_spec_to_transform_components,
+    compile_cleaning_params_to_spec,
+)
 from aiwf.flows.cleaning_transport import (
     base_artifact_upsert_impl,
     base_step_done_impl,
@@ -105,26 +109,18 @@ def try_rust_transform_rows_v2(
     rules_dict: Callable[[Dict[str, Any]], Dict[str, Any]],
     rule_param: Callable[[Dict[str, Any], str, Any], Any],
 ) -> Dict[str, Any]:
-    rules = rules_dict(params)
+    del rules_dict, rule_param
+    compiled_spec = compile_cleaning_params_to_spec(params)
+    rules, quality_gates, schema_hint = cleaning_spec_to_transform_components(
+        compiled_spec,
+        input_rows=raw_rows,
+    )
     return transform_rows_v2_operator(
         raw_rows=raw_rows,
         params=params,
         rules=rules,
-        quality_gates={
-            "max_invalid_rows": _quality_gate_value(params, rules, rule_param, "max_invalid_rows", None),
-            "max_filtered_rows": _quality_gate_value(params, rules, rule_param, "max_filtered_rows", None),
-            "min_output_rows": _quality_gate_value(params, rules, rule_param, "min_output_rows", None),
-            "max_invalid_ratio": _quality_gate_value(params, rules, rule_param, "max_invalid_ratio", None),
-            "required_fields": _quality_gate_value(params, rules, rule_param, "required_fields", None),
-            "max_required_missing_ratio": _quality_gate_value(params, rules, rule_param, "max_required_missing_ratio", None),
-            "max_duplicate_rows_removed": _quality_gate_value(params, rules, rule_param, "max_duplicate_rows_removed", None),
-            "allow_empty_output": _quality_gate_value(params, rules, rule_param, "allow_empty_output", None),
-            "numeric_parse_rate_min": _quality_gate_value(params, rules, rule_param, "numeric_parse_rate_min", None),
-            "date_parse_rate_min": _quality_gate_value(params, rules, rule_param, "date_parse_rate_min", None),
-            "duplicate_key_ratio_max": _quality_gate_value(params, rules, rule_param, "duplicate_key_ratio_max", None),
-            "blank_row_ratio_max": _quality_gate_value(params, rules, rule_param, "blank_row_ratio_max", None),
-        },
-        schema_hint={"source": "glue-python.cleaning"},
+        quality_gates=quality_gates,
+        schema_hint={**schema_hint, "source": "glue-python.cleaning"},
     )
 
 

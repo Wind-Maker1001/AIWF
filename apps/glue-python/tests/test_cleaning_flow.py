@@ -1016,6 +1016,36 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertEqual(out["rows"], [{"id": 1, "amount": 10.0}])
         self.assertTrue(out["quality"].get("rust_v2_used"))
         self.assertEqual(out["quality"].get("rust_v2_trace_id"), "t1")
+        self.assertEqual(out["quality"].get("cleaning_spec_version"), "cleaning_spec.v2")
+        self.assertEqual(out["execution_mode"], "rust_v2")
+        self.assertEqual(out["eligibility_reason"], "eligible")
+        self.assertEqual(out["execution_audit"], {})
+
+    def test_clean_rows_use_rust_v2_for_generic_rules_after_spec_compile(self):
+        fake_resp = Mock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "ok": True,
+            "rows": [{"customer_name": "alice", "amount": 10.0}],
+            "quality": {"input_rows": 1, "output_rows": 1, "invalid_rows": 0, "filtered_rows": 0, "duplicate_rows_removed": 0},
+            "trace_id": "tg1",
+            "audit": {"schema": "transform_rows_v2.audit.v1"},
+        }
+        with patch("requests.post", return_value=fake_resp):
+            out = cleaning._clean_rows(
+                [{"CustomerName": "Alice", "Amount": "10"}],
+                {
+                    "rules": {
+                        "use_rust_v2": True,
+                        "platform_mode": "generic",
+                        "rename_map": {"CustomerName": "customer_name", "Amount": "amount"},
+                        "casts": {"amount": "float"},
+                    }
+                },
+        )
+        self.assertEqual(out["rows"], [{"customer_name": "alice", "amount": 10.0}])
+        self.assertTrue(out["quality"].get("rust_v2_used"))
+        self.assertEqual(out["execution_audit"]["schema"], "transform_rows_v2.audit.v1")
 
     def test_clean_rows_fallback_when_rust_v2_unavailable(self):
         with patch("requests.post", side_effect=RuntimeError("unreachable")):
@@ -1025,6 +1055,430 @@ class CleaningFlowTests(unittest.TestCase):
             )
         self.assertEqual(out["rows"], [{"id": 1, "amount": 10.0}])
         self.assertFalse(out["quality"].get("rust_v2_used"))
+        self.assertEqual(out["execution_mode"], "python_legacy")
+        self.assertEqual(out["eligibility_reason"], "rust_v2_error")
+        self.assertEqual(out["execution_audit"]["schema"], "python_cleaning.audit.v1")
+        self.assertIn("rust_v2_error", out["execution_audit"])
+
+    def test_clean_rows_marks_python_legacy_when_flag_disabled(self):
+        out = cleaning._clean_rows(
+            [{"id": "1", "amount": "10"}],
+            {"rules": {}},
+        )
+        self.assertEqual(out["execution_mode"], "python_legacy")
+        self.assertEqual(out["eligibility_reason"], "mode_off")
+        self.assertEqual(out["requested_rust_v2_mode"], "off")
+        self.assertEqual(out["effective_rust_v2_mode"], "off")
+        self.assertFalse(out["verify_on_default"])
+        self.assertEqual(out["shadow_compare"]["status"], "skipped")
+        self.assertEqual(out["shadow_compare"]["skipped_reason"], "mode_off")
+
+    def test_python_reason_counts_maps_invalid_id_amount_to_required_missing(self):
+        counts = cleaning._python_reason_counts(
+            {
+                "rule_hits": {
+                    "cast_failed": 1,
+                    "invalid_id": 2,
+                    "invalid_amount": 3,
+                    "required_failed": 4,
+                }
+            }
+        )
+        self.assertEqual(counts["cast_failed"], 1)
+        self.assertEqual(counts["required_missing"], 9)
+
+    def test_clean_rows_shadow_mode_reports_match(self):
+        fake_resp = Mock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "ok": True,
+            "rows": [{"id": 1, "amount": 10.0}],
+            "quality": {
+                "input_rows": 1,
+                "output_rows": 1,
+                "invalid_rows": 0,
+                "filtered_rows": 0,
+                "duplicate_rows_removed": 0,
+                "required_missing_ratio": 0.0,
+            },
+            "trace_id": "shadow-ok",
+            "audit": {
+                "schema": "transform_rows_v2.audit.v1",
+                "reason_counts": {
+                    "invalid_object": 0,
+                    "cast_failed": 0,
+                    "required_missing": 0,
+                    "filter_rejected": 0,
+                    "duplicate_removed": 0,
+                },
+                "reason_samples": {
+                    "invalid_object": [],
+                    "cast_failed": [],
+                    "required_missing": [],
+                    "filter_rejected": [],
+                    "duplicate_removed": [],
+                },
+                "limits": {"sample_limit": 5},
+            },
+        }
+        with patch.dict(os.environ, {"AIWF_CLEANING_RUST_V2_MODE": "shadow"}, clear=False), patch("requests.post", return_value=fake_resp):
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"rules": {}},
+            )
+        self.assertEqual(out["execution_mode"], "python_legacy")
+        self.assertEqual(out["requested_rust_v2_mode"], "shadow")
+        self.assertEqual(out["effective_rust_v2_mode"], "shadow")
+        self.assertFalse(out["verify_on_default"])
+        self.assertEqual(out["shadow_compare"]["status"], "matched")
+        self.assertTrue(out["shadow_compare"]["matched"])
+
+    def test_clean_rows_shadow_mode_reports_mismatch(self):
+        fake_resp = Mock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "ok": True,
+            "rows": [{"id": 1, "amount": 999.0}],
+            "quality": {
+                "input_rows": 1,
+                "output_rows": 1,
+                "invalid_rows": 0,
+                "filtered_rows": 0,
+                "duplicate_rows_removed": 0,
+                "required_missing_ratio": 0.0,
+            },
+            "trace_id": "shadow-bad",
+            "audit": {
+                "schema": "transform_rows_v2.audit.v1",
+                "reason_counts": {
+                    "invalid_object": 0,
+                    "cast_failed": 0,
+                    "required_missing": 0,
+                    "filter_rejected": 0,
+                    "duplicate_removed": 0,
+                },
+                "reason_samples": {
+                    "invalid_object": [],
+                    "cast_failed": [],
+                    "required_missing": [],
+                    "filter_rejected": [],
+                    "duplicate_removed": [],
+                },
+                "limits": {"sample_limit": 5},
+            },
+        }
+        with patch.dict(os.environ, {"AIWF_CLEANING_RUST_V2_MODE": "shadow"}, clear=False), patch("requests.post", return_value=fake_resp):
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"rules": {}},
+            )
+        self.assertEqual(out["execution_mode"], "python_legacy")
+        self.assertEqual(out["shadow_compare"]["status"], "mismatched")
+        self.assertGreater(out["shadow_compare"]["mismatch_count"], 0)
+
+    def test_clean_rows_default_mode_prefers_rust(self):
+        fake_resp = Mock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "ok": True,
+            "rows": [{"id": 1, "amount": 10.0}],
+            "quality": {
+                "input_rows": 1,
+                "output_rows": 1,
+                "invalid_rows": 0,
+                "filtered_rows": 0,
+                "duplicate_rows_removed": 0,
+                "required_missing_ratio": 0.0,
+            },
+            "trace_id": "default-ok",
+            "audit": {"schema": "transform_rows_v2.audit.v1"},
+        }
+        with patch.dict(os.environ, {"AIWF_CLEANING_RUST_V2_MODE": "default"}, clear=False), patch("requests.post", return_value=fake_resp):
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"rules": {}},
+            )
+        self.assertEqual(out["execution_mode"], "rust_v2")
+        self.assertEqual(out["requested_rust_v2_mode"], "default")
+        self.assertEqual(out["effective_rust_v2_mode"], "default")
+        self.assertFalse(out["verify_on_default"])
+        self.assertEqual(out["shadow_compare"]["status"], "skipped")
+        self.assertEqual(out["shadow_compare"]["skipped_reason"], "default_without_verify")
+
+    def test_clean_rows_default_mode_with_verify_reports_match(self):
+        fake_resp = Mock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "ok": True,
+            "rows": [{"id": 1, "amount": 10.0}],
+            "quality": {
+                "input_rows": 1,
+                "output_rows": 1,
+                "invalid_rows": 0,
+                "filtered_rows": 0,
+                "duplicate_rows_removed": 0,
+                "required_missing_ratio": 0.0,
+            },
+            "trace_id": "default-verify-ok",
+            "audit": {
+                "schema": "transform_rows_v2.audit.v1",
+                "reason_counts": {
+                    "invalid_object": 0,
+                    "cast_failed": 0,
+                    "required_missing": 0,
+                    "filter_rejected": 0,
+                    "duplicate_removed": 0,
+                },
+                "reason_samples": {
+                    "invalid_object": [],
+                    "cast_failed": [],
+                    "required_missing": [],
+                    "filter_rejected": [],
+                    "duplicate_removed": [],
+                },
+                "limits": {"sample_limit": 5},
+            },
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "AIWF_CLEANING_RUST_V2_MODE": "default",
+                "AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT": "true",
+            },
+            clear=False,
+        ), patch("requests.post", return_value=fake_resp):
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"rules": {}},
+            )
+        self.assertEqual(out["execution_mode"], "rust_v2")
+        self.assertEqual(out["requested_rust_v2_mode"], "default")
+        self.assertEqual(out["effective_rust_v2_mode"], "default")
+        self.assertTrue(out["verify_on_default"])
+        self.assertEqual(out["shadow_compare"]["status"], "matched")
+        self.assertTrue(out["shadow_compare"]["matched"])
+
+    def test_clean_rows_default_mode_with_verify_keeps_rust_on_mismatch(self):
+        fake_resp = Mock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "ok": True,
+            "rows": [{"id": 1, "amount": 999.0}],
+            "quality": {
+                "input_rows": 1,
+                "output_rows": 1,
+                "invalid_rows": 0,
+                "filtered_rows": 0,
+                "duplicate_rows_removed": 0,
+                "required_missing_ratio": 0.0,
+            },
+            "trace_id": "default-verify-bad",
+            "audit": {
+                "schema": "transform_rows_v2.audit.v1",
+                "reason_counts": {
+                    "invalid_object": 0,
+                    "cast_failed": 0,
+                    "required_missing": 0,
+                    "filter_rejected": 0,
+                    "duplicate_removed": 0,
+                },
+                "reason_samples": {
+                    "invalid_object": [],
+                    "cast_failed": [],
+                    "required_missing": [],
+                    "filter_rejected": [],
+                    "duplicate_removed": [],
+                },
+                "limits": {"sample_limit": 5},
+            },
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "AIWF_CLEANING_RUST_V2_MODE": "default",
+                "AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT": "true",
+            },
+            clear=False,
+        ), patch("requests.post", return_value=fake_resp):
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"rules": {}},
+            )
+        self.assertEqual(out["execution_mode"], "python_legacy")
+        self.assertEqual(out["eligibility_reason"], "shadow_compare_mismatch")
+        self.assertEqual(out["requested_rust_v2_mode"], "default")
+        self.assertEqual(out["effective_rust_v2_mode"], "default")
+        self.assertTrue(out["verify_on_default"])
+        self.assertEqual(out["shadow_compare"]["status"], "mismatched")
+        self.assertGreater(out["shadow_compare"]["mismatch_count"], 0)
+
+    def test_clean_rows_local_standalone_defaults_to_default_verify(self):
+        fake_resp = Mock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "ok": True,
+            "rows": [{"id": 1, "amount": 10.0}],
+            "quality": {
+                "input_rows": 1,
+                "output_rows": 1,
+                "invalid_rows": 0,
+                "filtered_rows": 0,
+                "duplicate_rows_removed": 0,
+                "required_missing_ratio": 0.0,
+            },
+            "trace_id": "standalone-default-ok",
+            "audit": {
+                "schema": "transform_rows_v2.audit.v1",
+                "reason_counts": {
+                    "invalid_object": 0,
+                    "cast_failed": 0,
+                    "required_missing": 0,
+                    "filter_rejected": 0,
+                    "duplicate_removed": 0,
+                },
+                "reason_samples": {
+                    "invalid_object": [],
+                    "cast_failed": [],
+                    "required_missing": [],
+                    "filter_rejected": [],
+                    "duplicate_removed": [],
+                },
+                "limits": {"sample_limit": 5},
+            },
+        }
+        with patch("requests.post", return_value=fake_resp):
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"local_standalone": True},
+            )
+        self.assertEqual(out["execution_mode"], "rust_v2")
+        self.assertEqual(out["requested_rust_v2_mode"], "default")
+        self.assertEqual(out["effective_rust_v2_mode"], "default")
+        self.assertTrue(out["verify_on_default"])
+        self.assertEqual(out["shadow_compare"]["status"], "matched")
+
+    def test_rules_use_rust_v2_false_overrides_default_mode(self):
+        with patch.dict(os.environ, {"AIWF_CLEANING_RUST_V2_MODE": "default"}, clear=False), patch("requests.post") as post:
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"rules": {"use_rust_v2": False}},
+            )
+        post.assert_not_called()
+        self.assertEqual(out["execution_mode"], "python_legacy")
+        self.assertEqual(out["eligibility_reason"], "forced_python")
+        self.assertEqual(out["requested_rust_v2_mode"], "default")
+        self.assertEqual(out["effective_rust_v2_mode"], "force_python")
+        self.assertFalse(out["verify_on_default"])
+        self.assertEqual(out["shadow_compare"]["status"], "skipped")
+        self.assertEqual(out["shadow_compare"]["skipped_reason"], "forced_python")
+
+    def test_clean_rows_default_mode_falls_back_on_rust_error(self):
+        with patch.dict(os.environ, {"AIWF_CLEANING_RUST_V2_MODE": "default"}, clear=False), patch("requests.post", side_effect=RuntimeError("unreachable")):
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"rules": {}},
+            )
+        self.assertEqual(out["execution_mode"], "python_legacy")
+        self.assertEqual(out["eligibility_reason"], "rust_v2_error")
+        self.assertEqual(out["shadow_compare"]["status"], "rust_error")
+
+    def test_run_cleaning_surfaces_execution_report_on_local_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-execution-report",
+                    actor="test",
+                    params=with_job_context(local_job_root, rows=[{"id": 1, "amount": 10.0}], rules={"use_rust_v2": False}),
+                )
+
+            self.assertIn("execution", out)
+            self.assertEqual(out["execution"]["execution_mode"], "python_legacy")
+            self.assertEqual(out["profile"]["execution"]["eligibility_reason"], "forced_python")
+            self.assertEqual(out["execution"]["requested_rust_v2_mode"], "off")
+            self.assertEqual(out["execution"]["effective_rust_v2_mode"], "force_python")
+            self.assertFalse(out["execution"]["verify_on_default"])
+            self.assertIn("shadow_compare", out["execution"])
+
+    def test_run_cleaning_local_standalone_skips_base_transport(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            fake_resp = Mock()
+            fake_resp.status_code = 200
+            fake_resp.json.return_value = {
+                "ok": True,
+                "rows": [{"id": 1, "amount": 10.0}],
+                "quality": {
+                    "input_rows": 1,
+                    "output_rows": 1,
+                    "invalid_rows": 0,
+                    "filtered_rows": 0,
+                    "duplicate_rows_removed": 0,
+                    "required_missing_ratio": 0.0,
+                },
+                "trace_id": "standalone-run-ok",
+                "audit": {
+                    "schema": "transform_rows_v2.audit.v1",
+                    "reason_counts": {
+                        "invalid_object": 0,
+                        "cast_failed": 0,
+                        "required_missing": 0,
+                        "filter_rejected": 0,
+                        "duplicate_removed": 0,
+                    },
+                    "reason_samples": {
+                        "invalid_object": [],
+                        "cast_failed": [],
+                        "required_missing": [],
+                        "filter_rejected": [],
+                        "duplicate_removed": [],
+                    },
+                    "limits": {"sample_limit": 5},
+                },
+            }
+
+            with patch("aiwf.flows.cleaning._base_step_start") as step_start, patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ) as artifact_upsert, patch("aiwf.flows.cleaning._base_step_done") as step_done, patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ) as step_fail, patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ), patch("requests.post", return_value=fake_resp):
+                out = cleaning.run_cleaning(
+                    job_id="job-standalone",
+                    actor="test",
+                    params=with_job_context(local_job_root, rows=[{"id": "1", "amount": "10"}], local_standalone=True),
+                )
+
+            step_start.assert_not_called()
+            artifact_upsert.assert_not_called()
+            step_done.assert_not_called()
+            step_fail.assert_not_called()
+            self.assertEqual(out["execution"]["execution_mode"], "rust_v2")
+            self.assertEqual(out["execution"]["requested_rust_v2_mode"], "default")
+            self.assertTrue(out["execution"]["verify_on_default"])
 
     def test_write_cleaned_csv_quotes_delimited_fields(self):
         with tempfile.TemporaryDirectory() as tmp:

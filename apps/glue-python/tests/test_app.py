@@ -64,6 +64,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("dependencies", payload)
         self.assertIn("ingest_sidecar", payload)
         self.assertEqual(payload["ingest_sidecar"]["contract"], "contracts/glue/ingest_extract.schema.json")
+        self.assertEqual(payload["ingest_sidecar"]["supported_modalities"], ["txt", "docx", "pdf", "image", "xlsx"])
 
     def test_ingest_extract_route_returns_rows_and_quality_state(self):
         with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
@@ -75,6 +76,7 @@ class AppRouteTests(unittest.TestCase):
                     "quality_report": {"ok": True},
                     "image_blocks": [{"block_id": "img_blk_1"}],
                     "quality_metrics": {"ocr_confidence_avg": 0.95},
+                    "engine_trace": [{"engine": "docling", "ok": True}],
                 },
             )
             resp = self.client.post(
@@ -96,6 +98,11 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(payload["file_results"][0]["row_count"], 1)
         self.assertIn("image_blocks", payload["file_results"][0])
         self.assertIn("quality_report", payload["file_results"][0])
+        self.assertIn("header_mapping", payload)
+        self.assertIn("candidate_profiles", payload)
+        self.assertIn("quality_decisions", payload)
+        self.assertIn("blocked_reason_codes", payload)
+        self.assertIn("sample_rows", payload)
 
     def test_capabilities_route_reports_registered_components(self):
         resp = self.client.get("/capabilities")
@@ -104,6 +111,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         caps = payload["capabilities"]
         self.assertEqual(caps["ingest_sidecar"]["contract"], "contracts/glue/ingest_extract.schema.json")
+        self.assertEqual(caps["cleaning_spec_v2"]["contract"], "contracts/glue/cleaning_spec.v2.schema.json")
+        self.assertIn("finance_statement", caps["cleaning_spec_v2"]["profiles"])
         self.assertIn("cleaning", caps["flows"])
         self.assertNotIn("workflow_reference", caps["flows"])
         self.assertIn("txt", caps["input_formats"])

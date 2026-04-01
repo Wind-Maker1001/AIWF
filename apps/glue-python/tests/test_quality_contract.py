@@ -1,5 +1,6 @@
 import unittest
 
+from aiwf.canonical_profiles import get_profile_registry
 from aiwf.quality_contract import canonicalize_header, normalize_value_for_field
 
 
@@ -31,6 +32,16 @@ class QualityContractTests(unittest.TestCase):
 
     def test_normalize_value_for_field_handles_phone_fallback(self):
         self.assertEqual(normalize_value_for_field("138 0013 8000", "phone"), "+8613800138000")
+
+    def test_quality_contract_uses_shared_profile_registry(self):
+        registry = get_profile_registry()
+        self.assertEqual(registry["finance_statement"]["required_fields"], ["id", "amount"])
+        field, confidence, _matched = canonicalize_header(
+            "鏀舵淇℃伅 閲戦锛堜竾鍏冿級",
+            {"canonical_profile": "finance_statement"},
+        )
+        self.assertEqual(field, "amount")
+        self.assertGreaterEqual(confidence, 0.88)
 
 
 if __name__ == "__main__":

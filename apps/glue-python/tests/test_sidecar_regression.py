@@ -1,6 +1,7 @@
 import unittest
 
 from aiwf.sidecar_regression import (
+    _expected_reason_counts,
     compare_expected_quality,
     compare_expected_rows,
     compute_common_python_metrics,
@@ -14,6 +15,7 @@ class SidecarRegressionTests(unittest.TestCase):
         errors = validate_ingest_extract_contract({"ok": True, "rows": []})
         self.assertTrue(any("file_results" in item for item in errors))
         self.assertTrue(any("engine_trace" in item for item in errors))
+        self.assertTrue(any("header_mapping" in item for item in errors))
 
     def test_compare_expected_quality_checks_thresholds_and_blocked(self):
         payload = {
@@ -98,6 +100,23 @@ class SidecarRegressionTests(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertEqual(out["failed"], [])
         self.assertEqual(out["skipped"], ["case_skip"])
+
+    def test_expected_reason_counts_tracks_transform_rejections(self):
+        counts = _expected_reason_counts(
+            [
+                {"id": "1", "amount": "bad"},
+                {"id": "2", "amount": "10"},
+                {"id": "2", "amount": "10"},
+            ],
+            {
+                "casts": {"id": "int", "amount": "float"},
+                "required_fields": ["id", "amount"],
+                "deduplicate_by": ["id"],
+                "deduplicate_keep": "last",
+            },
+        )
+        self.assertEqual(counts["cast_failed"], 1)
+        self.assertEqual(counts["duplicate_removed"], 1)
 
 
 if __name__ == "__main__":

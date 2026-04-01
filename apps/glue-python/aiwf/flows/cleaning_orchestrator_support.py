@@ -76,6 +76,7 @@ def build_success_result(
         "seconds": round(time.time() - started_at, 3),
         "artifacts": artifacts,
         "profile": materialized["profile"],
+        "execution": materialized.get("execution"),
         "accel": {
             "attempted": accel_result["accel"].get("attempted", False),
             "ok": accel_result["accel"].get("ok", False),

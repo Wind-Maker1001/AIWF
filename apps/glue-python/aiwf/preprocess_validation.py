@@ -57,6 +57,8 @@ def validate_preprocess_spec_impl(
         errors.append("quality_report_path must be string")
     if "export_canonical_bundle" in spec and not isinstance(spec.get("export_canonical_bundle"), bool):
         errors.append("export_canonical_bundle must be boolean")
+    if "use_rust_v2" in spec and not isinstance(spec.get("use_rust_v2"), bool):
+        errors.append("use_rust_v2 must be boolean")
     if "canonical_bundle_dir" in spec and not isinstance(spec.get("canonical_bundle_dir"), str):
         errors.append("canonical_bundle_dir must be string")
     if "canonical_title" in spec and not isinstance(spec.get("canonical_title"), str):
@@ -150,6 +152,7 @@ def validate_preprocess_spec_impl(
         "generate_quality_report",
         "quality_report_path",
         "export_canonical_bundle",
+        "use_rust_v2",
         "canonical_bundle_dir",
         "canonical_title",
         "canonical_profile",

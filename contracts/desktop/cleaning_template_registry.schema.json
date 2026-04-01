@@ -34,6 +34,18 @@
           },
           "description": {
             "type": "string"
+          },
+          "template_format": {
+            "type": "string"
+          },
+          "params_schema": {
+            "type": "object"
+          },
+          "cleaning_spec_v2": {
+            "type": "object"
+          },
+          "rules": {
+            "type": "object"
           }
         },
         "additionalProperties": true

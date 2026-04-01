@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -103,6 +104,11 @@ def validate_ingest_extract_contract(payload: Dict[str, Any]) -> List[str]:
         "quality_blocked",
         "blocked_inputs",
         "engine_trace",
+        "header_mapping",
+        "candidate_profiles",
+        "quality_decisions",
+        "blocked_reason_codes",
+        "sample_rows",
         "contract",
     ]
     for field in required_top:
@@ -129,6 +135,11 @@ def validate_ingest_extract_contract(payload: Dict[str, Any]) -> List[str]:
             "table_cells",
             "sheet_frames",
             "engine_trace",
+            "header_mapping",
+            "candidate_profiles",
+            "quality_decisions",
+            "blocked_reason_codes",
+            "sample_rows",
         ]:
             if field not in item:
                 errors.append(f"missing file_result field: file_results[{index}].{field}")
@@ -361,6 +372,122 @@ def _rust_available(accel_url: str) -> bool:
         return False
 
 
+def _expected_reason_counts(rows: List[Dict[str, Any]], rust_rules: Dict[str, Any]) -> Dict[str, int]:
+    counts = {
+        "invalid_object": 0,
+        "cast_failed": 0,
+        "required_missing": 0,
+        "filter_rejected": 0,
+        "duplicate_removed": 0,
+    }
+    casts = rust_rules.get("casts") if isinstance(rust_rules.get("casts"), dict) else {}
+    required_fields = [str(item) for item in (rust_rules.get("required_fields") or [])]
+    filters = rust_rules.get("filters") if isinstance(rust_rules.get("filters"), list) else []
+    deduplicate_by = [str(item) for item in (rust_rules.get("deduplicate_by") or [])]
+    deduplicate_keep = str(rust_rules.get("deduplicate_keep") or "last").strip().lower()
+
+    passed_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            counts["invalid_object"] += 1
+            continue
+        cast_failed = False
+        normalized = dict(row)
+        for field, kind in casts.items():
+            if field not in normalized:
+                continue
+            value = normalized.get(field)
+            normalized_value = normalize_value_for_field(value, field)
+            kind_text = str(kind or "").strip().lower()
+            if kind_text in {"int", "integer"}:
+                try:
+                    normalized[field] = int(float(str(normalized_value)))
+                except Exception:
+                    cast_failed = True
+                    break
+            elif kind_text in {"float", "double", "number", "decimal"}:
+                try:
+                    normalized[field] = float(str(normalized_value).replace(",", ""))
+                except Exception:
+                    cast_failed = True
+                    break
+        if cast_failed:
+            counts["cast_failed"] += 1
+            continue
+        if required_fields and any(normalized.get(field) in {None, ""} for field in required_fields):
+            counts["required_missing"] += 1
+            continue
+        if filters:
+            filter_failed = False
+            for item in filters:
+                if not isinstance(item, dict):
+                    continue
+                field = str(item.get("field") or "").strip()
+                op = str(item.get("op") or "").strip().lower()
+                value = normalized.get(field)
+                target = item.get("value")
+                text_value = "" if value is None else str(value)
+                if op == "exists":
+                    ok = value not in {None, ""}
+                elif op == "not_exists":
+                    ok = value in {None, ""}
+                elif op == "eq":
+                    ok = text_value == str(target)
+                elif op == "ne":
+                    ok = text_value != str(target)
+                elif op == "contains":
+                    ok = str(target) in text_value
+                elif op == "in":
+                    ok = text_value in [str(x) for x in (target or [])]
+                elif op == "not_in":
+                    ok = text_value not in [str(x) for x in (target or [])]
+                elif op == "regex":
+                    ok = bool(re.search(str(target), text_value))
+                elif op == "not_regex":
+                    ok = not bool(re.search(str(target), text_value))
+                elif op in {"gt", "gte", "lt", "lte"}:
+                    try:
+                        left = float(text_value)
+                        right = float(target)
+                    except Exception:
+                        ok = False
+                    else:
+                        if op == "gt":
+                            ok = left > right
+                        elif op == "gte":
+                            ok = left >= right
+                        elif op == "lt":
+                            ok = left < right
+                        else:
+                            ok = left <= right
+                else:
+                    ok = True
+                if not ok:
+                    filter_failed = True
+                    break
+            if filter_failed:
+                counts["filter_rejected"] += 1
+                continue
+        passed_rows.append(normalized)
+
+    if deduplicate_by:
+        seen = {}
+        if deduplicate_keep == "first":
+            for row in passed_rows:
+                key = tuple(row.get(field) for field in deduplicate_by)
+                if key in seen:
+                    counts["duplicate_removed"] += 1
+                    continue
+                seen[key] = row
+        else:
+            for row in passed_rows:
+                key = tuple(row.get(field) for field in deduplicate_by)
+                if key in seen:
+                    counts["duplicate_removed"] += 1
+                seen[key] = row
+    return counts
+
+
 def run_python_rust_consistency(scenario_dir: str | Path, scenario: Dict[str, Any], accel_url: str) -> Dict[str, Any]:
     result = run_sidecar_extract_for_scenario(scenario_dir, scenario)
     if result["status_code"] != 200:
@@ -397,7 +524,7 @@ def run_python_rust_consistency(scenario_dir: str | Path, scenario: Dict[str, An
         rows=rows,
         rules=rust_rules,
         quality_gates=rust_gates,
-        schema_hint={"source": "sidecar_regression"},
+        schema_hint={"source": "sidecar_regression", "audit": {"sample_limit": 5}},
         base_url=accel_url,
         timeout=10.0,
     )
@@ -421,11 +548,34 @@ def run_python_rust_consistency(scenario_dir: str | Path, scenario: Dict[str, An
     gate_pass = rust_out.get("gate_result", {}).get("passed") if isinstance(rust_out.get("gate_result"), dict) else None
     if gate_pass is not True:
         mismatches.append(f"rust gate failed: {rust_out.get('gate_result')}")
+    rust_audit = rust_out.get("audit") if isinstance(rust_out.get("audit"), dict) else {}
+    rust_reason_counts = rust_audit.get("reason_counts") if isinstance(rust_audit.get("reason_counts"), dict) else {}
+    rust_reason_samples = rust_audit.get("reason_samples") if isinstance(rust_audit.get("reason_samples"), dict) else {}
+    expected_reason_counts = _expected_reason_counts(rows, rust_rules)
+    if set(rust_reason_counts.keys()) != set(expected_reason_counts.keys()):
+        mismatches.append(
+            f"reason_counts keys mismatch: python={sorted(expected_reason_counts.keys())} rust={sorted(rust_reason_counts.keys())}"
+        )
+    for key, python_count in expected_reason_counts.items():
+        rust_count = rust_reason_counts.get(key)
+        if rust_count is None:
+            mismatches.append(f"rust reason_counts missing {key}")
+            continue
+        if int(rust_count) != int(python_count):
+            mismatches.append(f"reason_counts[{key}]: python={python_count} rust={rust_count}")
+        samples = rust_reason_samples.get(key) if isinstance(rust_reason_samples.get(key), list) else []
+        if len(samples) > 5:
+            mismatches.append(f"reason_samples[{key}] exceeds sample_limit")
+        if int(rust_count) < len(samples):
+            mismatches.append(f"reason_samples[{key}] larger than count")
     return {
         "ok": len(mismatches) == 0,
         "status": "passed" if len(mismatches) == 0 else "failed",
         "python_metrics": python_metrics,
         "rust_quality": rust_quality,
+        "rust_audit": rust_audit,
+        "rust_audit_reason_counts": rust_reason_counts,
+        "expected_reason_counts": expected_reason_counts,
         "mismatches": mismatches,
     }
 
