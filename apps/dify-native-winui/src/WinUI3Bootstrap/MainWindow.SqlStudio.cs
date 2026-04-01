@@ -19,15 +19,29 @@ public sealed partial class MainWindow
     private bool _sortDescending;
     private readonly SqlQueryHistoryService _queryHistory = new();
 
+    private bool _sqlStudioInitialized;
+
     private void InitializeSqlStudioState()
     {
+        // Defer actual control initialization until the section becomes visible,
+        // because WinUI 3 may not fully materialize controls inside Collapsed panels.
+        _queryHistory.Load();
+    }
+
+    private void EnsureSqlStudioControlsInitialized()
+    {
+        if (_sqlStudioInitialized)
+        {
+            return;
+        }
+
+        _sqlStudioInitialized = true;
         ApplySqlConnectionProfileToControls(_sqlConnectionProfile);
         ApplySqlBuilderDraftToControls(_sqlBuilderDraft);
         SetSqlTextDraft(_sqlTextDraft);
         ApplySqlPreviewState(SqlPreviewState.Empty);
         UpdateSqlSourcePanels();
         UpdateSqlDraftModeText();
-        _queryHistory.Load();
         RenderQueryHistoryList();
     }
 
@@ -717,6 +731,11 @@ public sealed partial class MainWindow
 
     private void UpdateSqlSourcePanels()
     {
+        if (SqliteSourcePanel is null || SqlServerSourcePanel is null)
+        {
+            return;
+        }
+
         var sourceType = ReadSelectedSqlSourceType();
         var isServerBased = string.Equals(sourceType, SqlConnectionProfile.SqlServer, StringComparison.OrdinalIgnoreCase)
             || string.Equals(sourceType, SqlConnectionProfile.Postgres, StringComparison.OrdinalIgnoreCase);
