@@ -1,9 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const Module = require("module");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const Module = require("node:module");
 
 function purgeModules(modulePaths) {
   for (const modulePath of modulePaths) {
@@ -40,6 +40,7 @@ test("runOfflineCleaning falls back to markdown when office generators are unava
     const { runOfflineCleaning } = require("../offline_engine");
     const out = await runOfflineCleaning({
       output_root: tempRoot,
+      glue_url: "http://127.0.0.1:1",
       params: {
         report_title: "fallback_markdown_only",
         input_files: source,
@@ -52,7 +53,7 @@ test("runOfflineCleaning falls back to markdown when office generators are unava
 
     assert.equal(!!out?.ok, true);
     const warnings = Array.isArray(out?.warnings) ? out.warnings : [];
-    assert.ok(warnings.some((w) => String(w).includes("Office 生成依赖缺失")));
+    assert.ok(warnings.some((warning) => String(warning).includes("Office \u751f\u6210\u4f9d\u8d56\u7f3a\u5931")));
 
     const artifacts = Array.isArray(out?.artifacts) ? out.artifacts : [];
     assert.ok(artifacts.length >= 4);
@@ -66,14 +67,15 @@ test("runOfflineCleaning falls back to markdown when office generators are unava
 
 test("readTextFileSmart remains usable when iconv-lite is unavailable", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "aiwf-offline-text-"));
+  const sample = "\u4e2d\u6587\u5185\u5bb9";
   const file = path.join(tempRoot, "utf8.txt");
-  fs.writeFileSync(file, "中文内容", "utf8");
+  fs.writeFileSync(file, sample, "utf8");
 
   await withMissingModules(["iconv-lite"], async () => {
     purgeModules(["../offline_text"]);
     const { decodeBufferWithEncoding, readTextFileSmart } = require("../offline_text");
-    assert.equal(decodeBufferWithEncoding(Buffer.from("中文内容", "utf8"), "gb18030"), "中文内容");
-    assert.equal(readTextFileSmart(file), "中文内容");
+    assert.equal(decodeBufferWithEncoding(Buffer.from(sample, "utf8"), "gb18030"), sample);
+    assert.equal(readTextFileSmart(file), sample);
   });
 
   purgeModules(["../offline_text"]);

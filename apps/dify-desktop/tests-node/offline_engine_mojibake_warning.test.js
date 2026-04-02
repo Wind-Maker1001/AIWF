@@ -1,8 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const { runOfflineCleaning } = require("../offline_engine");
 
 test("runOfflineCleaning warns on medium gibberish ratio without forcing fidelity fallback", async () => {
@@ -11,6 +11,7 @@ test("runOfflineCleaning warns on medium gibberish ratio without forcing fidelit
 
   const out = await runOfflineCleaning({
     output_root: tmp,
+    glue_url: "http://127.0.0.1:1",
     params: {
       report_title: "mojibake_warning",
       input_files: src,
@@ -23,7 +24,12 @@ test("runOfflineCleaning warns on medium gibberish ratio without forcing fidelit
 
   assert.equal(!!out?.ok, true);
   const warnings = Array.isArray(out?.warnings) ? out.warnings : [];
-  assert.ok(warnings.some((w) => String(w).includes("疑似乱码率偏高") || String(w).includes("疑似乱码率过高")));
+  assert.ok(
+    warnings.some((warning) => {
+      const text = String(warning);
+      return text.includes("\u7591\u4f3c\u4e71\u7801\u7387\u504f\u9ad8") || text.includes("\u7591\u4f3c\u4e71\u7801\u7387\u8fc7\u9ad8");
+    })
+  );
   const qr = String(out?.quality_score?.gibberish_ratio || 0);
   assert.ok(Number(qr) >= 0.2);
 });
