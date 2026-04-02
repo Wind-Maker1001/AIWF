@@ -1,6 +1,7 @@
 const IO_CONTRACT_COMPATIBLE_OPERATORS = new Set([
   "transform_rows_v2",
   "transform_rows_v3",
+  "postprocess_rows_v1",
   "load_rows_v3",
   "finance_ratio_v1",
   "anomaly_explain_v1",
@@ -19,6 +20,22 @@ function buildIoContractInput(operator, nodeConfig, firstInputFile = "") {
     else if (fallbackInput) input.input_uri = fallbackInput;
     else input.rows = [];
     return input;
+  }
+  if (op === "postprocess_rows_v1") {
+    return {
+      rows: Array.isArray(cfg.rows) ? cfg.rows : [],
+      standardize_evidence: !!cfg.standardize_evidence,
+      evidence_schema: cfg.evidence_schema && typeof cfg.evidence_schema === "object" ? cfg.evidence_schema : {},
+      chunk_mode: String(cfg.chunk_mode || "").trim(),
+      chunk_field: String(cfg.chunk_field || "").trim(),
+      chunk_max_chars: Number.isFinite(Number(cfg.chunk_max_chars)) ? Number(cfg.chunk_max_chars) : undefined,
+      detect_conflicts: !!cfg.detect_conflicts,
+      conflict_topic_field: String(cfg.conflict_topic_field || "").trim(),
+      conflict_stance_field: String(cfg.conflict_stance_field || "").trim(),
+      conflict_text_field: String(cfg.conflict_text_field || "").trim(),
+      conflict_positive_words: Array.isArray(cfg.conflict_positive_words) ? cfg.conflict_positive_words : [],
+      conflict_negative_words: Array.isArray(cfg.conflict_negative_words) ? cfg.conflict_negative_words : [],
+    };
   }
   if (op === "finance_ratio_v1") return { rows: Array.isArray(cfg.rows) ? cfg.rows : [] };
   if (op === "anomaly_explain_v1") {

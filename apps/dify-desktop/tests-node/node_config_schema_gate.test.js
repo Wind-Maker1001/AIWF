@@ -35,11 +35,11 @@ test("node config schema coverage gate passes", () => {
   assert.match(payload.contractEsmPath, /node_config_contract\.generated\.js/i);
   assert.equal(payload.contractAuthority, "contracts/desktop/node_config_contracts.v1.json");
   assert.equal(payload.contractSchemaVersion, "node_config_contracts.v1");
-  assert.equal(payload.targetCount, 30);
-  assert.equal(payload.coveredCount, 30);
+  assert.equal(payload.targetCount, 31);
+  assert.equal(payload.coveredCount, 31);
   assert.ok(payload.contractValidatorKindCount >= 20);
   assert.equal(payload.minimumNestedShapeConstrained, 19);
-  assert.equal(payload.nestedShapeConstrainedCount, 19);
+  assert.equal(payload.nestedShapeConstrainedCount, 20);
   assert.deepEqual(
     payload.requiredNestedNodeTypes,
     [

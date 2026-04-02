@@ -7,6 +7,7 @@ pub(super) fn published_operator_catalog() -> &'static [OperatorMetadata] {
         .get_or_init(|| {
             vec![
                 published_entry("transform_rows_v3", true, true, true, true),
+                published_entry("postprocess_rows_v1", false, false, false, true),
                 published_entry("load_rows_v3", true, false, true, true),
                 published_entry("join_rows_v4", false, false, false, true),
                 published_entry("aggregate_rows_v4", false, false, false, true),
@@ -55,6 +56,7 @@ pub(super) fn infer_streaming(operator: &str) -> bool {
         operator,
         "transform_rows_v2"
             | "transform_rows_v3"
+            | "postprocess_rows_v1"
             | "load_rows_v2"
             | "load_rows_v3"
             | "stream_window_v1"
@@ -89,6 +91,7 @@ pub(super) fn infer_io_contract(operator: &str) -> bool {
         operator,
         "transform_rows_v2"
             | "transform_rows_v3"
+            | "postprocess_rows_v1"
             | "load_rows_v3"
             | "finance_ratio_v1"
             | "anomaly_explain_v1"
@@ -97,6 +100,7 @@ pub(super) fn infer_io_contract(operator: &str) -> bool {
     )
 }
 
+#[allow(dead_code)]
 pub(super) fn infer_desktop_hidden(operator: &str) -> bool {
     matches!(
         operator,
@@ -115,11 +119,17 @@ pub(super) fn infer_desktop_hidden(operator: &str) -> bool {
     )
 }
 
+#[allow(dead_code)]
+pub(super) fn infer_palette_hidden(operator: &str) -> bool {
+    matches!(operator, "postprocess_rows_v1")
+}
+
 pub(super) fn infer_domain_catalog(operator: &str) -> Option<(&'static str, &'static str)> {
     match operator {
         "cleaning" | "compute_metrics" => Some(("transform", "cleaning_runtime")),
         "transform_rows_v2" | "transform_rows_v3" => Some(("transform", "operators.transform")),
-        "text_preprocess_v2"
+        "postprocess_rows_v1"
+        | "text_preprocess_v2"
         | "normalize_schema_v1"
         | "entity_extract_v1"
         | "aggregate_pushdown_v1"

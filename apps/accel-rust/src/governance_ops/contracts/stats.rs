@@ -185,6 +185,7 @@ mod tests {
             "optimizer_adaptive_v2",
             "perf_baseline_v1",
             "plugin_operator_v1",
+            "postprocess_rows_v1",
             "quality_check_v4",
             "runtime_stats_v1",
             "stream_reliability_v1",

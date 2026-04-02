@@ -23,6 +23,7 @@ const NODE_CONFIG_CONTRACT_TYPES = Object.freeze([
   "optimizer_v1",
   "parquet_io_v2",
   "plugin_registry_v1",
+  "postprocess_rows_v1",
   "quality_check_v2",
   "quality_check_v3",
   "quality_check_v4",
@@ -43,6 +44,7 @@ const NODE_CONFIG_CONTRACT_QUALITY_BY_TYPE = Object.freeze({
   "load_rows_v2": "enum_constrained",
   "load_rows_v3": "nested_shape_constrained",
   "transform_rows_v3": "nested_shape_constrained",
+  "postprocess_rows_v1": "nested_shape_constrained",
   "join_rows_v2": "enum_constrained",
   "quality_check_v2": "nested_shape_constrained",
   "quality_check_v3": "nested_shape_constrained",
@@ -319,6 +321,65 @@ const NODE_CONFIG_CONTRACTS_BY_TYPE = Object.freeze({
       }
     ]
   },
+  "postprocess_rows_v1": {
+    "type": "postprocess_rows_v1",
+    "quality": "nested_shape_constrained",
+    "validators": [
+      {
+        "kind": "array",
+        "path": "rows"
+      },
+      {
+        "kind": "boolean",
+        "path": "standardize_evidence"
+      },
+      {
+        "kind": "json_object",
+        "path": "evidence_schema"
+      },
+      {
+        "kind": "string",
+        "path": "chunk_mode"
+      },
+      {
+        "kind": "string",
+        "path": "chunk_field"
+      },
+      {
+        "kind": "integer_min",
+        "path": "chunk_max_chars",
+        "min": 1
+      },
+      {
+        "kind": "boolean",
+        "path": "detect_conflicts"
+      },
+      {
+        "kind": "string",
+        "path": "conflict_topic_field"
+      },
+      {
+        "kind": "string",
+        "path": "conflict_stance_field"
+      },
+      {
+        "kind": "string",
+        "path": "conflict_text_field"
+      },
+      {
+        "kind": "array",
+        "path": "conflict_positive_words"
+      },
+      {
+        "kind": "array",
+        "path": "conflict_negative_words"
+      },
+      {
+        "kind": "json_object",
+        "path": "schema_hint"
+      }
+    ]
+  },
   "join_rows_v2": {
     "type": "join_rows_v2",
     "quality": "enum_constrained",
@@ -364,6 +425,10 @@ const NODE_CONFIG_CONTRACTS_BY_TYPE = Object.freeze({
       {
         "kind": "rules_object",
         "path": "rules"
+      },
+      {
+        "kind": "json_object",
+        "path": "metrics"
       }
     ]
   },

@@ -197,7 +197,7 @@ function defaultGovernanceProfile() {
     version: 1,
     roles: {
       owner: { allow: ["*"] },
-      analyst: { allow: ["ingest_files", "clean_md", "compute_rust", "load_rows_v2", "load_rows_v3", "transform_rows_v3", "join_rows_v2", "join_rows_v3", "join_rows_v4", "aggregate_rows_v2", "aggregate_rows_v3", "aggregate_rows_v4", "quality_check_v2", "quality_check_v3", "quality_check_v4", "sql_chart_v1", "office_slot_fill_v1", "md_output"] },
+      analyst: { allow: ["ingest_files", "clean_md", "compute_rust", "load_rows_v2", "load_rows_v3", "transform_rows_v3", "postprocess_rows_v1", "join_rows_v2", "join_rows_v3", "join_rows_v4", "aggregate_rows_v2", "aggregate_rows_v3", "aggregate_rows_v4", "quality_check_v2", "quality_check_v3", "quality_check_v4", "sql_chart_v1", "office_slot_fill_v1", "md_output"] },
       reviewer: { allow: ["manual_review", "md_output", "ai_audit"] },
     },
     ai_budget: {

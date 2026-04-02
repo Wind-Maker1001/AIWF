@@ -111,8 +111,25 @@ class AppRouteTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         caps = payload["capabilities"]
         self.assertEqual(caps["ingest_sidecar"]["contract"], "contracts/glue/ingest_extract.schema.json")
+        self.assertEqual(caps["ingest_sidecar"]["header_mapping_modes"], ["strict", "auto"])
+        self.assertEqual(caps["ingest_sidecar"]["default_header_mapping_mode"], "strict")
+        self.assertEqual(caps["ingest_sidecar"]["auto_header_mapping_inputs"], ["xlsx", "csv", "jsonl", "image", "pdf"])
+        self.assertEqual(caps["ingest_sidecar"]["ocr_auto_profile_policy"], "tabular_or_debate_text")
         self.assertEqual(caps["cleaning_spec_v2"]["contract"], "contracts/glue/cleaning_spec.v2.schema.json")
         self.assertIn("finance_statement", caps["cleaning_spec_v2"]["profiles"])
+        self.assertIn("bank_statement", caps["cleaning_spec_v2"]["profiles"])
+        self.assertIn("customer_contact", caps["cleaning_spec_v2"]["profiles"])
+        self.assertIn("customer_ledger", caps["cleaning_spec_v2"]["profiles"])
+        self.assertTrue(caps["cleaning_runtime"]["quality_rule_set_id_supported"])
+        self.assertEqual(caps["cleaning_runtime"]["quality_summary_schema_version"], "cleaning_quality_summary.v1")
+        self.assertIn("quality_summary_json", caps["cleaning_runtime"]["quality_summary_artifacts"])
+        self.assertIn("rejections_jsonl", caps["cleaning_runtime"]["quality_summary_artifacts"])
+        self.assertEqual(caps["cleaning_runtime"]["row_transform_primary_engine"], "transform_rows_v3")
+        self.assertEqual(caps["cleaning_runtime"]["postprocess_primary_engine"], "postprocess_rows_v1")
+        self.assertEqual(caps["cleaning_runtime"]["quality_gate_primary_engine"], "quality_check_v2")
+        self.assertEqual(caps["cleaning_runtime"]["preprocess_stage_plan_schema_version"], "preprocess_stage_plan.v1")
+        self.assertIn("postprocess_rows_v1", caps["cleaning_runtime"]["published_stage_operators"])
+        self.assertIn("custom_field_transform", caps["cleaning_runtime"]["preprocess_python_fallback_conditions"])
         self.assertIn("cleaning", caps["flows"])
         self.assertNotIn("workflow_reference", caps["flows"])
         self.assertIn("txt", caps["input_formats"])
@@ -183,6 +200,253 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(cleaning_domain["label"], "Cleaning")
         txt_reader = next(item for item in caps["input_format_details"] if item["input_format"] == "txt")
         self.assertTrue(txt_reader["source_module"].startswith("aiwf."))
+
+    def test_ingest_extract_auto_mode_reports_header_mapping_trace_and_recommendation(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {
+                        "sheet_name": "BankFlow",
+                        "account_no": "62220001",
+                        "txn_date": "2026-03-01",
+                        "debit_amount": 120.5,
+                        "credit_amount": 0.0,
+                        "balance": 12500.0,
+                        "remark": "Rent",
+                        "ref_no": "TXN-001",
+                    }
+                ],
+                {
+                    "input_format": "xlsx",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {"header_confidence": 0.9},
+                    "engine_trace": [{"engine": "docling", "ok": True}],
+                    "sheet_frames": [
+                        {
+                            "sheet_name": "BankFlow",
+                            "header_labels": ["Acct No", "Posting Dt", "DR", "CR", "Bal", "Memo", "Ref No"],
+                            "columns": ["account_no", "txn_date", "debit_amount", "credit_amount", "balance", "remark", "ref_no"],
+                        }
+                    ],
+                },
+            )
+            resp = self.client.post(
+                "/ingest/extract",
+                json={
+                    "input_path": r"D:\data\bank.xlsx",
+                    "canonical_profile": "bank_statement",
+                    "header_mapping_mode": "auto",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertEqual(payload["header_mapping"][0]["match_strategy"], "exact")
+        self.assertIn("alternatives", payload["header_mapping"][0])
+        self.assertEqual(payload["candidate_profiles"][0]["profile"], "bank_statement")
+        self.assertTrue(payload["candidate_profiles"][0]["recommended"])
+        self.assertEqual(payload["candidate_profiles"][0]["recommended_template_id"], "bank_statement_v1")
+        auto_trace = next(item for item in payload["file_results"][0]["engine_trace"] if item["engine"] == "auto_header_mapping")
+        self.assertEqual(auto_trace["requested_mode"], "auto")
+        self.assertEqual(auto_trace["effective_mode"], "auto")
+
+    def test_ingest_extract_auto_mode_recommends_customer_templates(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.side_effect = [
+                (
+                    [
+                        {"sheet_name": "Contacts", "customer_name": "Alice", "phone": "+8613800138000", "city": "Shanghai"},
+                    ],
+                    {
+                        "input_format": "xlsx",
+                        "quality_blocked": False,
+                        "quality_report": {"ok": True},
+                        "quality_metrics": {"header_confidence": 0.9},
+                        "engine_trace": [{"engine": "docling", "ok": True}],
+                        "sheet_frames": [
+                            {
+                                "sheet_name": "Contacts",
+                                "header_labels": ["Cust Name", "Mobile No", "City"],
+                                "columns": ["customer_name", "phone", "city"],
+                            }
+                        ],
+                    },
+                ),
+                (
+                    [
+                        {"sheet_name": "Ledger", "customer_name": "Alice", "phone": "+8613800138000", "city": "Shanghai", "amount": 120.0, "biz_date": "2026-03-01"},
+                    ],
+                    {
+                        "input_format": "xlsx",
+                        "quality_blocked": False,
+                        "quality_report": {"ok": True},
+                        "quality_metrics": {"header_confidence": 0.9},
+                        "engine_trace": [{"engine": "docling", "ok": True}],
+                        "sheet_frames": [
+                            {
+                                "sheet_name": "Ledger",
+                                "header_labels": ["Cust Name", "Mobile No", "City", "Amt", "Biz Dt"],
+                                "columns": ["customer_name", "phone", "city", "amount", "biz_date"],
+                            }
+                        ],
+                    },
+                ),
+            ]
+            contact_resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\contact.xlsx", "header_mapping_mode": "auto"},
+            )
+            ledger_resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\ledger.xlsx", "header_mapping_mode": "auto"},
+            )
+
+        self.assertEqual(contact_resp.status_code, 200)
+        self.assertEqual(ledger_resp.status_code, 200)
+        self.assertEqual(contact_resp.json()["candidate_profiles"][0]["profile"], "customer_contact")
+        self.assertEqual(contact_resp.json()["candidate_profiles"][0]["recommended_template_id"], "customer_contact_v1")
+        self.assertEqual(ledger_resp.json()["candidate_profiles"][0]["profile"], "customer_ledger")
+        self.assertEqual(ledger_resp.json()["candidate_profiles"][0]["recommended_template_id"], "customer_ledger_v1")
+
+    def test_ingest_extract_auto_mode_reports_fallback_to_strict_when_rapidfuzz_missing(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows, patch.object(
+            glue_app,
+            "header_mapping_runtime_info",
+            return_value={
+                "requested_mode": "auto",
+                "effective_mode": "strict",
+                "fuzzy_available": False,
+                "value_affinity_available": False,
+                "fallback_reason": "rapidfuzz_unavailable",
+            },
+        ):
+            load_rows.return_value = (
+                [{"sheet_name": "S1", "id": 1, "amount": 10.0}],
+                {
+                    "input_format": "xlsx",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {"header_confidence": 0.9},
+                    "engine_trace": [{"engine": "docling", "ok": True}],
+                    "sheet_frames": [{"sheet_name": "S1", "header_labels": ["Amt"], "columns": ["amount"]}],
+                },
+            )
+            resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\finance.xlsx", "header_mapping_mode": "auto"},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        auto_trace = next(item for item in resp.json()["file_results"][0]["engine_trace"] if item["engine"] == "auto_header_mapping")
+        self.assertEqual(auto_trace["effective_mode"], "strict")
+        self.assertEqual(auto_trace["reason"], "rapidfuzz_unavailable")
+
+    def test_recover_tabular_context_from_table_cells_uses_header_row_and_samples(self):
+        context = glue_app._recover_tabular_context_from_table_cells(
+            [
+                {"row": 1, "col": 1, "text": "Acct No"},
+                {"row": 1, "col": 2, "text": "Posting Dt"},
+                {"row": 1, "col": 3, "text": "DR"},
+                {"row": 2, "col": 1, "text": "62220001"},
+                {"row": 2, "col": 2, "text": "2026/03/01"},
+                {"row": 2, "col": 3, "text": "120.5"},
+            ]
+        )
+        self.assertIsNotNone(context)
+        assert context is not None
+        self.assertEqual(context["header_labels"], ["Acct No", "Posting Dt", "DR"])
+        self.assertEqual(context["sample_values_by_header"]["Posting Dt"], ["2026/03/01"])
+
+    def test_ingest_extract_auto_mode_detects_tabular_image_structure(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {"text": "Acct No Post Dt DR CR Bal Memo Ref No", "source_type": "image"},
+                    {"text": "62220001 2026/03/01 120.5 0 12500 Rent TXN-001", "source_type": "image"},
+                ],
+                {
+                    "input_format": "image",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {"ocr_confidence_avg": 0.93},
+                    "engine_trace": [{"engine": "docling", "ok": True}],
+                    "image_blocks": [{"block_id": "img_blk_0001", "text": "Acct No Post Dt DR CR Bal Memo Ref No"}],
+                    "table_cells": [
+                        {"row": 1, "col": 1, "text": "Acct No"},
+                        {"row": 1, "col": 2, "text": "Post Dt"},
+                        {"row": 1, "col": 3, "text": "DR"},
+                        {"row": 1, "col": 4, "text": "CR"},
+                        {"row": 1, "col": 5, "text": "Bal"},
+                        {"row": 1, "col": 6, "text": "Memo"},
+                        {"row": 1, "col": 7, "text": "Ref No"},
+                        {"row": 2, "col": 1, "text": "62220001"},
+                        {"row": 2, "col": 2, "text": "2026/03/01"},
+                        {"row": 2, "col": 3, "text": "120.5"},
+                        {"row": 2, "col": 4, "text": "0"},
+                        {"row": 2, "col": 5, "text": "12500"},
+                        {"row": 2, "col": 6, "text": "Rent"},
+                        {"row": 2, "col": 7, "text": "TXN-001"},
+                    ],
+                },
+            )
+            strict_resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\scan.png", "canonical_profile": "bank_statement", "header_mapping_mode": "strict"},
+            )
+            auto_resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\scan.png", "canonical_profile": "bank_statement", "header_mapping_mode": "auto"},
+            )
+
+        self.assertEqual(strict_resp.status_code, 200)
+        self.assertEqual(auto_resp.status_code, 200)
+        strict_payload = strict_resp.json()
+        auto_payload = auto_resp.json()
+        self.assertEqual(auto_payload["detected_structure"], "tabular")
+        self.assertEqual(auto_payload["file_results"][0]["detected_structure"], "tabular")
+        self.assertEqual(auto_payload["candidate_profiles"][0]["profile"], "bank_statement")
+        self.assertEqual(auto_payload["candidate_profiles"][0]["signal_source"], "table_cells")
+        self.assertTrue(auto_payload["candidate_profiles"][0]["recommended"])
+        strict_recommended = [item for item in strict_payload["candidate_profiles"] if item.get("recommended")]
+        self.assertEqual(strict_recommended, [])
+
+    def test_ingest_extract_auto_mode_detects_text_image_and_recommends_debate_only(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {"text": "Claim: Tax policy should be expanded because it improves compliance and long-run growth.", "source_type": "image"},
+                    {"text": "Speaker: Analyst Zhang argues the proposal reduces administrative friction across sectors.", "source_type": "image"},
+                    {"text": "Source: https://example.com/report", "source_type": "image"},
+                ],
+                {
+                    "input_format": "image",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {"ocr_confidence_avg": 0.91},
+                    "engine_trace": [{"engine": "tesseract", "ok": True}],
+                    "image_blocks": [
+                        {"block_id": "img_blk_0001", "text": "Claim: Tax policy should be expanded because it improves compliance and long-run growth."},
+                        {"block_id": "img_blk_0002", "text": "Speaker: Analyst Zhang argues the proposal reduces administrative friction across sectors."},
+                        {"block_id": "img_blk_0003", "text": "Source: https://example.com/report"},
+                    ],
+                    "table_cells": [],
+                    "sheet_frames": [],
+                },
+            )
+            resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\debate.png", "header_mapping_mode": "auto"},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertEqual(payload["detected_structure"], "text")
+        self.assertEqual(payload["header_mapping"], [])
+        self.assertEqual(len(payload["candidate_profiles"]), 1)
+        self.assertEqual(payload["candidate_profiles"][0]["profile"], "debate_evidence")
+        self.assertEqual(payload["candidate_profiles"][0]["signal_source"], "content")
+        self.assertTrue(payload["candidate_profiles"][0]["recommended"])
 
     def test_governance_control_plane_route_reports_split_explicitly(self):
         resp = self.client.get("/governance/meta/control-plane")
@@ -1336,6 +1600,21 @@ class AppRouteTests(unittest.TestCase):
         self.assertNotIn("evidence_dir", kwargs["params"])
 
     @patch.object(glue_app, "make_base_client", return_value=None)
+    @patch("aiwf.flows.cleaning.run_cleaning", return_value={"ok": True})
+    def test_run_cleaning_flow_passes_quality_rule_set_id(self, run_cleaning, _make_base_client):
+        req = glue_app.RunReq(
+            actor="local",
+            ruleset_version="v1",
+            quality_rule_set_id="finance_default",
+            params={"x": 1},
+        )
+
+        glue_app.run_cleaning_flow("job-quality-rule-set", req)
+
+        kwargs = run_cleaning.call_args.kwargs
+        self.assertEqual(kwargs["params"]["quality_rule_set_id"], "finance_default")
+
+    @patch.object(glue_app, "make_base_client", return_value=None)
     def test_run_flow_with_runner_propagates_runner_typeerror_without_retry(self, _make_base_client):
         calls = []
 
@@ -1349,6 +1628,28 @@ class AppRouteTests(unittest.TestCase):
             glue_app._run_flow_with_runner("job-typeerror", req, runner)
 
         self.assertEqual(len(calls), 1)
+
+    @patch.object(glue_app.runtime_catalog, "get_flow_runner")
+    def test_run_route_returns_400_for_quality_rule_set_validation_error(self, get_flow_runner):
+        def runner(**_kwargs):
+            raise ValueError("quality rule set not found: missing_set")
+
+        get_flow_runner.return_value = runner
+
+        resp = self.client.post(
+            "/jobs/job-quality-set/run/cleaning",
+            json={
+                "actor": "local",
+                "ruleset_version": "v1",
+                "quality_rule_set_id": "missing_set",
+                "params": {},
+            },
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertIn("quality rule set not found", payload["error"])
 
     @patch.object(glue_app, "make_base_client", return_value=None)
     def test_run_flow_with_runner_supports_params_json_signature(self, _make_base_client):

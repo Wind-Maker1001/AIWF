@@ -158,3 +158,41 @@ def remove_quality_rule_set(set_id: str) -> bool:
     if removed:
         _write_store(next_items)
     return removed
+
+
+def apply_quality_rule_set_to_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    params_obj = dict(params or {})
+    requested_id = str(params_obj.get("quality_rule_set_id") or "").strip()
+    if not requested_id:
+        params_obj.pop("_quality_rule_set_provenance", None)
+        return params_obj
+
+    item = get_quality_rule_set(requested_id)
+    if item is None:
+        raise ValueError(f"quality rule set not found: {requested_id}")
+
+    stored_rules = item.get("rules") if isinstance(item.get("rules"), dict) else {}
+    current_quality_rules = (
+        dict(params_obj.get("quality_rules") or {})
+        if isinstance(params_obj.get("quality_rules"), dict)
+        else {}
+    )
+    merged_quality_rules = {**stored_rules, **current_quality_rules}
+    override_keys = sorted(set(stored_rules.keys()) & set(current_quality_rules.keys()))
+
+    params_obj["quality_rule_set_id"] = str(item.get("id") or requested_id)
+    params_obj["quality_rules"] = merged_quality_rules
+    params_obj["_quality_rule_set_provenance"] = {
+        "applied": True,
+        "requested_id": requested_id,
+        "resolved_id": str(item.get("id") or requested_id),
+        "name": str(item.get("name") or requested_id),
+        "version": str(item.get("version") or "v1"),
+        "scope": str(item.get("scope") or "workflow"),
+        "owner": str(item.get("owner") or QUALITY_RULE_SET_OWNER),
+        "source_of_truth": str(item.get("source_of_truth") or QUALITY_RULE_SET_SOURCE),
+        "rule_keys": sorted(str(key) for key in stored_rules.keys()),
+        "merged_rule_keys": sorted(str(key) for key in merged_quality_rules.keys()),
+        "override_keys": override_keys,
+    }
+    return params_obj

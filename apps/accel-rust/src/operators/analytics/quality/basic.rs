@@ -142,6 +142,30 @@ pub(crate) fn run_quality_check_v2(req: QualityCheckV2Req) -> Result<QualityChec
         .cloned()
         .unwrap_or_default();
     let mut passed = base.passed;
+    let metrics = req
+        .metrics
+        .as_ref()
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+
+    let metric_f64 = |key: &str| -> Option<f64> {
+        metrics.get(key).and_then(|value| {
+            value
+                .as_f64()
+                .or_else(|| value.as_u64().map(|item| item as f64))
+                .or_else(|| value.as_i64().map(|item| item as f64))
+        })
+    };
+
+    let required_fields = rules
+        .get("required_fields")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+        .collect::<Vec<_>>();
 
     if let Some(ranges) = rules.get("range_checks").and_then(|v| v.as_array()) {
         let mut details = Vec::new();
@@ -249,6 +273,137 @@ pub(crate) fn run_quality_check_v2(req: QualityCheckV2Req) -> Result<QualityChec
         }
     }
 
+    let required_missing_ratio = metric_f64("required_missing_ratio").unwrap_or_else(|| {
+        if required_fields.is_empty() || req.rows.is_empty() {
+            return 0.0;
+        }
+        let mut missing = 0usize;
+        for row in &req.rows {
+            let Some(obj) = row.as_object() else { continue };
+            for field in &required_fields {
+                if is_missing(obj.get(field)) {
+                    missing += 1;
+                }
+            }
+        }
+        let total = req.rows.len().saturating_mul(required_fields.len());
+        if total == 0 {
+            0.0
+        } else {
+            missing as f64 / total as f64
+        }
+    });
+    if let Some(max_required_missing_ratio) = rules
+        .get("max_required_missing_ratio")
+        .and_then(|v| v.as_f64())
+        && required_missing_ratio > max_required_missing_ratio
+    {
+        passed = false;
+        violations.push(json!({
+            "rule":"required_missing_ratio",
+            "required_missing_ratio": required_missing_ratio,
+            "max_required_missing_ratio": max_required_missing_ratio
+        }));
+    }
+
+    let numeric_parse_rate = metric_f64("numeric_parse_rate").unwrap_or(1.0);
+    if let Some(min_numeric_parse_rate) = rules
+        .get("numeric_parse_rate_min")
+        .and_then(|v| v.as_f64())
+        && numeric_parse_rate < min_numeric_parse_rate
+    {
+        passed = false;
+        violations.push(json!({
+            "rule":"numeric_parse_rate",
+            "numeric_parse_rate": numeric_parse_rate,
+            "numeric_parse_rate_min": min_numeric_parse_rate
+        }));
+    }
+
+    let date_parse_rate = metric_f64("date_parse_rate").unwrap_or(1.0);
+    if let Some(min_date_parse_rate) = rules
+        .get("date_parse_rate_min")
+        .and_then(|v| v.as_f64())
+        && date_parse_rate < min_date_parse_rate
+    {
+        passed = false;
+        violations.push(json!({
+            "rule":"date_parse_rate",
+            "date_parse_rate": date_parse_rate,
+            "date_parse_rate_min": min_date_parse_rate
+        }));
+    }
+
+    let duplicate_key_ratio = metric_f64("duplicate_key_ratio").unwrap_or_else(|| {
+        let key_fields = rules
+            .get("unique_keys")
+            .or_else(|| rules.get("deduplicate_by"))
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect::<Vec<_>>();
+        if key_fields.is_empty() || req.rows.is_empty() {
+            return 0.0;
+        }
+        let keys = req
+            .rows
+            .iter()
+            .filter_map(|row| row.as_object())
+            .map(|obj| {
+                key_fields
+                    .iter()
+                    .map(|field| value_to_string_or_null(obj.get(field)))
+                    .collect::<Vec<_>>()
+                    .join("|")
+            })
+            .filter(|key| !key.trim_matches('|').trim().is_empty())
+            .collect::<Vec<_>>();
+        if keys.is_empty() {
+            return 0.0;
+        }
+        let unique = keys.iter().cloned().collect::<std::collections::HashSet<_>>().len();
+        1.0 - (unique as f64 / keys.len() as f64)
+    });
+    if let Some(max_duplicate_key_ratio) = rules
+        .get("duplicate_key_ratio_max")
+        .and_then(|v| v.as_f64())
+        && duplicate_key_ratio > max_duplicate_key_ratio
+    {
+        passed = false;
+        violations.push(json!({
+            "rule":"duplicate_key_ratio",
+            "duplicate_key_ratio": duplicate_key_ratio,
+            "duplicate_key_ratio_max": max_duplicate_key_ratio
+        }));
+    }
+
+    let blank_row_ratio = metric_f64("blank_row_ratio").unwrap_or_else(|| {
+        if req.rows.is_empty() {
+            return 0.0;
+        }
+        let blank = req
+            .rows
+            .iter()
+            .filter_map(|row| row.as_object())
+            .filter(|obj| obj.values().all(|value| is_missing(Some(value))))
+            .count();
+        blank as f64 / req.rows.len() as f64
+    });
+    if let Some(max_blank_row_ratio) = rules
+        .get("blank_row_ratio_max")
+        .and_then(|v| v.as_f64())
+        && blank_row_ratio > max_blank_row_ratio
+    {
+        passed = false;
+        violations.push(json!({
+            "rule":"blank_row_ratio",
+            "blank_row_ratio": blank_row_ratio,
+            "blank_row_ratio_max": max_blank_row_ratio
+        }));
+    }
+
     let score = if violations.is_empty() {
         100.0
     } else {
@@ -264,7 +419,53 @@ pub(crate) fn run_quality_check_v2(req: QualityCheckV2Req) -> Result<QualityChec
             "rows": req.rows.len(),
             "violations": violations,
             "rule_count": rules.len(),
-            "quality_score": score
+            "quality_score": score,
+            "metrics": {
+                "required_missing_ratio": required_missing_ratio,
+                "numeric_parse_rate": numeric_parse_rate,
+                "date_parse_rate": date_parse_rate,
+                "duplicate_key_ratio": duplicate_key_ratio,
+                "blank_row_ratio": blank_row_ratio
+            }
         }),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quality_check_v2_supports_extended_metric_thresholds() {
+        let out = run_quality_check_v2(QualityCheckV2Req {
+            run_id: Some("qc-v2-metrics".to_string()),
+            rows: vec![json!({"id":1,"amount":10.0}), json!({"id":2,"amount":20.0})],
+            rules: json!({
+                "required_fields":["id","amount"],
+                "max_required_missing_ratio": 0.0,
+                "numeric_parse_rate_min": 0.9,
+                "date_parse_rate_min": 0.8,
+                "duplicate_key_ratio_max": 0.1,
+                "blank_row_ratio_max": 0.1
+            }),
+            metrics: Some(json!({
+                "required_missing_ratio": 0.0,
+                "numeric_parse_rate": 1.0,
+                "date_parse_rate": 1.0,
+                "duplicate_key_ratio": 0.0,
+                "blank_row_ratio": 0.0
+            })),
+        })
+        .expect("quality_check_v2");
+
+        assert!(out.passed);
+        assert_eq!(
+            out.report
+                .get("metrics")
+                .and_then(|v| v.get("numeric_parse_rate"))
+                .and_then(|v| v.as_f64())
+                .unwrap_or_default(),
+            1.0
+        );
+    }
 }

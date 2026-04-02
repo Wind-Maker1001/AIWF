@@ -78,6 +78,62 @@ def _filter_match(row: Dict[str, Any], f: Dict[str, Any], *, to_float: Callable[
     return True
 
 
+def _eval_expr_arg(token: str, row: Dict[str, Any], *, to_float: Callable[..., Any]) -> Any:
+    text = str(token or "").strip()
+    if text.startswith("$"):
+        return row.get(text[1:])
+    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+        return text[1:-1]
+    num = to_float(text)
+    if num is not None:
+        return num
+    return row.get(text, text)
+
+
+def _eval_simple_computed_expr(expr: str, row: Dict[str, Any], *, to_float: Callable[..., Any]) -> Any:
+    text = str(expr or "").strip()
+    if not text:
+        return None
+    match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\((.*)\)$", text)
+    if not match:
+        return row.get(text[1:]) if text.startswith("$") else row.get(text, text)
+    fn_name = match.group(1).strip().lower()
+    args = [item.strip() for item in match.group(2).split(",")] if match.group(2).strip() else []
+    values = [_eval_expr_arg(item, row, to_float=to_float) for item in args]
+
+    def num(index: int) -> float:
+        value = values[index] if index < len(values) else 0
+        parsed = to_float(value)
+        return float(parsed) if parsed is not None else 0.0
+
+    if fn_name == "add":
+        return sum(num(i) for i in range(len(values)))
+    if fn_name == "sub":
+        return num(0) - num(1)
+    if fn_name == "mul":
+        return num(0) * num(1)
+    if fn_name == "div":
+        denominator = num(1)
+        return None if denominator == 0 else num(0) / denominator
+    if fn_name == "concat":
+        return "".join("" if value is None else str(value) for value in values)
+    if fn_name == "coalesce":
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            return value
+        return None
+    if fn_name == "lower":
+        return str(values[0] if values else "").lower()
+    if fn_name == "upper":
+        return str(values[0] if values else "").upper()
+    if fn_name == "trim":
+        return str(values[0] if values else "").strip()
+    return None
+
+
 def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], hooks: Dict[str, Callable[..., Any]]) -> Dict[str, Any]:
     rules_dict = hooks["rules_dict"]
     to_bool = hooks["to_bool"]
@@ -105,6 +161,16 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
     trim_strings = to_bool(rules.get("trim_strings"), default=True)
     lowercase_fields = set(str(x) for x in (rules.get("lowercase_fields") or []))
     uppercase_fields = set(str(x) for x in (rules.get("uppercase_fields") or []))
+    computed_fields = rules.get("computed_fields") if isinstance(rules.get("computed_fields"), dict) else {}
+    try:
+        sample_limit = max(0, min(100, int(params.get("audit_sample_limit", 5) or 5)))
+    except Exception:
+        sample_limit = 5
+
+    def add_reason_sample(reason: str, payload: Dict[str, Any]) -> None:
+        items = reason_samples.setdefault(reason, [])
+        if len(items) < sample_limit:
+            items.append(dict(payload))
 
     out: List[Dict[str, Any]] = []
     invalid_rows = 0
@@ -112,8 +178,25 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
     cast_failed_rows = 0
     required_failed_rows = 0
     filter_rejected_rows = 0
+    reason_samples: Dict[str, List[Dict[str, Any]]] = {
+        "invalid_object": [],
+        "cast_failed": [],
+        "required_missing": [],
+        "filter_rejected": [],
+        "duplicate_removed": [],
+    }
 
     for raw in raw_rows:
+        if not isinstance(raw, dict):
+            invalid_rows += 1
+            add_reason_sample(
+                "invalid_object",
+                {
+                    "reason": "invalid_object",
+                    "value": raw,
+                },
+            )
+            continue
         row = dict(raw or {})
 
         for k, v in list(row.items()):
@@ -135,6 +218,10 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
             if row.get(k) is None:
                 row[k] = dv
 
+        for field, expr in computed_fields.items():
+            if isinstance(expr, str) and str(expr).strip():
+                row[str(field)] = _eval_simple_computed_expr(str(expr), row, to_float=to_float)
+
         for k in list(row.keys()):
             if isinstance(row[k], str):
                 if k in lowercase_fields:
@@ -143,25 +230,60 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
                     row[k] = row[k].upper()
 
         cast_failed = False
+        failed_fields: List[str] = []
         for k, ctype in casts.items():
             v, ok = _cast_value(row.get(k), str(ctype), to_int=to_int, to_float=to_float, to_bool=to_bool)
             row[k] = v
             if not ok:
                 cast_failed = True
+                failed_fields.append(str(k))
         if cast_failed:
             cast_failed_rows += 1
             invalid_rows += 1
+            add_reason_sample(
+                "cast_failed",
+                {
+                    "reason": "cast_failed",
+                    "fields": failed_fields,
+                    "row": dict(row),
+                },
+            )
             continue
 
-        missing_required = any(row.get(str(k)) is None for k in required_fields)
+        missing_fields = [str(k) for k in required_fields if row.get(str(k)) is None]
+        missing_required = bool(missing_fields)
         if missing_required:
             required_failed_rows += 1
             invalid_rows += 1
+            add_reason_sample(
+                "required_missing",
+                {
+                    "reason": "required_failed",
+                    "fields": missing_fields,
+                    "row": dict(row),
+                },
+            )
             continue
 
-        if any(not _filter_match(row, f if isinstance(f, dict) else {}, to_float=to_float) for f in filters):
+        failed_filter = next(
+            (
+                f if isinstance(f, dict) else {}
+                for f in filters
+                if not _filter_match(row, f if isinstance(f, dict) else {}, to_float=to_float)
+            ),
+            None,
+        )
+        if failed_filter is not None:
             filter_rejected_rows += 1
             filtered_rows += 1
+            add_reason_sample(
+                "filter_rejected",
+                {
+                    "reason": "filtered_rules",
+                    "filter": dict(failed_filter),
+                    "row": dict(row),
+                },
+            )
             continue
 
         out.append(row)
@@ -175,9 +297,29 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
                 key = tuple(r.get(k) for k in key_fields)
                 if key not in d:
                     d[key] = r
+                else:
+                    add_reason_sample(
+                        "duplicate_removed",
+                        {
+                            "reason": "deduplicate_removed",
+                            "key": list(key),
+                            "deduplicate_keep": deduplicate_keep,
+                            "row": dict(r),
+                        },
+                    )
         else:
             for r in out:
                 key = tuple(r.get(k) for k in key_fields)
+                if key in d:
+                    add_reason_sample(
+                        "duplicate_removed",
+                        {
+                            "reason": "deduplicate_removed",
+                            "key": list(key),
+                            "deduplicate_keep": deduplicate_keep,
+                            "row": dict(d[key]),
+                        },
+                    )
                 d[key] = r
         deduped = list(d.values())
         duplicate_rows_removed = len(out) - len(deduped)
@@ -229,4 +371,4 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
             "deduplicate_removed": duplicate_rows_removed,
         },
     }
-    return {"rows": out, "quality": quality}
+    return {"rows": out, "quality": quality, "reason_samples": reason_samples}

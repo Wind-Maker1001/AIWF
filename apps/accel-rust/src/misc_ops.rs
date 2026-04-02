@@ -18,6 +18,7 @@ use std::{env, fs, path::PathBuf};
 mod pushdown;
 mod rules;
 mod schema_ops;
+mod postprocess;
 mod text;
 
 pub(crate) use pushdown::run_aggregate_pushdown_v1;
@@ -26,4 +27,5 @@ pub(crate) use rules::{
     run_rules_package_publish_v1, safe_pkg_token, write_stream_checkpoint,
 };
 pub(crate) use schema_ops::{run_entity_extract_v1, run_normalize_schema_v1};
+pub(crate) use postprocess::run_postprocess_rows_v1;
 pub(crate) use text::run_text_preprocess_v2;

@@ -15,6 +15,7 @@ class NodeConfigContractRuntimeTests(unittest.TestCase):
 
         self.assertIn("ai_refine", registered)
         self.assertIn("transform_rows_v3", registered)
+        self.assertIn("postprocess_rows_v1", registered)
         self.assertIn("compute_rust", registered)
         self.assertIn("md_output", registered)
 

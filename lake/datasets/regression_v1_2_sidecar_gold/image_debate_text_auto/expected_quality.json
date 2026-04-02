@@ -1,0 +1,7 @@
+{
+  "quality_blocked": false,
+  "ocr_confidence_avg_min": 0.55,
+  "empty_text_block_ratio_max": 0.2,
+  "table_cells_min": 0,
+  "sheet_frames_min": 0
+}

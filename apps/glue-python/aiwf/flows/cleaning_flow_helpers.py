@@ -76,10 +76,17 @@ def prepare_local_clean_cache(
             "execution_mode": str(cleaned_local.get("execution_mode") or ""),
             "execution_audit": dict(cleaned_local.get("execution_audit") or {}),
             "eligibility_reason": str(cleaned_local.get("eligibility_reason") or ""),
+            "execution_plan": "rust_row_transform" if str(cleaned_local.get("row_transform_engine") or "").startswith("transform_rows_v3") else "python_row_transform",
             "shadow_compare": dict(cleaned_local.get("shadow_compare") or {}),
             "requested_rust_v2_mode": str(cleaned_local.get("requested_rust_v2_mode") or ""),
             "effective_rust_v2_mode": str(cleaned_local.get("effective_rust_v2_mode") or ""),
             "verify_on_default": bool(cleaned_local.get("verify_on_default", False)),
+            "row_transform_engine": str(cleaned_local.get("row_transform_engine") or ""),
+            "postprocess_engine": str(cleaned_local.get("postprocess_engine") or "none"),
+            "quality_gate_engine": str(cleaned_local.get("quality_gate_engine") or ""),
+            "materialization_engine": str(cleaned_local.get("materialization_engine") or "python"),
+            "legacy_cleaning_operator_used": bool(cleaned_local.get("legacy_cleaning_operator_used", False)),
+            "stage_provenance": list(cleaned_local.get("stage_provenance") or []),
         },
         "params_for_accel": params_for_accel,
     }
@@ -105,7 +112,7 @@ def prepare_accel_result(
         accel = {
             "attempted": False,
             "ok": False,
-            "error": "accel skipped for generic/local-only cleaning mode",
+            "error": "legacy accel cleaning skipped for generic/local-only cleaning mode",
         }
     else:
         accel = try_accel_cleaning(

@@ -49,3 +49,25 @@ def register_builtin_cleaning_artifacts(register_cleaning_artifact) -> None:
         domain="cleaning-core",
         domain_metadata=ARTIFACT_DOMAIN,
     )
+    register_cleaning_artifact(
+        "quality_summary_json",
+        artifact_id="quality_summary_json_001",
+        kind="json",
+        path_key="quality_summary_json",
+        sha_key="sha_quality_summary_json",
+        local_path_resolver=registry._quality_summary_local_path,
+        local_writer=registry._write_quality_summary_artifact,
+        domain="cleaning-core",
+        domain_metadata=ARTIFACT_DOMAIN,
+    )
+    register_cleaning_artifact(
+        "rejections_jsonl",
+        artifact_id="rejections_jsonl_001",
+        kind="jsonl",
+        path_key="rejections_jsonl",
+        sha_key="sha_rejections_jsonl",
+        local_path_resolver=registry._rejections_local_path,
+        local_writer=registry._write_rejections_artifact,
+        domain="cleaning-core",
+        domain_metadata=ARTIFACT_DOMAIN,
+    )

@@ -26,7 +26,11 @@ test("rust operator palette policy covers desktop-exposable operators with expli
   assert.deepEqual(result.details.duplicatePinnedOperators, []);
 
   const types = result.entries.map((entry) => entry.type);
-  assert.deepEqual(types.sort(), [...rendererManifest.DESKTOP_RUST_OPERATOR_TYPES]);
+  const visibleRustTypes = [...rendererManifest.DESKTOP_RUST_OPERATOR_TYPES].filter(
+    (type) => !rendererManifest.DESKTOP_RUST_OPERATOR_METADATA[type]?.palette_hidden,
+  );
+  assert.deepEqual(types.sort(), visibleRustTypes);
+  assert.equal(types.includes("postprocess_rows_v1"), false);
   for (const entry of result.entries) {
     assert.ok(String(entry.group || "").trim(), `${entry.type} group must not be empty`);
     assert.ok(String(entry.policy_section || "").trim(), `${entry.type} policy_section must not be empty`);

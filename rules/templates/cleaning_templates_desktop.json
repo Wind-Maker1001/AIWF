@@ -4,14 +4,32 @@
     {
       "id": "finance_report_v1",
       "file": "finance_report_v1.cleaning_spec_v2.json",
-      "label": "财报模板 v1（资产/利润/现金流）",
-      "description": "面向财务报表金额字段的严格清洗模板，包含类型转换、过滤、去重和质量门禁。"
+      "label": "Finance Report Template v1",
+      "description": "Strict cleaning template for finance statements and structured report tables."
     },
     {
       "id": "debate_evidence_v1",
       "file": "generic_debate_evidence.json",
-      "label": "辩论证据模板 v1（文本证据）",
-      "description": "面向辩论证据文本的清洗模板，保留核心论据并按来源去重。"
+      "label": "Debate Evidence Template v1",
+      "description": "Evidence-oriented cleaning template for debate text extraction and source tracking."
+    },
+    {
+      "id": "bank_statement_v1",
+      "file": "bank_statement_v1.cleaning_spec_v2.json",
+      "label": "Bank Statement Template v1",
+      "description": "Structured cleaning template for bank statements and reconciliation-style tabular inputs."
+    },
+    {
+      "id": "customer_contact_v1",
+      "file": "customer_contact_v1.cleaning_spec_v2.json",
+      "label": "Customer Contact Template v1",
+      "description": "Pure customer contact cleaning template for name, phone, and city normalization."
+    },
+    {
+      "id": "customer_ledger_v1",
+      "file": "customer_ledger_v1.cleaning_spec_v2.json",
+      "label": "Customer Ledger Template v1",
+      "description": "Customer ledger cleaning template for contact, amount, and business date normalization."
     }
   ]
 }

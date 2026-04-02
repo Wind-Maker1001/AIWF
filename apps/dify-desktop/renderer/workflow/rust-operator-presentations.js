@@ -1,5 +1,6 @@
 export const RUST_OPERATOR_PRESENTATIONS = Object.freeze({
   transform_rows_v3: { name: "清洗变换 v3", desc: "调用 Rust transform_rows_v3（AST 表达式 + lineage）" },
+  postprocess_rows_v1: { name: "后处理 v1", desc: "调用 Rust postprocess_rows_v1（证据标准化、切块、冲突检测）" },
   join_rows_v2: { name: "多键 Join v2", desc: "调用 Rust join_rows_v2（inner/left/right/full/semi/anti）" },
   join_rows_v3: { name: "Join v3", desc: "调用 Rust join_rows_v3（auto/hash/sort_merge + spill 标记）" },
   join_rows_v4: { name: "Join v4", desc: "调用 Rust join_rows_v4（bloom 预过滤 + 策略优化）" },

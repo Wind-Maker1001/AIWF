@@ -17,6 +17,7 @@ from aiwf.flows.cleaning_orchestrator_support import (
     collect_materialized_artifacts,
     register_artifacts,
 )
+from aiwf.governance_quality_rule_sets import apply_quality_rule_set_to_params
 
 
 def run_cleaning_flow(
@@ -59,7 +60,12 @@ def run_cleaning_flow(
     base_step_fail = hooks["_base_step_fail"]
 
     t0 = time.time()
-    params = params or {}
+    params = apply_quality_rule_set_to_params(params or {})
+    public_params = {
+        key: value
+        for key, value in params.items()
+        if not str(key).startswith("_")
+    }
     base_url = resolve_base_url(s, base)
     headers = headers_from_params(params)
     layout = prepare_job_layout(job_id, params, ensure_dirs=ensure_dirs)
@@ -76,7 +82,7 @@ def run_cleaning_flow(
                 ruleset_version=ruleset_version,
                 input_uri=layout["input_uri"],
                 output_uri=layout["output_uri"],
-                params=params,
+                params=public_params,
                 headers=headers,
             )
 
@@ -116,11 +122,24 @@ def run_cleaning_flow(
         )
 
         if accel_result["use_accel_outputs"]:
+            accel_quality_gate = apply_quality_gates(local_cache["local_quality"], params_effective)
+            local_profile = build_profile(
+                local_cache["local_rows"],
+                local_cache["local_quality"],
+                local_cache["source"],
+            )
+            local_profile["quality_gate"] = accel_quality_gate
+            local_profile["preprocess"] = preprocess_result
+            local_profile["execution"] = local_cache["local_execution"]
             materialized = materialize_accel_outputs(
                 params_effective=params_effective,
                 accel_outputs=accel_result["accel_outputs"],
                 accel_profile=accel_result["accel_profile"],
                 sha256_file=sha256_file,
+                local_rows=local_cache["local_rows"],
+                local_profile=local_profile,
+                local_execution=local_cache["local_execution"],
+                preprocess_result=preprocess_result,
             )
         else:
             materialized = materialize_local_outputs(

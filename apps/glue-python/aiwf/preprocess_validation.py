@@ -49,6 +49,12 @@ def validate_preprocess_spec_impl(
         errors.append("xlsx_all_sheets must be boolean")
     if "include_hidden_sheets" in spec and not isinstance(spec.get("include_hidden_sheets"), bool):
         errors.append("include_hidden_sheets must be boolean")
+    if "header_mapping_mode" in spec and not isinstance(spec.get("header_mapping_mode"), str):
+        errors.append("header_mapping_mode must be string")
+    if "header_mapping_mode" in spec:
+        val = str(spec.get("header_mapping_mode") or "").strip().lower()
+        if val and val not in {"strict", "auto"}:
+            errors.append("header_mapping_mode must be strict|auto")
     if "standardize_evidence" in spec and not isinstance(spec.get("standardize_evidence"), bool):
         errors.append("standardize_evidence must be boolean")
     if "generate_quality_report" in spec and not isinstance(spec.get("generate_quality_report"), bool):
@@ -145,6 +151,7 @@ def validate_preprocess_spec_impl(
         "ocr_preprocess",
         "xlsx_all_sheets",
         "include_hidden_sheets",
+        "header_mapping_mode",
         "max_retries",
         "on_file_error",
         "standardize_evidence",

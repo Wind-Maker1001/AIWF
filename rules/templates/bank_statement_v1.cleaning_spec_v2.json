@@ -1,0 +1,105 @@
+{
+  "schema_version": "cleaning_spec.v2",
+  "ingest": {},
+  "schema": {
+    "canonical_profile": "bank_statement",
+    "defaults": {
+      "currency": "CNY"
+    },
+    "unique_keys": ["account_no", "txn_date", "ref_no", "amount"],
+    "header_aliases": {},
+    "auto_normalize_headers": false,
+    "header_normalizer": "none"
+  },
+  "transform": {
+    "rename_map": {
+      "账号": "account_no",
+      "账户": "account_no",
+      "账户号": "account_no",
+      "卡号": "account_no",
+      "交易日期": "txn_date",
+      "记账日期": "txn_date",
+      "入账日期": "txn_date",
+      "借方金额": "debit_amount",
+      "支出": "debit_amount",
+      "付款金额": "debit_amount",
+      "贷方金额": "credit_amount",
+      "收入": "credit_amount",
+      "收款金额": "credit_amount",
+      "余额": "balance",
+      "账户余额": "balance",
+      "对方户名": "counterparty_name",
+      "对手方": "counterparty_name",
+      "交易对手": "counterparty_name",
+      "摘要": "remark",
+      "附言": "remark",
+      "备注": "remark",
+      "用途": "remark",
+      "流水号": "ref_no",
+      "交易流水号": "ref_no",
+      "凭证号": "ref_no",
+      "交易类型": "txn_type",
+      "业务类型": "txn_type",
+      "方向": "txn_type",
+      "币种": "currency",
+      "货币": "currency",
+      "结算币种": "currency"
+    },
+    "casts": {
+      "debit_amount": "float",
+      "credit_amount": "float",
+      "amount": "float",
+      "balance": "float",
+      "txn_date": "string",
+      "account_no": "string",
+      "counterparty_name": "string",
+      "remark": "string",
+      "ref_no": "string",
+      "txn_type": "string",
+      "currency": "string"
+    },
+    "required_fields": ["account_no", "txn_date"],
+    "default_values": {
+      "currency": "CNY"
+    },
+    "include_fields": [],
+    "exclude_fields": [],
+    "filters": [],
+    "deduplicate_by": ["account_no", "txn_date", "ref_no", "amount"],
+    "deduplicate_keep": "last",
+    "sort_by": [
+      { "field": "txn_date", "order": "asc" },
+      { "field": "ref_no", "order": "asc" }
+    ],
+    "aggregate": {},
+    "null_values": [],
+    "trim_strings": true,
+    "computed_fields": {
+      "amount": "sub($credit_amount,$debit_amount)"
+    },
+    "string_ops": [
+      { "field": "currency", "op": "upper" }
+    ],
+    "date_ops": [],
+    "field_ops": []
+  },
+  "quality": {
+    "required_fields": ["account_no", "txn_date"],
+    "gates": {
+      "max_required_missing_ratio": 0.0,
+      "duplicate_key_ratio_max": 0.1,
+      "numeric_parse_rate_min": 0.95,
+      "date_parse_rate_min": 0.95,
+      "allow_empty_output": false
+    },
+    "image_rules": {},
+    "xlsx_rules": {}
+  },
+  "artifacts": {},
+  "audit": {
+    "enabled": true,
+    "sample_limit": 5,
+    "lineage": true,
+    "warnings": []
+  }
+}

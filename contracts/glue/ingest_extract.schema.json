@@ -9,6 +9,7 @@
       "properties": {
         "input_path": { "type": "string" },
         "input_files": { "type": "array", "items": { "type": "string" } },
+        "header_mapping_mode": { "type": "string", "enum": ["strict", "auto"] },
         "text_split_by_line": { "type": "boolean" },
         "ocr_enabled": { "type": "boolean" },
         "ocr_lang": { "type": "string" },
@@ -23,7 +24,7 @@
         "sheet_profiles": { "type": "object" },
         "canonical_profile": {
           "type": "string",
-          "enum": ["finance_statement", "customer_contact", "debate_evidence"]
+          "enum": ["finance_statement", "bank_statement", "customer_contact", "customer_ledger", "debate_evidence"]
         },
         "on_file_error": { "type": "string", "enum": ["raise", "skip"] }
       },
@@ -42,6 +43,7 @@
         "quality_blocked",
         "blocked_inputs",
         "engine_trace",
+        "detected_structure",
         "header_mapping",
         "candidate_profiles",
         "quality_decisions",
@@ -68,6 +70,7 @@
               "table_cells",
               "sheet_frames",
               "engine_trace",
+              "detected_structure",
               "header_mapping",
               "candidate_profiles",
               "quality_decisions",
@@ -87,8 +90,52 @@
               "table_cells": { "type": "array", "items": { "type": "object" } },
               "sheet_frames": { "type": "array", "items": { "type": "object" } },
               "engine_trace": { "type": "array", "items": { "type": "object" } },
-              "header_mapping": { "type": "array", "items": { "type": "object" } },
-              "candidate_profiles": { "type": "array", "items": { "type": "object" } },
+              "detected_structure": { "type": "string", "enum": ["tabular", "text", "mixed", "unknown"] },
+              "header_mapping": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "raw_header": { "type": "string" },
+                    "canonical_field": { "type": "string" },
+                    "confidence": { "type": "number" },
+                    "matched_token": { "type": "string" },
+                    "match_strategy": { "type": "string", "enum": ["exact", "substring", "fuzzy", "fuzzy+value_affinity", "unresolved"] },
+                    "alternatives": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "field": { "type": "string" },
+                          "confidence": { "type": "number" }
+                        },
+                        "required": ["field", "confidence"],
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "candidate_profiles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "profile": { "type": "string" },
+                    "score": { "type": "number" },
+                    "required_hits": { "type": "integer" },
+                    "required_total": { "type": "integer" },
+                    "matched_fields": { "type": "array", "items": { "type": "string" } },
+                    "avg_confidence": { "type": "number" },
+                    "required_coverage": { "type": "number" },
+                    "recommended": { "type": "boolean" },
+                    "recommended_template_id": { "type": "string" },
+                    "signal_source": { "type": "string", "enum": ["headers", "table_cells", "content"] }
+                  },
+                  "additionalProperties": true
+                }
+              },
               "quality_decisions": { "type": "array", "items": { "type": "object" } },
               "blocked_reason_codes": { "type": "array", "items": { "type": "string" } },
               "sample_rows": { "type": "array", "items": { "type": "object" } }
@@ -104,8 +151,52 @@
         "engine_trace": { "type": "array", "items": { "type": "object" } },
         "quality_blocked": { "type": "boolean" },
         "blocked_inputs": { "type": "array", "items": { "type": "object" } },
-        "header_mapping": { "type": "array", "items": { "type": "object" } },
-        "candidate_profiles": { "type": "array", "items": { "type": "object" } },
+        "detected_structure": { "type": "string", "enum": ["tabular", "text", "mixed", "unknown"] },
+        "header_mapping": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "raw_header": { "type": "string" },
+              "canonical_field": { "type": "string" },
+              "confidence": { "type": "number" },
+              "matched_token": { "type": "string" },
+              "match_strategy": { "type": "string", "enum": ["exact", "substring", "fuzzy", "fuzzy+value_affinity", "unresolved"] },
+              "alternatives": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": { "type": "string" },
+                    "confidence": { "type": "number" }
+                  },
+                  "required": ["field", "confidence"],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "candidate_profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "profile": { "type": "string" },
+              "score": { "type": "number" },
+              "required_hits": { "type": "integer" },
+              "required_total": { "type": "integer" },
+              "matched_fields": { "type": "array", "items": { "type": "string" } },
+              "avg_confidence": { "type": "number" },
+              "required_coverage": { "type": "number" },
+              "recommended": { "type": "boolean" },
+              "recommended_template_id": { "type": "string" },
+              "signal_source": { "type": "string", "enum": ["headers", "table_cells", "content"] }
+            },
+            "additionalProperties": true
+          }
+        },
         "quality_decisions": { "type": "array", "items": { "type": "object" } },
         "blocked_reason_codes": { "type": "array", "items": { "type": "string" } },
         "sample_rows": { "type": "array", "items": { "type": "object" } }

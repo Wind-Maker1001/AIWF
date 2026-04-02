@@ -37,6 +37,7 @@ function uniqueSorted(values) {
 function buildRustOperatorPalettePolicy(metadataByType = {}, presentations = {}) {
   const errors = [];
   const desktopTypes = uniqueSorted(Object.keys(metadataByType));
+  const visibleTypes = desktopTypes.filter((type) => !Boolean(metadataByType?.[type]?.palette_hidden));
   const presentationTypes = uniqueSorted(Object.keys(presentations));
 
   const sectionDomainMap = new Map();
@@ -75,7 +76,7 @@ function buildRustOperatorPalettePolicy(metadataByType = {}, presentations = {})
   const missingPresentationOperators = [];
   const invalidPresentationEntries = [];
 
-  const entries = desktopTypes.map((type) => {
+  const entries = visibleTypes.map((type) => {
     const metadata = metadataByType[type] || {};
     const presentation = presentations[type];
     const domain = String(metadata.domain || "").trim();

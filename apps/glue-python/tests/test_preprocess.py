@@ -12,6 +12,7 @@ class PreprocessTests(unittest.TestCase):
         ok = preprocess.validate_preprocess_spec(
             {
                 "header_map": {"Amt": "amount"},
+                "header_mapping_mode": "auto",
                 "amount_fields": ["amount"],
                 "date_fields": ["biz_date"],
                 "amount_round_digits": 2,
@@ -46,6 +47,8 @@ class PreprocessTests(unittest.TestCase):
         self.assertFalse(bad11["ok"])
         bad12 = preprocess.validate_preprocess_spec({"row_filters": [{"field": "text", "op": "missing_filter"}]})
         self.assertFalse(bad12["ok"])
+        bad13 = preprocess.validate_preprocess_spec({"header_mapping_mode": "invalid"})
+        self.assertFalse(bad13["ok"])
 
     def test_preprocess_passes_ocr_options_to_ingest(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -108,6 +111,41 @@ class PreprocessTests(unittest.TestCase):
             self.assertEqual(rows[0]["amount"], "1200.56")
             self.assertEqual(rows[0]["biz_date"], "2026-02-16")
 
+    def test_preprocess_csv_file_for_bank_statement_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "bank.csv")
+            dst = os.path.join(tmp, "bank_out.jsonl")
+            with open(src, "w", encoding="utf-8", newline="\n") as f:
+                f.write("账号,交易日期,借方金额,贷方金额,余额,对方户名,流水号\n")
+                f.write('62220001,2026/03/01,120.5,0,"1,250.00",张三,TXN-001\n')
+
+            res = preprocess.preprocess_file(
+                src,
+                dst,
+                {
+                    "input_format": "csv",
+                    "output_format": "jsonl",
+                    "canonical_profile": "bank_statement",
+                    "header_map": {
+                        "账号": "account_no",
+                        "交易日期": "txn_date",
+                        "借方金额": "debit_amount",
+                        "贷方金额": "credit_amount",
+                        "余额": "balance",
+                        "对方户名": "counterparty_name",
+                        "流水号": "ref_no",
+                    },
+                    "amount_fields": ["debit_amount", "credit_amount", "balance"],
+                    "date_fields": ["txn_date"],
+                },
+            )
+            self.assertEqual(res["summary"]["output_rows"], 1)
+            rows = preprocess._read_jsonl(dst)
+            self.assertEqual(rows[0]["account_no"], "62220001")
+            self.assertEqual(rows[0]["txn_date"], "2026-03-01")
+            self.assertEqual(rows[0]["debit_amount"], 120.5)
+            self.assertEqual(rows[0]["balance"], 1250.0)
+
     def test_preprocess_jsonl_with_transforms_and_filters(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = os.path.join(tmp, "raw.jsonl")
@@ -149,10 +187,11 @@ class PreprocessTests(unittest.TestCase):
             with open(src, "w", encoding="utf-8") as f:
                 f.write(json.dumps({"Speaker": " Alice ", "biz_date": "2026/03/01"}) + "\n")
 
-            fake_resp = Mock()
-            fake_resp.status_code = 200
-            fake_resp.json.return_value = {
+            transform_resp = Mock()
+            transform_resp.status_code = 200
+            transform_resp.json.return_value = {
                 "ok": True,
+                "operator": "transform_rows_v3",
                 "rows": [{"speaker": "alice", "biz_date": "2026-03-01"}],
                 "quality": {
                     "input_rows": 1,
@@ -168,7 +207,14 @@ class PreprocessTests(unittest.TestCase):
                 "trace_id": "tp1",
                 "audit": {"schema": "transform_rows_v2.audit.v1"},
             }
-            with patch("requests.post", return_value=fake_resp):
+            quality_resp = Mock()
+            quality_resp.status_code = 200
+            quality_resp.json.return_value = {
+                "ok": True,
+                "passed": True,
+                "report": {"violations": [], "metrics": {}},
+            }
+            with patch("requests.post", side_effect=[transform_resp, quality_resp]):
                 res = preprocess.preprocess_file(
                     src,
                     dst,
@@ -188,10 +234,16 @@ class PreprocessTests(unittest.TestCase):
             self.assertEqual(rows[0]["biz_date"], "2026-03-01")
             self.assertEqual(res["summary"]["cleaning_spec_version"], "cleaning_spec.v2")
             self.assertTrue(res["summary"]["rust_v2_used"])
-            self.assertEqual(res["execution_mode"], "rust_v2")
+            self.assertEqual(res["execution_mode"], "rust_v3")
             self.assertEqual(res["eligibility_reason"], "eligible")
             self.assertEqual(res["execution_audit"]["schema"], "transform_rows_v2.audit.v1")
-            self.assertEqual(res["summary"]["execution_mode"], "rust_v2")
+            self.assertEqual(res["summary"]["execution_mode"], "rust_v3")
+            self.assertEqual(res["summary"]["row_transform_engine"], "transform_rows_v3")
+            self.assertEqual(res["execution_audit"]["stage_plan"]["schema_version"], "preprocess_stage_plan.v1")
+            self.assertEqual(
+                [item["name"] for item in res["execution_audit"]["stage_plan"]["stages"]],
+                ["row_transform", "standardize_evidence", "chunk_text", "detect_conflicts", "quality_check", "materialize"],
+            )
 
     def test_preprocess_rust_v2_blocked_by_chunk_mode(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -200,7 +252,31 @@ class PreprocessTests(unittest.TestCase):
             with open(src, "w", encoding="utf-8") as f:
                 f.write(json.dumps({"text": "a. b."}) + "\n")
 
-            with patch("requests.post") as post:
+            transform_resp = Mock()
+            transform_resp.status_code = 200
+            transform_resp.json.return_value = {
+                "ok": True,
+                "operator": "transform_rows_v3",
+                "rows": [{"text": "a. b."}],
+                "quality": {"input_rows": 1, "output_rows": 1, "invalid_rows": 0, "filtered_rows": 0, "duplicate_rows_removed": 0},
+                "trace_id": "tp-chunk",
+                "audit": {"schema": "transform_rows_v2.audit.v1"},
+            }
+            postprocess_resp = Mock()
+            postprocess_resp.status_code = 200
+            postprocess_resp.json.return_value = {
+                "ok": True,
+                "operator": "postprocess_rows_v1",
+                "rows": [{"text": "a.", "chunk_seq": 0}, {"text": "b.", "chunk_seq": 1}],
+                "quality": {"input_rows": 1, "output_rows": 2, "standardized_rows": 0, "chunked_rows_created": 1, "conflict_rows_marked": 0},
+                "trace_id": "pp-chunk",
+                "audit": {"schema": "postprocess_rows_v1.audit.v1"},
+            }
+            quality_resp = Mock()
+            quality_resp.status_code = 200
+            quality_resp.json.return_value = {"ok": True, "passed": True, "report": {"violations": [], "metrics": {}}}
+
+            with patch("requests.post", side_effect=[transform_resp, postprocess_resp, quality_resp]) as post:
                 res = preprocess.preprocess_file(
                     src,
                     dst,
@@ -211,10 +287,13 @@ class PreprocessTests(unittest.TestCase):
                         "chunk_mode": "sentence",
                     },
                 )
-            post.assert_not_called()
-            self.assertEqual(res["execution_mode"], "python_legacy")
-            self.assertEqual(res["eligibility_reason"], "chunk_mode_enabled")
-            self.assertEqual(res["summary"]["execution_audit"]["schema"], "python_preprocess.audit.v1")
+            self.assertEqual(post.call_count, 3)
+            self.assertEqual(res["execution_mode"], "rust_v3_postprocess_v1")
+            self.assertEqual(res["eligibility_reason"], "mixed_rust_postprocess")
+            self.assertEqual(res["summary"]["execution_audit"]["schema"], "transform_rows_v2.audit.v1")
+            self.assertEqual(res["summary"]["postprocess_engine"], "postprocess_rows_v1")
+            self.assertEqual(res["summary"]["chunked_rows_created"], 1)
+            self.assertTrue(res["execution_audit"]["stage_plan"]["stages"][2]["enabled"])
 
     def test_preprocess_rust_v2_blocked_by_conflict_detection(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -223,7 +302,31 @@ class PreprocessTests(unittest.TestCase):
             with open(src, "w", encoding="utf-8") as f:
                 f.write(json.dumps({"claim_text": "support tax"}) + "\n")
 
-            with patch("requests.post") as post:
+            transform_resp = Mock()
+            transform_resp.status_code = 200
+            transform_resp.json.return_value = {
+                "ok": True,
+                "operator": "transform_rows_v3",
+                "rows": [{"claim_text": "support tax"}],
+                "quality": {"input_rows": 1, "output_rows": 1, "invalid_rows": 0, "filtered_rows": 0, "duplicate_rows_removed": 0},
+                "trace_id": "tp-conflict",
+                "audit": {"schema": "transform_rows_v2.audit.v1"},
+            }
+            postprocess_resp = Mock()
+            postprocess_resp.status_code = 200
+            postprocess_resp.json.return_value = {
+                "ok": True,
+                "operator": "postprocess_rows_v1",
+                "rows": [{"claim_text": "support tax", "conflict_flag": False, "conflict_topic": "tax", "conflict_polarity": "pro"}],
+                "quality": {"input_rows": 1, "output_rows": 1, "standardized_rows": 0, "chunked_rows_created": 0, "conflict_rows_marked": 0},
+                "trace_id": "pp-conflict",
+                "audit": {"schema": "postprocess_rows_v1.audit.v1"},
+            }
+            quality_resp = Mock()
+            quality_resp.status_code = 200
+            quality_resp.json.return_value = {"ok": True, "passed": True, "report": {"violations": [], "metrics": {}}}
+
+            with patch("requests.post", side_effect=[transform_resp, postprocess_resp, quality_resp]) as post:
                 res = preprocess.preprocess_file(
                     src,
                     dst,
@@ -234,9 +337,11 @@ class PreprocessTests(unittest.TestCase):
                         "detect_conflicts": True,
                     },
                 )
-            post.assert_not_called()
-            self.assertEqual(res["execution_mode"], "python_legacy")
-            self.assertEqual(res["eligibility_reason"], "detect_conflicts_enabled")
+            self.assertEqual(post.call_count, 3)
+            self.assertEqual(res["execution_mode"], "rust_v3_postprocess_v1")
+            self.assertEqual(res["eligibility_reason"], "mixed_rust_postprocess")
+            self.assertEqual(res["summary"]["conflict_rows_marked"], 0)
+            self.assertTrue(res["execution_audit"]["stage_plan"]["stages"][3]["enabled"])
 
     def test_preprocess_rust_v2_blocked_by_standardize_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -245,7 +350,31 @@ class PreprocessTests(unittest.TestCase):
             with open(src, "w", encoding="utf-8") as f:
                 f.write(json.dumps({"text": "claim"}) + "\n")
 
-            with patch("requests.post") as post:
+            transform_resp = Mock()
+            transform_resp.status_code = 200
+            transform_resp.json.return_value = {
+                "ok": True,
+                "operator": "transform_rows_v3",
+                "rows": [{"text": "claim"}],
+                "quality": {"input_rows": 1, "output_rows": 1, "invalid_rows": 0, "filtered_rows": 0, "duplicate_rows_removed": 0},
+                "trace_id": "tp-std",
+                "audit": {"schema": "transform_rows_v2.audit.v1"},
+            }
+            postprocess_resp = Mock()
+            postprocess_resp.status_code = 200
+            postprocess_resp.json.return_value = {
+                "ok": True,
+                "operator": "postprocess_rows_v1",
+                "rows": [{"evidence_id": "e1", "claim_text": "claim"}],
+                "quality": {"input_rows": 1, "output_rows": 1, "standardized_rows": 1, "chunked_rows_created": 0, "conflict_rows_marked": 0},
+                "trace_id": "pp-std",
+                "audit": {"schema": "postprocess_rows_v1.audit.v1"},
+            }
+            quality_resp = Mock()
+            quality_resp.status_code = 200
+            quality_resp.json.return_value = {"ok": True, "passed": True, "report": {"violations": [], "metrics": {}}}
+
+            with patch("requests.post", side_effect=[transform_resp, postprocess_resp, quality_resp]) as post:
                 res = preprocess.preprocess_file(
                     src,
                     dst,
@@ -256,9 +385,11 @@ class PreprocessTests(unittest.TestCase):
                         "standardize_evidence": True,
                     },
                 )
-            post.assert_not_called()
-            self.assertEqual(res["execution_mode"], "python_legacy")
-            self.assertEqual(res["eligibility_reason"], "standardize_evidence_enabled")
+            self.assertEqual(post.call_count, 3)
+            self.assertEqual(res["execution_mode"], "rust_v3_postprocess_v1")
+            self.assertEqual(res["eligibility_reason"], "mixed_rust_postprocess")
+            self.assertEqual(res["summary"]["standardized_rows"], 1)
+            self.assertTrue(res["execution_audit"]["stage_plan"]["stages"][1]["enabled"])
 
     def test_preprocess_rust_v2_blocked_by_custom_transform(self):
         def prefix_transform(value, cfg):

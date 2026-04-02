@@ -50,6 +50,34 @@ def transform_rows_v2(
     return post_json("/operators/transform_rows_v2", payload, base_url=base_url, timeout=timeout)
 
 
+def transform_rows_v3(
+    *,
+    rows: list[dict[str, Any]],
+    rules: Optional[Dict[str, Any]] = None,
+    quality_gates: Optional[Dict[str, Any]] = None,
+    schema_hint: Optional[Dict[str, Any]] = None,
+    computed_fields_v3: Optional[list[Dict[str, Any]]] = None,
+    filter_expr_v3: Optional[Dict[str, Any]] = None,
+    trace_id: str = "",
+    traceparent: str = "",
+    run_id: str = "",
+    base_url: str = "http://127.0.0.1:18082",
+    timeout: float = 10.0,
+) -> Dict[str, Any]:
+    payload = {
+        "run_id": run_id,
+        "rows": rows,
+        "rules": rules or {},
+        "quality_gates": quality_gates or {},
+        "schema_hint": schema_hint or {},
+        "computed_fields_v3": computed_fields_v3 or [],
+        "filter_expr_v3": filter_expr_v3,
+        "trace_id": trace_id,
+        "traceparent": traceparent,
+    }
+    return post_json("/operators/transform_rows_v3", payload, base_url=base_url, timeout=timeout)
+
+
 def transform_rows_v2_stream(
     *,
     rows: Optional[list[dict[str, Any]]] = None,
@@ -412,6 +440,66 @@ def quality_check_v1(
 ) -> Dict[str, Any]:
     payload = {"run_id": run_id, "rows": rows, "rules": rules}
     return post_json("/operators/quality_check_v1", payload, base_url=base_url, timeout=timeout)
+
+
+def quality_check_v2(
+    *,
+    rows: list[dict[str, Any]],
+    rules: Dict[str, Any],
+    metrics: Optional[Dict[str, Any]] = None,
+    run_id: str = "",
+    base_url: str = "http://127.0.0.1:18082",
+    timeout: float = 30.0,
+) -> Dict[str, Any]:
+    payload = {
+        "run_id": run_id,
+        "rows": rows,
+        "rules": rules,
+        "metrics": metrics or {},
+    }
+    return post_json("/operators/quality_check_v2", payload, base_url=base_url, timeout=timeout)
+
+
+def postprocess_rows_v1(
+    *,
+    rows: list[dict[str, Any]],
+    standardize_evidence: bool = False,
+    evidence_schema: Optional[Dict[str, Any]] = None,
+    chunk_mode: str = "none",
+    chunk_field: str = "",
+    chunk_max_chars: int = 500,
+    detect_conflicts: bool = False,
+    conflict_topic_field: str = "",
+    conflict_stance_field: str = "",
+    conflict_text_field: str = "",
+    conflict_positive_words: Optional[list[str]] = None,
+    conflict_negative_words: Optional[list[str]] = None,
+    schema_hint: Optional[Dict[str, Any]] = None,
+    trace_id: str = "",
+    traceparent: str = "",
+    run_id: str = "",
+    base_url: str = "http://127.0.0.1:18082",
+    timeout: float = 30.0,
+) -> Dict[str, Any]:
+    payload = {
+        "run_id": run_id,
+        "rows": rows,
+        "standardize_evidence": standardize_evidence,
+        "evidence_schema": evidence_schema or {},
+        "chunk_mode": chunk_mode,
+        "chunk_field": chunk_field,
+        "chunk_max_chars": chunk_max_chars,
+        "detect_conflicts": detect_conflicts,
+        "conflict_topic_field": conflict_topic_field,
+        "conflict_stance_field": conflict_stance_field,
+        "conflict_text_field": conflict_text_field,
+        "conflict_positive_words": conflict_positive_words or [],
+        "conflict_negative_words": conflict_negative_words or [],
+        "schema_hint": schema_hint or {},
+        "trace_id": trace_id,
+        "traceparent": traceparent,
+    }
+    return post_json("/operators/postprocess_rows_v1", payload, base_url=base_url, timeout=timeout)
 
 
 def aggregate_pushdown_v1(

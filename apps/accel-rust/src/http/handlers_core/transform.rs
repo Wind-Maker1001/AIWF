@@ -1,10 +1,11 @@
 use crate::{
     api_types::{
-        CleaningReq, ComputeReq, ErrResp, RulesCompileReq, RulesCompileResp, TextPreprocessReq,
+        CleaningReq, ComputeReq, ErrResp, PostprocessRowsV1Req, RulesCompileReq, RulesCompileResp,
+        TextPreprocessReq,
     },
     cleaning_runtime::{run_cleaning_operator, run_compute_metrics},
     current_task_cfg,
-    misc_ops::{compile_rules_dsl, run_text_preprocess_v2},
+    misc_ops::{compile_rules_dsl, run_postprocess_rows_v1, run_text_preprocess_v2},
     operators::transform::{
         TransformRowsReq, TransformRowsV3Req, observe_transform_success,
         run_transform_rows_v2_with_cache, run_transform_rows_v3,
@@ -65,6 +66,7 @@ pub(crate) use submit::transform_rows_v2_submit_operator;
 #[path = "transform/misc.rs"]
 mod misc;
 pub(crate) use misc::{rules_compile_v1_operator, text_preprocess_v2_operator};
+pub(crate) use misc::postprocess_rows_v1_operator;
 
 #[cfg(test)]
 mod tests {

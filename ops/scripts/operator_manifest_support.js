@@ -113,6 +113,7 @@ function normalizeManifest(manifest) {
       published: Boolean(item?.published),
       workflow_exposable: Boolean(item?.workflow_exposable),
       desktop_exposable: Boolean(item?.desktop_exposable),
+      palette_hidden: Boolean(item?.palette_hidden),
       direct_http_only: Boolean(item?.direct_http_only),
       internal_only: Boolean(item?.internal_only),
       contracts: item?.contracts && typeof item.contracts === "object" && !Array.isArray(item.contracts)
@@ -200,6 +201,9 @@ function validateOperatorManifest(manifest) {
     }
     if (item.desktop_exposable && !item.workflow_exposable) {
       push(`${prefix}.desktop_exposable requires workflow_exposable`);
+    }
+    if (item.palette_hidden && !item.desktop_exposable) {
+      push(`${prefix}.palette_hidden requires desktop_exposable`);
     }
     if (item.direct_http_only && item.workflow_exposable) {
       push(`${prefix}.direct_http_only cannot be true when workflow_exposable is true`);
@@ -412,6 +416,7 @@ function buildOperatorManifest(repoRoot) {
   const checkpoint = parseBooleanMatchFunction(catalogText, "infer_checkpoint");
   const ioContract = parseBooleanMatchFunction(catalogText, "infer_io_contract");
   const desktopHidden = parseBooleanMatchFunction(catalogText, "infer_desktop_hidden");
+  const paletteHidden = parseBooleanMatchFunction(catalogText, "infer_palette_hidden");
 
   const operators = uniqueSorted([...domainCatalog.keys()]).map((operator) => {
     const domainEntry = domainCatalog.get(operator);
@@ -427,6 +432,7 @@ function buildOperatorManifest(repoRoot) {
       published,
       workflow_exposable: workflowExposable,
       desktop_exposable: desktopExposable,
+      palette_hidden: desktopExposable && paletteHidden.has(operator),
       direct_http_only: published && !workflowExposable,
       internal_only: !desktopExposable && !(published && !workflowExposable),
       contracts: OPERATOR_CONTRACT_OVERRIDES[operator],

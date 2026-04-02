@@ -13,6 +13,29 @@ from aiwf.canonical_profiles import (
 )
 
 
+_HEADER_MAPPING_MODE_DEFAULT = "strict"
+_HEADER_MAPPING_MODE_VALUES = {"strict", "auto"}
+_AUTO_ONLY_HEADER_ALIASES: dict[str, list[str]] = {
+    "amount": ["amt"],
+    "currency": ["ccy"],
+    "biz_date": ["biz dt", "biz_dt"],
+    "published_at": ["pub dt"],
+    "account_no": ["acct no", "acct#", "acct_num", "acct_no"],
+    "txn_date": ["txn dt", "post dt", "posting dt"],
+    "debit_amount": ["dr"],
+    "credit_amount": ["cr"],
+    "balance": ["bal"],
+    "counterparty_name": ["cp"],
+    "remark": ["memo"],
+    "ref_no": ["ref no"],
+    "customer_name": ["cust name", "customer name"],
+    "phone": ["mobile no", "tel no"],
+    "city": ["city", "city name"],
+    "source_url": ["src url"],
+    "source_title": ["src title"],
+}
+
+
 _DEFAULT_HEADER_ALIASES: dict[str, list[str]] = {
     "id": ["id", "record_id", "row_id", "identifier", "编号", "序号", "单号", "记录编号"],
     "amount": ["amount", "amt", "total_amount", "金额", "总金额", "发生额", "收款金额", "付款金额"],
@@ -37,6 +60,18 @@ _PROFILE_HEADER_ALIASES: dict[str, dict[str, list[str]]] = {
         "biz_date": ["业务日期", "发生日期", "交易日期", "记账日期", "入账日期"],
         "published_at": ["发布日期", "发布时间"],
     },
+    "bank_statement": {
+        "account_no": ["账号", "账户", "账户号", "卡号"],
+        "txn_date": ["交易日期", "记账日期", "入账日期", "日期"],
+        "debit_amount": ["借方金额", "支出", "付款金额"],
+        "credit_amount": ["贷方金额", "收入", "收款金额"],
+        "balance": ["余额", "账户余额"],
+        "counterparty_name": ["对方户名", "对手方", "交易对手"],
+        "remark": ["摘要", "附言", "备注", "用途"],
+        "ref_no": ["流水号", "交易流水号", "凭证号"],
+        "txn_type": ["交易类型", "业务类型", "方向"],
+        "currency": ["币种", "货币", "结算币种"],
+    },
     "customer_contact": {
         "customer_name": ["客户", "客户名称", "客户名", "姓名", "联系人", "联系人姓名"],
         "phone": ["手机", "手机号", "手机号码", "电话", "联系电话", "座机"],
@@ -57,6 +92,12 @@ _PROFILE_SPECS: dict[str, dict[str, Any]] = {
         "string_fields": ["currency"],
         "numeric_fields": ["id", "amount"],
         "date_fields": ["biz_date", "published_at"],
+    },
+    "bank_statement": {
+        "required_fields": ["account_no", "txn_date"],
+        "string_fields": ["account_no", "currency", "counterparty_name", "remark", "ref_no", "txn_type"],
+        "numeric_fields": ["debit_amount", "credit_amount", "amount", "balance"],
+        "date_fields": ["txn_date"],
     },
     "customer_contact": {
         "required_fields": ["customer_name", "phone"],
@@ -311,13 +352,56 @@ def resolve_canonical_profile(spec: Mapping[str, Any]) -> str:
     return str(value or "").strip().lower()
 
 
+def resolve_header_mapping_mode(spec: Optional[Mapping[str, Any]] = None) -> str:
+    spec_obj = spec or {}
+    quality_rules = spec_obj.get("quality_rules") if isinstance(spec_obj.get("quality_rules"), dict) else {}
+    value = spec_obj.get("header_mapping_mode") or quality_rules.get("header_mapping_mode") or ""
+    mode = str(value or "").strip().lower()
+    if mode not in _HEADER_MAPPING_MODE_VALUES:
+        return _HEADER_MAPPING_MODE_DEFAULT
+    return mode
+
+
+def header_mapping_runtime_info(spec: Optional[Mapping[str, Any]] = None) -> dict[str, Any]:
+    requested_mode = resolve_header_mapping_mode(spec)
+    fuzz, process = _load_rapidfuzz()
+    fuzzy_available = fuzz is not None and process is not None
+    date_affinity_available = _load_dateparser() is not None
+    if requested_mode != "auto":
+        return {
+            "requested_mode": requested_mode,
+            "effective_mode": "strict",
+            "fuzzy_available": fuzzy_available,
+            "value_affinity_available": date_affinity_available,
+            "fallback_reason": "",
+        }
+    if not fuzzy_available:
+        return {
+            "requested_mode": "auto",
+            "effective_mode": "strict",
+            "fuzzy_available": False,
+            "value_affinity_available": False,
+            "fallback_reason": "rapidfuzz_unavailable",
+        }
+    return {
+        "requested_mode": "auto",
+        "effective_mode": "auto",
+        "fuzzy_available": True,
+        "value_affinity_available": date_affinity_available,
+        "fallback_reason": "" if date_affinity_available else "dateparser_unavailable",
+    }
+
+
 def _flatten_sheet_profiles(spec: Mapping[str, Any]) -> dict[str, list[str]]:
-    aliases: dict[str, list[str]] = {key: list(values) for key, values in _DEFAULT_HEADER_ALIASES.items()}
+    aliases: dict[str, list[str]] = {}
     profile_name = resolve_canonical_profile(spec)
     if profile_name in _PROFILE_HEADER_ALIASES:
         for field, values in _PROFILE_HEADER_ALIASES[profile_name].items():
-            aliases.setdefault(field, [])
-            aliases[field].extend(list(values))
+            default_values = list(_DEFAULT_HEADER_ALIASES.get(str(field), []))
+            aliases[str(field)] = [str(item) for item in values] + default_values
+    for field, values in _DEFAULT_HEADER_ALIASES.items():
+        if field not in aliases:
+            aliases[field] = list(values)
     profiles = spec.get("sheet_profiles")
     if isinstance(profiles, dict):
         for profile in profiles.values():
@@ -333,16 +417,135 @@ def _flatten_sheet_profiles(spec: Mapping[str, Any]) -> dict[str, list[str]]:
     return aliases
 
 
-def canonicalize_header(name: str, spec: Optional[Mapping[str, Any]] = None) -> tuple[str, float, str]:
+def _merge_header_alias_maps(
+    base_aliases: Mapping[str, Sequence[str]],
+    extra_aliases: Mapping[str, Sequence[str]],
+) -> dict[str, list[str]]:
+    merged: dict[str, list[str]] = {
+        str(field): [str(item) for item in values if str(item).strip()]
+        for field, values in base_aliases.items()
+    }
+    for field, values in extra_aliases.items():
+        key = str(field)
+        merged.setdefault(key, [])
+        merged[key].extend([str(item) for item in values if str(item).strip()])
+    return merged
+
+
+def _header_aliases_for_mode(spec: Mapping[str, Any], mode: str) -> dict[str, list[str]]:
+    aliases = _flatten_sheet_profiles(spec)
+    if mode != "auto":
+        return aliases
+    return _merge_header_alias_maps(aliases, _AUTO_ONLY_HEADER_ALIASES)
+
+
+def _profile_field_sets(profile_name: str) -> tuple[set[str], set[str], set[str], set[str]]:
+    profile = _PROFILE_SPECS.get(profile_name, {})
+    required_fields = {str(item) for item in (profile.get("required_fields") or []) if str(item).strip()}
+    numeric_fields = {str(item) for item in (profile.get("numeric_fields") or []) if str(item).strip()}
+    date_fields = {str(item) for item in (profile.get("date_fields") or []) if str(item).strip()}
+    field_union = required_fields | numeric_fields | date_fields | {
+        str(item) for item in (profile.get("string_fields") or []) if str(item).strip()
+    }
+    return required_fields, numeric_fields, date_fields, field_union
+
+
+def _token_display(token: str) -> str:
+    return str(token or "").replace("_", " ").strip()
+
+
+def _header_value_affinity(
+    field: str,
+    sample_values: Sequence[Any],
+    *,
+    raw_header: str,
+    profile_name: str,
+    value_affinity_available: bool,
+) -> tuple[float, float]:
+    non_empty = [item for item in sample_values if item not in {None, ""} and str(item).strip()]
+    if not non_empty:
+        return 0.0, 0.0
+    _required_fields, numeric_fields, date_fields, _field_union = _profile_field_sets(profile_name)
+    field_key = str(field or "").strip()
+    sample = non_empty[:10]
+    if field_key in numeric_fields and value_affinity_available:
+        parsed = 0
+        for value in sample:
+            normalized = normalize_value_for_field(value, field_key, raw_header=raw_header)
+            try:
+                float(str(normalized).replace(",", ""))
+                parsed += 1
+            except Exception:
+                continue
+        rate = parsed / max(1, len(sample))
+        return (0.05, rate) if rate >= 0.7 else (0.0, rate)
+    if field_key in date_fields and value_affinity_available:
+        parsed = 0
+        for value in sample:
+            normalized = normalize_value_for_field(value, field_key, raw_header=raw_header)
+            if normalized not in {None, ""}:
+                parsed += 1
+        rate = parsed / max(1, len(sample))
+        return (0.05, rate) if rate >= 0.7 else (0.0, rate)
+    return 0.0, 0.0
+
+
+def analyze_header_mapping(
+    name: str,
+    spec: Optional[Mapping[str, Any]] = None,
+    *,
+    sample_values: Optional[Sequence[Any]] = None,
+) -> dict[str, Any]:
+    spec_obj = dict(spec or {})
     normalized = _normalize_token(name)
     if not normalized:
-        return "", 0.0, ""
+        return {
+            "canonical_field": "",
+            "confidence": 0.0,
+            "matched_token": "",
+            "match_strategy": "unresolved",
+            "alternatives": [],
+            "resolved": False,
+            "normalized": "",
+        }
 
-    aliases = _flatten_sheet_profiles(spec or {})
+    runtime = header_mapping_runtime_info(spec_obj)
+    effective_mode = str(runtime.get("effective_mode") or "strict")
+    aliases = _header_aliases_for_mode(spec_obj, effective_mode)
+    profile_name = resolve_canonical_profile(spec_obj)
+    required_fields, _numeric_fields, _date_fields, _field_union = _profile_field_sets(profile_name)
+
+    exact_matches: list[str] = []
     for field, candidates in aliases.items():
         normalized_candidates = {_normalize_token(field), *[_normalize_token(item) for item in candidates]}
         if normalized in normalized_candidates:
-            return field, 1.0, normalized
+            exact_matches.append(field)
+    if exact_matches:
+        unique_fields: list[str] = []
+        for item in exact_matches:
+            field_name = str(item or "").strip()
+            if field_name and field_name not in unique_fields:
+                unique_fields.append(field_name)
+        if len(unique_fields) == 1 or effective_mode != "auto":
+            field = unique_fields[0]
+            return {
+                "canonical_field": field,
+                "confidence": 1.0,
+                "matched_token": normalized,
+                "match_strategy": "exact",
+                "alternatives": [{"field": field, "confidence": 1.0}],
+                "resolved": True,
+                "normalized": normalized,
+            }
+        return {
+            "canonical_field": "",
+            "confidence": 0.55,
+            "matched_token": normalized,
+            "match_strategy": "unresolved",
+            "alternatives": [{"field": field, "confidence": 1.0} for field in unique_fields[:3]],
+            "resolved": False,
+            "normalized": normalized,
+        }
 
     substring_matches: list[tuple[str, str]] = []
     for field, candidates in aliases.items():
@@ -355,10 +558,97 @@ def canonicalize_header(name: str, spec: Optional[Mapping[str, Any]] = None) -> 
             if candidate_token in normalized:
                 substring_matches.append((field, candidate_token))
     if substring_matches:
-        best_field, best_candidate = max(substring_matches, key=lambda item: (len(item[1]), item[1]))
-        return best_field, 0.88, best_candidate
+        ranked_matches = sorted(substring_matches, key=lambda item: (-len(item[1]), item[1], item[0]))
+        unique_fields = []
+        for field, _candidate in ranked_matches:
+            if field not in unique_fields:
+                unique_fields.append(field)
+        if len(unique_fields) == 1 or effective_mode != "auto":
+            best_field, best_candidate = ranked_matches[0]
+            return {
+                "canonical_field": best_field,
+                "confidence": 0.88,
+                "matched_token": best_candidate,
+                "match_strategy": "substring",
+                "alternatives": [{"field": best_field, "confidence": 0.88}],
+                "resolved": True,
+                "normalized": normalized,
+            }
+        return {
+            "canonical_field": "",
+            "confidence": 0.55,
+            "matched_token": normalized,
+            "match_strategy": "unresolved",
+            "alternatives": [{"field": field, "confidence": 0.88} for field in unique_fields[:3]],
+            "resolved": False,
+            "normalized": normalized,
+        }
 
     fuzz, process = _load_rapidfuzz()
+    sample_values_list = [item for item in (sample_values or [])]
+    if effective_mode == "auto" and fuzz is not None and process is not None:
+        choice_best: dict[str, dict[str, Any]] = {}
+        left = _token_display(normalized)
+        for field, candidates in aliases.items():
+            for candidate in [field, *candidates]:
+                candidate_token = _normalize_token(candidate)
+                if not candidate_token:
+                    continue
+                right = _token_display(candidate_token)
+                base_score = (
+                    float(fuzz.token_set_ratio(left, right)) * 0.5
+                    + float(fuzz.token_sort_ratio(left, right)) * 0.3
+                    + float(fuzz.partial_ratio(left, right)) * 0.2
+                )
+                alias_bonus = 6.0 if candidate_token != _normalize_token(field) else 0.0
+                required_bonus = 4.0 if field in required_fields else 0.0
+                affinity_bonus, affinity_rate = _header_value_affinity(
+                    field,
+                    sample_values_list,
+                    raw_header=str(name or ""),
+                    profile_name=profile_name,
+                    value_affinity_available=bool(runtime.get("value_affinity_available")),
+                )
+                score = min(100.0, base_score + alias_bonus + required_bonus + (affinity_bonus * 100.0))
+                strategy = "fuzzy+value_affinity" if affinity_bonus > 0.0 else "fuzzy"
+                existing = choice_best.get(field)
+                if existing is None or score > float(existing.get("score", 0.0)):
+                    choice_best[field] = {
+                        "field": field,
+                        "score": score,
+                        "matched_token": candidate_token,
+                        "match_strategy": strategy,
+                        "affinity_rate": affinity_rate,
+                    }
+        alternatives = sorted(choice_best.values(), key=lambda item: (-float(item["score"]), item["field"]))
+        alt_payload = [
+            {"field": str(item["field"]), "confidence": round(float(item["score"]) / 100.0, 6)}
+            for item in alternatives[:3]
+        ]
+        if alternatives:
+            best = alternatives[0]
+            second_score = float(alternatives[1]["score"]) if len(alternatives) > 1 else 0.0
+            best_score = float(best["score"])
+            if best_score >= 82.0 and (best_score - second_score) >= 6.0:
+                return {
+                    "canonical_field": str(best["field"]),
+                    "confidence": round(best_score / 100.0, 6),
+                    "matched_token": str(best.get("matched_token") or ""),
+                    "match_strategy": str(best.get("match_strategy") or "fuzzy"),
+                    "alternatives": alt_payload,
+                    "resolved": True,
+                    "normalized": normalized,
+                }
+        return {
+            "canonical_field": "",
+            "confidence": 0.55,
+            "matched_token": normalized,
+            "match_strategy": "unresolved",
+            "alternatives": alt_payload,
+            "resolved": False,
+            "normalized": normalized,
+        }
+
     if fuzz is not None and process is not None:
         choices: list[tuple[str, str]] = []
         for field, candidates in aliases.items():
@@ -373,9 +663,46 @@ def canonicalize_header(name: str, spec: Optional[Mapping[str, Any]] = None) -> 
                 if matched_score >= 85:
                     for field, candidate in choices:
                         if candidate == matched_value:
-                            return field, matched_score / 100.0, matched_value
+                            return {
+                                "canonical_field": field,
+                                "confidence": round(matched_score / 100.0, 6),
+                                "matched_token": matched_value,
+                                "match_strategy": "fuzzy",
+                                "alternatives": [{"field": field, "confidence": round(matched_score / 100.0, 6)}],
+                                "resolved": True,
+                                "normalized": normalized,
+                            }
 
-    return normalized, 0.55, normalized
+    return {
+        "canonical_field": "",
+        "confidence": 0.55,
+        "matched_token": normalized,
+        "match_strategy": "unresolved",
+        "alternatives": [],
+        "resolved": False,
+        "normalized": normalized,
+    }
+
+
+def canonicalize_header(
+    name: str,
+    spec: Optional[Mapping[str, Any]] = None,
+    *,
+    sample_values: Optional[Sequence[Any]] = None,
+) -> tuple[str, float, str]:
+    details = analyze_header_mapping(name, spec, sample_values=sample_values)
+    if details.get("resolved"):
+        return (
+            str(details.get("canonical_field") or ""),
+            float(details.get("confidence") or 0.0),
+            str(details.get("matched_token") or ""),
+        )
+    normalized = str(details.get("normalized") or "")
+    return (
+        normalized,
+        float(details.get("confidence") or 0.55),
+        str(details.get("matched_token") or normalized),
+    )
 
 
 def normalize_value_for_field(value: Any, field_name: str, *, raw_header: Any = None) -> Any:
@@ -383,13 +710,13 @@ def normalize_value_for_field(value: Any, field_name: str, *, raw_header: Any = 
     if value is None:
         return None
     if isinstance(value, (int, float)) and not isinstance(value, bool):
-        if "amount" in field or "amt" in field or "score" in field:
+        if "amount" in field or "amt" in field or "score" in field or field in {"debit_amount", "credit_amount", "balance"}:
             parsed_amount = _parse_amount_value(value, raw_header=raw_header)
             return parsed_amount if parsed_amount is not None else float(value)
         if field == "id" or field.endswith("_id"):
             parsed_id = _parse_int_like(value)
             return parsed_id if parsed_id is not None else int(value)
-        if "date" in field or field.endswith("_at"):
+        if "date" in field or field.endswith("_at") or field == "txn_date":
             parsed_date = _parse_date_value(value)
             return parsed_date if parsed_date is not None else str(value)
         return value
@@ -397,13 +724,13 @@ def normalize_value_for_field(value: Any, field_name: str, *, raw_header: Any = 
     if not text:
         return ""
 
-    if "amount" in field or "amt" in field or "score" in field:
+    if "amount" in field or "amt" in field or "score" in field or field in {"debit_amount", "credit_amount", "balance"}:
         parsed_amount = _parse_amount_value(text, raw_header=raw_header)
         return parsed_amount if parsed_amount is not None else text
     if field == "id" or field.endswith("_id"):
         parsed_id = _parse_int_like(text)
         return parsed_id if parsed_id is not None else text
-    if "date" in field or field.endswith("_at"):
+    if "date" in field or field.endswith("_at") or field == "txn_date":
         parsed_date = _parse_date_value(text)
         return parsed_date if parsed_date is not None else text
     if "phone" in field or "mobile" in field or "tel" in field:
@@ -450,7 +777,15 @@ def _validate_with_pandera(rows: Sequence[Mapping[str, Any]], required_fields: S
                 object,
                 required=False,
                 nullable=True,
-                checks=pa.Check(lambda s: s.map(lambda v: _to_float(v) is not None if v not in {None, ""} else True)),
+                checks=pa.Check(
+                    lambda s, field=field: s.map(
+                        lambda v: (
+                            normalize_value_for_field(v, field) not in {None, ""}
+                            if v not in {None, ""}
+                            else True
+                        )
+                    )
+                ),
             )
         for field in profile.get("date_fields") or []:
             columns[str(field)] = pa.Column(

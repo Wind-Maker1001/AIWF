@@ -67,6 +67,9 @@ The current UI enables `仅输出 Markdown` by default. Uncheck it if you want t
    - `default`
    - `debate_evidence_v1`
    - `finance_report_v1`
+   - `bank_statement_v1`
+   - `customer_contact_v1`
+   - `customer_ledger_v1`
    Template payloads are `cleaning_spec.v2` first; older `rules` templates still work, but the desktop runtime compiles them into `cleaning_spec.v2` before execution.
 6. Click `开始生成`.
 

@@ -62,7 +62,7 @@ from aiwf.flows.cleaning_runtime_support import (
     post_json as _post_json_impl_runtime,
     sha256_file as _sha256_file_impl_runtime,
     try_accel_cleaning as _try_accel_cleaning_impl_runtime,
-    try_rust_transform_rows_v2 as _try_rust_transform_rows_v2_impl_runtime,
+    try_rust_transform_rows_v3 as _try_rust_transform_rows_v3_impl_runtime,
     utc_now_str as _utc_now_str_impl_runtime,
 )
 from aiwf.flows.cleaning_simple_rules import clean_rows_simple as _clean_rows_simple
@@ -118,8 +118,8 @@ def _try_accel_cleaning(
     )
 
 
-def _try_rust_transform_rows_v2(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
-    return _try_rust_transform_rows_v2_impl_runtime(
+def _try_rust_transform_rows_v3(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    return _try_rust_transform_rows_v3_impl_runtime(
         raw_rows,
         params,
         rules_dict=_rules_dict,
@@ -468,6 +468,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     compiled_spec = compile_cleaning_params_to_spec(params)
     strategy = _cleaning_rust_v2_strategy(params)
     verify_on_default = bool(params.get("local_standalone")) or _to_bool(os.getenv("AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT", "false"), default=False)
+    quality_rule_set_provenance = params.get("_quality_rule_set_provenance") if isinstance(params.get("_quality_rule_set_provenance"), dict) else {}
 
     def apply_execution_metadata(out: Dict[str, Any]) -> Dict[str, Any]:
         out["requested_rust_v2_mode"] = str(strategy.get("requested_mode") or "")
@@ -499,16 +500,20 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
         q = dict(out.get("quality") or {})
         q["cleaning_spec_version"] = CLEANING_SPEC_V2_VERSION
         q["rust_v2_used"] = False
+        if quality_rule_set_provenance:
+            q["quality_rule_set_id"] = str(quality_rule_set_provenance.get("resolved_id") or params.get("quality_rule_set_id") or "")
         if rust_error:
             q["rust_v2_error"] = rust_error
         out["quality"] = q
+        reason_samples = out.get("reason_samples") if isinstance(out.get("reason_samples"), dict) else {}
         out["cleaning_spec"] = compiled_spec
         out["execution_mode"] = "python_legacy"
         out["execution_audit"] = {
             "schema": "python_cleaning.audit.v1",
+            "operator": "python_clean_rows",
             "rule_hits": dict(q.get("rule_hits") or {}),
             "reason_counts": _python_reason_counts(q),
-            "reason_samples": {
+            "reason_samples": reason_samples or {
                 "invalid_object": [],
                 "cast_failed": [],
                 "required_missing": [],
@@ -517,6 +522,18 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             },
             "rust_v2_error": rust_error,
         }
+        out["row_transform_engine"] = "python"
+        out["postprocess_engine"] = "none"
+        out["quality_gate_engine"] = "python"
+        out["materialization_engine"] = "python"
+        out["legacy_cleaning_operator_used"] = False
+        out["stage_provenance"] = [
+            {"stage": "row_transform", "engine": "python"},
+            {"stage": "quality_gate", "engine": "python"},
+            {"stage": "materialize", "engine": "python"},
+        ]
+        if quality_rule_set_provenance:
+            out["execution_audit"]["quality_rule_set_provenance"] = dict(quality_rule_set_provenance)
         if strategy["decision"] == "force_python":
             out["eligibility_reason"] = "forced_python"
         elif rust_error:
@@ -541,11 +558,16 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     ) -> Dict[str, Any]:
         quality = dict(rust_v2["quality"])
         quality["cleaning_spec_version"] = CLEANING_SPEC_V2_VERSION
+        if quality_rule_set_provenance:
+            quality["quality_rule_set_id"] = str(quality_rule_set_provenance.get("resolved_id") or params.get("quality_rule_set_id") or "")
         execution_audit = (
             rust_v2.get("audit")
             if isinstance(rust_v2.get("audit"), dict)
             else dict(quality.get("rust_v2_audit") or {})
         )
+        execution_audit["operator"] = str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3")
+        if quality_rule_set_provenance:
+            execution_audit["quality_rule_set_provenance"] = dict(quality_rule_set_provenance)
         return apply_execution_metadata({
             "rows": rust_v2["rows"],
             "quality": quality,
@@ -553,6 +575,16 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             "execution_mode": "rust_v2",
             "execution_audit": execution_audit,
             "eligibility_reason": "eligible",
+            "row_transform_engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3"),
+            "postprocess_engine": "none",
+            "quality_gate_engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3"),
+            "materialization_engine": "python",
+            "legacy_cleaning_operator_used": False,
+            "stage_provenance": [
+                {"stage": "row_transform", "engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3")},
+                {"stage": "quality_gate", "engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3")},
+                {"stage": "materialize", "engine": "python"},
+            ],
             "shadow_compare": shadow_compare or _shadow_compare_result(
                 status="skipped",
                 matched=False,
@@ -567,7 +599,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     if strategy["decision"] == "off":
         return build_python_result(skipped_reason="mode_off")
 
-    rust_v2 = _try_rust_transform_rows_v2(raw_rows, params)
+    rust_v2 = _try_rust_transform_rows_v3(raw_rows, params)
 
     if strategy["decision"] == "force_rust":
         if rust_v2.get("ok"):

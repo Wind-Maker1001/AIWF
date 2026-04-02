@@ -5,6 +5,8 @@ use super::custom::{
 };
 use super::support::{run_stateful_workflow_step, run_stateless_workflow_step, workflow_error};
 use super::*;
+use crate::api_types::PostprocessRowsV1Req;
+use crate::misc_ops::run_postprocess_rows_v1;
 use crate::operator_catalog::resolve_operator_metadata;
 
 type WorkflowStepHandler = fn(&AppState, Value) -> Result<Value, String>;
@@ -50,6 +52,7 @@ macro_rules! define_stateful_workflow_handlers {
 define_stateless_workflow_handlers! {
     workflow_cleaning_handler => "cleaning", CleaningReq, run_cleaning_operator;
     workflow_transform_rows_v3_handler => "transform_rows_v3", TransformRowsV3Req, run_transform_rows_v3;
+    workflow_postprocess_rows_v1_handler => "postprocess_rows_v1", PostprocessRowsV1Req, run_postprocess_rows_v1;
     workflow_text_preprocess_v2_handler => "text_preprocess_v2", TextPreprocessReq, run_text_preprocess_v2;
     workflow_compute_metrics_handler => "compute_metrics", ComputeReq, run_compute_metrics;
     workflow_join_rows_v1_handler => "join_rows_v1", JoinRowsReq, run_join_rows_v1;

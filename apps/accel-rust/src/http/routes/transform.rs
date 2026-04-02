@@ -40,6 +40,10 @@ pub(super) fn transform_routes() -> Router<AppState> {
             post(crate::http::text_preprocess_v2_operator),
         )
         .route(
+            "/operators/postprocess_rows_v1",
+            post(crate::http::postprocess_rows_v1_operator),
+        )
+        .route(
             "/operators/normalize_schema_v1",
             post(crate::http::normalize_schema_v1_operator),
         )

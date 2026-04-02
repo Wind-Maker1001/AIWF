@@ -17,21 +17,64 @@ from aiwf.quality_contract import normalize_value_for_field
 
 _PROFILE_NUMERIC_FIELDS = {
     "finance_statement": ["id", "amount"],
+    "bank_statement": ["debit_amount", "credit_amount", "amount", "balance"],
     "customer_contact": [],
+    "customer_ledger": ["amount"],
     "debate_evidence": ["confidence"],
 }
 
 _PROFILE_DATE_FIELDS = {
     "finance_statement": ["biz_date", "published_at"],
+    "bank_statement": ["txn_date"],
     "customer_contact": [],
+    "customer_ledger": ["biz_date"],
     "debate_evidence": ["published_at"],
 }
 
 _PROFILE_REQUIRED_FIELDS = {
     "finance_statement": ["id", "amount"],
+    "bank_statement": ["account_no", "txn_date"],
     "customer_contact": ["customer_name", "phone"],
+    "customer_ledger": ["customer_name", "phone", "amount", "biz_date"],
     "debate_evidence": ["claim_text"],
 }
+
+
+def _resolve_numeric_fields(scenario: Dict[str, Any]) -> List[str]:
+    profile = str(scenario.get("canonical_profile") or "").strip().lower()
+    fields = scenario.get("numeric_fields") if isinstance(scenario.get("numeric_fields"), list) else _PROFILE_NUMERIC_FIELDS.get(profile, [])
+    return [str(item) for item in fields if str(item).strip()]
+
+
+def _resolve_date_fields(scenario: Dict[str, Any]) -> List[str]:
+    profile = str(scenario.get("canonical_profile") or "").strip().lower()
+    fields = scenario.get("date_fields") if isinstance(scenario.get("date_fields"), list) else _PROFILE_DATE_FIELDS.get(profile, [])
+    return [str(item) for item in fields if str(item).strip()]
+
+
+def _default_numeric_cast(field: str) -> str:
+    return "int" if field.strip().lower() == "id" else "float"
+
+
+def _derive_default_rust_rules(scenario: Dict[str, Any]) -> Dict[str, Any]:
+    required_fields = _resolve_required_fields(scenario)
+    duplicate_fields = _resolve_duplicate_fields(scenario)
+    numeric_fields = _resolve_numeric_fields(scenario)
+    date_fields = _resolve_date_fields(scenario)
+    quality_rules = scenario.get("quality_rules") if isinstance(scenario.get("quality_rules"), dict) else {}
+    deduplicate_keep = str(quality_rules.get("deduplicate_keep") or "last").strip().lower() or "last"
+
+    rules: Dict[str, Any] = {}
+    if required_fields:
+        rules["required_fields"] = required_fields
+    if duplicate_fields:
+        rules["deduplicate_by"] = duplicate_fields
+        rules["deduplicate_keep"] = deduplicate_keep
+    if numeric_fields:
+        rules["casts"] = {field: _default_numeric_cast(field) for field in numeric_fields}
+    if date_fields:
+        rules["date_ops"] = [{"field": field, "op": "parse_ymd", "as": field} for field in date_fields]
+    return rules
 
 
 def _load_glue_app():
@@ -104,6 +147,7 @@ def validate_ingest_extract_contract(payload: Dict[str, Any]) -> List[str]:
         "quality_blocked",
         "blocked_inputs",
         "engine_trace",
+        "detected_structure",
         "header_mapping",
         "candidate_profiles",
         "quality_decisions",
@@ -135,6 +179,7 @@ def validate_ingest_extract_contract(payload: Dict[str, Any]) -> List[str]:
             "table_cells",
             "sheet_frames",
             "engine_trace",
+            "detected_structure",
             "header_mapping",
             "candidate_profiles",
             "quality_decisions",
@@ -170,6 +215,7 @@ def run_sidecar_extract_for_scenario(scenario_dir: str | Path, scenario: Dict[st
     scenario_path = Path(scenario_dir)
     body = {
         "input_files": _scenario_input_paths(scenario, scenario_path),
+        "header_mapping_mode": str(scenario.get("header_mapping_mode") or ""),
         "ocr_enabled": bool(scenario.get("ocr_enabled", True)),
         "ocr_lang": scenario.get("ocr_lang"),
         "ocr_config": scenario.get("ocr_config"),
@@ -200,6 +246,8 @@ def normalize_rows_for_compare(rows: Iterable[Dict[str, Any]], fields: List[str]
 
 
 def compare_expected_rows(actual_rows: List[Dict[str, Any]], expected_rows: List[Dict[str, Any]], scenario: Dict[str, Any]) -> List[str]:
+    if bool(scenario.get("skip_row_compare", False)):
+        return []
     fields = scenario.get("expected_row_fields") if isinstance(scenario.get("expected_row_fields"), list) else []
     compare_fields = [str(item) for item in fields if str(item).strip()]
     if not compare_fields:
@@ -224,6 +272,11 @@ def compare_expected_quality(
         errors.append(
             f"quality_blocked={bool(payload.get('quality_blocked'))} != expected {bool(expected_blocked)}"
         )
+    expected_structure = str(scenario_obj.get("expected_detected_structure") or "").strip()
+    if expected_structure and str(payload.get("detected_structure") or "").strip() != expected_structure:
+        errors.append(
+            f"detected_structure={str(payload.get('detected_structure') or '').strip()} != {expected_structure}"
+        )
     engine_trace = payload.get("engine_trace") if isinstance(payload.get("engine_trace"), list) else []
     engine_ok_any_of = scenario_obj.get("engine_ok_any_of") if isinstance(scenario_obj.get("engine_ok_any_of"), list) else []
     if engine_ok_any_of:
@@ -242,6 +295,61 @@ def compare_expected_quality(
         for field in expected_quality["required_fields"]:
             if str(field) not in required_missing:
                 errors.append(f"required_field_missing missing key: {field}")
+    expected_profile = str(scenario_obj.get("expected_recommended_profile") or "").strip()
+    expected_template_id = str(scenario_obj.get("expected_recommended_template_id") or "").strip()
+    expected_signal_source = str(scenario_obj.get("expected_signal_source") or "").strip()
+    forbidden_recommended_profiles = (
+        [str(item) for item in scenario_obj.get("forbidden_recommended_profiles", []) if str(item).strip()]
+        if isinstance(scenario_obj.get("forbidden_recommended_profiles"), list)
+        else []
+    )
+    expected_header_fields = (
+        [str(item) for item in scenario_obj.get("expected_header_mapping_fields", []) if str(item).strip()]
+        if isinstance(scenario_obj.get("expected_header_mapping_fields"), list)
+        else []
+    )
+    candidate_profiles = payload.get("candidate_profiles") if isinstance(payload.get("candidate_profiles"), list) else []
+    if expected_profile or expected_template_id:
+        recommended = next(
+            (
+                item
+                for item in candidate_profiles
+                if isinstance(item, dict) and bool(item.get("recommended"))
+            ),
+            candidate_profiles[0] if candidate_profiles else {},
+        )
+        if expected_profile and str(recommended.get("profile") or "").strip() != expected_profile:
+            errors.append(
+                f"recommended_profile={str(recommended.get('profile') or '').strip()} != {expected_profile}"
+            )
+        if expected_template_id and str(recommended.get("recommended_template_id") or "").strip() != expected_template_id:
+            errors.append(
+                "recommended_template_id="
+                f"{str(recommended.get('recommended_template_id') or '').strip()} != {expected_template_id}"
+            )
+        if expected_signal_source and str(recommended.get("signal_source") or "").strip() != expected_signal_source:
+            errors.append(
+                f"signal_source={str(recommended.get('signal_source') or '').strip()} != {expected_signal_source}"
+            )
+    if forbidden_recommended_profiles:
+        recommended_profiles = {
+            str(item.get("profile") or "").strip()
+            for item in candidate_profiles
+            if isinstance(item, dict) and bool(item.get("recommended")) and str(item.get("profile") or "").strip()
+        }
+        blocked = [profile for profile in forbidden_recommended_profiles if profile in recommended_profiles]
+        if blocked:
+            errors.append(f"forbidden recommended profiles present: {', '.join(sorted(blocked))}")
+    if expected_header_fields:
+        header_mapping = payload.get("header_mapping") if isinstance(payload.get("header_mapping"), list) else []
+        mapped_fields = {
+            str(item.get("canonical_field") or "").strip()
+            for item in header_mapping
+            if isinstance(item, dict) and str(item.get("canonical_field") or "").strip()
+        }
+        missing = [field for field in expected_header_fields if field not in mapped_fields]
+        if missing:
+            errors.append(f"header_mapping missing fields: {', '.join(missing)}")
     for key, value in expected_quality.items():
         if key == "quality_blocked" or key == "required_fields":
             continue
@@ -298,8 +406,12 @@ def _resolve_duplicate_fields(scenario: Dict[str, Any]) -> List[str]:
     profile = str(scenario.get("canonical_profile") or "").strip().lower()
     if profile == "finance_statement":
         return ["id"]
+    if profile == "bank_statement":
+        return ["account_no", "txn_date", "ref_no", "amount"]
     if profile == "customer_contact":
         return ["phone"]
+    if profile == "customer_ledger":
+        return ["phone", "biz_date", "amount"]
     return []
 
 
@@ -307,8 +419,8 @@ def compute_common_python_metrics(rows: List[Dict[str, Any]], scenario: Dict[str
     profile = str(scenario.get("canonical_profile") or "").strip().lower()
     required_fields = _resolve_required_fields(scenario)
     duplicate_fields = _resolve_duplicate_fields(scenario)
-    numeric_fields = scenario.get("numeric_fields") if isinstance(scenario.get("numeric_fields"), list) else _PROFILE_NUMERIC_FIELDS.get(profile, [])
-    date_fields = scenario.get("date_fields") if isinstance(scenario.get("date_fields"), list) else _PROFILE_DATE_FIELDS.get(profile, [])
+    numeric_fields = _resolve_numeric_fields(scenario)
+    date_fields = _resolve_date_fields(scenario)
 
     required_missing_cells = 0
     for field in required_fields:
@@ -499,13 +611,7 @@ def run_python_rust_consistency(scenario_dir: str | Path, scenario: Dict[str, An
     quality_rules = dict(scenario.get("quality_rules") or {})
     rust_rules = dict(scenario.get("rust_rules") or {})
     if not rust_rules:
-        if quality_rules.get("canonical_profile") == "finance_statement":
-            rust_rules = {
-                "casts": {"id": "int", "amount": "float"},
-                "deduplicate_by": ["id"],
-                "deduplicate_keep": "last",
-                "date_ops": [{"field": "biz_date", "op": "parse_ymd", "as": "biz_date_norm"}],
-            }
+        rust_rules = _derive_default_rust_rules(scenario)
     rust_gates = {}
     if "required_fields" in quality_rules:
         rust_gates["required_fields"] = quality_rules.get("required_fields")
@@ -520,7 +626,7 @@ def run_python_rust_consistency(scenario_dir: str | Path, scenario: Dict[str, An
     ]:
         if key in quality_rules:
             rust_gates[key] = quality_rules[key]
-    rust_out = rust_client.transform_rows_v2(
+    rust_out = rust_client.transform_rows_v3(
         rows=rows,
         rules=rust_rules,
         quality_gates=rust_gates,

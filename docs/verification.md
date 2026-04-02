@@ -70,6 +70,18 @@ Frontend verification evidence written by `ci_check.ps1`:
 - `ops/logs/frontend_verification/frontend_primary_verification_latest.json`
 - `ops/logs/frontend_verification/frontend_compatibility_verification_latest.json`
 
+OpenAPI / SDK sync gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_openapi_sdk_sync.ps1
+```
+
+This gate now enforces:
+
+- checked-in Rust OpenAPI `contracts/rust/openapi.v2.yaml` keeps the current handwritten Python client surface covered
+- current handwritten client `apps/glue-python/aiwf/rust_client.py` exposes the active transform path functions such as `transform_rows_v3`, `postprocess_rows_v1`, and `quality_check_v2`
+- legacy helper `ops/scripts/generate_rust_client.ps1` remains auxiliary only; it is not the current authority path for the Python client surface
+
 Architecture scorecard written by `ci_check.ps1`:
 
 - `ops/logs/architecture/architecture_scorecard_latest.json`
@@ -308,10 +320,11 @@ This gate now enforces:
 - checked-in renderer Rust operator manifest module `apps/dify-desktop/renderer/workflow/rust_operator_manifest.generated.js` stays in sync with the checked-in manifest
 - checked-in Rust operator presentation map `apps/dify-desktop/renderer/workflow/rust-operator-presentations.js` stays aligned with the renderer desktop-exposable Rust operator surface
 - checked-in Rust operator palette policy `apps/dify-desktop/renderer/workflow/rust-operator-palette-policy.js` stays aligned with renderer desktop-exposable Rust operator domains and ordering policy
-- every published Rust operator exposed by `operator_catalog_data.rs` must stay represented in desktop `defaults-catalog.js`
+- every published Rust operator exposed by `operator_catalog_data.rs` must stay routed by desktop `rust_ops_domain.js`
 - every published Rust operator must stay routed by desktop `rust_ops_domain.js`
-- every Rust operator marked desktop-exposable by manifest must stay represented in desktop `defaults-catalog.js`
+- every non-`palette_hidden` Rust operator marked desktop-exposable by manifest must stay represented in desktop `defaults-catalog.js`
 - every Rust operator marked desktop-exposable by manifest must stay routed by desktop `rust_ops_domain.js`
+- `palette_hidden` Rust operators must remain present in manifest/generated modules but must not be required in the default hand-authored palette surface
 - desktop Rust routing and desktop Rust catalog must not expose operators outside manifest desktop exposure
 - renderer Rust operator presentations must cover every desktop-exposable Rust operator with non-empty `name` / `desc`, and must not keep stale entries
 - renderer Rust operator palette policy must cover every desktop-exposable Rust operator domain, and pinned order entries must not drift or duplicate
@@ -329,6 +342,12 @@ This script regenerates `contracts/rust/operators_manifest.v1.json` from Rust ca
 The manifest is expected to conform to `contracts/rust/operators_manifest.schema.json`.
 It also regenerates `apps/dify-desktop/workflow_chiplets/domains/rust_operator_manifest.generated.js` for desktop runtime consumption.
 It also regenerates `apps/dify-desktop/renderer/workflow/rust_operator_manifest.generated.js` for renderer-side Rust palette filtering.
+
+Rust client generation note:
+
+- `ops/scripts/generate_rust_client.ps1` remains an auxiliary helper for OpenAPI exploration only
+- the current repository keeps `apps/glue-python/aiwf/rust_client.py` as the maintained hand-written client surface
+- OpenAPI/client sync is currently enforced by external contract tests rather than by a checked-in generated SDK artifact
 
 If your local machine does not have SQL ready yet, add `-SkipSqlConnectivityGate`.
 

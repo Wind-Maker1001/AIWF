@@ -6,6 +6,7 @@ pub(crate) fn run_quality_check_v3(req: QualityCheckV3Req) -> Result<QualityChec
         run_id: req.run_id.clone(),
         rows: req.rows.clone(),
         rules: req.rules.clone(),
+        metrics: None,
     })?;
     let rules = req.rules.as_object().cloned().unwrap_or_default();
     let mut violations = base

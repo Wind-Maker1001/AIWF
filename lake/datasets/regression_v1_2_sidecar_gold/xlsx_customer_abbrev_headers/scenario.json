@@ -1,0 +1,25 @@
+{
+  "id": "xlsx_customer_abbrev_headers",
+  "input_files": ["input.xlsx"],
+  "canonical_profile": "customer_contact",
+  "header_mapping_mode": "auto",
+  "xlsx_all_sheets": true,
+  "sheet_allowlist": ["Contacts"],
+  "include_hidden_sheets": false,
+  "quality_rules": {
+    "canonical_profile": "customer_contact",
+    "required_fields": ["customer_name", "phone"],
+    "unique_keys": ["phone"],
+    "max_required_missing_ratio": 0.0,
+    "duplicate_key_ratio_max": 0.0
+  },
+  "xlsx_rules": {
+    "required_columns": ["customer_name", "phone", "city"],
+    "header_confidence_min": 0.8,
+    "sheet_row_count_min": 1,
+    "cross_sheet_required_coverage_min": 1.0
+  },
+  "expected_row_fields": ["customer_name", "phone", "city"],
+  "expected_recommended_profile": "customer_contact",
+  "expected_header_mapping_fields": ["customer_name", "phone", "city"]
+}

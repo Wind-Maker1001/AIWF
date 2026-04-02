@@ -59,6 +59,7 @@ pub(crate) struct QualityCheckV2Req {
     pub run_id: Option<String>,
     pub rows: Vec<Value>,
     pub rules: Value,
+    pub metrics: Option<Value>,
 }
 
 #[derive(Deserialize)]

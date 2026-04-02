@@ -72,6 +72,7 @@ function uniqueSorted(values) {
   const cjsPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_contract.js");
   const esmPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "workflow-contract.js");
   const catalogPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "defaults-catalog.js");
+  const rustManifestPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "rust_operator_manifest.generated.js");
   const contractPath = path.join(repoRoot, "contracts", "desktop", "node_config_contracts.v1.json");
   const contractCjsPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_node_config_contract.generated.js");
   const contractEsmPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "node_config_contract.generated.js");
@@ -79,6 +80,7 @@ function uniqueSorted(values) {
   const cjs = require(cjsPath);
   const esm = await import(pathToFileURL(esmPath).href);
   const catalog = await import(pathToFileURL(catalogPath).href);
+  const rustManifest = await import(pathToFileURL(rustManifestPath).href);
   const contractJson = JSON.parse(require("fs").readFileSync(contractPath, "utf8"));
   const contractCjs = require(contractCjsPath);
   const contractEsm = await import(pathToFileURL(contractEsmPath).href);
@@ -92,6 +94,12 @@ function uniqueSorted(values) {
     ? esm.NODE_CONFIG_SCHEMA_QUALITY_BY_TYPE
     : {};
   const catalogIds = new Set((Array.isArray(catalog.NODE_CATALOG) ? catalog.NODE_CATALOG : []).map((item) => String(item?.type || "")));
+  const hiddenRustTypes = new Set(
+    Object.entries(rustManifest.DESKTOP_RUST_OPERATOR_METADATA || {})
+      .filter(([, item]) => item && item.palette_hidden === true)
+      .map(([type]) => String(type || "").trim())
+      .filter(Boolean)
+  );
   const allowedQuality = ["typed", "enum_constrained", "nested_shape_constrained"];
   const issues = [];
   const contractTypes = Array.isArray(contractJson?.nodes)
@@ -117,7 +125,7 @@ function uniqueSorted(values) {
   ));
   const requiredNestedTypesMissingFromContract = requiredNestedNodeTypes.filter((type) => !contractTypes.includes(type));
 
-  const missingFromCatalog = TARGET_NODE_TYPES.filter((type) => !catalogIds.has(type));
+  const missingFromCatalog = TARGET_NODE_TYPES.filter((type) => !catalogIds.has(type) && !hiddenRustTypes.has(type));
   const missingFromCjs = TARGET_NODE_TYPES.filter((type) => !cjsIds.includes(type));
   const missingFromEsm = TARGET_NODE_TYPES.filter((type) => !esmIds.includes(type));
   const drift = Array.from(new Set(

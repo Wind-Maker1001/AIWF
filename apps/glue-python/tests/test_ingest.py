@@ -1,9 +1,11 @@
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from aiwf import ingest
+from aiwf.ingest_file_readers import load_pdf_input
 from aiwf.ingest_image_pipeline import extract_image_rows
 from aiwf.ingest_xlsx_pipeline import extract_xlsx_rows
 
@@ -207,6 +209,36 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(len(meta["table_cells"]), 1)
         self.assertFalse(meta["quality_blocked"])
 
+    def test_load_pdf_input_prefers_docling_metadata_when_available(self):
+        with patch("aiwf.ingest_file_readers.extract_with_docling") as extract_docling:
+            extract_docling.return_value = {
+                "image_blocks": [
+                    {
+                        "block_id": "doc_blk_0001",
+                        "block_type": "text",
+                        "text": "Claim: policy reform improves compliance and reduces friction.",
+                        "page_no": 1,
+                        "line_no": 1,
+                        "bbox": [0, 0, 10, 10],
+                    }
+                ],
+                "table_cells": [
+                    {"cell_id": "doc_cell_1", "row": 1, "col": 1, "text": "Acct No"},
+                    {"cell_id": "doc_cell_2", "row": 1, "col": 2, "text": "Posting Dt"},
+                    {"cell_id": "doc_cell_3", "row": 2, "col": 1, "text": "62220001"},
+                    {"cell_id": "doc_cell_4", "row": 2, "col": 2, "text": "2026/03/01"},
+                ],
+                "sheet_frames": [],
+                "engine_trace": [{"engine": "docling", "ok": True}],
+            }
+            rows, meta = load_pdf_input("demo.pdf", {"text_by_line": False})
+
+        self.assertEqual(meta["input_format"], "pdf")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["source_type"], "pdf")
+        self.assertEqual(len(meta["table_cells"]), 4)
+        self.assertEqual(meta["engine_trace"][0]["engine"], "docling")
+
     def test_extract_xlsx_rows_handles_chinese_multirow_headers_and_units(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = os.path.join(tmp, "cn_finance.xlsx")
@@ -243,6 +275,110 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(rows[0]["biz_date"], "2026-03-01")
         self.assertFalse(meta["quality_blocked"])
 
+    def test_extract_xlsx_rows_handles_bank_statement_multiheaders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = os.path.join(tmp, "bank_statement.xlsx")
+            from openpyxl import Workbook  # type: ignore
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "流水"
+            ws["A1"] = "账号"
+            ws.merge_cells("A1:A2")
+            ws["B1"] = "交易日期"
+            ws.merge_cells("B1:B2")
+            ws["C1"] = "借贷信息"
+            ws.merge_cells("C1:D1")
+            ws["C2"] = "借方金额"
+            ws["D2"] = "贷方金额"
+            ws["E1"] = "金额"
+            ws.merge_cells("E1:E2")
+            ws["F1"] = "余额（万元）"
+            ws.merge_cells("F1:F2")
+            ws["G1"] = "对方户名"
+            ws.merge_cells("G1:G2")
+            ws["H1"] = "流水号"
+            ws.merge_cells("H1:H2")
+            ws.append(["62220001", "2026年3月1日", "120.5", "0", "-120.5", "1.25", "张三", "TXN-001"])
+            wb.save(p)
+
+            rows, meta = extract_xlsx_rows(
+                p,
+                spec={
+                    "canonical_profile": "bank_statement",
+                    "quality_rules": {
+                        "canonical_profile": "bank_statement",
+                        "required_fields": ["account_no", "txn_date"],
+                        "unique_keys": ["account_no", "txn_date", "ref_no", "amount"],
+                        "max_required_missing_ratio": 0.0,
+                        "numeric_parse_rate_min": 1.0,
+                        "date_parse_rate_min": 1.0,
+                    },
+                    "xlsx_rules": {
+                        "required_columns": ["account_no", "txn_date", "debit_amount", "credit_amount", "amount", "balance", "counterparty_name", "ref_no"],
+                        "header_confidence_min": 0.8,
+                    },
+                },
+            )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["account_no"], "62220001")
+        self.assertEqual(rows[0]["txn_date"], "2026-03-01")
+        self.assertEqual(rows[0]["debit_amount"], 120.5)
+        self.assertEqual(rows[0]["amount"], -120.5)
+        self.assertEqual(rows[0]["balance"], 12500.0)
+        self.assertEqual(rows[0]["counterparty_name"], "张三")
+        self.assertEqual(rows[0]["ref_no"], "TXN-001")
+        self.assertFalse(meta["quality_blocked"])
+
+    def test_extract_xlsx_rows_auto_mode_handles_bank_statement_abbrev_headers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = os.path.join(tmp, "bank_statement_abbrev.xlsx")
+            from openpyxl import Workbook  # type: ignore
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "BankFlow"
+            ws.append(["Acct No", "Posting Dt", "DR", "CR", "Bal", "Memo", "Ref No"])
+            ws.append(["62220001", "2026/03/01", "120.5", "0", "12500", "Rent", "TXN-001"])
+            ws.append(["62220001", "2026-03-02", "0", "300", "12800", "Refund", "TXN-002"])
+            wb.save(p)
+
+            strict_rows, strict_meta = extract_xlsx_rows(
+                p,
+                spec={
+                    "canonical_profile": "bank_statement",
+                    "header_mapping_mode": "strict",
+                    "xlsx_rules": {
+                        "required_columns": ["account_no", "txn_date", "debit_amount", "credit_amount", "balance", "remark", "ref_no"],
+                        "header_confidence_min": 0.8,
+                    },
+                },
+            )
+            auto_rows, auto_meta = extract_xlsx_rows(
+                p,
+                spec={
+                    "canonical_profile": "bank_statement",
+                    "header_mapping_mode": "auto",
+                    "xlsx_rules": {
+                        "required_columns": ["account_no", "txn_date", "debit_amount", "credit_amount", "balance", "remark", "ref_no"],
+                        "header_confidence_min": 0.8,
+                    },
+                },
+            )
+
+        self.assertEqual(len(strict_rows), 2)
+        self.assertTrue(strict_meta["quality_blocked"])
+        self.assertEqual(len(auto_rows), 2)
+        self.assertEqual(auto_rows[0]["account_no"], "62220001")
+        self.assertEqual(auto_rows[0]["txn_date"], "2026-03-01")
+        self.assertEqual(auto_rows[0]["debit_amount"], 120.5)
+        self.assertEqual(auto_rows[0]["credit_amount"], 0.0)
+        self.assertEqual(auto_rows[0]["balance"], 12500.0)
+        self.assertEqual(auto_rows[0]["remark"], "Rent")
+        self.assertEqual(auto_rows[0]["ref_no"], "TXN-001")
+        self.assertFalse(auto_meta["quality_blocked"])
+
     def test_read_docx(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = os.path.join(tmp, "a.docx")
@@ -266,6 +402,37 @@ class IngestTests(unittest.TestCase):
             self.assertEqual(rows, [])
             self.assertEqual(meta["input_format"], "image")
             self.assertTrue(meta.get("skipped"))
+
+    def test_real_ocr_image_assets_exist_and_are_readable(self):
+        from PIL import Image  # type: ignore
+
+        root = Path(__file__).resolve().parents[3] / "lake" / "datasets" / "regression_v1_2_sidecar_gold"
+        paths = [
+            root / "image_bank_statement_tabular_auto" / "input.png",
+            root / "image_debate_text_auto" / "input.png",
+            root / "image_customer_contact_auto" / "input.png",
+            root / "image_customer_ledger_auto" / "input.png",
+        ]
+        for path in paths:
+            self.assertTrue(path.exists(), str(path))
+            with Image.open(path) as image:
+                self.assertGreater(image.width, 100)
+                self.assertGreater(image.height, 100)
+
+    def test_real_ocr_pdf_assets_exist_and_are_readable(self):
+        from pypdf import PdfReader  # type: ignore
+
+        root = Path(__file__).resolve().parents[3] / "lake" / "datasets" / "regression_v1_2_sidecar_gold"
+        paths = [
+            root / "pdf_bank_statement_tabular_auto" / "input.pdf",
+            root / "pdf_debate_text_auto" / "input.pdf",
+            root / "pdf_customer_contact_auto" / "input.pdf",
+            root / "pdf_customer_ledger_auto" / "input.pdf",
+        ]
+        for path in paths:
+            self.assertTrue(path.exists(), str(path))
+            reader = PdfReader(str(path))
+            self.assertGreaterEqual(len(reader.pages), 1)
 
     def test_register_input_reader_supports_custom_extension(self):
         with tempfile.TemporaryDirectory() as tmp:

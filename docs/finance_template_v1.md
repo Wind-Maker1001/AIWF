@@ -3,6 +3,11 @@
 ## 目的
 `finance_report_v1` 用于把财务报表类原始数据清洗成可计算、可复核的结构化数据，重点约束资产负债表/利润表/现金流相关金额字段。
 
+边界说明：
+
+- `finance_report_v1` 面向财报/报表类金额字段，不覆盖银行流水/对账单语义。
+- 银行流水请改用 `bank_statement_v1`，见 [docs/bank_statement_template_v1.md](bank_statement_template_v1.md)。
+
 ## 启用方式
 - GUI: 在“数据模板”选择 `财报模板 v1（资产/利润/现金流）`。
 - API payload: `params.cleaning_template = "finance_report_v1"`。
