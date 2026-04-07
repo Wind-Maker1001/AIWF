@@ -31,12 +31,14 @@ test("node config schema coverage gate passes", () => {
   assert.ok(payload, `expected structured JSON payload in output:\n${result.stdout}\n${result.stderr}`);
   assert.equal(payload.status, "passed");
   assert.match(payload.contractPath, /node_config_contracts\.v1\.json/i);
-  assert.match(payload.contractCjsPath, /workflow_node_config_contract\.generated\.js/i);
-  assert.match(payload.contractEsmPath, /node_config_contract\.generated\.js/i);
+  assert.match(payload.rustAuthorityPath, /workflow_contract\.rs/i);
+  assert.match(payload.rustHandlerPath, /platform\.rs/i);
+  assert.match(payload.glueValidationClientPath, /workflow_validation_client\.py/i);
   assert.equal(payload.contractAuthority, "contracts/desktop/node_config_contracts.v1.json");
   assert.equal(payload.contractSchemaVersion, "node_config_contracts.v1");
   assert.equal(payload.targetCount, 31);
   assert.equal(payload.coveredCount, 31);
+  assert.equal(payload.rustAuthorityCoveredCount, 31);
   assert.ok(payload.contractValidatorKindCount >= 20);
   assert.equal(payload.minimumNestedShapeConstrained, 19);
   assert.equal(payload.nestedShapeConstrainedCount, 20);
@@ -87,8 +89,8 @@ test("node config schema coverage gate emits structured failure details", () => 
     payload.nestedShapeConstrainedDeficit,
     payload.minimumNestedShapeConstrained - payload.nestedShapeConstrainedCount,
   );
-  assert.ok(payload.drift && Array.isArray(payload.drift.missingFromCatalog));
-  assert.ok(Array.isArray(payload.drift.contractModuleTypeDrift));
-  assert.ok(Array.isArray(payload.drift.contractModuleQualityDrift));
+  assert.ok(payload.drift && Array.isArray(payload.drift.rustAuthorityDrift));
+  assert.ok(Array.isArray(payload.drift.rustHandlerDrift));
+  assert.ok(Array.isArray(payload.drift.glueValidationClientDrift));
   assert.ok(Array.isArray(payload.drift.requiredNestedTypesMissingFromContract));
 });

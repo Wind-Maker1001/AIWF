@@ -6,11 +6,6 @@ const path = require("path");
 
 const {
   TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
-  TEMPLATE_MARKETPLACE_SCHEMA_VERSION,
-  WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION,
-  WORKFLOW_NODE_CACHE_SCHEMA_VERSION,
-  WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION,
-  WORKFLOW_TASK_QUEUE_SCHEMA_VERSION,
   createWorkflowIpcStateSupport,
 } = require("../workflow_ipc_state");
 
@@ -80,23 +75,23 @@ test("workflow ipc state normalizes queue control quotas into safe bounds", () =
   });
 });
 
-test("workflow ipc state persists versioned workflow_store containers and reads legacy payloads", () => {
+test("workflow ipc state persists minimal workflow_store containers and reads legacy payloads", () => {
   const { support } = makeSupport();
 
   support.saveWorkflowQueue([{ run_id: "run_1" }]);
   const queueJson = JSON.parse(fs.readFileSync(support.workflowQueuePath(), "utf8"));
-  assert.equal(queueJson.schema_version, WORKFLOW_TASK_QUEUE_SCHEMA_VERSION);
+  assert.equal(Object.prototype.hasOwnProperty.call(queueJson, "schema_version"), false);
   assert.deepEqual(queueJson.items, [{ run_id: "run_1" }]);
 
   support.saveQueueControl({ paused: true, quotas: { alpha: 3 } });
   const controlJson = JSON.parse(fs.readFileSync(support.workflowQueueControlPath(), "utf8"));
-  assert.equal(controlJson.schema_version, WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION);
+  assert.equal(Object.prototype.hasOwnProperty.call(controlJson, "schema_version"), false);
   assert.equal(controlJson.paused, true);
   assert.deepEqual(controlJson.quotas, { alpha: 3 });
 
   support.saveTemplateMarketplace([{ id: "pack_1", name: "Pack One", templates: [] }]);
   const marketplaceJson = JSON.parse(fs.readFileSync(support.templateMarketplacePath(), "utf8"));
-  assert.equal(marketplaceJson.schema_version, TEMPLATE_MARKETPLACE_SCHEMA_VERSION);
+  assert.equal(Object.prototype.hasOwnProperty.call(marketplaceJson, "schema_version"), false);
   assert.equal(marketplaceJson.items.length, 1);
   assert.equal(marketplaceJson.items[0].schema_version, TEMPLATE_PACK_ENTRY_SCHEMA_VERSION);
 
@@ -132,8 +127,8 @@ test("workflow ipc state node cache tracks hits misses and sets", () => {
   assert.equal(stats.hit_rate, 0.5);
   const cacheJson = JSON.parse(fs.readFileSync(support.nodeCachePath(), "utf8"));
   const metricsJson = JSON.parse(fs.readFileSync(support.nodeCacheMetricsPath(), "utf8"));
-  assert.equal(cacheJson.schema_version, WORKFLOW_NODE_CACHE_SCHEMA_VERSION);
-  assert.equal(metricsJson.schema_version, WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION);
+  assert.equal(Object.prototype.hasOwnProperty.call(cacheJson, "schema_version"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(metricsJson, "schema_version"), false);
 
   support.clearNodeCache();
   const cleared = support.cacheStats();
@@ -144,6 +139,6 @@ test("workflow ipc state node cache tracks hits misses and sets", () => {
   assert.equal(cleared.last_reset_at, "2026-03-13T22:50:00.000Z");
   const clearedCacheJson = JSON.parse(fs.readFileSync(support.nodeCachePath(), "utf8"));
   const clearedMetricsJson = JSON.parse(fs.readFileSync(support.nodeCacheMetricsPath(), "utf8"));
-  assert.equal(clearedCacheJson.schema_version, WORKFLOW_NODE_CACHE_SCHEMA_VERSION);
-  assert.equal(clearedMetricsJson.schema_version, WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION);
+  assert.equal(Object.prototype.hasOwnProperty.call(clearedCacheJson, "schema_version"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(clearedMetricsJson, "schema_version"), false);
 });

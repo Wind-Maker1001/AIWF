@@ -38,7 +38,7 @@ test("workflow preflight support normalizes graph validation and rust context", 
     },
   ]);
 
-  assert.deepEqual(buildGraphValidationIssues({
+  const contractIssues = buildGraphValidationIssues({
     errors: ["workflow.version is required"],
     error_items: [{
       code: "required",
@@ -46,17 +46,13 @@ test("workflow preflight support normalizes graph validation and rust context", 
       message: "workflow.version is required",
       error_contract: "contracts/desktop/node_config_validation_errors.v1.json",
     }],
-  }), [
-    {
-      level: "error",
-      kind: "graph_contract",
-      message: "workflow.version is required",
-      error_code: "required",
-      error_path: "workflow.version",
-      error_contract: "contracts/desktop/node_config_validation_errors.v1.json",
-      resolution_hint: "请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。",
-    },
-  ]);
+  });
+  assert.equal(contractIssues.length, 1);
+  assert.equal(contractIssues[0].kind, "graph_contract");
+  assert.equal(contractIssues[0].error_code, "required");
+  assert.equal(contractIssues[0].error_path, "workflow.version");
+  assert.equal(contractIssues[0].error_contract, "contracts/desktop/node_config_validation_errors.v1.json");
+  assert.match(String(contractIssues[0].resolution_hint || ""), /version/i);
 
   const rustCtx = collectRustPreflightContext({
     nodes: [

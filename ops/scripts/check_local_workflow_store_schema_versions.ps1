@@ -37,18 +37,17 @@ function failPayload(payload) {
 
   const stateModulePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_state.js");
   const stateModuleText = fs.readFileSync(stateModulePath, "utf8");
-  const missingSourceSchemaVersionModules = stateModuleText.includes("schema_version")
-    ? []
-    : ["workflow_ipc_state"];
+  const sourceHasTemplatePackVersion = /TEMPLATE_PACK_ENTRY_SCHEMA_VERSION/.test(stateModuleText);
+  const legacyShellMarkersRetired =
+    !/WORKFLOW_TASK_QUEUE_SCHEMA_VERSION/.test(stateModuleText)
+    && !/WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION/.test(stateModuleText)
+    && !/WORKFLOW_NODE_CACHE_SCHEMA_VERSION/.test(stateModuleText)
+    && !/WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION/.test(stateModuleText)
+    && !/TEMPLATE_MARKETPLACE_SCHEMA_VERSION/.test(stateModuleText);
 
   const stateModule = require(stateModulePath);
   const {
     TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
-    TEMPLATE_MARKETPLACE_SCHEMA_VERSION,
-    WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION,
-    WORKFLOW_NODE_CACHE_SCHEMA_VERSION,
-    WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION,
-    WORKFLOW_TASK_QUEUE_SCHEMA_VERSION,
     createWorkflowIpcStateSupport,
   } = stateModule;
 
@@ -74,37 +73,36 @@ function failPayload(payload) {
     nowIso: () => "2026-03-24T00:00:00.000Z",
   });
 
-  const runtimeCoveredOutputs = [];
-  const missingRuntimeSchemaVersionOutputs = [];
-  function recordOutput(name, predicate) {
-    if (predicate) runtimeCoveredOutputs.push(name);
-    else missingRuntimeSchemaVersionOutputs.push(name);
-  }
-
   support.saveWorkflowQueue([{ run_id: "run_1" }]);
-  const queueJson = JSON.parse(fs.readFileSync(support.workflowQueuePath(), "utf8"));
-  recordOutput("workflow_task_queue_file", queueJson.schema_version === WORKFLOW_TASK_QUEUE_SCHEMA_VERSION);
-
   support.saveQueueControl({ paused: true, quotas: { alpha: 2 } });
-  const queueControlJson = JSON.parse(fs.readFileSync(support.workflowQueueControlPath(), "utf8"));
-  recordOutput("workflow_queue_control_file", queueControlJson.schema_version === WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION);
-
   support.saveTemplateMarketplace([{ id: "pack_1", name: "Pack One", templates: [] }]);
-  const templateMarketplaceJson = JSON.parse(fs.readFileSync(support.templateMarketplacePath(), "utf8"));
-  recordOutput("template_marketplace_file", templateMarketplaceJson.schema_version === TEMPLATE_MARKETPLACE_SCHEMA_VERSION);
-  recordOutput(
-    "template_pack_entry",
-    Array.isArray(templateMarketplaceJson.items)
-      && templateMarketplaceJson.items.length === 1
-      && templateMarketplaceJson.items[0].schema_version === TEMPLATE_PACK_ENTRY_SCHEMA_VERSION
-  );
-
   const cache = support.createNodeCacheApi();
   cache.set("n1", { ok: true });
+
+  const queueJson = JSON.parse(fs.readFileSync(support.workflowQueuePath(), "utf8"));
+  const queueControlJson = JSON.parse(fs.readFileSync(support.workflowQueueControlPath(), "utf8"));
+  const templateMarketplaceJson = JSON.parse(fs.readFileSync(support.templateMarketplacePath(), "utf8"));
   const nodeCacheJson = JSON.parse(fs.readFileSync(support.nodeCachePath(), "utf8"));
   const nodeCacheMetricsJson = JSON.parse(fs.readFileSync(support.nodeCacheMetricsPath(), "utf8"));
-  recordOutput("workflow_node_cache_file", nodeCacheJson.schema_version === WORKFLOW_NODE_CACHE_SCHEMA_VERSION);
-  recordOutput("workflow_node_cache_metrics_file", nodeCacheMetricsJson.schema_version === WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION);
+
+  const runtimeMinimalOutputs = [];
+  const runtimeUnexpectedSchemaVersionOutputs = [];
+  function recordUnversioned(name, payload) {
+    const hasSchemaVersion = !!(payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "schema_version"));
+    if (!hasSchemaVersion) runtimeMinimalOutputs.push(name);
+    else runtimeUnexpectedSchemaVersionOutputs.push(name);
+  }
+
+  recordUnversioned("workflow_task_queue_file", queueJson);
+  recordUnversioned("workflow_queue_control_file", queueControlJson);
+  recordUnversioned("template_marketplace_file", templateMarketplaceJson);
+  recordUnversioned("workflow_node_cache_file", nodeCacheJson);
+  recordUnversioned("workflow_node_cache_metrics_file", nodeCacheMetricsJson);
+
+  const templatePackEntryVersioned =
+    Array.isArray(templateMarketplaceJson.items)
+    && templateMarketplaceJson.items.length === 1
+    && templateMarketplaceJson.items[0].schema_version === TEMPLATE_PACK_ENTRY_SCHEMA_VERSION;
 
   fs.writeFileSync(support.workflowQueuePath(), `${JSON.stringify({ items: [{ run_id: "legacy_run" }] }, null, 2)}\n`, "utf8");
   fs.writeFileSync(support.workflowQueueControlPath(), `${JSON.stringify({ paused: false, quotas: { beta: 3 } }, null, 2)}\n`, "utf8");
@@ -113,8 +111,7 @@ function failPayload(payload) {
   fs.writeFileSync(support.nodeCacheMetricsPath(), `${JSON.stringify({ hits: 2, misses: 1, sets: 1, last_reset_at: "", updated_at: "" }, null, 2)}\n`, "utf8");
 
   const legacyQueueRead = JSON.stringify(support.loadWorkflowQueue()) === JSON.stringify([{ run_id: "legacy_run" }]);
-  const legacyControl = support.loadQueueControl();
-  const legacyControlRead = JSON.stringify(legacyControl) === JSON.stringify({ paused: false, quotas: { beta: 3 } });
+  const legacyControlRead = JSON.stringify(support.loadQueueControl()) === JSON.stringify({ paused: false, quotas: { beta: 3 } });
   const legacyTemplateItems = support.listTemplateMarketplace(20);
   const legacyTemplateRead = Array.isArray(legacyTemplateItems)
     && legacyTemplateItems.length === 1
@@ -128,23 +125,26 @@ function failPayload(payload) {
   const legacyCacheStore = support.createNodeCacheApi();
   const legacyCacheRead = JSON.stringify(legacyCacheStore.get("n2")) === JSON.stringify({ ok: true });
 
-  const requiredOutputSet = uniqueSorted([
-    "template_pack_entry",
-    "workflow_task_queue_file",
-    "workflow_queue_control_file",
-    "template_marketplace_file",
-    "workflow_node_cache_file",
-    "workflow_node_cache_metrics_file",
-  ]);
-  const coveredOutputSet = uniqueSorted(runtimeCoveredOutputs);
-  const missingRequiredRuntimeOutputs = uniqueSorted((Array.isArray(requiredRuntimeOutputs) ? requiredRuntimeOutputs : []).filter((name) => !coveredOutputSet.includes(String(name))));
+  const requiredOutputSet = uniqueSorted(["template_pack_entry"]);
+  const missingRequiredRuntimeOutputs = uniqueSorted((Array.isArray(requiredRuntimeOutputs) ? requiredRuntimeOutputs : []).filter((name) => {
+    if (String(name) === "template_pack_entry") {
+      return !templatePackEntryVersioned;
+    }
+    return true;
+  }));
 
   const issues = [];
-  if (missingSourceSchemaVersionModules.length > 0) {
-    issues.push(`source modules missing schema_version markers: ${missingSourceSchemaVersionModules.join(", ")}`);
+  if (!sourceHasTemplatePackVersion) {
+    issues.push("workflow_ipc_state.js no longer declares template pack entry schema version");
   }
-  if (missingRuntimeSchemaVersionOutputs.length > 0) {
-    issues.push(`runtime outputs missing schema_version: ${uniqueSorted(missingRuntimeSchemaVersionOutputs).join(", ")}`);
+  if (!legacyShellMarkersRetired) {
+    issues.push("workflow_ipc_state.js still declares retired queue/cache/template marketplace schema version constants");
+  }
+  if (runtimeUnexpectedSchemaVersionOutputs.length > 0) {
+    issues.push(`runtime local shell outputs still carry schema_version: ${uniqueSorted(runtimeUnexpectedSchemaVersionOutputs).join(", ")}`);
+  }
+  if (!templatePackEntryVersioned) {
+    issues.push("template pack entries no longer preserve schema_version");
   }
   if (!legacyQueueRead) issues.push("legacy workflow queue payload no longer migrates");
   if (!legacyControlRead) issues.push("legacy workflow queue control payload no longer migrates");
@@ -158,10 +158,11 @@ function failPayload(payload) {
     status: issues.length > 0 ? "failed" : "passed",
     requiredStoreModules: ["workflow_ipc_state"],
     sourceModuleCount: 1,
-    sourceSchemaVersionCount: 1 - missingSourceSchemaVersionModules.length,
+    sourceSchemaVersionCount: sourceHasTemplatePackVersion ? 1 : 0,
+    runtimeCheckCount: 6,
+    runtimeSchemaVersionCount: templatePackEntryVersioned ? 1 : 0,
+    runtimeMinimalCount: runtimeMinimalOutputs.length,
     requiredRuntimeOutputs: requiredOutputSet,
-    runtimeCheckCount: requiredOutputSet.length,
-    runtimeSchemaVersionCount: coveredOutputSet.length,
     legacyReads: {
       workflow_task_queue: legacyQueueRead,
       workflow_queue_control: legacyControlRead,
@@ -169,8 +170,10 @@ function failPayload(payload) {
       workflow_node_cache: legacyCacheRead,
     },
     drift: {
-      missingSourceSchemaVersionModules: uniqueSorted(missingSourceSchemaVersionModules),
-      missingRuntimeSchemaVersionOutputs: uniqueSorted(missingRuntimeSchemaVersionOutputs),
+      missingSourceSchemaVersionModules: sourceHasTemplatePackVersion ? [] : ["workflow_ipc_state"],
+      legacyShellMarkersRetired: legacyShellMarkersRetired,
+      missingRuntimeSchemaVersionOutputs: templatePackEntryVersioned ? [] : ["template_pack_entry"],
+      unexpectedRuntimeSchemaVersionOutputs: uniqueSorted(runtimeUnexpectedSchemaVersionOutputs),
       missingRequiredRuntimeOutputs,
     },
     issues: uniqueSorted(issues),
@@ -186,13 +189,16 @@ function failPayload(payload) {
     requiredStoreModules: ["workflow_ipc_state"],
     sourceModuleCount: 1,
     sourceSchemaVersionCount: 0,
-    requiredRuntimeOutputs: [],
     runtimeCheckCount: 0,
     runtimeSchemaVersionCount: 0,
+    runtimeMinimalCount: 0,
+    requiredRuntimeOutputs: [],
     legacyReads: {},
     drift: {
       missingSourceSchemaVersionModules: [],
+      legacyShellMarkersRetired: false,
       missingRuntimeSchemaVersionOutputs: [],
+      unexpectedRuntimeSchemaVersionOutputs: [],
       missingRequiredRuntimeOutputs: [],
     },
     issues: [error && error.stack ? error.stack : String(error)],

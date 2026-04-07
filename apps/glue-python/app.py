@@ -150,7 +150,7 @@ WORKFLOW_GRAPH_ERROR_CODE = "workflow_graph_invalid"
 GOVERNANCE_VALIDATION_ERROR_CODE = "governance_validation_invalid"
 
 
-def _normalize_workflow_graph_error_messages(message: str) -> list[str]:
+def _normalize_workflow_definition_error_messages(message: str) -> list[str]:
     text = str(message or "").strip()
     if not text:
         return []
@@ -158,6 +158,8 @@ def _normalize_workflow_graph_error_messages(message: str) -> list[str]:
     node_config_prefixes = (
         "workflow app graph node config invalid: ",
         "workflow version graph node config invalid: ",
+        "workflow app workflow_definition node config invalid: ",
+        "workflow version workflow_definition node config invalid: ",
     )
     for prefix in node_config_prefixes:
         if text.startswith(prefix):
@@ -165,18 +167,18 @@ def _normalize_workflow_graph_error_messages(message: str) -> list[str]:
             return [item.strip() for item in tail.split(";") if item.strip()]
 
     replacements = [
-        (re.compile(r"^workflow (?:app|version) graph must be an object$"), "workflow must be an object"),
-        (re.compile(r"^workflow (?:app|version) graph requires workflow_id$"), "workflow.workflow_id is required"),
-        (re.compile(r"^workflow (?:app|version) graph requires version$"), "workflow.version is required"),
-        (re.compile(r"^workflow (?:app|version) graph requires nodes array$"), "workflow.nodes must be an array"),
-        (re.compile(r"^workflow (?:app|version) graph requires edges array$"), "workflow.edges must be an array"),
-        (re.compile(r"^workflow (?:app|version) graph contains unregistered node types: (.+)$"), lambda m: f"workflow contains unregistered node types: {m.group(1)}"),
-        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] must be an object$"), lambda m: f"workflow.nodes[{m.group(1)}] must be an object"),
-        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] requires id$"), lambda m: f"workflow.nodes[{m.group(1)}].id is required"),
-        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] requires type$"), lambda m: f"workflow.nodes[{m.group(1)}].type is required"),
-        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] must be an object$"), lambda m: f"workflow.edges[{m.group(1)}] must be an object"),
-        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] requires from$"), lambda m: f"workflow.edges[{m.group(1)}].from is required"),
-        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] requires to$"), lambda m: f"workflow.edges[{m.group(1)}].to is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) must be an object$"), "workflow must be an object"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) requires workflow_id$"), "workflow.workflow_id is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) requires version$"), "workflow.version is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) requires nodes array$"), "workflow.nodes must be an array"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) requires edges array$"), "workflow.edges must be an array"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) contains unregistered node types: (.+)$"), lambda m: f"workflow contains unregistered node types: {m.group(1)}"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) nodes\[(\d+)\] must be an object$"), lambda m: f"workflow.nodes[{m.group(1)}] must be an object"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) nodes\[(\d+)\] requires id$"), lambda m: f"workflow.nodes[{m.group(1)}].id is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) nodes\[(\d+)\] requires type$"), lambda m: f"workflow.nodes[{m.group(1)}].type is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) edges\[(\d+)\] must be an object$"), lambda m: f"workflow.edges[{m.group(1)}] must be an object"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) edges\[(\d+)\] requires from$"), lambda m: f"workflow.edges[{m.group(1)}].from is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) edges\[(\d+)\] requires to$"), lambda m: f"workflow.edges[{m.group(1)}].to is required"),
     ]
     for pattern, replacement in replacements:
         match = pattern.match(text)
@@ -239,7 +241,7 @@ def _build_validation_error_items(errors: list[str]) -> list[dict[str, str]]:
 
 
 def _workflow_graph_error_response(provider: str, scope: str, exc: ValueError) -> JSONResponse:
-    normalized_errors = _normalize_workflow_graph_error_messages(str(exc))
+    normalized_errors = _normalize_workflow_definition_error_messages(str(exc))
     return JSONResponse(
         status_code=400,
         content={
@@ -374,7 +376,6 @@ class WorkflowAppReq(BaseModel):
     name: Optional[str] = None
     workflow_id: Optional[str] = None
     published_version_id: Optional[str] = None
-    graph: Optional[Dict[str, Any]] = None
     params_schema: Dict[str, Any] = Field(default_factory=dict)
     template_policy: Dict[str, Any] = Field(default_factory=dict)
 
@@ -390,7 +391,6 @@ class WorkflowVersionReq(BaseModel):
     workflow_name: Optional[str] = None
     path: Optional[str] = None
     workflow_definition: Optional[Dict[str, Any]] = None
-    graph: Dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowVersionUpsertReq(BaseModel):
@@ -1695,7 +1695,7 @@ def put_governance_workflow_version(version_id: str, req: WorkflowVersionUpsertR
         workflow_definition = (
             payload.get("workflow_definition")
             if isinstance(payload.get("workflow_definition"), dict)
-            else (payload.get("graph") if isinstance(payload.get("graph"), dict) else {})
+            else {}
         )
         validated = validate_workflow_definition_authoritatively(
             workflow_definition,
@@ -1707,7 +1707,6 @@ def put_governance_workflow_version(version_id: str, req: WorkflowVersionUpsertR
         normalized_workflow_definition = validated.get("normalized_workflow_definition")
         if isinstance(normalized_workflow_definition, dict):
             payload["workflow_definition"] = normalized_workflow_definition
-        payload.pop("graph", None)
         item = save_workflow_version(payload)
     except WorkflowValidationFailure as exc:
         return _workflow_graph_validation_failure_response(WORKFLOW_VERSION_OWNER, "workflow_version", exc)

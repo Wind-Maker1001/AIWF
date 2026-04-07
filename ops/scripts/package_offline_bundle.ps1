@@ -10,7 +10,6 @@
   [switch]$SkipWorkflowContractSyncGate,
   [switch]$SkipGovernanceControlPlaneBoundaryGate,
   [switch]$SkipOperatorCatalogSyncGate,
-  [switch]$SkipFallbackGovernanceGate,
   [switch]$SkipCleaningRustV2RolloutGate,
   [switch]$SkipGovernanceStoreSchemaVersionsGate,
   [switch]$SkipLocalWorkflowStoreSchemaVersionsGate,
@@ -145,7 +144,6 @@ $workflowContractSyncGate = Join-Path $PSScriptRoot "check_workflow_contract_syn
 $governanceCapabilityExportScript = Join-Path $PSScriptRoot "export_governance_capabilities.ps1"
 $governanceControlPlaneBoundaryGate = Join-Path $PSScriptRoot "check_governance_control_plane_boundary.ps1"
 $operatorCatalogSyncGate = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
-$fallbackGovernanceGate = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
 $cleaningRustV2RolloutGate = Join-Path $PSScriptRoot "check_cleaning_rust_v2_rollout.ps1"
 $cleaningRustV2RolloutSummaryScript = Join-Path $PSScriptRoot "summarize_cleaning_rust_v2_rollout.ps1"
 $governanceStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_governance_store_schema_versions.ps1"
@@ -168,9 +166,6 @@ $governanceControlPlaneBoundaryGateError = ""
 $operatorCatalogSyncGateStatus = "skipped"
 $operatorCatalogSyncGateCheckedAt = ""
 $operatorCatalogSyncGateError = ""
-$fallbackGovernanceGateStatus = "skipped"
-$fallbackGovernanceGateCheckedAt = ""
-$fallbackGovernanceGateError = ""
 $cleaningRustV2RolloutGateStatus = "skipped"
 $cleaningRustV2RolloutGateCheckedAt = ""
 $cleaningRustV2RolloutGateError = ""
@@ -328,23 +323,6 @@ if (-not $SkipOperatorCatalogSyncGate) {
 } else {
   $operatorCatalogSyncGateCheckedAt = (Get-Date).ToString("s")
   Write-Host "[WARN] skip operator catalog sync package gate" -ForegroundColor Yellow
-}
-
-if (-not $SkipFallbackGovernanceGate) {
-  if (-not (Test-Path $fallbackGovernanceGate)) { throw "fallback governance gate script missing: $fallbackGovernanceGate" }
-  Info "running fallback governance package gate"
-  powershell -ExecutionPolicy Bypass -File $fallbackGovernanceGate
-  $fallbackGovernanceGateCheckedAt = (Get-Date).ToString("s")
-  if ($LASTEXITCODE -ne 0) {
-    $fallbackGovernanceGateStatus = "failed"
-    $fallbackGovernanceGateError = "check_fallback_governance.ps1 exit code $LASTEXITCODE"
-    throw "package blocked by fallback governance gate"
-  }
-  $fallbackGovernanceGateStatus = "passed"
-  Ok "fallback governance package gate passed"
-} else {
-  $fallbackGovernanceGateCheckedAt = (Get-Date).ToString("s")
-  Write-Host "[WARN] skip fallback governance package gate" -ForegroundColor Yellow
 }
 
 if (-not $SkipCleaningRustV2RolloutGate) {
@@ -708,12 +686,6 @@ $manifest = [ordered]@{
       checked_at = $operatorCatalogSyncGateCheckedAt
       script = "ops/scripts/check_operator_catalog_sync.ps1"
       error = $operatorCatalogSyncGateError
-    }
-    fallback_governance = [ordered]@{
-      status = $fallbackGovernanceGateStatus
-      checked_at = $fallbackGovernanceGateCheckedAt
-      script = "ops/scripts/check_fallback_governance.ps1"
-      error = $fallbackGovernanceGateError
     }
     cleaning_rust_v2_rollout = [ordered]@{
       status = $cleaningRustV2RolloutGateStatus

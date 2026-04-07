@@ -54,7 +54,10 @@ function createWorkflowFlowIoUi(els, deps = {}) {
         if (!out?.canceled) setStatus(`加载失败: ${formatWorkflowContractError(out)}`, false);
         return;
       }
-      const migrated = migrateLoadedWorkflowGraph(out.graph || {});
+      const loadedWorkflowDefinition = out.workflow_definition && typeof out.workflow_definition === "object"
+        ? out.workflow_definition
+        : (out.graph || {});
+      const migrated = migrateLoadedWorkflowGraph(loadedWorkflowDefinition);
       const applied = applyLoadedWorkflowGraph(migrated.graph || {});
       const migrationReport = combineWorkflowMigrationReports(migrated, applied?.contract);
       if (els.workflowName) els.workflowName.value = getLoadedWorkflowName() || "Custom Workflow";

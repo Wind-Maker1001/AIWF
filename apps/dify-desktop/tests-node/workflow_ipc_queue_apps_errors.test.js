@@ -112,12 +112,6 @@ test("workflow queue apps ipc restore version returns canonical workflow_definit
           nodes: [{ id: "n1", type: "ingest_files" }],
           edges: [],
         },
-        graph: {
-          workflow_id: "wf_finance_legacy",
-          version: "legacy",
-          nodes: [],
-          edges: [],
-        },
       }),
       compareVersions: async () => ({ ok: true }),
     },
@@ -189,7 +183,7 @@ test("workflow queue apps ipc publishes app via version snapshot reference", asy
   const out = await publishWorkflowApp({}, {
     app_id: "finance_app",
     name: "Finance App",
-    graph: {
+    workflow_definition: {
       workflow_id: "wf_finance",
       version: "workflow.v1",
       nodes: [{ id: "n1", type: "ingest_files" }],
@@ -235,7 +229,7 @@ test("workflow queue apps ipc publish fails closed when authoritative validation
   const out = await publishWorkflowApp({}, {
     app_id: "finance_app",
     name: "Finance App",
-    graph: {
+    workflow_definition: {
       workflow_id: "wf_finance",
       version: "workflow.v1",
       nodes: [{ id: "n1", type: "ingest_files" }],

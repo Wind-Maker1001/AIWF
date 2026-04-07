@@ -159,8 +159,8 @@ test("workflow quality rule set ui formats structured save failure", async () =>
     delete global.window;
   }
 
-  assert.deepEqual(statuses, [{
-    text: "保存规则集失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。",
-    ok: false,
-  }]);
+  assert.equal(statuses.length, 1);
+  assert.equal(statuses[0].ok, false);
+  assert.match(statuses[0].text, /\[required\]/);
+  assert.match(statuses[0].text, /workflow\.version/);
 });

@@ -153,10 +153,11 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_local_workflow_stor
 
 This gate now enforces:
 
-- desktop `workflow_store/` local JSON containers keep explicit `schema_version`
-- `workflow_task_queue.json`, `workflow_queue_control.json`, `workflow_node_cache.json`, `workflow_node_cache_metrics.json`, and `template_marketplace.json` are written as versioned containers
+- desktop local workflow shell containers stay minimally shaped and do not regain long-lived `schema_version`
+- `workflow_task_queue.json`, `workflow_queue_control.json`, `workflow_node_cache.json`, `workflow_node_cache_metrics.json`, and `template_marketplace.json` are written as minimal local shell containers
+- only persisted template pack entries continue to keep explicit `template_pack_entry.v1`
 - legacy unversioned queue / queue-control / template-marketplace / node-cache payloads still migrate on read instead of hard-failing silently
-- failure output stays machine-readable so the architecture scorecard can call out missing local store version markers or missing legacy migration paths explicitly
+- failure output stays machine-readable so the architecture scorecard can call out unexpected shell-object versioning or missing legacy migration paths explicitly
 
 The architecture scorecard and release-ready scorecard now surface this boundary as `local_workflow_store_schema_versions`.
 
@@ -242,47 +243,25 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_node_config_schema_
 
 This gate now enforces:
 
-- all target node types remain covered
-- canonical node config contract asset `contracts/desktop/node_config_contracts.v1.json` stays aligned with generated CJS / ESM helper modules
+- canonical node config contract asset `contracts/desktop/node_config_contracts.v1.json` stays aligned with Rust authoritative workflow validation consumption
+- glue authoritative validation client continues to route through `/operators/workflow_contract_v1/validate`
+- desktop workflow helper code and packaging manifests do not retain generated node-config helper dependencies
 - a minimum `nested_shape_constrained` count
 - a required nested-shape set for critical nodes such as `load_rows_v3`, `quality_check_v3`, `quality_check_v4`, `office_slot_fill_v1`, `optimizer_v1`, `parquet_io_v2`, `plugin_registry_v1`, `transform_rows_v3`, `lineage_v3`, `rule_simulator_v1`, `constraint_solver_v1`, and `udf_wasm_v2`
-- failure output stays machine-readable so the release-ready scorecard can call out required nested coverage gaps, `nested_shape_constrained` deficits, contract/generation drift, and helper drift explicitly
+- failure output stays machine-readable so the release-ready scorecard can call out required nested coverage gaps, Rust authority drift, and generated-helper retirement drift explicitly
 
-Contract and export assets:
+Contract and authority assets:
 
 - `contracts/desktop/node_config_contracts.v1.json`
-- `ops/scripts/export_node_config_contracts.ps1`
-- `apps/dify-desktop/workflow_node_config_contract.generated.js`
-- `apps/dify-desktop/renderer/workflow/node_config_contract.generated.js`
+- `apps/accel-rust/src/governance_ops/contracts/workflow_contract.rs`
+- `apps/accel-rust/src/http/handlers_extended/platform.rs`
+- `apps/glue-python/aiwf/workflow_validation_client.py`
 
 Current note:
 
-- node-config authority now lives in `contracts/desktop/node_config_contracts.v1.json`; the desktop main path consumes generated contract modules for the full schema-covered node-config surface rather than owning per-node truth directly in `workflow-contract.js`
+- node-config authority lives in `contracts/desktop/node_config_contracts.v1.json`; the main executable consumer is now Rust, while desktop workflow helpers keep UI-only formatting and migration behavior
 
 Each run also writes timestamped snapshots beside the `*_latest.json` files.
-
-Node config runtime parity gate:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_node_config_runtime_parity.ps1
-```
-
-This gate now enforces:
-
-- shared node-config parity fixtures in `contracts/desktop/node_config_contract_fixtures.v1.json` stay present for the current high-risk cross-runtime node set
-- fixture schema `contracts/desktop/node_config_contract_fixtures.schema.json` stays present beside the checked-in fixture payload
-- declared validation error code contract `contracts/desktop/node_config_validation_errors.v1.json` stays present beside `contracts/desktop/node_config_validation_errors.schema.json`
-- Rust workflow validation remains the authoritative source for workflow/node-config validity on desktop and glue-python write/run paths
-- declared validation error code contract `contracts/desktop/node_config_validation_errors.v1.json` stays aligned with Rust-originated error items rendered by desktop and glue-python
-- failure output stays machine-readable so the release-ready scorecard can call out missing fixture coverage, Rust expectation failures, and validation-surface drift explicitly
-
-Parity assets:
-
-- `contracts/desktop/node_config_contract_fixtures.v1.json`
-- `contracts/desktop/node_config_contract_fixtures.schema.json`
-- `contracts/desktop/node_config_validation_errors.v1.json`
-- `contracts/desktop/node_config_validation_errors.schema.json`
-- `ops/scripts/check_node_config_runtime_parity.ps1`
 
 Workflow preflight report export contract:
 

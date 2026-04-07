@@ -53,9 +53,9 @@ test("ci check publishes architecture scorecard outputs", () => {
   assert.match(ciCheck, /legacy office theme migration missing/);
   assert.match(ciCheck, /offline engine cleaning template registry is empty/);
   assert.match(ciCheck, /node_config_contracts\.v1\.json/);
-  assert.match(ciCheck, /workflow_node_config_contract\.generated\.js/);
-  assert.match(ciCheck, /contract module type drift/);
-  assert.match(ciCheck, /contract module quality drift/);
+  assert.match(ciCheck, /rust authority drift/);
+  assert.match(ciCheck, /glue validation client drift/);
+  assert.match(ciCheck, /generated desktop helper files still present/);
   assert.match(ciCheck, /node_config_schema_coverage/);
   assert.match(ciCheck, /local_node_catalog_policy/);
   assert.match(ciCheck, /check_node_config_schema_coverage\.ps1/);
@@ -64,7 +64,7 @@ test("ci check publishes architecture scorecard outputs", () => {
   assert.match(ciCheck, /required_nested_missing/);
   assert.match(ciCheck, /nested_shape_constrained_deficit/);
   assert.match(ciCheck, /missing required nested node coverage/);
-  assert.match(ciCheck, /coverage gap/);
+  assert.match(ciCheck, /rust_authority=/);
   assert.match(ciCheck, /operator_catalog_sync/);
   assert.match(ciCheck, /schema_path/);
   assert.match(ciCheck, /desktop_module_path/);
@@ -102,7 +102,6 @@ test("ci check publishes architecture scorecard outputs", () => {
   assert.match(ciCheck, /desktop rust routing missing desktop-exposable Rust operators/);
   assert.match(ciCheck, /defaults catalog missing published Rust operators/);
   assert.match(ciCheck, /desktop rust routing missing published Rust operators/);
-  assert.match(ciCheck, /fallback_governance/);
   assert.match(ciCheck, /frontend_primary_verification/);
   assert.match(ciCheck, /frontend_compatibility_verification/);
 
@@ -136,9 +135,8 @@ test("ci check publishes architecture scorecard outputs", () => {
   assert.match(verification, /office_layout_catalog\.schema\.json/i);
   assert.match(verification, /cleaning_template_registry\.schema\.json/i);
   assert.match(verification, /node_config_contracts\.v1\.json/i);
-  assert.match(verification, /export_node_config_contracts\.ps1/i);
-  assert.match(verification, /workflow_node_config_contract\.generated\.js/i);
-  assert.match(verification, /node_config_contract\.generated\.js/i);
+  assert.match(verification, /workflow_validation_client\.py/i);
+  assert.match(verification, /workflow_contract\.rs/i);
   assert.match(verification, /check_node_config_schema_coverage\.ps1/i);
   assert.match(verification, /check_local_node_catalog_policy\.ps1/i);
   assert.match(verification, /export_operator_manifest\.ps1/i);

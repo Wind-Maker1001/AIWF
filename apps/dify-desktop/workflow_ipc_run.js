@@ -5,7 +5,10 @@ function registerWorkflowRunIpc(ctx, deps) {
     loadConfig,
     runMinimalWorkflow,
   } = ctx;
-  const { workflowStoreRemoteErrorResult } = require("./workflow_store_remote_error");
+  const {
+    createWorkflowStoreRemoteError,
+    workflowStoreRemoteErrorResult,
+  } = require("./workflow_store_remote_error");
   const {
     normalizeWorkflowConfig,
     resolveOutputRoot,
@@ -80,12 +83,6 @@ function registerWorkflowRunIpc(ctx, deps) {
     });
   }
 
-  function allowJsCompatibilityFallback(cfg = null) {
-    const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });
-    return merged.workflowDraftExecutionCompatibilityEngine === true
-      || String(process.env.AIWF_WORKFLOW_DRAFT_ENGINE_COMPAT || "").trim() === "1";
-  }
-
   async function executeWorkflowPayloadAuthoritatively(effectivePayload, merged) {
     const runRequestKind = String(effectivePayload?.run_request_kind || "draft").trim().toLowerCase();
     if (
@@ -107,20 +104,17 @@ function registerWorkflowRunIpc(ctx, deps) {
           payload: effectivePayload,
           cfg: merged,
         });
-      } catch (error) {
-        if (!allowJsCompatibilityFallback(merged)) throw error;
+      }
+      catch (error) {
+        throw error;
       }
     }
-    const out = await runMinimalWorkflow({
-      payload: effectivePayload,
-      config: merged,
-      outputRoot: resolveOutputRoot(merged),
-      nodeCache: createNodeCacheApi(),
+    throw createWorkflowStoreRemoteError({
+      ok: false,
+      error: "workflow authoritative execution unavailable: accel-rust draft/reference execution surface is required",
+      error_code: "workflow_authoritative_execution_unavailable",
+      run_request_kind: runRequestKind || "draft",
     });
-    return {
-      ...out,
-      compatibility_fallback: true,
-    };
   }
 
   function normalizeDraftRunPayload(payload) {

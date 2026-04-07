@@ -147,7 +147,7 @@ test("workflow sandbox rule store uses glue provider as the only sandbox rule so
   assert.deepEqual(rolledBack.rules.whitelist_node_types, []);
 });
 
-test("workflow sandbox rule store rejects retired local legacy provider", async () => {
+test("workflow sandbox rule store rejects unsupported provider override", async () => {
   const sandboxSupport = makeSandboxSupport();
   const store = createWorkflowSandboxRuleStore({
     loadConfig: () => ({ mode: "offline_local" }),
@@ -156,8 +156,8 @@ test("workflow sandbox rule store rejects retired local legacy provider", async 
 
   const out = await store.getRules({
     mode: "offline_local",
-    workflowSandboxRuleProvider: "local_legacy",
+    workflowSandboxRuleProvider: "unsupported_provider",
   });
   assert.equal(out.ok, false);
-  assert.match(String(out.error || ""), /retired/i);
+  assert.match(String(out.error || ""), /unsupported|provider/i);
 });

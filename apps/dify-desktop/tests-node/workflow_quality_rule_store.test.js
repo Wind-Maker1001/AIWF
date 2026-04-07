@@ -19,8 +19,8 @@ test("workflow quality rule store resolves provider from mode and explicit overr
   assert.equal(support.resolveProvider(), GLUE_PROVIDER);
   assert.equal(support.resolveProvider({ mode: "base_api" }), GLUE_PROVIDER);
   assert.throws(
-    () => support.resolveProvider({ mode: "base_api", qualityRuleSetProvider: "local_legacy" }),
-    /retired/i
+    () => support.resolveProvider({ mode: "base_api", qualityRuleSetProvider: "unsupported_provider" }),
+    /unsupported|provider/i
   );
 });
 
@@ -107,7 +107,7 @@ test("workflow quality rule store uses glue http provider for remote governance"
   assert.ok(calls.some((entry) => /governance\/quality-rule-sets\/finance_remote$/.test(entry.url)));
 });
 
-test("workflow quality rule store rejects retired local legacy provider", async () => {
+test("workflow quality rule store rejects unsupported provider override", async () => {
   const support = createWorkflowQualityRuleSetSupport({
     loadConfig: () => ({ mode: "offline_local" }),
   });
@@ -120,10 +120,10 @@ test("workflow quality rule store rejects retired local legacy provider", async 
       scope: "workflow",
       rules: { required_columns: ["amount"] },
     },
-  }, { mode: "offline_local", qualityRuleSetProvider: "local_legacy" });
+  }, { mode: "offline_local", qualityRuleSetProvider: "unsupported_provider" });
 
   assert.equal(saved.ok, false);
-  assert.match(String(saved.error || ""), /retired/i);
+  assert.match(String(saved.error || ""), /unsupported|provider/i);
 });
 
 test("workflow quality rule store preserves structured remote failure details", async () => {

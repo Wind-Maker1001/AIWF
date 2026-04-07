@@ -29,31 +29,11 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   throw "node not found in PATH"
 }
 
-$nodeScript = @'
-const path = require("path");
-const { pathToFileURL } = require("url");
-const DEFAULT_REQUIRED_NESTED_NODE_TYPES = [
-  "load_rows_v3",
-  "quality_check_v3",
-  "quality_check_v4",
-  "office_slot_fill_v1",
-  "optimizer_v1",
-  "parquet_io_v2",
-  "plugin_registry_v1",
-  "transform_rows_v3",
-  "lineage_v3",
-  "rule_simulator_v1",
-  "constraint_solver_v1",
-  "udf_wasm_v2",
-];
-const DEFAULT_MIN_NESTED_SHAPE_CONSTRAINED = 19;
+$requiredTypesJson = ConvertTo-Json -InputObject @($RequiredNestedNodeTypes) -Compress
 
-function parseCsvList(value) {
-  return String(value || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+$nodeScript = @'
+const fs = require("fs");
+const path = require("path");
 
 function uniqueSorted(values) {
   return Array.from(new Set((Array.isArray(values) ? values : []).map((item) => String(item || "").trim()).filter(Boolean))).sort();
@@ -61,142 +41,160 @@ function uniqueSorted(values) {
 
 (async () => {
   const repoRoot = process.argv[2];
-  const requiredNestedNodeTypes = (() => {
-    const fromEnv = parseCsvList(process.env.AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES);
-    return fromEnv.length > 0 ? Array.from(new Set(fromEnv)) : DEFAULT_REQUIRED_NESTED_NODE_TYPES;
-  })();
-  const minimumNestedShapeConstrained = (() => {
-    const raw = Number.parseInt(process.env.AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED || "", 10);
-    return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_MIN_NESTED_SHAPE_CONSTRAINED;
-  })();
-  const cjsPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_contract.js");
-  const esmPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "workflow-contract.js");
-  const catalogPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "defaults-catalog.js");
-  const rustManifestPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "rust_operator_manifest.generated.js");
+  const minimumNestedShapeConstrained = Number.parseInt(process.env.AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED || "19", 10);
+  const requiredNestedNodeTypes = JSON.parse(process.env.AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES_JSON || "[]");
+
   const contractPath = path.join(repoRoot, "contracts", "desktop", "node_config_contracts.v1.json");
-  const contractCjsPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_node_config_contract.generated.js");
-  const contractEsmPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "node_config_contract.generated.js");
+  const rustAuthorityPath = path.join(repoRoot, "apps", "accel-rust", "src", "governance_ops", "contracts", "workflow_contract.rs");
+  const rustHandlerPath = path.join(repoRoot, "apps", "accel-rust", "src", "http", "handlers_extended", "platform.rs");
+  const glueValidationClientPath = path.join(repoRoot, "apps", "glue-python", "aiwf", "workflow_validation_client.py");
+  const desktopWorkflowContractPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "workflow-contract.js");
+  const packageJsonPath = path.join(repoRoot, "apps", "dify-desktop", "package.json");
+  const liteManifestPath = path.join(repoRoot, "apps", "dify-desktop", "build", "electron-builder.lite.json");
+  const generatedCjsPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_node_config_contract.generated.js");
+  const generatedEsmPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "node_config_contract.generated.js");
 
-  const cjs = require(cjsPath);
-  const esm = await import(pathToFileURL(esmPath).href);
-  const catalog = await import(pathToFileURL(catalogPath).href);
-  const rustManifest = await import(pathToFileURL(rustManifestPath).href);
-  const contractJson = JSON.parse(require("fs").readFileSync(contractPath, "utf8"));
-  const contractCjs = require(contractCjsPath);
-  const contractEsm = await import(pathToFileURL(contractEsmPath).href);
+  const contractJson = JSON.parse(fs.readFileSync(contractPath, "utf8"));
+  const rustAuthorityText = fs.readFileSync(rustAuthorityPath, "utf8");
+  const rustHandlerText = fs.readFileSync(rustHandlerPath, "utf8");
+  const glueValidationClientText = fs.readFileSync(glueValidationClientPath, "utf8");
+  const desktopWorkflowContractText = fs.readFileSync(desktopWorkflowContractPath, "utf8");
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8").replace(/^\uFEFF/, ""));
+  const liteManifest = JSON.parse(fs.readFileSync(liteManifestPath, "utf8").replace(/^\uFEFF/, ""));
 
-  const cjsIds = Array.isArray(cjs.NODE_CONFIG_SCHEMA_IDS) ? cjs.NODE_CONFIG_SCHEMA_IDS : [];
-  const esmIds = Array.isArray(esm.NODE_CONFIG_SCHEMA_IDS) ? esm.NODE_CONFIG_SCHEMA_IDS : [];
-  const cjsQuality = cjs.NODE_CONFIG_SCHEMA_QUALITY_BY_TYPE && typeof cjs.NODE_CONFIG_SCHEMA_QUALITY_BY_TYPE === "object"
-    ? cjs.NODE_CONFIG_SCHEMA_QUALITY_BY_TYPE
-    : {};
-  const esmQuality = esm.NODE_CONFIG_SCHEMA_QUALITY_BY_TYPE && typeof esm.NODE_CONFIG_SCHEMA_QUALITY_BY_TYPE === "object"
-    ? esm.NODE_CONFIG_SCHEMA_QUALITY_BY_TYPE
-    : {};
-  const catalogIds = new Set((Array.isArray(catalog.NODE_CATALOG) ? catalog.NODE_CATALOG : []).map((item) => String(item?.type || "")));
-  const hiddenRustTypes = new Set(
-    Object.entries(rustManifest.DESKTOP_RUST_OPERATOR_METADATA || {})
-      .filter(([, item]) => item && item.palette_hidden === true)
-      .map(([type]) => String(type || "").trim())
-      .filter(Boolean)
-  );
-  const allowedQuality = ["typed", "enum_constrained", "nested_shape_constrained"];
-  const issues = [];
-  const contractTypes = Array.isArray(contractJson?.nodes)
-    ? Array.from(new Set(contractJson.nodes.map((item) => String(item?.type || "").trim()).filter(Boolean))).sort()
-    : [];
-  const contractValidatorKinds = uniqueSorted((Array.isArray(contractJson?.nodes) ? contractJson.nodes : []).flatMap((item) => (
-    Array.isArray(item?.validators) ? item.validators.map((validator) => String(validator?.kind || "").trim()) : []
+  const contractNodes = Array.isArray(contractJson?.nodes) ? contractJson.nodes : [];
+  const contractTypes = uniqueSorted(contractNodes.map((item) => item?.type));
+  const contractQuality = Object.fromEntries(contractNodes.map((item) => [
+    String(item?.type || "").trim(),
+    String(item?.quality || "").trim(),
+  ]).filter(([type]) => !!type));
+  const contractValidatorKinds = uniqueSorted(contractNodes.flatMap((item) => (
+    Array.isArray(item?.validators) ? item.validators.map((validator) => validator?.kind) : []
   )));
-  const TARGET_NODE_TYPES = contractTypes;
-  const contractQuality = Object.fromEntries((Array.isArray(contractJson?.nodes) ? contractJson.nodes : [])
-    .map((item) => [String(item?.type || "").trim(), String(item?.quality || "").trim()]));
-  const contractAuthority = String(contractJson?.authority || "").trim();
-  const contractSchemaVersion = String(contractJson?.schema_version || "").trim();
-  const contractModuleTypeDrift = Array.from(new Set(
-    contractTypes.filter((type) => !(Array.isArray(contractCjs.NODE_CONFIG_CONTRACT_TYPES) ? contractCjs.NODE_CONFIG_CONTRACT_TYPES : []).includes(type))
-      .concat(contractTypes.filter((type) => !(Array.isArray(contractEsm.NODE_CONFIG_CONTRACT_TYPES) ? contractEsm.NODE_CONFIG_CONTRACT_TYPES : []).includes(type)))
-      .concat((Array.isArray(contractCjs.NODE_CONFIG_CONTRACT_TYPES) ? contractCjs.NODE_CONFIG_CONTRACT_TYPES : []).filter((type) => !contractTypes.includes(type)))
-      .concat((Array.isArray(contractEsm.NODE_CONFIG_CONTRACT_TYPES) ? contractEsm.NODE_CONFIG_CONTRACT_TYPES : []).filter((type) => !contractTypes.includes(type)))
-  ));
-  const contractModuleQualityDrift = contractTypes.filter((type) => (
-    String(contractQuality[type] || "") !== String((contractCjs.NODE_CONFIG_CONTRACT_QUALITY_BY_TYPE || {})[type] || "")
-    || String(contractQuality[type] || "") !== String((contractEsm.NODE_CONFIG_CONTRACT_QUALITY_BY_TYPE || {})[type] || "")
-  ));
-  const requiredNestedTypesMissingFromContract = requiredNestedNodeTypes.filter((type) => !contractTypes.includes(type));
 
-  const missingFromCatalog = TARGET_NODE_TYPES.filter((type) => !catalogIds.has(type) && !hiddenRustTypes.has(type));
-  const missingFromCjs = TARGET_NODE_TYPES.filter((type) => !cjsIds.includes(type));
-  const missingFromEsm = TARGET_NODE_TYPES.filter((type) => !esmIds.includes(type));
-  const drift = Array.from(new Set(
-    cjsIds.filter((type) => !esmIds.includes(type))
-      .concat(esmIds.filter((type) => !cjsIds.includes(type)))
-  ));
-  const missingQualityCjs = TARGET_NODE_TYPES.filter((type) => !Object.prototype.hasOwnProperty.call(cjsQuality, type));
-  const missingQualityEsm = TARGET_NODE_TYPES.filter((type) => !Object.prototype.hasOwnProperty.call(esmQuality, type));
-  const invalidQuality = TARGET_NODE_TYPES.filter((type) => !allowedQuality.includes(String(cjsQuality[type] || "")));
-  const qualityDrift = TARGET_NODE_TYPES.filter((type) => String(cjsQuality[type] || "") !== String(esmQuality[type] || ""));
-  const qualityCounts = Object.fromEntries(allowedQuality.map((quality) => [
-    quality,
-    TARGET_NODE_TYPES.filter((type) => cjsQuality[type] === quality).length,
-  ]));
-  const nestedCovered = TARGET_NODE_TYPES.filter((type) => cjsQuality[type] === "nested_shape_constrained");
-  const requiredNestedMissing = requiredNestedNodeTypes.filter((type) => cjsQuality[type] !== "nested_shape_constrained");
-  const nestedShapeConstrainedDeficit = Math.max(0, minimumNestedShapeConstrained - nestedCovered.length);
+  const qualityCounts = {
+    typed: contractTypes.filter((type) => contractQuality[type] === "typed").length,
+    enum_constrained: contractTypes.filter((type) => contractQuality[type] === "enum_constrained").length,
+    nested_shape_constrained: contractTypes.filter((type) => contractQuality[type] === "nested_shape_constrained").length,
+  };
+  const requiredNestedMissing = requiredNestedNodeTypes.filter((type) => contractQuality[type] !== "nested_shape_constrained");
+  const requiredNestedSatisfied = requiredNestedNodeTypes.filter((type) => contractQuality[type] === "nested_shape_constrained");
+  const nestedShapeConstrainedDeficit = Math.max(0, minimumNestedShapeConstrained - qualityCounts.nested_shape_constrained);
 
-  if (missingFromCatalog.length > 0) issues.push(`node config schema target missing from defaults catalog: ${missingFromCatalog.join(", ")}`);
-  if (missingFromCjs.length > 0) issues.push(`node config schema coverage missing in workflow_contract.js: ${missingFromCjs.join(", ")}`);
-  if (missingFromEsm.length > 0) issues.push(`node config schema coverage missing in renderer workflow-contract.js: ${missingFromEsm.join(", ")}`);
-  if (drift.length > 0) issues.push(`node config schema id drift between CJS and ESM helpers: ${drift.join(", ")}`);
-  if (missingQualityCjs.length > 0) issues.push(`node config schema quality missing in workflow_contract.js: ${missingQualityCjs.join(", ")}`);
-  if (missingQualityEsm.length > 0) issues.push(`node config schema quality missing in renderer workflow-contract.js: ${missingQualityEsm.join(", ")}`);
-  if (invalidQuality.length > 0) issues.push(`node config schema quality invalid in workflow_contract.js: ${invalidQuality.join(", ")}`);
-  if (qualityDrift.length > 0) issues.push(`node config schema quality drift between CJS and ESM helpers: ${qualityDrift.join(", ")}`);
-  if (requiredNestedTypesMissingFromContract.length > 0) issues.push(`node config contract missing required nested types: ${requiredNestedTypesMissingFromContract.join(", ")}`);
-  if (contractModuleTypeDrift.length > 0) issues.push(`node config contract module type drift: ${contractModuleTypeDrift.join(", ")}`);
-  if (contractModuleQualityDrift.length > 0) issues.push(`node config contract module quality drift: ${contractModuleQualityDrift.join(", ")}`);
+  const rustAuthorityDrift = [];
+  if (!/NODE_CONFIG_CONTRACT_AUTHORITY:\s*&str\s*=\s*"contracts\/desktop\/node_config_contracts\.v1\.json"/.test(rustAuthorityText)) {
+    rustAuthorityDrift.push("rust workflow contract authority constant drift");
+  }
+  if (!/fn\s+load_node_config_contracts\(\)/.test(rustAuthorityText)) {
+    rustAuthorityDrift.push("rust workflow contract loader missing");
+  }
+  if (!/workflow_validation_assets\(\)/.test(rustAuthorityText)) {
+    rustAuthorityDrift.push("rust workflow validation assets bootstrap missing");
+  }
+  if (!/validate_contract_backed_node_config/.test(rustAuthorityText)) {
+    rustAuthorityDrift.push("rust contract-backed node config validation missing");
+  }
+
+  const rustHandlerDrift = [];
+  if (!/workflow_contract_v1_operator/.test(rustHandlerText)) {
+    rustHandlerDrift.push("rust workflow contract endpoint missing");
+  }
+  if (!/run_workflow_contract_v1\(WorkflowContractV1Req/.test(rustHandlerText)) {
+    rustHandlerDrift.push("rust draft/reference execution no longer routes through workflow_contract_v1");
+  }
+  if (!/workflow_reference_run_v1_operator/.test(rustHandlerText)) {
+    rustHandlerDrift.push("rust workflow reference execution endpoint missing");
+  }
+  if (!/workflow_draft_run_v1_operator/.test(rustHandlerText)) {
+    rustHandlerDrift.push("rust workflow draft execution endpoint missing");
+  }
+
+  const glueValidationClientDrift = [];
+  if (!/operator_url\(base_url,\s*"\/operators\/workflow_contract_v1\/validate"\)/.test(glueValidationClientText)) {
+    glueValidationClientDrift.push("glue authoritative validation client no longer targets workflow_contract_v1 validate");
+  }
+  if (!/validation_scope/.test(glueValidationClientText)) {
+    glueValidationClientDrift.push("glue authoritative validation client no longer forwards validation_scope");
+  }
+
+  const desktopGeneratedHelperReferences = [];
+  if (/node_config_contract\.generated\.js/.test(desktopWorkflowContractText)) {
+    desktopGeneratedHelperReferences.push("renderer/workflow/workflow-contract.js");
+  }
+
+  const packagingGeneratedHelperReferences = [];
+  const fullFiles = Array.isArray(packageJson?.build?.files) ? packageJson.build.files : [];
+  const liteFiles = Array.isArray(liteManifest?.files) ? liteManifest.files : [];
+  if (fullFiles.includes("workflow_node_config_contract.generated.js")) {
+    packagingGeneratedHelperReferences.push("apps/dify-desktop/package.json");
+  }
+  if (liteFiles.includes("workflow_node_config_contract.generated.js")) {
+    packagingGeneratedHelperReferences.push("apps/dify-desktop/build/electron-builder.lite.json");
+  }
+
+  const generatedDesktopHelperFilesPresent = [];
+  if (fs.existsSync(generatedCjsPath)) generatedDesktopHelperFilesPresent.push("apps/dify-desktop/workflow_node_config_contract.generated.js");
+  if (fs.existsSync(generatedEsmPath)) generatedDesktopHelperFilesPresent.push("apps/dify-desktop/renderer/workflow/node_config_contract.generated.js");
+
+  const issues = [];
   if (nestedShapeConstrainedDeficit > 0) {
-    issues.push(`node config schema nested_shape_constrained count too low: ${nestedCovered.length} < ${minimumNestedShapeConstrained}`);
+    issues.push(`node config schema nested_shape_constrained count too low: ${qualityCounts.nested_shape_constrained} < ${minimumNestedShapeConstrained}`);
   }
   if (requiredNestedMissing.length > 0) {
     issues.push(`node config schema required nested coverage missing: ${requiredNestedMissing.join(", ")}`);
   }
+  if (rustAuthorityDrift.length > 0) issues.push(...rustAuthorityDrift);
+  if (rustHandlerDrift.length > 0) issues.push(...rustHandlerDrift);
+  if (glueValidationClientDrift.length > 0) issues.push(...glueValidationClientDrift);
+  if (desktopGeneratedHelperReferences.length > 0) {
+    issues.push(`desktop workflow contract still imports generated node config helpers: ${desktopGeneratedHelperReferences.join(", ")}`);
+  }
+  if (packagingGeneratedHelperReferences.length > 0) {
+    issues.push(`desktop packaging still references generated node config helpers: ${packagingGeneratedHelperReferences.join(", ")}`);
+  }
+  if (generatedDesktopHelperFilesPresent.length > 0) {
+    issues.push(`generated desktop node config helper files still present: ${generatedDesktopHelperFilesPresent.join(", ")}`);
+  }
 
-  const summary = {
+  const rustAuthorityCoveredCount =
+    rustAuthorityDrift.length === 0 && rustHandlerDrift.length === 0 && glueValidationClientDrift.length === 0
+      ? contractTypes.length
+      : 0;
+
+  const payload = {
     status: issues.length > 0 ? "failed" : "passed",
     contractPath,
-    contractCjsPath,
-    contractEsmPath,
-    contractAuthority,
-    contractSchemaVersion,
+    rustAuthorityPath,
+    rustHandlerPath,
+    glueValidationClientPath,
+    contractAuthority: String(contractJson?.authority || "").trim(),
+    contractSchemaVersion: String(contractJson?.schema_version || "").trim(),
     contractValidatorKindCount: contractValidatorKinds.length,
-    targetCount: TARGET_NODE_TYPES.length,
-    coveredCount: TARGET_NODE_TYPES.filter((type) => cjsIds.includes(type) && esmIds.includes(type)).length,
+    targetCount: contractTypes.length,
+    coveredCount: rustAuthorityCoveredCount,
     minimumNestedShapeConstrained: minimumNestedShapeConstrained,
-    nestedShapeConstrainedCount: nestedCovered.length,
+    nestedShapeConstrainedCount: qualityCounts.nested_shape_constrained,
     nestedShapeConstrainedDeficit,
-    requiredNestedNodeTypes: requiredNestedNodeTypes,
-    requiredNestedSatisfied: requiredNestedNodeTypes.filter((type) => cjsQuality[type] === "nested_shape_constrained"),
+    requiredNestedNodeTypes,
+    requiredNestedSatisfied,
     requiredNestedMissing,
+    rustAuthorityCoveredCount,
     qualityCounts,
     drift: {
-      missingFromCatalog,
-      missingFromCjs,
-      missingFromEsm,
-      idDrift: drift,
-      missingQualityCjs,
-      missingQualityEsm,
-      invalidQuality,
-      qualityDrift,
-      contractModuleTypeDrift,
-      contractModuleQualityDrift,
-      requiredNestedTypesMissingFromContract,
+      rustAuthorityDrift,
+      rustHandlerDrift,
+      glueValidationClientDrift,
+      desktopGeneratedHelperReferences,
+      packagingGeneratedHelperReferences,
+      generatedDesktopHelperFilesPresent,
+      requiredNestedTypesMissingFromContract: requiredNestedNodeTypes.filter((type) => !contractTypes.includes(type)),
     },
-    issues,
-    covered: TARGET_NODE_TYPES,
+    covered: contractTypes,
+    issues: uniqueSorted(issues),
   };
-  console.log(JSON.stringify(summary));
-  if (summary.status !== "passed") {
+
+  console.log(JSON.stringify(payload));
+  if (payload.status !== "passed") {
     process.exit(1);
   }
 })().catch((error) => {
@@ -205,36 +203,27 @@ function uniqueSorted(values) {
 });
 '@
 
-if ($null -eq $env:AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED) {
-  $previousMinimumNestedShapeConstrained = $null
-} else {
-  $previousMinimumNestedShapeConstrained = $env:AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED
-}
-if ($null -eq $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES) {
-  $previousRequiredNestedNodeTypes = $null
-} else {
-  $previousRequiredNestedNodeTypes = $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES
-}
+$previousMinimum = $env:AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED
+$previousRequired = $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES_JSON
 $env:AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED = [string]$MinimumNestedShapeConstrained
-$env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES = (@($RequiredNestedNodeTypes | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ",")
+$env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES_JSON = $requiredTypesJson
 
 try {
   $nodeScript | node - $RepoRoot
   if ($LASTEXITCODE -ne 0) {
     throw "node config schema coverage checks failed"
   }
-
   Ok "node config schema coverage check passed"
 }
 finally {
-  if ($null -eq $previousMinimumNestedShapeConstrained) {
+  if ($null -eq $previousMinimum) {
     Remove-Item Env:AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED -ErrorAction SilentlyContinue
   } else {
-    $env:AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED = $previousMinimumNestedShapeConstrained
+    $env:AIWF_NODE_CONFIG_SCHEMA_MIN_NESTED_SHAPE_CONSTRAINED = $previousMinimum
   }
-  if ($null -eq $previousRequiredNestedNodeTypes) {
-    Remove-Item Env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES -ErrorAction SilentlyContinue
+  if ($null -eq $previousRequired) {
+    Remove-Item Env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES_JSON -ErrorAction SilentlyContinue
   } else {
-    $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES = $previousRequiredNestedNodeTypes
+    $env:AIWF_NODE_CONFIG_SCHEMA_REQUIRED_NESTED_TYPES_JSON = $previousRequired
   }
 }

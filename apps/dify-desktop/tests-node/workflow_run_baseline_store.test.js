@@ -62,26 +62,26 @@ test("workflow run baseline store honors glue env override in offline_local mode
   assert.equal(store.resolveProvider({ mode: "offline_local" }), GLUE_PROVIDER);
 });
 
-test("workflow run baseline store rejects retired local legacy provider", async () => {
+test("workflow run baseline store rejects unsupported provider override", async () => {
   const store = createWorkflowRunBaselineStore({
     loadConfig: () => ({ mode: "offline_local" }),
   });
 
   const listed = await store.list(100, {
     mode: "offline_local",
-    runBaselineProvider: "local_legacy",
+    runBaselineProvider: "unsupported_provider",
   });
   assert.equal(listed.ok, false);
-  assert.match(String(listed.error || ""), /retired/i);
+  assert.match(String(listed.error || ""), /unsupported|provider/i);
 
   const out = await store.save({
     baseline_id: "base_1",
     run_id: "run_1",
   }, {
     mode: "offline_local",
-    runBaselineProvider: "local_legacy",
+    runBaselineProvider: "unsupported_provider",
   });
 
   assert.equal(out.ok, false);
-  assert.match(String(out.error || ""), /retired/i);
+  assert.match(String(out.error || ""), /unsupported|provider/i);
 });

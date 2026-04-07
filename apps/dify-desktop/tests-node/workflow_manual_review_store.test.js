@@ -98,26 +98,26 @@ test("workflow manual review store honors glue env override in offline_local mod
   assert.equal(store.resolveProvider({ mode: "offline_local" }), GLUE_PROVIDER);
 });
 
-test("workflow manual review store rejects retired local legacy provider", async () => {
+test("workflow manual review store rejects unsupported provider override", async () => {
   const store = createWorkflowManualReviewStore({
     loadConfig: () => ({ mode: "offline_local" }),
   });
 
   const listed = await store.listQueue(100, {
     mode: "offline_local",
-    manualReviewProvider: "local_legacy",
+    manualReviewProvider: "unsupported_provider",
   });
   assert.equal(listed.ok, false);
-  assert.match(String(listed.error || ""), /retired/i);
+  assert.match(String(listed.error || ""), /unsupported|provider/i);
 
   const out = await store.enqueue([{
     run_id: "run_1",
     review_key: "gate_a",
   }], {
     mode: "offline_local",
-    manualReviewProvider: "local_legacy",
+    manualReviewProvider: "unsupported_provider",
   });
 
   assert.equal(out.ok, false);
-  assert.match(String(out.error || ""), /retired/i);
+  assert.match(String(out.error || ""), /unsupported|provider/i);
 });

@@ -239,12 +239,7 @@ test("workflow queue apps ipc preserves structured enqueue failure details", asy
 test("workflow run ipc preserves run status and surfaces review enqueue failure separately", async () => {
   const handlers = {};
   registerWorkflowRunIpc(
-    { ipcMain: { handle: (name, fn) => { handlers[name] = fn; } }, createWorkflowWindow: () => {}, loadConfig: () => ({}), runMinimalWorkflow: async () => ({
-      ok: false,
-      run_id: "run_review",
-      status: "pending_review",
-      pending_reviews: [{ review_key: "gate_a", status: "pending" }],
-    }) },
+    { ipcMain: { handle: (name, fn) => { handlers[name] = fn; } }, createWorkflowWindow: () => {}, loadConfig: () => ({}), runMinimalWorkflow: async () => ({ ok: true }) },
     {
       normalizeWorkflowConfig: (cfg) => cfg,
       resolveOutputRoot: () => "D:/tmp",
@@ -264,6 +259,17 @@ test("workflow run ipc preserves run status and surfaces review enqueue failure 
       sandboxSupport: { attachQualityGate: (value) => value, appendSandboxViolationAudit: () => {} },
       sandboxRuleStore: { getRuntimeRules: async () => ({ ok: true, rules: {} }) },
       sandboxAutoFixStore: { applyPayload: async (payload) => payload, processRunAutoFix: async () => ({ ok: true }) },
+      workflowExecutionSupport: {
+        executeDraftWorkflowAuthoritatively: async () => ({
+          ok: false,
+          run_id: "run_review",
+          status: "pending_review",
+          pending_reviews: [{ review_key: "gate_a", status: "pending" }],
+          node_runs: [],
+          node_outputs: {},
+          artifacts: [],
+        }),
+      },
     },
   );
 

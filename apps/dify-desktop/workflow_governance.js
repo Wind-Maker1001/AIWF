@@ -137,11 +137,9 @@ function createGovernanceGlueStoreSupport(deps = {}) {
 
   function normalizeProvider(value) {
     const raw = String(value || "").trim().toLowerCase();
+    if (!raw) return "";
     if (raw === "glue_http") return "glue_http";
-    if (raw === "local_legacy") {
-      throw new Error(`${providerLabel} local_legacy provider has been retired; use glue_http`);
-    }
-    return "";
+    throw new Error(`${providerLabel} provider unsupported: ${raw}; use glue_http`);
   }
 
   function resolveProvider(cfg = null) {

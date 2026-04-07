@@ -807,7 +807,7 @@ class AppRouteTests(unittest.TestCase):
                 ):
                     resp = self.client.put(
                         "/governance/workflow-versions/ver_bad",
-                        json={"version": {"graph": {"workflow_id": "wf_only"}}},
+                        json={"version": {"workflow_definition": {"workflow_id": "wf_only"}}},
                     )
                 self.assertEqual(resp.status_code, 400)
                 payload = resp.json()
@@ -838,7 +838,7 @@ class AppRouteTests(unittest.TestCase):
                         "/governance/workflow-versions/ver_bad_unknown_type",
                         json={
                             "version": {
-                                "graph": {
+                                "workflow_definition": {
                                     "workflow_id": "wf_bad_unknown_type",
                                     "version": "workflow.v1",
                                     "nodes": [{"id": "n1", "type": "unknown_future_node"}],
@@ -903,7 +903,7 @@ class AppRouteTests(unittest.TestCase):
                         "/governance/workflow-versions/ver_unavailable",
                         json={
                             "version": {
-                                "graph": {
+                                "workflow_definition": {
                                     "workflow_id": "wf_unavailable",
                                     "version": "workflow.v1",
                                     "nodes": [{"id": "n1", "type": "ingest_files"}],

@@ -34,7 +34,6 @@ param(
   [switch]$SkipNodeConfigSchemaCoverage,
   [switch]$SkipLocalNodeCatalogPolicy,
   [switch]$SkipOperatorCatalogSync,
-  [switch]$SkipFallbackGovernance,
   [switch]$SkipCleaningRustV2RolloutGate,
   [switch]$SkipSecretScan,
   [switch]$SkipContractTests,
@@ -186,7 +185,6 @@ function Get-ArchitectureScorecardMarkdownLines($Payload) {
     @{ name = "node_config_schema_coverage"; item = $Payload.boundaries.node_config_schema_coverage },
     @{ name = "local_node_catalog_policy"; item = $Payload.boundaries.local_node_catalog_policy },
     @{ name = "operator_catalog_sync"; item = $Payload.boundaries.operator_catalog_sync },
-    @{ name = "fallback_governance"; item = $Payload.boundaries.fallback_governance },
     @{ name = "cleaning_rust_v2_rollout"; item = $Payload.boundaries.cleaning_rust_v2_rollout },
     @{ name = "frontend_convergence"; item = $Payload.boundaries.frontend_convergence },
     @{ name = "frontend_primary_verification"; item = $Payload.frontend.primary },
@@ -1023,8 +1021,9 @@ function New-NodeConfigSchemaCoverageDetails($Summary) {
   $drift = Get-OptionalObjectProperty $Summary "drift"
   return [ordered]@{
     contract_path = Get-OptionalPropertyValue $Summary "contractPath"
-    contract_cjs_path = Get-OptionalPropertyValue $Summary "contractCjsPath"
-    contract_esm_path = Get-OptionalPropertyValue $Summary "contractEsmPath"
+    rust_authority_path = Get-OptionalPropertyValue $Summary "rustAuthorityPath"
+    rust_handler_path = Get-OptionalPropertyValue $Summary "rustHandlerPath"
+    glue_validation_client_path = Get-OptionalPropertyValue $Summary "glueValidationClientPath"
     contract_authority = [string]($Summary.contractAuthority)
     contract_schema_version = [string]($Summary.contractSchemaVersion)
     contract_validator_kind_count = [int]($Summary.contractValidatorKindCount)
@@ -1036,33 +1035,20 @@ function New-NodeConfigSchemaCoverageDetails($Summary) {
     required_nested_node_types = @(Get-StringArrayProperty $Summary "requiredNestedNodeTypes")
     required_nested_satisfied = @(Get-StringArrayProperty $Summary "requiredNestedSatisfied")
     required_nested_missing = @(Get-StringArrayProperty $Summary "requiredNestedMissing")
-    python_runtime_contract_authority = Get-OptionalPropertyValue $Summary "pythonRuntimeContractAuthority"
-    python_runtime_schema_version = Get-OptionalPropertyValue $Summary "pythonRuntimeSchemaVersion"
-    python_runtime_covered_count = [int](Get-OptionalPropertyValue $Summary "pythonRuntimeCoveredCount")
-    python_runtime_supported_validator_kind_count = [int](Get-OptionalPropertyValue $Summary "pythonRuntimeSupportedValidatorKindCount")
-    python_runtime_supported_validator_kinds = @(Get-StringArrayProperty $Summary "pythonRuntimeSupportedValidatorKinds")
+    rust_authority_covered_count = [int](Get-OptionalPropertyValue $Summary "rustAuthorityCoveredCount")
     quality_counts = [ordered]@{
       typed = [int](Get-OptionalPropertyValue $qualityCounts "typed")
       enum_constrained = [int](Get-OptionalPropertyValue $qualityCounts "enum_constrained")
       nested_shape_constrained = [int](Get-OptionalPropertyValue $qualityCounts "nested_shape_constrained")
     }
     drift = [ordered]@{
-      missing_from_catalog = @(Get-StringArrayProperty $drift "missingFromCatalog")
-      missing_from_cjs = @(Get-StringArrayProperty $drift "missingFromCjs")
-      missing_from_esm = @(Get-StringArrayProperty $drift "missingFromEsm")
-      id_drift = @(Get-StringArrayProperty $drift "idDrift")
-      missing_quality_cjs = @(Get-StringArrayProperty $drift "missingQualityCjs")
-      missing_quality_esm = @(Get-StringArrayProperty $drift "missingQualityEsm")
-      invalid_quality = @(Get-StringArrayProperty $drift "invalidQuality")
-      quality_drift = @(Get-StringArrayProperty $drift "qualityDrift")
-      contract_module_type_drift = @(Get-StringArrayProperty $drift "contractModuleTypeDrift")
-      contract_module_quality_drift = @(Get-StringArrayProperty $drift "contractModuleQualityDrift")
+      rust_authority_drift = @(Get-StringArrayProperty $drift "rustAuthorityDrift")
+      rust_handler_drift = @(Get-StringArrayProperty $drift "rustHandlerDrift")
+      glue_validation_client_drift = @(Get-StringArrayProperty $drift "glueValidationClientDrift")
+      desktop_generated_helper_references = @(Get-StringArrayProperty $drift "desktopGeneratedHelperReferences")
+      packaging_generated_helper_references = @(Get-StringArrayProperty $drift "packagingGeneratedHelperReferences")
+      generated_desktop_helper_files_present = @(Get-StringArrayProperty $drift "generatedDesktopHelperFilesPresent")
       required_nested_types_missing_from_contract = @(Get-StringArrayProperty $drift "requiredNestedTypesMissingFromContract")
-      python_runtime_authority_drift = @(Get-StringArrayProperty $drift "pythonRuntimeAuthorityDrift")
-      python_runtime_schema_version_drift = @(Get-StringArrayProperty $drift "pythonRuntimeSchemaVersionDrift")
-      python_runtime_missing_types = @(Get-StringArrayProperty $drift "pythonRuntimeMissingTypes")
-      python_runtime_stale_types = @(Get-StringArrayProperty $drift "pythonRuntimeStaleTypes")
-      python_runtime_missing_validator_kinds = @(Get-StringArrayProperty $drift "pythonRuntimeMissingValidatorKinds")
     }
     issues = @(Get-StringArrayProperty $Summary "issues")
   }
@@ -1077,15 +1063,15 @@ function Get-NodeConfigSchemaCoverageReason($Summary, [string]$Status) {
   $typed = [int]($details.quality_counts.typed)
   $enumConstrained = [int]($details.quality_counts.enum_constrained)
   $nested = [int]($details.quality_counts.nested_shape_constrained)
-  $pythonRuntimeCovered = [int]($details.python_runtime_covered_count)
-  $base = "node config schema coverage checks {0} ({1}/{2}; typed={3}; enum_constrained={4}; nested_shape_constrained={5}; python_runtime={6}/{2}; contract=node_config_contracts.v1.json; generated=workflow_node_config_contract.generated.js)" -f `
+  $rustAuthorityCovered = [int]($details.rust_authority_covered_count)
+  $base = "node config schema coverage checks {0} ({1}/{2}; typed={3}; enum_constrained={4}; nested_shape_constrained={5}; rust_authority={6}/{2}; contract=node_config_contracts.v1.json)" -f `
     $(if ($Status -eq "failed") { "failed" } else { "passed" }),
     [int]$details.covered_count,
     [int]$details.target_count,
     $typed,
     $enumConstrained,
     $nested,
-    $pythonRuntimeCovered
+    $rustAuthorityCovered
 
   if ($Status -ne "failed") {
     return $base
@@ -1135,22 +1121,13 @@ function Get-NodeConfigReleaseReadyIssues($Item) {
 
   $drift = Get-OptionalObjectProperty $details "drift"
   foreach ($entry in @(
-    @{ name = "missing_from_catalog"; label = "defaults catalog drift" },
-    @{ name = "missing_from_cjs"; label = "workflow_contract.js coverage drift" },
-    @{ name = "missing_from_esm"; label = "renderer workflow-contract.js coverage drift" },
-    @{ name = "id_drift"; label = "CJS/ESM schema id drift" },
-    @{ name = "missing_quality_cjs"; label = "workflow_contract.js quality metadata drift" },
-    @{ name = "missing_quality_esm"; label = "renderer workflow-contract.js quality metadata drift" },
-    @{ name = "invalid_quality"; label = "invalid quality tier assignments" },
-    @{ name = "quality_drift"; label = "CJS/ESM quality tier drift" },
-    @{ name = "contract_module_type_drift"; label = "contract module type drift" },
-    @{ name = "contract_module_quality_drift"; label = "contract module quality drift" },
-    @{ name = "required_nested_types_missing_from_contract"; label = "required nested contract types missing" },
-    @{ name = "python_runtime_authority_drift"; label = "python runtime authority drift" },
-    @{ name = "python_runtime_schema_version_drift"; label = "python runtime schema version drift" },
-    @{ name = "python_runtime_missing_types"; label = "python runtime missing contract types" },
-    @{ name = "python_runtime_stale_types"; label = "python runtime stale contract types" },
-    @{ name = "python_runtime_missing_validator_kinds"; label = "python runtime missing validator kinds" }
+    @{ name = "rust_authority_drift"; label = "rust authority drift" },
+    @{ name = "rust_handler_drift"; label = "rust workflow endpoint drift" },
+    @{ name = "glue_validation_client_drift"; label = "glue validation client drift" },
+    @{ name = "desktop_generated_helper_references"; label = "desktop generated helper references still present" },
+    @{ name = "packaging_generated_helper_references"; label = "packaging generated helper references still present" },
+    @{ name = "generated_desktop_helper_files_present"; label = "generated desktop helper files still present" },
+    @{ name = "required_nested_types_missing_from_contract"; label = "required nested contract types missing" }
   )) {
     $values = @(Get-StringArrayProperty $drift $entry.name)
     if ($values.Count -gt 0) {
@@ -1624,7 +1601,6 @@ function Write-ArchitectureReleaseReadyScorecard([string]$Directory, [string]$St
     node_config_schema_coverage = Select-MergedBoundarySummary -Name "node_config_schema_coverage" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "node_config_schema_coverage" } -StaleAfterHours $staleAfterHours
     local_node_catalog_policy = Select-MergedBoundarySummary -Name "local_node_catalog_policy" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "local_node_catalog_policy" } -StaleAfterHours $staleAfterHours
     operator_catalog_sync = Select-MergedBoundarySummary -Name "operator_catalog_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "operator_catalog_sync" } -StaleAfterHours $staleAfterHours
-    fallback_governance = Select-MergedBoundarySummary -Name "fallback_governance" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "fallback_governance" } -StaleAfterHours $staleAfterHours
     cleaning_rust_v2_rollout = Select-MergedBoundarySummary -Name "cleaning_rust_v2_rollout" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "cleaning_rust_v2_rollout" } -StaleAfterHours $staleAfterHours
     frontend_convergence = Select-MergedBoundarySummary -Name "frontend_convergence" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "frontend_convergence" } -StaleAfterHours $staleAfterHours
     frontend_primary_verification = Select-MergedBoundarySummary -Name "frontend_primary_verification" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardFrontendItem $payload "primary" } -StaleAfterHours $staleAfterHours
@@ -1852,7 +1828,6 @@ $offlineTemplateCatalogSyncScript = Join-Path $PSScriptRoot "check_offline_templ
 $nodeConfigSchemaCoverageScript = Join-Path $PSScriptRoot "check_node_config_schema_coverage.ps1"
 $localNodeCatalogPolicyScript = Join-Path $PSScriptRoot "check_local_node_catalog_policy.ps1"
 $operatorCatalogSyncScript = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
-$fallbackGovernanceScript = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
 $cleaningRustV2RolloutScript = Join-Path $PSScriptRoot "check_cleaning_rust_v2_rollout.ps1"
 $secretScanScript = Join-Path $PSScriptRoot "secret_scan.ps1"
 $contractRustApiScript = Join-Path $PSScriptRoot "contract_test_rust_api.ps1"
@@ -1880,10 +1855,8 @@ $templatePackContractSyncCheckState = New-FrontendCheckState $(if ($SkipTemplate
 $localTemplateStorageContractSyncCheckState = New-FrontendCheckState $(if ($SkipLocalTemplateStorageContractSync) { "skipped" } else { "pending" }) $(if ($SkipLocalTemplateStorageContractSync) { "skipped by SkipLocalTemplateStorageContractSync" } else { "awaiting local template storage contract sync gate" })
 $offlineTemplateCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOfflineTemplateCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOfflineTemplateCatalogSync) { "skipped by SkipOfflineTemplateCatalogSync" } else { "awaiting offline template catalog sync gate" })
 $nodeConfigSchemaCoverageCheckState = New-FrontendCheckState $(if ($SkipNodeConfigSchemaCoverage) { "skipped" } else { "pending" }) $(if ($SkipNodeConfigSchemaCoverage) { "skipped by SkipNodeConfigSchemaCoverage" } else { "awaiting node config schema coverage gate" })
-$nodeConfigRuntimeParityCheckState = New-FrontendCheckState "skipped" "node config runtime parity gate not configured in this ci profile"
 $localNodeCatalogPolicyCheckState = New-FrontendCheckState $(if ($SkipLocalNodeCatalogPolicy) { "skipped" } else { "pending" }) $(if ($SkipLocalNodeCatalogPolicy) { "skipped by SkipLocalNodeCatalogPolicy" } else { "awaiting local node catalog policy gate" })
 $operatorCatalogSyncCheckState = New-FrontendCheckState $(if ($SkipOperatorCatalogSync) { "skipped" } else { "pending" }) $(if ($SkipOperatorCatalogSync) { "skipped by SkipOperatorCatalogSync" } else { "awaiting operator catalog sync gate" })
-$fallbackGovernanceCheckState = New-FrontendCheckState $(if ($SkipFallbackGovernance) { "skipped" } else { "pending" }) $(if ($SkipFallbackGovernance) { "skipped by SkipFallbackGovernance" } else { "awaiting fallback governance gate" })
 $cleaningRustV2RolloutCheckState = New-FrontendCheckState $(if ($SkipCleaningRustV2RolloutGate) { "skipped" } else { "pending" }) $(if ($SkipCleaningRustV2RolloutGate) { "skipped by SkipCleaningRustV2RolloutGate" } else { "awaiting cleaning rust v2 rollout gate" })
 $frontendConvergenceCheckState = New-FrontendCheckState $(if ($SkipFrontendConvergence) { "skipped" } else { "pending" }) $(if ($SkipFrontendConvergence) { "skipped by SkipFrontendConvergence" } else { "awaiting frontend convergence gate" })
 $frontendPrimarySmokeCheckState = New-FrontendCheckState $(if ($SkipNativeWinuiSmoke) { "skipped" } else { "pending" }) $(if ($SkipNativeWinuiSmoke) { "skipped by SkipNativeWinuiSmoke" } else { "awaiting native winui smoke" })
@@ -1962,10 +1935,8 @@ function Publish-ArchitectureScorecard() {
       $localTemplateStorageContractSyncCheckState,
       $offlineTemplateCatalogSyncCheckState,
       $nodeConfigSchemaCoverageCheckState,
-      $nodeConfigRuntimeParityCheckState,
       $localNodeCatalogPolicyCheckState,
       $operatorCatalogSyncCheckState,
-      $fallbackGovernanceCheckState,
       $cleaningRustV2RolloutCheckState,
       $frontendConvergenceCheckState,
       [ordered]@{ status = $primarySummary.status },
@@ -1982,7 +1953,6 @@ function Publish-ArchitectureScorecard() {
       node_config_schema_coverage = $nodeConfigSchemaCoverageCheckState
       local_node_catalog_policy = $localNodeCatalogPolicyCheckState
       operator_catalog_sync = $operatorCatalogSyncCheckState
-      fallback_governance = $fallbackGovernanceCheckState
       cleaning_rust_v2_rollout = $cleaningRustV2RolloutCheckState
       frontend_convergence = $frontendConvergenceCheckState
     }
@@ -2410,28 +2380,6 @@ if (-not $SkipOperatorCatalogSync) {
   Set-FrontendCheckState $operatorCatalogSyncCheckState "skipped" "skipped by SkipOperatorCatalogSync"
   Publish-ArchitectureScorecard
   Warn "skip operator catalog sync checks"
-}
-
-if (-not $SkipFallbackGovernance) {
-  if (-not (Test-Path $fallbackGovernanceScript)) {
-    Set-FrontendCheckState $fallbackGovernanceCheckState "failed" "fallback governance script missing"
-    Publish-ArchitectureScorecard
-    throw "fallback governance script not found: $fallbackGovernanceScript"
-  }
-  Info "running fallback governance checks"
-  powershell -ExecutionPolicy Bypass -File $fallbackGovernanceScript
-  if ($LASTEXITCODE -ne 0) {
-    Set-FrontendCheckState $fallbackGovernanceCheckState "failed" "fallback governance checks failed"
-    Publish-ArchitectureScorecard
-    throw "fallback governance checks failed"
-  }
-  Set-FrontendCheckState $fallbackGovernanceCheckState "passed" "fallback governance checks passed"
-  Publish-ArchitectureScorecard
-  Ok "fallback governance checks passed"
-} else {
-  Set-FrontendCheckState $fallbackGovernanceCheckState "skipped" "skipped by SkipFallbackGovernance"
-  Publish-ArchitectureScorecard
-  Warn "skip fallback governance checks"
 }
 
 if (-not $SkipCleaningRustV2RolloutGate) {

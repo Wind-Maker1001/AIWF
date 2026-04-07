@@ -113,6 +113,21 @@ test("workflow run ipc replays reference-backed runs via version lookup instead 
           notes: [],
         }),
       },
+      workflowExecutionSupport: {
+        executeReferenceWorkflowAuthoritatively: async ({ payload }) => {
+          runPayloads.push(payload);
+          return {
+            ok: true,
+            run_id: "run_replayed",
+            status: "done",
+            workflow_id: payload?.workflow?.workflow_id || "",
+            node_runs: [{ id: "n1", type: "ingest_files", status: "done" }],
+            node_outputs: {},
+            artifacts: [],
+            pending_reviews: [],
+          };
+        },
+      },
     },
   );
 
@@ -195,6 +210,21 @@ test("workflow review ipc auto-resumes reference-backed runs via version lookup"
           normalized_workflow_definition: workflowDefinition,
           notes: [],
         }),
+      },
+      workflowExecutionSupport: {
+        executeReferenceWorkflowAuthoritatively: async ({ payload }) => {
+          runPayloads.push(payload);
+          return {
+            ok: true,
+            run_id: "run_resumed",
+            status: "done",
+            workflow_id: payload?.workflow?.workflow_id || "",
+            node_runs: [{ id: "n1", type: "ingest_files", status: "done" }],
+            node_outputs: {},
+            artifacts: [],
+            pending_reviews: [],
+          };
+        },
       },
     },
   );

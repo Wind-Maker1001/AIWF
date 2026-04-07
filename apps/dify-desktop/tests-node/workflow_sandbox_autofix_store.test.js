@@ -102,7 +102,7 @@ test("workflow sandbox autofix store mirrors glue state and actions", async () =
   assert.equal(state.state.schema_version, WORKFLOW_SANDBOX_AUTOFIX_STATE_SCHEMA_VERSION);
 });
 
-test("workflow sandbox autofix store rejects retired local legacy provider", async () => {
+test("workflow sandbox autofix store rejects unsupported provider override", async () => {
   const store = createWorkflowSandboxAutoFixStore({
     loadConfig: () => ({ mode: "offline_local" }),
     sandboxSupport: {
@@ -113,8 +113,8 @@ test("workflow sandbox autofix store rejects retired local legacy provider", asy
 
   const out = await store.getState({
     mode: "offline_local",
-    workflowSandboxAutoFixProvider: "local_legacy",
+    workflowSandboxAutoFixProvider: "unsupported_provider",
   });
   assert.equal(out.ok, false);
-  assert.match(String(out.error || ""), /retired/i);
+  assert.match(String(out.error || ""), /unsupported|provider/i);
 });

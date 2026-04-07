@@ -33,7 +33,8 @@ test("local workflow store schema version gate passes", () => {
   assert.equal(payload.sourceModuleCount, 1);
   assert.equal(payload.sourceSchemaVersionCount, 1);
   assert.equal(payload.runtimeCheckCount, 6);
-  assert.equal(payload.runtimeSchemaVersionCount, 6);
+  assert.equal(payload.runtimeSchemaVersionCount, 1);
+  assert.equal(payload.runtimeMinimalCount, 5);
   assert.equal(payload.legacyReads.workflow_task_queue, true);
   assert.equal(payload.legacyReads.workflow_queue_control, true);
   assert.equal(payload.legacyReads.template_marketplace, true);
@@ -41,6 +42,8 @@ test("local workflow store schema version gate passes", () => {
   assert.ok(payload.requiredRuntimeOutputs.includes("template_pack_entry"));
   assert.deepEqual(payload.drift.missingSourceSchemaVersionModules, []);
   assert.deepEqual(payload.drift.missingRuntimeSchemaVersionOutputs, []);
+  assert.deepEqual(payload.drift.unexpectedRuntimeSchemaVersionOutputs, []);
+  assert.equal(payload.drift.legacyShellMarkersRetired, true);
 });
 
 test("local workflow store schema version gate emits structured failure details", () => {

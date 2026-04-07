@@ -40,7 +40,7 @@ test("workflow run audit store defaults to local runtime provider even in base_a
   assert.equal(store.resolveProvider({ mode: "base_api" }), LOCAL_PROVIDER);
 });
 
-test("workflow run audit store rejects retired local legacy provider", async () => {
+test("workflow run audit store rejects unsupported provider override", async () => {
   const store = createWorkflowRunAuditStore({
     loadConfig: () => ({ mode: "offline_local" }),
     fs,
@@ -52,10 +52,10 @@ test("workflow run audit store rejects retired local legacy provider", async () 
 
   const runs = await store.listRuns(20, {
     mode: "offline_local",
-    workflowRunAuditProvider: "local_legacy",
+    workflowRunAuditProvider: "unsupported_provider",
   });
   assert.equal(runs.ok, false);
-  assert.match(String(runs.error || ""), /retired/i);
+  assert.match(String(runs.error || ""), /unsupported|provider/i);
 });
 
 test("workflow run audit store reads local runtime history in offline_local mode", async () => {

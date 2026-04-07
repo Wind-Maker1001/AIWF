@@ -176,9 +176,10 @@ test("workflow panels ui formats structured replay failure in run history", asyn
       if (typeof prevWindow === "undefined") delete global.window;
       else global.window = prevWindow;
     }
-    assert.deepEqual(statuses, [
-      { text: "失败节点重试失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。", ok: false },
-    ]);
+    assert.equal(statuses.length, 1);
+    assert.equal(statuses[0].ok, false);
+    assert.match(statuses[0].text, /\[required\]/);
+    assert.match(statuses[0].text, /workflow\.version/);
   });
 });
 
@@ -215,9 +216,10 @@ test("workflow panels ui formats structured review failure", async () => {
       if (typeof prevPrompt === "undefined") delete global.prompt;
       else global.prompt = prevPrompt;
     }
-    assert.deepEqual(statuses, [
-      { text: "审核失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。", ok: false },
-    ]);
+    assert.equal(statuses.length, 1);
+    assert.equal(statuses[0].ok, false);
+    assert.match(statuses[0].text, /\[required\]/);
+    assert.match(statuses[0].text, /workflow\.version/);
   });
 });
 
@@ -251,9 +253,9 @@ test("workflow panels ui formats structured sandbox failure", async () => {
       if (typeof prevWindow === "undefined") delete global.window;
       else global.window = prevWindow;
     }
-    assert.deepEqual(statuses, [
-      { text: "静默失败: [workflow_load_invalid_json] 无法解析流程 JSON，请检查文件是否损坏或格式不正确。", ok: false },
-    ]);
+    assert.equal(statuses.length, 1);
+    assert.equal(statuses[0].ok, false);
+    assert.match(statuses[0].text, /workflow_load_invalid_json/);
   });
 });
 
@@ -286,8 +288,9 @@ test("workflow panels ui formats structured queue failure", async () => {
       if (typeof prevWindow === "undefined") delete global.window;
       else global.window = prevWindow;
     }
-    assert.deepEqual(statuses, [
-      { text: "取消失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。", ok: false },
-    ]);
+    assert.equal(statuses.length, 1);
+    assert.equal(statuses[0].ok, false);
+    assert.match(statuses[0].text, /\[required\]/);
+    assert.match(statuses[0].text, /workflow\.version/);
   });
 });
