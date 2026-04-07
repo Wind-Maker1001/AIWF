@@ -12,7 +12,7 @@ For the full categorized documentation map, use [README.md](README.md).
 
 If you are trying to understand why those boundaries exist, read:
 
-- [architecture_cognition_review_20260328.md](architecture_cognition_review_20260328.md)
+- [authority_execution_convergence_20260406.md](authority_execution_convergence_20260406.md)
 - [governance_control_plane_boundary_20260324.md](governance_control_plane_boundary_20260324.md)
 - [frontend_convergence_decision_20260320.md](frontend_convergence_decision_20260320.md)
 

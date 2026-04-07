@@ -1,5 +1,7 @@
 # AIWF Project Review (2026-03-25)
 
+> Historical snapshot. Retained for review lineage; not current implementation authority.
+
 ## Scope
 
 This review reassesses the repository under `D:\AIWF` after the convergence work around governance control-plane boundaries, node-config contract assets, runtime parity gates, and frontend primary-path decisions.

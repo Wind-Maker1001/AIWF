@@ -1,5 +1,7 @@
 # AIWF Architecture Follow-Up Review (2026-03-24)
 
+> Historical snapshot. Retained for review lineage; not current implementation authority.
+
 ## 这份文档回答什么
 
 这不是重复 `docs/project_review_20260324.md`。

@@ -1,5 +1,7 @@
 # AIWF Fallback Retirement Backlog
 
+> Historical only. This backlog is retained for migration history and should not be treated as current architecture authority.
+
 日期：2026-03-22
 
 ## 目的

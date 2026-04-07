@@ -1,5 +1,7 @@
 # AIWF Fallback Governance
 
+> Historical only. This document is retained for migration history and should not be treated as current architecture authority.
+
 日期：2026-03-20
 
 ## 目标

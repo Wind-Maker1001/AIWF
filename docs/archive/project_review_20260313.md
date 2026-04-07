@@ -1,5 +1,7 @@
 # AIWF Project Review (2026-03-13)
 
+> Historical snapshot. Retained for review lineage; not current implementation authority.
+
 ## Scope
 
 This review covers the full repository under `D:\AIWF`, including:

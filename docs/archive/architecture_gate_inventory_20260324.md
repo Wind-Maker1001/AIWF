@@ -1,5 +1,7 @@
 # AIWF Architecture Gate Inventory
 
+> Historical snapshot. Retained for gate-history context; not current implementation authority.
+
 日期: 2026-03-24
 
 ## 目标
@@ -28,7 +30,7 @@
 ### `check_fallback_governance.ps1`
 
 - owner: architecture / fallback governance
-- source authority: `docs/fallback_governance_20260320.md`
+- source authority: `docs/archive/fallback_governance_20260320.md`
 - blocking intent: 防止无 owner / 无退出条件 fallback 重新进入主链
 
 ### `check_governance_store_schema_versions.ps1`

@@ -1,5 +1,7 @@
 # AIWF Architecture Cognition Review (2026-03-28)
 
+> Historical snapshot. Retained for review lineage; not current implementation authority.
+
 ## 范围与前提
 
 这份文档不是代码修复记录，也不是温和建议书。
@@ -267,7 +269,7 @@ AIWF 的真实形态已经不是“一个后端 + 一个前端”的普通三层
 
 - `apps/dify-desktop/workflow_governance.js`
 - `docs/frontend_convergence_decision_20260320.md`
-- `docs/fallback_governance_20260320.md`
+- `docs/archive/fallback_governance_20260320.md`
 
 但收口还没完成：
 

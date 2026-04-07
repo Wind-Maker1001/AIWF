@@ -7,18 +7,31 @@ The active documentation entrypoint for the repository is now [../README.md](../
 ## Archived Here
 
 - `accel_rust_modularization_handoff_20260310.md`
+- `architecture_cognition_review_20260328.md`
+- `architecture_convergence_plan_20260320.md`
+- `architecture_followup_review_20260324.md`
+- `architecture_followup_review_20260325.md`
+- `architecture_gate_inventory_20260324.md`
+- `architecture_gate_inventory_addendum_20260325.md`
 - `codex_handoff_20260216.md`
 - `codex_handoff_20260227.md`
 - `codex_handoff_gui_to_native_20260226.md`
 - `dify_desktop_handoff_20260310.md`
 - `dify_standalone_frontend_legacy_20260216.md`
+- `fallback_governance_20260320.md`
+- `fallback_retirement_backlog_20260322.md`
 - `glue_python_context_compaction_handoff_20260310.md`
 - `winui_drawer_refactor_handoff_20260310.md`
 - `native_migration_handoff_20260226.md`
 - `optimization_snapshot_20260216.md`
 - `project_audit_20260218.md`
+- `project_review_20260313.md`
+- `project_review_20260324.md`
+- `project_review_20260325.md`
 - `release_notes_v1.1.5.md`
 - `v1_1_goal_freeze.md`
+- `workflow_refactor_delivery_review_20260320.md`
+- `workflow_refactor_stage_report_20260320.md`
 
 ## Still Kept In `docs/`
 

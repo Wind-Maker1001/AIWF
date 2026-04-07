@@ -1,5 +1,7 @@
 # Architecture Gate Inventory Addendum (2026-03-25)
 
+> Historical snapshot. Retained for gate-history context; not current implementation authority.
+
 This addendum records one gate-inventory change after `docs/architecture_gate_inventory_20260324.md`.
 
 ## New core boundary gate

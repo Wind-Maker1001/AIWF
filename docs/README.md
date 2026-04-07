@@ -6,7 +6,7 @@ Use this page as the canonical documentation entrypoint for the current reposito
 
 - Start with [quickstart.md](quickstart.md) if you want the fastest current local startup path.
 - Start with [../README.md](../README.md) if you need the repository overview and common commands first.
-- Use the dated review documents when you want to understand why the repo looks the way it does today.
+- Use [archive/README.md](archive/README.md) when you want dated reviews and earlier migration reasoning.
 - Treat compatibility docs as secondary paths, not primary onboarding.
 - Treat `archive/` as historical context, not active design authority.
 
@@ -17,37 +17,26 @@ Use this page as the canonical documentation entrypoint for the current reposito
 - Native WinUI quickstart: [quickstart_native_winui.md](quickstart_native_winui.md)
 - Backend quickstart: [quickstart_backend.md](quickstart_backend.md)
 - Verification guide: [verification.md](verification.md)
-- Current architecture cognition review: [architecture_cognition_review_20260328.md](architecture_cognition_review_20260328.md)
+- Authority and execution convergence: [authority_execution_convergence_20260406.md](authority_execution_convergence_20260406.md)
 
 ## Current Architecture and Boundary Docs
 
-- Architecture cognition review: [architecture_cognition_review_20260328.md](architecture_cognition_review_20260328.md)
-- Architecture convergence plan: [architecture_convergence_plan_20260320.md](architecture_convergence_plan_20260320.md)
 - Governance control-plane boundary: [governance_control_plane_boundary_20260324.md](governance_control_plane_boundary_20260324.md)
 - Governance control-plane enforcement: [governance_control_plane_enforcement_20260325.md](governance_control_plane_enforcement_20260325.md)
+- Authority and execution convergence: [authority_execution_convergence_20260406.md](authority_execution_convergence_20260406.md)
 - Node-config contract authority: [node_config_contract_authority_20260324.md](node_config_contract_authority_20260324.md)
 - Capability ownership matrix: [capability_ownership_matrix_20260320.md](capability_ownership_matrix_20260320.md)
 - Frontend convergence decision: [frontend_convergence_decision_20260320.md](frontend_convergence_decision_20260320.md)
-- Fallback governance: [fallback_governance_20260320.md](fallback_governance_20260320.md)
 
 ## Current Inventories, Plans, and Backlogs
 
-- Architecture gate inventory: [architecture_gate_inventory_20260324.md](architecture_gate_inventory_20260324.md)
-- Architecture gate inventory addendum: [architecture_gate_inventory_addendum_20260325.md](architecture_gate_inventory_addendum_20260325.md)
-- Fallback retirement backlog: [fallback_retirement_backlog_20260322.md](fallback_retirement_backlog_20260322.md)
 - Electron capability inventory: [electron_capability_inventory_20260321.md](electron_capability_inventory_20260321.md)
 - Desktop workflow app refactor plan: [desktop_workflow_app_refactor_plan.md](desktop_workflow_app_refactor_plan.md)
 - Workflow frontend layering guide: [workflow_frontend_layering_guide_20260320.md](workflow_frontend_layering_guide_20260320.md)
 
 ## Reviews and Dated Assessments
 
-- Latest project review in repo: [project_review_20260325.md](project_review_20260325.md)
-- Latest architecture follow-up in repo: [architecture_followup_review_20260325.md](architecture_followup_review_20260325.md)
-- Earlier project review: [project_review_20260324.md](project_review_20260324.md)
-- Earlier architecture follow-up: [architecture_followup_review_20260324.md](architecture_followup_review_20260324.md)
-- Baseline project review: [project_review_20260313.md](project_review_20260313.md)
-- Workflow refactor stage report: [workflow_refactor_stage_report_20260320.md](workflow_refactor_stage_report_20260320.md)
-- Workflow refactor delivery review: [workflow_refactor_delivery_review_20260320.md](workflow_refactor_delivery_review_20260320.md)
+- Dated reviews and earlier planning snapshots remain available as historical context under [archive/README.md](archive/README.md).
 
 ## Runtime, Delivery, and Operations
 

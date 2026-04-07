@@ -1,5 +1,7 @@
 # AIWF Project Review (2026-03-24)
 
+> Historical snapshot. Retained for review lineage; not current implementation authority.
+
 ## Scope
 
 This report reassesses the repository under `D:\AIWF` after the architecture convergence work landed between March 20, 2026 and March 24, 2026.

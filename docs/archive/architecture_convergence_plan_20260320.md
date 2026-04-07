@@ -40,7 +40,7 @@ AIWF 当前更接近一个多运行时平台仓库，而不是普通多语言 mo
 详细矩阵见：
 
 - `docs/capability_ownership_matrix_20260320.md`
-- `docs/fallback_retirement_backlog_20260322.md`
+- `docs/archive/fallback_retirement_backlog_20260322.md`
 
 ## 4. Phase 1 已落地的硬边界
 
@@ -395,4 +395,4 @@ AIWF 当前更接近一个多运行时平台仓库，而不是普通多语言 mo
 - WinUI 主前端当前已覆盖 manual review queue/history、approve/reject、recent runs、run timeline、failure summary、audit events、quality rule set list/save/delete、sandbox rules viewer/editor、version rollback、sandbox mute helper，以及 sandbox autofix state/history viewer/editor
 - fallback governance gate 已从手工固定清单推进到自动发现 desktop `local_legacy` provider / local mirror；新增本地兼容层若缺 inventory section，会在 gate 阶段直接失败
 - WinUI / Electron 前端启动链自 2026-03-22 起开始显式确保本地 glue-python governance bridge 健康，这为后续把 `offline_local` 的治理 owner 收口到 backend contract 提供了启动前提
-- `docs/fallback_retirement_backlog_20260322.md` 已把现存 fallback 按删债批次挂牌；其中 sandbox autofix local mirror 已从 `base_api` 运行主路径退出，剩余阻塞集中在 `offline_local`
+- `docs/archive/fallback_retirement_backlog_20260322.md` 已把现存 fallback 按删债批次挂牌；其中 sandbox autofix local mirror 已从 `base_api` 运行主路径退出，剩余阻塞集中在 `offline_local`
