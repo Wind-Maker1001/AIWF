@@ -356,6 +356,94 @@ function createOfflineIngest(deps = {}) {
     return rows;
   }
 
+  function normalizeProfile(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function uniqueStrings(values = []) {
+    return Array.from(new Set((Array.isArray(values) ? values : []).map((x) => String(x || "").trim()).filter(Boolean)));
+  }
+
+  function isTemplateDriven(params = {}) {
+    const templateId = String(params.cleaning_template || "").trim().toLowerCase();
+    if (templateId && templateId !== "default") return true;
+    if (params.cleaning_spec_v2 && typeof params.cleaning_spec_v2 === "object") return true;
+    if (normalizeProfile(params.template_expected_profile || params.canonical_profile)) return true;
+    return false;
+  }
+
+  function resolveRequestedProfile(params = {}, ruleObj = {}) {
+    return normalizeProfile(
+      params.template_expected_profile
+      || params.canonical_profile
+      || params?.cleaning_spec_v2?.schema?.template_expected_profile
+      || params?.cleaning_spec_v2?.schema?.canonical_profile
+      || ruleObj.template_expected_profile
+      || ruleObj.canonical_profile
+      || params?.quality_rules?.canonical_profile
+      || params?.rules?.canonical_profile
+    );
+  }
+
+  function resolveBlankOutputExpected(params = {}) {
+    if (params.blank_output_expected !== undefined) return toBool(params.blank_output_expected, false);
+    const explicitBlank = ruleParam(params, "blank_output_expected");
+    if (explicitBlank !== undefined) return toBool(explicitBlank, false);
+    const allowEmpty = ruleParam(params, "allow_empty_output");
+    if (allowEmpty !== undefined) return toBool(allowEmpty, true);
+    return !(isTemplateDriven(params) || toBool(params.local_standalone, false));
+  }
+
+  function resolveProfileMismatchAction(params = {}) {
+    const explicit = String(params.profile_mismatch_action || "").trim().toLowerCase();
+    if (explicit === "warn" || explicit === "block") return explicit;
+    return (isTemplateDriven(params) || toBool(params.local_standalone, false)) ? "block" : "warn";
+  }
+
+  function findRecommendedCandidate(candidateProfiles = []) {
+    return (Array.isArray(candidateProfiles) ? candidateProfiles : []).find((item) => item && item.recommended && String(item.profile || "").trim()) || null;
+  }
+
+  function findCandidateByProfile(candidateProfiles = [], profile = "") {
+    const target = normalizeProfile(profile);
+    if (!target) return null;
+    return (Array.isArray(candidateProfiles) ? candidateProfiles : []).find((item) => normalizeProfile(item?.profile) === target) || null;
+  }
+
+  function buildProfileRecommendationSummary(params = {}, candidateProfiles = []) {
+    const requestedProfile = resolveRequestedProfile(params);
+    const requestedCandidate = findCandidateByProfile(candidateProfiles, requestedProfile);
+    const recommendedCandidate = findRecommendedCandidate(candidateProfiles);
+    const recommendedProfile = normalizeProfile(recommendedCandidate?.profile);
+    const recommendedTemplateId = String(recommendedCandidate?.recommended_template_id || "").trim();
+    const profileConfidence = Number(recommendedCandidate?.score || 0);
+    const requestedCoverage = Number(requestedCandidate?.required_coverage || 0);
+    const recommendedCoverage = Number(recommendedCandidate?.required_coverage || 0);
+    const mismatchAction = resolveProfileMismatchAction(params);
+    const profileMismatch = !!(requestedProfile && recommendedProfile && requestedProfile !== recommendedProfile);
+    const profileMismatchBlocked = !!(
+      profileMismatch
+      && recommendedCandidate
+      && mismatchAction === "block"
+      && profileConfidence >= 0.85
+      && recommendedCoverage >= 0.75
+      && requestedCoverage <= 0.25
+    );
+    const profileMismatchWarn = !!(profileMismatch && !profileMismatchBlocked);
+    return {
+      requested_profile: requestedProfile,
+      recommended_profile: recommendedProfile,
+      recommended_template_id: recommendedTemplateId,
+      profile_confidence: Number(profileConfidence.toFixed(6)),
+      profile_mismatch: profileMismatch,
+      profile_mismatch_blocked: profileMismatchBlocked,
+      profile_mismatch_warn: profileMismatchWarn,
+      requested_profile_required_coverage: Number(requestedCoverage.toFixed(6)),
+      recommended_profile_required_coverage: Number(recommendedCoverage.toFixed(6)),
+      recommendation_signal_available: !!recommendedCandidate,
+    };
+  }
+
   function precheckRows(rawRows, params = {}, runtime = {}) {
     const ruleObj = resolveRuleObject(params);
     const renameMap = normalizeRuleMap(ruleObj.rename_map);
@@ -425,7 +513,17 @@ function createOfflineIngest(deps = {}) {
       qualityGateError = String(e && e.message ? e.message : e);
     }
 
-    const issues = [];
+    const blankOutputExpected = resolveBlankOutputExpected(params);
+    const predictedZeroOutputUnexpected = Number(q.output_rows || 0) <= 0 && !blankOutputExpected;
+    if (predictedZeroOutputUnexpected) {
+      qualityGateOk = false;
+      if (!qualityGateError) {
+        qualityGateError = "quality gate failed: output_rows=0 while blank_output_expected=false";
+      }
+    }
+
+    const blockingIssues = [];
+    const warningIssues = [];
     const textRows = mappedRows
       .map((r) => String(r?.text || "").trim())
       .filter((t) => t.length > 0);
@@ -437,32 +535,44 @@ function createOfflineIngest(deps = {}) {
       coherent_paragraph_ratio: longTextRows.length > 0 ? Number((coherentRows.length / longTextRows.length).toFixed(6)) : 0,
     };
     if (missingRequired.length > 0) {
-      issues.push(`缺少必填字段: ${missingRequired.join("、")}`);
+      blockingIssues.push(`缺少必填字段: ${missingRequired.join("、")}`);
     }
     if (amountNonEmpty > 0 && amountConvertRate < requiredAmountConvertRate) {
-      issues.push(`金额列可转换率偏低: ${(amountConvertRate * 100).toFixed(1)}%`);
+      blockingIssues.push(`金额列可转换率偏低: ${(amountConvertRate * 100).toFixed(1)}%`);
     }
     if (!qualityGateOk && qualityGateError) {
-      issues.push(`质量门禁预检未通过: ${qualityGateError}`);
+      blockingIssues.push(`质量门禁预检未通过: ${qualityGateError}`);
     }
     const sidecarBlockedReasonCodes = sidecarPayload && Array.isArray(sidecarPayload.blocked_reason_codes)
       ? sidecarPayload.blocked_reason_codes.map((x) => String(x)).filter(Boolean)
       : [];
+    const candidateProfiles = sidecarPayload && Array.isArray(sidecarPayload.candidate_profiles) ? sidecarPayload.candidate_profiles : [];
+    const recommendation = buildProfileRecommendationSummary(params, candidateProfiles);
     const sidecarQualityBlocked = !!(sidecarPayload && sidecarPayload.quality_blocked);
     if (sidecarQualityBlocked) {
       const sidecarBlockedText = sidecarBlockedReasonCodes.length > 0
         ? sidecarBlockedReasonCodes.join("、")
         : "输入质量门禁阻断";
-      issues.unshift(`输入质量门禁阻断: ${sidecarBlockedText}`);
+      blockingIssues.unshift(`输入质量门禁阻断: ${sidecarBlockedText}`);
       qualityGateOk = false;
       if (!qualityGateError) qualityGateError = sidecarBlockedText;
     }
+    if (recommendation.profile_mismatch_blocked) {
+      blockingIssues.unshift(`模板画像不匹配: ${recommendation.requested_profile} -> ${recommendation.recommended_profile}`);
+    } else if (recommendation.profile_mismatch_warn) {
+      warningIssues.push(`模板画像可能不匹配: ${recommendation.requested_profile} -> ${recommendation.recommended_profile}`);
+    } else if (recommendation.requested_profile && !recommendation.recommendation_signal_available) {
+      warningIssues.push("推荐信号不足，正式运行仍可能触发运行时挡板。");
+    }
+    if (predictedZeroOutputUnexpected) {
+      blockingIssues.push("将产生空结果，且当前模板不允许空输出。");
+    }
     const contentGateEnabled = toBool(ruleParam(params, "precheck_content_gate_enabled"), false);
     if (contentGateEnabled && contentPrecheck.long_paragraph_ratio < 0.2) {
-      issues.push(`正文段落比例偏低: ${(contentPrecheck.long_paragraph_ratio * 100).toFixed(1)}%`);
+      blockingIssues.push(`正文段落比例偏低: ${(contentPrecheck.long_paragraph_ratio * 100).toFixed(1)}%`);
     }
     if (contentGateEnabled && contentPrecheck.coherent_paragraph_ratio < 0.5) {
-      issues.push(`段落连贯性偏低: ${(contentPrecheck.coherent_paragraph_ratio * 100).toFixed(1)}%`);
+      blockingIssues.push(`段落连贯性偏低: ${(contentPrecheck.coherent_paragraph_ratio * 100).toFixed(1)}%`);
     }
 
     const suggestions = [];
@@ -475,9 +585,22 @@ function createOfflineIngest(deps = {}) {
     if (!qualityGateOk) {
       suggestions.push("请先修复预检问题，再执行正式生成。");
     }
+    if (recommendation.recommended_template_id) {
+      suggestions.push(`推荐模板: ${recommendation.recommended_template_id}`);
+    }
     if (contentPrecheck.long_paragraph_ratio < 0.2 || contentPrecheck.coherent_paragraph_ratio < 0.5) {
       suggestions.push("建议先进行论文正文抽取（去注释/去参考文献）后再做 Office 产物。");
     }
+    if (!recommendation.recommendation_signal_available && recommendation.requested_profile) {
+      suggestions.push("当前缺少模板推荐信号，正式运行仍可能触发运行时挡板。");
+    }
+    const issues = [...blockingIssues, ...warningIssues];
+    const blockingReasonCodes = uniqueStrings([
+      ...sidecarBlockedReasonCodes,
+      ...(recommendation.profile_mismatch_blocked ? ["profile_mismatch"] : []),
+      ...(predictedZeroOutputUnexpected ? ["zero_output_unexpected"] : []),
+    ]);
+    const precheckAction = blockingIssues.length > 0 ? "block" : (warningIssues.length > 0 ? "warn" : "allow");
     if (issues.length === 0) {
       suggestions.push("预检通过，可以直接执行开始生成。");
     }
@@ -503,11 +626,20 @@ function createOfflineIngest(deps = {}) {
       content_gate_enabled: contentGateEnabled,
       quality_gate_ok: qualityGateOk,
       quality_gate_error: qualityGateError,
-      ok: issues.length === 0,
+      ok: blockingIssues.length === 0,
+      requested_profile: recommendation.requested_profile,
+      recommended_profile: recommendation.recommended_profile,
+      recommended_template_id: recommendation.recommended_template_id,
+      profile_confidence: recommendation.profile_confidence,
+      profile_mismatch: recommendation.profile_mismatch,
+      precheck_action: precheckAction,
+      predicted_zero_output_unexpected: predictedZeroOutputUnexpected,
+      blank_output_expected: blankOutputExpected,
       header_mapping: sidecarPayload && Array.isArray(sidecarPayload.header_mapping) ? sidecarPayload.header_mapping : [],
-      candidate_profiles: sidecarPayload && Array.isArray(sidecarPayload.candidate_profiles) ? sidecarPayload.candidate_profiles : [],
+      candidate_profiles: candidateProfiles,
       quality_decisions: sidecarPayload && Array.isArray(sidecarPayload.quality_decisions) ? sidecarPayload.quality_decisions : [],
       blocked_reason_codes: sidecarBlockedReasonCodes,
+      blocking_reason_codes: blockingReasonCodes,
       sample_rows: sidecarPayload && Array.isArray(sidecarPayload.sample_rows) ? sidecarPayload.sample_rows : rawRows.slice(0, 5),
       issues,
       suggestions,

@@ -1,4 +1,4 @@
-function renderPrecheck(res){
+function renderPrecheckLegacy(res){
   const p = res && typeof res === "object" ? res : {};
   precheckEl.textContent = JSON.stringify(p, null, 2);
   precheckIssuesEl.innerHTML = "";
@@ -63,6 +63,128 @@ function renderPrecheck(res){
     if (precheckIssuesEl.children.length === 0) {
       addIssueBtn("查看问题摘要", (Array.isArray(p.issues) ? p.issues : []).join("\n"));
     }
+  }
+}
+
+function renderPrecheck(res){
+  const p = res && typeof res === "object" ? res : {};
+  precheckEl.textContent = JSON.stringify(p, null, 2);
+  precheckIssuesEl.innerHTML = "";
+  precheckDetailEl.textContent = "点击上方问题可查看详情";
+
+  const action = String(p.precheck_action || (p.ok ? "allow" : "block")).trim().toLowerCase();
+  const issues = Array.isArray(p.issues) ? p.issues : [];
+  const requestedProfile = String(p.requested_profile || "").trim();
+  const recommendedProfile = String(p.recommended_profile || "").trim();
+  const recommendedTemplateId = String(p.recommended_template_id || "").trim();
+  const blockingReasonCodes = Array.isArray(p.blocking_reason_codes) ? p.blocking_reason_codes : [];
+
+  const addIssueBtn = (title, detail) => {
+    const b = document.createElement("button");
+    b.className = "secondary";
+    b.textContent = title;
+    b.onclick = () => { precheckDetailEl.textContent = detail; };
+    precheckIssuesEl.appendChild(b);
+  };
+
+  if (action === "allow") {
+    precheckHintEl.textContent = "预检通过：字段和质量门槛可接受。";
+  } else if (action === "warn") {
+    precheckHintEl.textContent = "预检提示：建议调整模板后再运行。";
+  } else {
+    precheckHintEl.textContent = `预检拦截：${issues.length} 个问题`;
+  }
+
+  const summaryBtn = document.createElement("button");
+  summaryBtn.className = "secondary";
+  summaryBtn.textContent = action === "allow" ? "查看通过摘要" : "查看预检摘要";
+  summaryBtn.onclick = () => {
+    precheckDetailEl.textContent = [
+      `预检动作: ${action}`,
+      `输入行数: ${p.input_rows || 0}`,
+      `字段数: ${Array.isArray(p.headers) ? p.headers.length : 0}`,
+      `金额可转换率: ${Number((p.amount_convert_rate || 0) * 100).toFixed(1)}%（下限 ${(Number(p.amount_convert_rate_required || 0.9) * 100).toFixed(1)}%）`,
+      `请求画像: ${requestedProfile || "-"}`,
+      `推荐画像: ${recommendedProfile || "-"}`,
+      `推荐模板: ${recommendedTemplateId || "-"}`,
+      `推荐置信度: ${Number(p.profile_confidence || 0).toFixed(3)}`,
+      `预期空输出: ${p.blank_output_expected === true ? "true" : "false"}`,
+      `零输出预判: ${p.predicted_zero_output_unexpected === true ? "true" : "false"}`,
+      `阻断原因: ${blockingReasonCodes.length > 0 ? blockingReasonCodes.join(", ") : "-"}`,
+    ].join("\n");
+  };
+  precheckIssuesEl.appendChild(summaryBtn);
+
+  const missing = Array.isArray(p.missing_required_fields) ? p.missing_required_fields : [];
+  if (missing.length > 0) {
+    addIssueBtn(
+      `缺少字段 (${missing.length})`,
+      `缺少必填字段:\n- ${missing.join("\n- ")}\n\n当前检测到字段:\n- ${(Array.isArray(p.headers) ? p.headers : []).join("\n- ")}`
+    );
+  }
+
+  const rate = Number(p.amount_convert_rate || 0);
+  const requiredRate = Number(p.amount_convert_rate_required || 0.9);
+  const invalidSamples = Array.isArray(p.amount_invalid_samples) ? p.amount_invalid_samples : [];
+  if (rate < requiredRate) {
+    const lines = invalidSamples.length > 0
+      ? invalidSamples.map((s, i) => `${i + 1}. 行 ${s.row_no || "-"} | ${s.raw_value || ""} | ${s.source_file || ""}`)
+      : ["无可用样本"];
+    addIssueBtn(
+      "金额列异常",
+      `金额字段: ${p.amount_field || "-"}\n可转换率: ${(rate * 100).toFixed(1)}%（下限 ${(requiredRate * 100).toFixed(1)}%）\n异常样本:\n${lines.join("\n")}`
+    );
+    invalidSamples.slice(0, 5).forEach((s, i) => {
+      const b = document.createElement("button");
+      b.className = "secondary";
+      b.textContent = `打开样本 ${i + 1}`;
+      b.onclick = async () => {
+        const fp = String(s?.source_file || "");
+        if(!fp){ setStatus("样本缺少文件路径", false); return; }
+        await window.aiwfDesktop.openPath(fp);
+        setStatus(`已打开样本文件，可定位到行 ${s?.row_no || "-"}`, true);
+      };
+      precheckIssuesEl.appendChild(b);
+    });
+  }
+
+  if (!p.quality_gate_ok) {
+    addIssueBtn(
+      "质量门槛未通过",
+      `质量门槛错误:\n${p.quality_gate_error || "unknown"}\n\n建议:\n- 先修复上述字段或金额问题\n- 再重新执行模板预检`
+    );
+  }
+
+  if (requestedProfile && recommendedProfile && requestedProfile !== recommendedProfile) {
+    addIssueBtn(
+      "模板画像不匹配",
+      `当前模板画像: ${requestedProfile}\n推荐画像: ${recommendedProfile}\n推荐模板: ${recommendedTemplateId || "-"}\n置信度: ${Number(p.profile_confidence || 0).toFixed(3)}\n\n建议先切换到推荐模板后再运行。`
+    );
+  }
+
+  if (recommendedTemplateId) {
+    addIssueBtn(
+      "推荐模板",
+      `推荐模板: ${recommendedTemplateId}\n推荐画像: ${recommendedProfile || "-"}\n置信度: ${Number(p.profile_confidence || 0).toFixed(3)}`
+    );
+  }
+
+  if (p.predicted_zero_output_unexpected) {
+    addIssueBtn(
+      "将产生空结果",
+      "当前预检预测 output_rows=0，且 blank_output_expected=false。\n建议调整模板、映射或过滤条件后再运行。"
+    );
+  }
+
+  if (requestedProfile && !recommendedProfile) {
+    addIssueBtn(
+      "推荐信号不足",
+      "当前没有足够的 sidecar 推荐信号可判断模板是否匹配，正式运行仍可能触发运行时挡板。"
+    );
+  }
+
+  if (precheckIssuesEl.children.length === 1) {
+    addIssueBtn("查看问题摘要", issues.join("\n") || "暂无额外问题");
   }
 }
 

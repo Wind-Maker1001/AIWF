@@ -116,6 +116,124 @@ test("precheckRows surfaces sidecar metadata when available", () => {
   assert.equal(out.header_mapping[0].canonical_field, "amount");
 });
 
+test("precheckRows recommends finance template when sidecar recommends requested profile", () => {
+  const ingest = createOfflineIngest({ normalizeCell, normalizeAmount });
+  const out = ingest.precheckRows(
+    [
+      { ID: "101", Amt: "100.5", currency: "CNY" },
+      { ID: "102", Amt: "230.1", currency: "CNY" },
+    ],
+    {
+      cleaning_template: "finance_report_v1",
+      template_expected_profile: "finance_statement",
+      blank_output_expected: false,
+      rules: {
+        rename_map: { ID: "id", Amt: "amount" },
+        required_fields: ["id", "amount"],
+        casts: { id: "int", amount: "float", currency: "string" },
+        min_output_rows: 1,
+        allow_empty_output: false,
+      },
+    },
+    {
+      sidecarExtractResults: [
+        {
+          path: "D:/finance.csv",
+          payload: {
+            candidate_profiles: [
+              { profile: "finance_statement", recommended: true, recommended_template_id: "finance_report_v1", score: 0.96, required_coverage: 1.0 },
+              { profile: "bank_statement", recommended: false, recommended_template_id: "", score: 0.21, required_coverage: 0.0 },
+            ],
+          },
+        },
+      ],
+    },
+  );
+  assert.equal(out.ok, true);
+  assert.equal(out.precheck_action, "allow");
+  assert.equal(out.requested_profile, "finance_statement");
+  assert.equal(out.recommended_profile, "finance_statement");
+  assert.equal(out.recommended_template_id, "finance_report_v1");
+  assert.equal(out.profile_mismatch, false);
+});
+
+test("precheckRows blocks high-confidence template profile mismatch from sidecar", () => {
+  const ingest = createOfflineIngest({ normalizeCell, normalizeAmount });
+  const out = ingest.precheckRows(
+    [{ text: "claim", source_file: "sample.txt" }],
+    {
+      cleaning_template: "finance_report_v1",
+      template_expected_profile: "finance_statement",
+      blank_output_expected: false,
+      rules: {},
+    },
+    {
+      sidecarExtractResults: [
+        {
+          path: "D:/sample.txt",
+          payload: {
+            candidate_profiles: [
+              { profile: "debate_evidence", recommended: true, recommended_template_id: "debate_evidence_v1", score: 0.93, required_coverage: 1.0 },
+              { profile: "finance_statement", recommended: false, recommended_template_id: "", score: 0.12, required_coverage: 0.0 },
+            ],
+          },
+        },
+      ],
+    },
+  );
+  assert.equal(out.ok, false);
+  assert.equal(out.precheck_action, "block");
+  assert.equal(out.requested_profile, "finance_statement");
+  assert.equal(out.recommended_profile, "debate_evidence");
+  assert.equal(out.recommended_template_id, "debate_evidence_v1");
+  assert.equal(out.profile_mismatch, true);
+  assert.ok(out.blocking_reason_codes.includes("profile_mismatch"));
+});
+
+test("precheckRows predicts zero output unexpected when blank output is not expected", () => {
+  const ingest = createOfflineIngest({ normalizeCell, normalizeAmount });
+  const out = ingest.precheckRows(
+    [{ ID: "1", Amt: "10.0", currency: "CNY" }],
+    {
+      cleaning_template: "finance_report_v1",
+      template_expected_profile: "finance_statement",
+      blank_output_expected: false,
+      rules: {
+        rename_map: { ID: "id", Amt: "amount" },
+        casts: { id: "int", amount: "float" },
+        filters: [{ field: "amount", op: "gte", value: 100 }],
+      },
+    },
+  );
+  assert.equal(out.ok, false);
+  assert.equal(out.precheck_action, "block");
+  assert.equal(out.predicted_zero_output_unexpected, true);
+  assert.equal(out.blank_output_expected, false);
+  assert.ok(out.blocking_reason_codes.includes("zero_output_unexpected"));
+});
+
+test("precheckRows warns instead of blocking when recommendation signal is unavailable", () => {
+  const ingest = createOfflineIngest({ normalizeCell, normalizeAmount });
+  const out = ingest.precheckRows(
+    [{ ID: "101", Amt: "100.5", currency: "CNY" }],
+    {
+      cleaning_template: "finance_report_v1",
+      template_expected_profile: "finance_statement",
+      blank_output_expected: false,
+      rules: {
+        rename_map: { ID: "id", Amt: "amount" },
+        required_fields: ["id", "amount"],
+        casts: { id: "int", amount: "float", currency: "string" },
+      },
+    },
+  );
+  assert.equal(out.ok, true);
+  assert.equal(out.precheck_action, "warn");
+  assert.equal(out.requested_profile, "finance_statement");
+  assert.equal(out.recommended_profile, "");
+  assert.equal(out.recommended_template_id, "");
+});
+
 test("readInputRows rejects missing input files by default", async () => {
   const ingest = createOfflineIngest({ normalizeCell, normalizeAmount });
 

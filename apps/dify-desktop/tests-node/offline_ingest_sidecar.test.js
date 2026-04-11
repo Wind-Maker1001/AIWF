@@ -101,3 +101,26 @@ test("offline ingest parsers local xlsx fallback reads all sheets when sidecar i
   assert.deepEqual(rows.map((item) => item.sheet_name), ["S1", "S2"]);
   assert.ok(warnings.some((item) => String(item).includes("glue sidecar 不可用")));
 });
+
+test("offline ingest parsers preserve sidecar recommendation payload for downstream precheck", async () => {
+  const warnings = [];
+  const runtime = {};
+  const deps = baseDeps({
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        rows: [{ source_type: "xlsx", amount: "10" }],
+        quality_blocked: false,
+        candidate_profiles: [{ profile: "finance_statement", recommended: true, recommended_template_id: "finance_report_v1", score: 0.96 }],
+        blocked_reason_codes: ["header_low_confidence"],
+      }),
+    }),
+  });
+  const parsers = createOfflineIngestParsers(deps);
+  await parsers.parseOneFile("D:/sample.xlsx", warnings, { glue_sidecar_url: "http://127.0.0.1:18081" }, runtime);
+  assert.equal(Array.isArray(runtime.sidecarExtractResults), true);
+  assert.equal(runtime.sidecarExtractResults.length, 1);
+  assert.equal(runtime.sidecarExtractResults[0].payload.candidate_profiles[0].recommended_template_id, "finance_report_v1");
+  assert.equal(runtime.sidecarExtractResults[0].payload.blocked_reason_codes[0], "header_low_confidence");
+});
