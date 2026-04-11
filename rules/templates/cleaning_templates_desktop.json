@@ -5,31 +5,41 @@
       "id": "finance_report_v1",
       "file": "finance_report_v1.cleaning_spec_v2.json",
       "label": "Finance Report Template v1",
-      "description": "Strict cleaning template for finance statements and structured report tables."
+      "description": "Strict cleaning template for finance statements and structured report tables.",
+      "template_expected_profile": "finance_statement",
+      "blank_output_expected": false
     },
     {
       "id": "debate_evidence_v1",
       "file": "generic_debate_evidence.json",
       "label": "Debate Evidence Template v1",
-      "description": "Evidence-oriented cleaning template for debate text extraction and source tracking."
+      "description": "Evidence-oriented cleaning template for debate text extraction and source tracking.",
+      "template_expected_profile": "debate_evidence",
+      "blank_output_expected": false
     },
     {
       "id": "bank_statement_v1",
       "file": "bank_statement_v1.cleaning_spec_v2.json",
       "label": "Bank Statement Template v1",
-      "description": "Structured cleaning template for bank statements and reconciliation-style tabular inputs."
+      "description": "Structured cleaning template for bank statements and reconciliation-style tabular inputs.",
+      "template_expected_profile": "bank_statement",
+      "blank_output_expected": false
     },
     {
       "id": "customer_contact_v1",
       "file": "customer_contact_v1.cleaning_spec_v2.json",
       "label": "Customer Contact Template v1",
-      "description": "Pure customer contact cleaning template for name, phone, and city normalization."
+      "description": "Pure customer contact cleaning template for name, phone, and city normalization.",
+      "template_expected_profile": "customer_contact",
+      "blank_output_expected": false
     },
     {
       "id": "customer_ledger_v1",
       "file": "customer_ledger_v1.cleaning_spec_v2.json",
       "label": "Customer Ledger Template v1",
-      "description": "Customer ledger cleaning template for contact, amount, and business date normalization."
+      "description": "Customer ledger cleaning template for contact, amount, and business date normalization.",
+      "template_expected_profile": "customer_ledger",
+      "blank_output_expected": false
     }
   ]
 }

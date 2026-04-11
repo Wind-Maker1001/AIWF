@@ -51,6 +51,7 @@
         "max_required_missing_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
         "max_duplicate_rows_removed": { "type": "integer", "minimum": 0 },
         "allow_empty_output": { "type": "boolean" },
+        "blank_output_expected": { "type": "boolean" },
         "numeric_parse_rate_min": { "type": "number", "minimum": 0, "maximum": 1 },
         "date_parse_rate_min": { "type": "number", "minimum": 0, "maximum": 1 },
         "duplicate_key_ratio_max": { "type": "number", "minimum": 0, "maximum": 1 },

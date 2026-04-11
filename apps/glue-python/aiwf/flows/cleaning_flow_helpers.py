@@ -87,6 +87,7 @@ def prepare_local_clean_cache(
             "materialization_engine": str(cleaned_local.get("materialization_engine") or "python"),
             "legacy_cleaning_operator_used": bool(cleaned_local.get("legacy_cleaning_operator_used", False)),
             "stage_provenance": list(cleaned_local.get("stage_provenance") or []),
+            "profile_analysis": dict(cleaned_local.get("profile_analysis") or {}),
         },
         "params_for_accel": params_for_accel,
     }

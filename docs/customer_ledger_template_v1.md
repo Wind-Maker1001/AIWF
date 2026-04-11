@@ -14,6 +14,10 @@ Core fields:
 - API payload: `params.cleaning_template = "customer_ledger_v1"`
 - Primary template: `rules/templates/customer_ledger_v1.cleaning_spec_v2.json`
 - Compatibility template: `rules/templates/generic_customer_ledger_standardize.json`
+- Template metadata:
+  - `template_expected_profile = customer_ledger`
+  - `blank_output_expected = false`
+  - template-driven runs default to `profile_mismatch_action = block`
 
 ## Runtime Semantics
 - canonical profile: `customer_ledger`

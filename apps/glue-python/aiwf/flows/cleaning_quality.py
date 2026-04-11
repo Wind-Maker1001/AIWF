@@ -4,6 +4,19 @@ from decimal import Decimal
 from typing import Any, Callable, Dict
 
 
+def _to_optional_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
 def _quality_gate_param(
     params: Dict[str, Any],
     rule_param: Callable[[Dict[str, Any], str, Any], Any],
@@ -42,7 +55,14 @@ def apply_quality_gates_impl(
     max_required_missing_ratio = to_decimal(_quality_gate_param(params, rule_param, "max_required_missing_ratio"))
     max_duplicate_rows_removed = to_int(_quality_gate_param(params, rule_param, "max_duplicate_rows_removed"))
     allow_empty_output_value = _quality_gate_param(params, rule_param, "allow_empty_output", None)
-    allow_empty_output = None if allow_empty_output_value is None else str(allow_empty_output_value).strip().lower() in {"1", "true", "yes", "on"}
+    blank_output_expected_value = _quality_gate_param(params, rule_param, "blank_output_expected", None)
+    allow_empty_output = _to_optional_bool(allow_empty_output_value)
+    blank_output_expected = _to_optional_bool(blank_output_expected_value)
+    if allow_empty_output is None:
+        allow_empty_output = blank_output_expected
+    if blank_output_expected is None:
+        blank_output_expected = allow_empty_output
+    zero_output_unexpected = output_rows <= 0 and blank_output_expected is False
 
     if max_invalid_rows is not None and invalid_rows > max_invalid_rows:
         raise RuntimeError(
@@ -82,5 +102,7 @@ def apply_quality_gates_impl(
         "max_required_missing_ratio": (float(max_required_missing_ratio) if max_required_missing_ratio is not None else None),
         "max_duplicate_rows_removed": max_duplicate_rows_removed,
         "allow_empty_output": allow_empty_output,
+        "blank_output_expected": blank_output_expected,
+        "zero_output_unexpected": zero_output_unexpected,
         "evaluated": True,
     }

@@ -42,6 +42,18 @@ test("desktop real sample acceptance keeps office output gates disabled explicit
     assert.match(text, /cleaning_result\.json/i);
   }
 
+  assert.match(psAcceptance, /cleaning_template = "debate_evidence_v1"/i);
+  assert.match(psAcceptance, /requested_profile/i);
+  assert.match(psAcceptance, /blocking_reason_codes/i);
+  assert.match(psAcceptance, /blank_output_expected/i);
+  assert.match(psAcceptance, /zero_output_unexpected/i);
+
+  assert.match(financeAcceptance, /requested_profile/i);
+  assert.match(financeAcceptance, /blocking_reason_codes/i);
+  assert.match(financeAcceptance, /blank_output_expected/i);
+  assert.match(financeAcceptance, /zero_output_unexpected/i);
+  assert.match(financeAcceptance, /blank_output_expected=false/i);
+
   assert.doesNotMatch(psAcceptance, /runOfflineCleaning\s*\(/);
   assert.doesNotMatch(financeAcceptance, /runOfflineCleaning\s*\(/);
   assert.doesNotMatch(psAcceptance, /New-AiwfBaseJob/);

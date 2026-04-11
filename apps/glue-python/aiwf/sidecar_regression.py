@@ -638,6 +638,15 @@ def run_python_rust_consistency(scenario_dir: str | Path, scenario: Dict[str, An
         return {"ok": False, "status": "failed", "error": str(rust_out.get("error") or "rust transform failed")}
     python_metrics = compute_common_python_metrics(rows, scenario)
     rust_quality = rust_out.get("quality") if isinstance(rust_out.get("quality"), dict) else {}
+    allow_empty_output = quality_rules.get("allow_empty_output")
+    if allow_empty_output is None and "blank_output_expected" in quality_rules:
+        allow_empty_output = quality_rules.get("blank_output_expected")
+    python_blocking_reason_codes: List[str] = []
+    rust_blocking_reason_codes: List[str] = []
+    if allow_empty_output is False and int(python_metrics.get("output_rows", 0) or 0) <= 0:
+        python_blocking_reason_codes.append("zero_output_unexpected")
+    if allow_empty_output is False and int(rust_quality.get("output_rows", 0) or 0) <= 0:
+        rust_blocking_reason_codes.append("zero_output_unexpected")
     mismatches: List[str] = []
     for key in ["required_missing_ratio", "numeric_parse_rate", "date_parse_rate", "duplicate_key_ratio"]:
         if key not in rust_quality:
@@ -674,11 +683,17 @@ def run_python_rust_consistency(scenario_dir: str | Path, scenario: Dict[str, An
             mismatches.append(f"reason_samples[{key}] exceeds sample_limit")
         if int(rust_count) < len(samples):
             mismatches.append(f"reason_samples[{key}] larger than count")
+    if python_blocking_reason_codes != rust_blocking_reason_codes:
+        mismatches.append(
+            f"blocking_reason_codes mismatch: python={python_blocking_reason_codes} rust={rust_blocking_reason_codes}"
+        )
     return {
         "ok": len(mismatches) == 0,
         "status": "passed" if len(mismatches) == 0 else "failed",
         "python_metrics": python_metrics,
+        "python_blocking_reason_codes": python_blocking_reason_codes,
         "rust_quality": rust_quality,
+        "rust_blocking_reason_codes": rust_blocking_reason_codes,
         "rust_audit": rust_audit,
         "rust_audit_reason_counts": rust_reason_counts,
         "expected_reason_counts": expected_reason_counts,

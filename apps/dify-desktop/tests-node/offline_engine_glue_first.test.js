@@ -305,3 +305,145 @@ test("runOfflineCleaning falls back to local cleaner on glue mismatch", async ()
     purgeModules(["../offline_engine"]);
   }
 });
+
+test("runOfflineCleaning surfaces structured guardrail block without local fallback", async () => {
+  const originalLoad = Module._load;
+  const originalFetch = global.fetch;
+  Module._load = function patchedLoad(request, parent, isMain) {
+    if (request === "./offline_text") {
+      return { readTextFileSmart: () => "" };
+    }
+    if (request === "./offline_runtime") {
+      return { runImageOcr: () => ({ ok: false }), runPdfOcr: () => ({ ok: false }) };
+    }
+    if (request === "./offline_paper") {
+      return {
+        splitPdfTextToEvidence: () => [],
+        scorePdfExtractText: () => 10,
+        isLikelyCorruptedText: () => false,
+        rowTextForQuality: (row) => String(row?.text || ""),
+        materializePaperMarkdown: () => [],
+        writePaperMarkdownIndex: async () => {},
+        writeAiCorpusMarkdown: async () => {},
+        writeQualityReport: async () => {},
+      };
+    }
+    if (request === "./offline_outputs") {
+      return {
+        createOfflineOutputs: () => ({
+          buildDataQualityInsights: () => [],
+          buildEvidenceHighlights: () => [],
+          filterRowsForOffice: () => ({ rows: [], filtered: 0, removedRows: [] }),
+          computeOfficeQualityScore: () => ({ score: 90, pass: true, level: "good", thresholds: { min_score: 60 }, metrics: {} }),
+          writeMarkdown: async () => {},
+        }),
+      };
+    }
+    if (request === "./offline_ingest") {
+      return {
+        createOfflineIngest: () => ({
+          readInputRows: async () => {
+            throw new Error("local readInputRows should not be used after structured block");
+          },
+          cleanRows: () => {
+            throw new Error("local cleanRows should not be used after structured block");
+          },
+          applyQualityGates: () => ({ evaluated: true, passed: true }),
+          buildFidelityRows: () => [],
+          precheckRows: () => ({ ok: true }),
+        }),
+      };
+    }
+    if (request === "./offline_engine_config") {
+      return {
+        createOfflineEngineConfig: () => ({
+          listCleaningTemplates: () => ({ ok: true, templates: [] }),
+          normalizeReportTitle: (title) => String(title || "report"),
+          resolveCleaningTemplateParams: (params) => ({ ...(params || {}) }),
+          resolveOfficeLayout: () => ({}),
+          resolveOfficeTheme: () => ({}),
+        }),
+      };
+    }
+    if (request === "./offline_engine_runtime") {
+      return {
+        ExcelJS: {},
+        IMG_EXT: new Set(),
+        ensureDir: () => {},
+        extractPdfTextFromBuffer: async () => "",
+        imageSize: {},
+        isMissingNodeModuleError: () => false,
+        makeJobId: () => "job-test",
+        mammoth: {},
+        normalizeAmount: (value) => Number(value),
+        normalizeCell: (value) => String(value ?? ""),
+        resolveOfficeFont: () => "",
+        sha256File: () => "sha",
+      };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+
+  global.fetch = async (url) => {
+    if (String(url).endsWith("/health")) {
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true }) };
+    }
+    if (String(url).includes("/ingest/extract")) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ ok: true, rows: [{ claim_text: "claim", speaker: "alice" }] }),
+      };
+    }
+    if (String(url).includes("/run/cleaning")) {
+      return {
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify({
+          ok: false,
+          error: "profile mismatch blocked",
+          error_code: "profile_mismatch_blocked",
+          reason_codes: ["profile_mismatch_blocked"],
+          requested_profile: "finance_statement",
+          recommended_profile: "debate_evidence",
+          profile_confidence: 0.93,
+          required_field_coverage: 0.0,
+          template_id: "finance_report_v1",
+          template_expected_profile: "finance_statement",
+          blocking_reason_codes: ["profile_mismatch", "profile_mismatch_blocked"],
+          blank_output_expected: false,
+          zero_output_unexpected: false,
+        }),
+      };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+
+  try {
+    purgeModules(["../offline_engine"]);
+    const { runOfflineCleaning } = require("../offline_engine");
+    const out = await runOfflineCleaning({
+      output_root: "D:/tmp",
+      glue_url: "http://127.0.0.1:18081",
+      params: {
+        input_files: JSON.stringify(["D:/sample.txt"]),
+        cleaning_template: "finance_report_v1",
+      },
+    });
+    assert.equal(out.ok, false);
+    assert.equal(out.blocked, true);
+    assert.equal(out.job_id, "job-test");
+    assert.equal(out.error_code, "profile_mismatch_blocked");
+    assert.equal(out.requested_profile, "finance_statement");
+    assert.equal(out.recommended_profile, "debate_evidence");
+    assert.deepEqual(out.reason_codes, ["profile_mismatch_blocked"]);
+    assert.deepEqual(out.blocking_reason_codes, ["profile_mismatch", "profile_mismatch_blocked"]);
+    assert.equal(out.quality_summary.requested_profile, "finance_statement");
+    assert.equal(out.quality_summary.recommended_profile, "debate_evidence");
+    assert.equal(out.execution.execution_mode, "guardrail_blocked");
+  } finally {
+    global.fetch = originalFetch;
+    Module._load = originalLoad;
+    purgeModules(["../offline_engine"]);
+  }
+});

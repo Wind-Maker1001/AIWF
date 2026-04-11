@@ -115,6 +115,7 @@ from aiwf.workflow_validation_client import (
 )
 from aiwf.rust_client import workflow_reference_run_v1
 from aiwf.flows.cleaning_flow_materialization import materialize_accel_outputs
+from aiwf.flows.cleaning_errors import CleaningGuardrailError
 from aiwf.flows.cleaning_orchestrator_support import collect_materialized_artifacts, build_success_result
 from aiwf.flows.cleaning_runtime_support import sha256_file
 from aiwf.flows.cleaning_transport import (
@@ -1871,6 +1872,11 @@ def run_flow(job_id: str, flow: str, req: RunReq):
         )
     try:
         result = _run_flow_with_runner(job_id, req, runner)
+    except CleaningGuardrailError as exc:
+        return JSONResponse(
+            status_code=400,
+            content=exc.to_response(job_id=job_id, flow=flow),
+        )
     except ValueError as exc:
         return JSONResponse(
             status_code=400,

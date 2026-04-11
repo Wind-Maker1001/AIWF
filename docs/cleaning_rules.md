@@ -76,6 +76,26 @@ You can put legacy rules under either:
 Preferred modern entry:
 - `params.cleaning_spec_v2`
 - template file payloads with top-level `schema_version = "cleaning_spec.v2"`
+- template registry metadata may additionally declare:
+  - `template_expected_profile`
+  - `blank_output_expected`
+
+Template/profile guardrails:
+- template-driven cleaning now resolves `params.cleaning_template` before execution
+- `template_expected_profile` is compared with runtime profile recommendation before materialization
+- default policy:
+  - template-driven or `local_standalone`: `profile_mismatch_action = block`
+  - general API calls: `profile_mismatch_action = warn`
+- structured guardrail errors currently include:
+  - `error_code`
+  - `reason_codes`
+  - `requested_profile`
+  - `recommended_profile`
+  - `profile_confidence`
+  - `required_field_coverage`
+  - `template_id`
+  - `blank_output_expected`
+  - `zero_output_unexpected`
 
 Cleaning local execution mode:
 - `AIWF_CLEANING_RUST_V2_MODE=off|shadow|default`
@@ -106,6 +126,15 @@ Standard evidence and audit outputs:
 - `quality_summary.json`: normalized run-level quality/audit summary
 - `rejections.jsonl`: sampled rejected rows from cast/required/filter/dedup paths
 - `preprocess_stage_plan.v1`: fixed stage-plan schema embedded in preprocess execution audit
+- `quality_summary.json` now also carries:
+  - `requested_profile`
+  - `recommended_profile`
+  - `profile_confidence`
+  - `profile_mismatch`
+  - `required_field_coverage`
+  - `blocking_reason_codes`
+  - `blank_output_expected`
+  - `zero_output_unexpected`
 
 Published but palette-hidden operator:
 

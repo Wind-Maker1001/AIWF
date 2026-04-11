@@ -169,6 +169,12 @@ function applyCleaningSpecToParams(params = {}, spec) {
   if (!String(next.canonical_profile || "").trim()) {
     next.canonical_profile = String(normalized.schema?.canonical_profile || "").trim().toLowerCase();
   }
+  if (next.blank_output_expected === undefined && normalized.quality?.gates?.blank_output_expected !== undefined) {
+    next.blank_output_expected = Boolean(normalized.quality.gates.blank_output_expected);
+  }
+  if (!String(next.template_expected_profile || "").trim()) {
+    next.template_expected_profile = String(normalized.schema?.template_expected_profile || normalized.schema?.canonical_profile || "").trim().toLowerCase();
+  }
   return next;
 }
 

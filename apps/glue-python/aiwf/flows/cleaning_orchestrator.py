@@ -11,6 +11,7 @@ from aiwf.flows.cleaning_flow_helpers import (
     prepare_local_clean_cache,
     resolve_base_url,
 )
+from aiwf.flows.cleaning_errors import CleaningGuardrailError, guardrail_template_expected_profile, guardrail_template_id
 from aiwf.flows.cleaning_orchestrator_support import (
     build_office_outputs_fn,
     build_success_result,
@@ -31,6 +32,7 @@ def run_cleaning_flow(
     hooks: Dict[str, Callable[..., Any]],
 ) -> Dict[str, Any]:
     ensure_dirs = hooks["_ensure_dirs"]
+    prepare_cleaning_params = hooks["_prepare_cleaning_params"]
     load_raw_rows = hooks["_load_raw_rows"]
     clean_rows = hooks["_clean_rows"]
     rules_dict = hooks["_rules_dict"]
@@ -61,6 +63,7 @@ def run_cleaning_flow(
 
     t0 = time.time()
     params = apply_quality_rule_set_to_params(params or {})
+    params = prepare_cleaning_params(params)
     public_params = {
         key: value
         for key, value in params.items()
@@ -87,6 +90,7 @@ def run_cleaning_flow(
             )
 
         params_effective, preprocess_result = maybe_preprocess_input(params, layout["job_root"], layout["stage_dir"])
+        params_effective = prepare_cleaning_params(params_effective)
         local_cache = prepare_local_clean_cache(
             params_effective,
             layout["job_root"],
@@ -94,6 +98,39 @@ def run_cleaning_flow(
             clean_rows=clean_rows,
             rules_dict=rules_dict,
         )
+        profile_analysis = (
+            dict(local_cache["local_execution"].get("profile_analysis") or {})
+            if isinstance(local_cache.get("local_execution"), dict)
+            else {}
+        )
+        allow_empty_output = to_bool(
+            rule_param(
+                params_effective,
+                "allow_empty_output",
+                params_effective.get("blank_output_expected", True),
+            ),
+            default=bool(params_effective.get("blank_output_expected", True)),
+        )
+        if int(local_cache["local_quality"].get("output_rows", 0) or 0) <= 0 and not allow_empty_output:
+            raise CleaningGuardrailError(
+                error_code="zero_output_unexpected",
+                message="cleaning blocked: output_rows=0 while blank output is not expected",
+                reason_codes=["zero_output_unexpected"],
+                requested_profile=str(profile_analysis.get("requested_profile") or ""),
+                recommended_profile=str(profile_analysis.get("recommended_profile") or ""),
+                profile_confidence=float(profile_analysis.get("profile_confidence") or 0.0),
+                required_field_coverage=float(profile_analysis.get("required_field_coverage") or 0.0),
+                template_id=guardrail_template_id(params_effective),
+                template_expected_profile=guardrail_template_expected_profile(params_effective),
+                blank_output_expected=bool(params_effective.get("blank_output_expected", False)),
+                zero_output_unexpected=True,
+                blocking_reason_codes=list(profile_analysis.get("blocking_reason_codes") or []) + ["zero_output_unexpected"],
+                details={
+                    "output_rows": int(local_cache["local_quality"].get("output_rows", 0) or 0),
+                    "input_rows": int(local_cache["local_quality"].get("input_rows", 0) or 0),
+                    "quality": dict(local_cache["local_quality"] or {}),
+                },
+            )
 
         accel_result = prepare_accel_result(
             params_effective=params_effective,

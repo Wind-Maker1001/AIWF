@@ -12,18 +12,29 @@
   "transform": {
     "rename_map": {
       "CustomerName": "customer_name",
+      "Cust Name": "customer_name",
+      "Customer Name": "customer_name",
       "Name": "customer_name",
       "Customer": "customer_name",
       "客户名称": "customer_name",
+      "客户": "customer_name",
       "姓名": "customer_name",
+      "联系人": "customer_name",
+      "联系人姓名": "customer_name",
       "Phone": "phone",
       "Mobile": "phone",
+      "Mobile No": "phone",
       "Telephone": "phone",
+      "Tel No": "phone",
       "手机": "phone",
       "手机号": "phone",
-      "电话": "phone",
+      "电话号码": "phone",
+      "联系电话": "phone",
+      "座机": "phone",
       "City": "city",
-      "城市": "city"
+      "City Name": "city",
+      "城市": "city",
+      "所在城市": "city"
     },
     "casts": {
       "customer_name": "string",

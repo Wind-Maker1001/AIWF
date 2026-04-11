@@ -13,6 +13,7 @@ from aiwf.flows.office_artifacts import (
     materialize_accel_office_artifacts,
     select_office_artifact_registrations,
 )
+from aiwf.flows.cleaning_errors import CleaningGuardrailError, guardrail_template_expected_profile, guardrail_template_id
 from aiwf.flows.cleaning_reporting import build_quality_summary, flatten_rejection_records
 
 
@@ -227,8 +228,28 @@ def materialize_local_outputs(
     materialize_office_outputs_fn: Callable[..., Dict[str, Any]],
 ) -> Dict[str, Any]:
     quality_gate = apply_quality_gates(quality, params_effective)
-    if not rows and not to_bool(rule_param(params_effective, "allow_empty_output", True), default=True):
-        raise RuntimeError("cleaning produced empty result")
+    allow_empty_output_default = params_effective.get("blank_output_expected", True)
+    if not rows and not to_bool(rule_param(params_effective, "allow_empty_output", allow_empty_output_default), default=True):
+        execution_profile_analysis = (
+            dict(execution_report.get("profile_analysis") or {})
+            if isinstance(execution_report, dict)
+            else {}
+        )
+        raise CleaningGuardrailError(
+            error_code="zero_output_unexpected",
+            message="cleaning blocked: output_rows=0 while blank output is not expected",
+            reason_codes=["zero_output_unexpected"],
+            requested_profile=str(execution_profile_analysis.get("requested_profile") or ""),
+            recommended_profile=str(execution_profile_analysis.get("recommended_profile") or ""),
+            profile_confidence=float(execution_profile_analysis.get("profile_confidence") or 0.0),
+            required_field_coverage=float(execution_profile_analysis.get("required_field_coverage") or 0.0),
+            template_id=guardrail_template_id(params_effective),
+            template_expected_profile=guardrail_template_expected_profile(params_effective),
+            blank_output_expected=bool(params_effective.get("blank_output_expected", False)),
+            zero_output_unexpected=True,
+            blocking_reason_codes=list(execution_profile_analysis.get("blocking_reason_codes") or []) + ["zero_output_unexpected"],
+            details={"quality": dict(quality or {})},
+        )
 
     require_local_parquet_dependencies(params_effective)
     execution_effective = dict(execution_report or {})

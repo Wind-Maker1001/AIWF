@@ -134,6 +134,101 @@ def _eval_simple_computed_expr(expr: str, row: Dict[str, Any], *, to_float: Call
     return None
 
 
+def _parse_ymd_simple(value: Any) -> tuple[int, int, int] | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = (
+        text.replace("年", "-")
+        .replace("月", "-")
+        .replace("日", "")
+        .replace("/", "-")
+        .replace(".", "-")
+    )
+    normalized = re.sub(r"-+", "-", normalized).strip("-")
+    matched = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", normalized)
+    if matched:
+        year, month, day = matched.groups()
+        return int(year), int(month), int(day)
+    digits = re.sub(r"\D+", "", text)
+    matched = re.match(r"^(\d{4})(\d{2})(\d{2})$", digits)
+    if matched:
+        year, month, day = matched.groups()
+        return int(year), int(month), int(day)
+    return None
+
+
+def _round_half_up(value: float, digits: int) -> float:
+    factor = 10 ** max(0, int(digits))
+    return round(value * factor) / factor
+
+
+def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, to_float: Callable[..., Any]) -> tuple[Any, bool]:
+    kind = str(op_obj.get("op") or "").strip().lower()
+    if not kind:
+        return current, False
+    cur = "" if current is None else str(current)
+    if kind == "trim":
+        return cur.strip(), True
+    if kind == "lower":
+        return cur.lower(), True
+    if kind == "upper":
+        return cur.upper(), True
+    if kind == "collapse_whitespace":
+        return re.sub(r"\s+", " ", cur).strip(), True
+    if kind == "remove_urls":
+        return re.sub(r"https?://\S+|www\.\S+", "", cur).strip(), True
+    if kind == "remove_emails":
+        return re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "", cur).strip(), True
+    if kind == "regex_replace":
+        pattern = str(op_obj.get("pattern") or "")
+        replacement = str(op_obj.get("replace") or op_obj.get("to") or "")
+        try:
+            return re.sub(pattern, replacement, cur), True
+        except re.error:
+            return current, False
+    if kind == "extract_regex":
+        pattern = str(op_obj.get("pattern") or "")
+        group = int(op_obj.get("group", 0) or 0)
+        try:
+            match = re.search(pattern, cur)
+        except re.error:
+            return current, False
+        if not match:
+            return current, False
+        try:
+            return match.group(group), True
+        except IndexError:
+            return current, False
+    if kind == "parse_number":
+        parsed = to_float(cur.replace(",", "").replace("$", "").strip())
+        return (parsed if parsed is not None else current), (parsed is not None)
+    if kind == "round_number":
+        parsed = to_float(current)
+        if parsed is None:
+            return current, False
+        return _round_half_up(float(parsed), int(op_obj.get("digits", 2) or 2)), True
+    if kind == "scale_number":
+        parsed = to_float(current)
+        multiplier = to_float(op_obj.get("multiplier"))
+        if parsed is None or multiplier is None:
+            return current, False
+        return float(parsed) * float(multiplier), True
+    if kind == "map_value":
+        mapping = op_obj.get("mapping") if isinstance(op_obj.get("mapping"), dict) else {}
+        key = cur.strip()
+        if key in mapping:
+            return mapping[key], True
+        return current, False
+    if kind == "parse_date":
+        parsed = _parse_ymd_simple(cur)
+        if parsed is None:
+            return current, False
+        year, month, day = parsed
+        return f"{year:04d}-{month:02d}-{day:02d}", True
+    return current, False
+
+
 def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], hooks: Dict[str, Callable[..., Any]]) -> Dict[str, Any]:
     rules_dict = hooks["rules_dict"]
     to_bool = hooks["to_bool"]
@@ -162,6 +257,9 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
     lowercase_fields = set(str(x) for x in (rules.get("lowercase_fields") or []))
     uppercase_fields = set(str(x) for x in (rules.get("uppercase_fields") or []))
     computed_fields = rules.get("computed_fields") if isinstance(rules.get("computed_fields"), dict) else {}
+    string_ops = rules.get("string_ops") if isinstance(rules.get("string_ops"), list) else []
+    date_ops = rules.get("date_ops") if isinstance(rules.get("date_ops"), list) else []
+    field_ops = rules.get("field_ops") if isinstance(rules.get("field_ops"), list) else []
     try:
         sample_limit = max(0, min(100, int(params.get("audit_sample_limit", 5) or 5)))
     except Exception:
@@ -178,6 +276,9 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
     cast_failed_rows = 0
     required_failed_rows = 0
     filter_rejected_rows = 0
+    string_ops_applied = 0
+    date_ops_applied = 0
+    field_ops_applied = 0
     reason_samples: Dict[str, List[Dict[str, Any]]] = {
         "invalid_object": [],
         "cast_failed": [],
@@ -229,6 +330,27 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
                 if k in uppercase_fields:
                     row[k] = row[k].upper()
 
+        for op in string_ops:
+            if not isinstance(op, dict):
+                continue
+            field = str(op.get("field") or "").strip()
+            kind = str(op.get("op") or "").strip().lower()
+            if not field or not kind or field not in row:
+                continue
+            value = row.get(field)
+            if kind == "trim" and isinstance(value, str):
+                row[field] = value.strip()
+                string_ops_applied += 1
+            elif kind == "lower" and isinstance(value, str):
+                row[field] = value.lower()
+                string_ops_applied += 1
+            elif kind == "upper" and isinstance(value, str):
+                row[field] = value.upper()
+                string_ops_applied += 1
+            elif kind == "replace" and isinstance(value, str):
+                row[field] = value.replace(str(op.get("from") or ""), str(op.get("to") or ""))
+                string_ops_applied += 1
+
         cast_failed = False
         failed_fields: List[str] = []
         for k, ctype in casts.items():
@@ -249,6 +371,43 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
                 },
             )
             continue
+
+        for op in date_ops:
+            if not isinstance(op, dict):
+                continue
+            field = str(op.get("field") or "").strip()
+            kind = str(op.get("op") or "").strip().lower()
+            out_field = str(op.get("as") or field).strip()
+            if not field or not kind or not out_field or field not in row:
+                continue
+            parsed = _parse_ymd_simple(row.get(field))
+            if parsed is None:
+                row[out_field] = None
+            else:
+                year, month, day = parsed
+                if kind == "parse_ymd":
+                    row[out_field] = f"{year:04d}-{month:02d}-{day:02d}"
+                elif kind == "year":
+                    row[out_field] = year
+                elif kind == "month":
+                    row[out_field] = month
+                elif kind == "day":
+                    row[out_field] = day
+                else:
+                    continue
+            date_ops_applied += 1
+
+        for op in field_ops:
+            if not isinstance(op, dict):
+                continue
+            field = str(op.get("field") or "").strip()
+            out_field = str(op.get("as") or field).strip()
+            if not field or not out_field or field not in row:
+                continue
+            next_value, changed = _apply_field_op(row.get(field), op, to_float=to_float)
+            row[out_field] = next_value
+            if changed:
+                field_ops_applied += 1
 
         missing_fields = [str(k) for k in required_fields if row.get(str(k)) is None]
         missing_required = bool(missing_fields)
@@ -369,6 +528,9 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
             "required_failed": required_failed_rows,
             "filtered_rules": filter_rejected_rows,
             "deduplicate_removed": duplicate_rows_removed,
+            "string_ops": string_ops_applied,
+            "date_ops": date_ops_applied,
+            "field_ops": field_ops_applied,
         },
     }
     return {"rows": out, "quality": quality, "reason_samples": reason_samples}

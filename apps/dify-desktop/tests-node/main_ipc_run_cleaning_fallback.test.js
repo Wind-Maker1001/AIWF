@@ -168,3 +168,45 @@ test("aiwf:runCleaning writes execution fields into offline_local run mode audit
   assert.equal(last.shadow_compare_mismatch_count, 0);
   assert.equal(last.rust_v2_used, false);
 });
+
+test("aiwf:runCleaning keeps structured remote guardrail block and audits blocking fields", async () => {
+  const { ipcMain, runModeAudit } = createCtx({
+    runViaBaseApi: async () => ({
+      ok: false,
+      job_id: "remote-guardrail",
+      error: "profile mismatch blocked",
+      error_code: "profile_mismatch_blocked",
+      reason_codes: ["profile_mismatch_blocked"],
+      template_id: "finance_report_v1",
+      template_expected_profile: "finance_statement",
+      quality_summary: {
+        requested_profile: "finance_statement",
+        recommended_profile: "debate_evidence",
+        profile_mismatch: true,
+        blocking_reason_codes: ["profile_mismatch", "profile_mismatch_blocked"],
+        blank_output_expected: false,
+        zero_output_unexpected: false,
+      },
+    }),
+    runOfflineCleaningInWorker: async () => {
+      throw new Error("should not be called");
+    },
+  });
+  const h = ipcMain.handlers.get("aiwf:runCleaning");
+  const out = await h({}, { params: {} }, { mode: "base_api" });
+  assert.equal(out.ok, false);
+  assert.equal(out.error_code, "profile_mismatch_blocked");
+  assert.equal(out.quality_summary.recommended_profile, "debate_evidence");
+  const last = readLastAuditLine(runModeAudit);
+  assert.equal(last.mode, "base_api");
+  assert.equal(last.ok, false);
+  assert.equal(last.reason, "remote_returned_not_ok");
+  assert.equal(last.template, "");
+  assert.equal(last.template_expected_profile, "finance_statement");
+  assert.equal(last.requested_profile, "finance_statement");
+  assert.equal(last.recommended_profile, "debate_evidence");
+  assert.equal(last.profile_mismatch, true);
+  assert.deepEqual(last.blocking_reason_codes, ["profile_mismatch", "profile_mismatch_blocked"]);
+  assert.equal(last.blank_output_expected, false);
+  assert.equal(last.zero_output_unexpected, false);
+});

@@ -192,6 +192,21 @@ function getGlueCleaningCompatibilityQualityGate(glueResult) {
   return { evaluated: false, passed: true };
 }
 
+function getGlueCleaningCompatibilityQualitySummary(glueResult) {
+  if (glueResult && glueResult.quality_summary && typeof glueResult.quality_summary === "object") {
+    return glueResult.quality_summary;
+  }
+  if (glueResult && glueResult.profile && typeof glueResult.profile.quality_summary === "object") {
+    return glueResult.profile.quality_summary;
+  }
+  return {};
+}
+
+function isStructuredCleaningBlock(body) {
+  const errorCode = String(body?.error_code || "").trim().toLowerCase();
+  return errorCode === "profile_mismatch_blocked" || errorCode === "zero_output_unexpected";
+}
+
 async function tryRunGlueFirstCleaning({ payload, params, outRoot, jobId, warnings }) {
   const glueUrl = String(payload?.glue_url || params?.glue_sidecar_url || process.env.AIWF_GLUE_URL || "http://127.0.0.1:18081").trim().replace(/\/$/, "");
   const accelUrl = String(process.env.AIWF_ACCEL_URL || "http://127.0.0.1:18082").trim().replace(/\/$/, "");
@@ -263,6 +278,54 @@ async function tryRunGlueFirstCleaning({ payload, params, outRoot, jobId, warnin
     body: JSON.stringify(body),
   }, 300000).catch((error) => ({ ok: false, json: { error: String(error) } }));
   if (!glueRun.ok || !glueRun.json || glueRun.json.ok === false) {
+    if (isStructuredCleaningBlock(glueRun.json)) {
+      const reasonCodes = Array.isArray(glueRun.json.reason_codes) ? glueRun.json.reason_codes : [];
+      const blockingReasonCodes = Array.isArray(glueRun.json.blocking_reason_codes) ? glueRun.json.blocking_reason_codes : reasonCodes;
+      return {
+        ok: false,
+        blocked: true,
+        mode: "offline_local",
+        job_id: String(glueRun.json.job_id || jobId),
+        template: String(params.cleaning_template || "default").trim().toLowerCase() || "default",
+        template_expected_profile: String(params.template_expected_profile || glueRun.json.template_expected_profile || "").trim().toLowerCase(),
+        error: String(glueRun.json.error || "cleaning blocked"),
+        error_code: String(glueRun.json.error_code || ""),
+        reason_codes: reasonCodes,
+        blocking_reason_codes: blockingReasonCodes,
+        requested_profile: String(glueRun.json.requested_profile || ""),
+        recommended_profile: String(glueRun.json.recommended_profile || ""),
+        profile_confidence: Number(glueRun.json.profile_confidence || 0),
+        required_field_coverage: Number(glueRun.json.required_field_coverage || 0),
+        blank_output_expected: glueRun.json.blank_output_expected === undefined ? undefined : !!glueRun.json.blank_output_expected,
+        zero_output_unexpected: glueRun.json.zero_output_unexpected === undefined ? undefined : !!glueRun.json.zero_output_unexpected,
+        warnings,
+        execution: {
+          execution_mode: "guardrail_blocked",
+          eligibility_reason: String(glueRun.json.error_code || ""),
+          requested_rust_v2_mode: "",
+          effective_rust_v2_mode: "",
+          verify_on_default: false,
+          shadow_compare: {
+            status: "skipped",
+            matched: false,
+            mismatch_count: 0,
+            mismatches: [],
+            skipped_reason: "guardrail_blocked",
+            compare_fields: ["rows", "quality", "reason_counts"],
+          },
+        },
+        quality_summary: {
+          requested_profile: String(glueRun.json.requested_profile || ""),
+          recommended_profile: String(glueRun.json.recommended_profile || ""),
+          profile_confidence: Number(glueRun.json.profile_confidence || 0),
+          required_field_coverage: Number(glueRun.json.required_field_coverage || 0),
+          blocking_reason_codes: blockingReasonCodes,
+          blank_output_expected: glueRun.json.blank_output_expected === undefined ? false : !!glueRun.json.blank_output_expected,
+          zero_output_unexpected: glueRun.json.zero_output_unexpected === undefined ? false : !!glueRun.json.zero_output_unexpected,
+        },
+        raw: glueRun.json,
+      };
+    }
     warnings.push(`glue cleaning failed, fallback to local cleaner: ${String((glueRun.json && glueRun.json.error) || "run_cleaning_failed")}`);
     return { ok: false, reason: "glue_cleaning_failed" };
   }
@@ -280,6 +343,7 @@ async function tryRunGlueFirstCleaning({ payload, params, outRoot, jobId, warnin
 
   const quality = getGlueCleaningCompatibilityQuality(glueRun.json);
   const qualityGate = getGlueCleaningCompatibilityQualityGate(glueRun.json);
+  const qualitySummary = getGlueCleaningCompatibilityQualitySummary(glueRun.json);
   const csvArtifact = glueRun.json.artifacts.find((item) => String(item?.artifact_id || "") === "csv_cleaned_001" || String(item?.kind || "").toLowerCase() === "csv");
   let rows = [];
   if (csvArtifact && csvArtifact.path && fs.existsSync(csvArtifact.path)) {
@@ -300,11 +364,14 @@ async function tryRunGlueFirstCleaning({ payload, params, outRoot, jobId, warnin
     ok: true,
     job_id: String(glueRun.json.job_id || jobId),
     mode: "offline_local",
+    template: String(params.cleaning_template || "default").trim().toLowerCase() || "default",
+    template_expected_profile: String(params.template_expected_profile || qualitySummary.template_expected_profile || "").trim().toLowerCase(),
     run: {
       ok: true,
       seconds: Math.round((Number(glueRun.json.seconds || 0) || 0) * 1000) / 1000,
     },
     quality,
+    quality_summary: qualitySummary,
     execution,
     quality_score: qualityScore,
     quality_gate: qualityGate,
@@ -477,6 +544,13 @@ async function runOfflineCleaning(payload) {
   if (glueFirstResult && glueFirstResult.ok) {
     glueFirstResult.run = glueFirstResult.run || {
       ok: true,
+      seconds: Math.round(((Date.now() - t0) / 1000) * 1000) / 1000,
+    };
+    return glueFirstResult;
+  }
+  if (glueFirstResult && glueFirstResult.blocked) {
+    glueFirstResult.run = glueFirstResult.run || {
+      ok: false,
       seconds: Math.round(((Date.now() - t0) / 1000) * 1000) / 1000,
     };
     return glueFirstResult;
@@ -669,6 +743,8 @@ async function runOfflineCleaning(payload) {
     ok: true,
     job_id: jobId,
     mode: "offline_local",
+    template: String(params.cleaning_template || "default").trim().toLowerCase() || "default",
+    template_expected_profile: String(params.template_expected_profile || "").trim().toLowerCase(),
     run: {
       ok: true,
       seconds: Math.round(((Date.now() - t0) / 1000) * 1000) / 1000,

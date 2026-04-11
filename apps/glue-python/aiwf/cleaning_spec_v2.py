@@ -19,33 +19,6 @@ _PROFILE_TEMPLATE_RECOMMENDATIONS = {
     "debate_evidence": "debate_evidence_v1",
 }
 
-
-CANONICAL_PROFILE_REGISTRY: dict[str, dict[str, Any]] = {
-    "finance_statement": {
-        "required_fields": ["id", "amount"],
-        "string_fields": ["currency"],
-        "numeric_fields": ["id", "amount"],
-        "date_fields": ["biz_date", "published_at"],
-        "unique_keys": ["id"],
-        "defaults": {"currency": "CNY"},
-    },
-    "customer_contact": {
-        "required_fields": ["customer_name", "phone"],
-        "string_fields": ["customer_name", "phone", "city"],
-        "numeric_fields": [],
-        "date_fields": [],
-        "unique_keys": ["phone"],
-        "defaults": {},
-    },
-    "debate_evidence": {
-        "required_fields": ["claim_text"],
-        "string_fields": ["claim_text", "speaker", "source_title", "source_url", "stance"],
-        "numeric_fields": ["confidence"],
-        "date_fields": ["published_at"],
-        "unique_keys": ["source_path", "chunk_index", "claim_text"],
-        "defaults": {},
-    },
-}
 CANONICAL_PROFILE_REGISTRY = get_profile_registry()
 
 _QUALITY_GATE_KEYS = [
@@ -56,6 +29,7 @@ _QUALITY_GATE_KEYS = [
     "max_required_missing_ratio",
     "max_duplicate_rows_removed",
     "allow_empty_output",
+    "blank_output_expected",
     "numeric_parse_rate_min",
     "date_parse_rate_min",
     "duplicate_key_ratio_max",
@@ -145,6 +119,8 @@ def _quality_gates_from_sources(*sources: Mapping[str, Any]) -> dict[str, Any]:
         for key in _QUALITY_GATE_KEYS:
             if key in source:
                 out[key] = source.get(key)
+    if "allow_empty_output" not in out and "blank_output_expected" in out:
+        out["allow_empty_output"] = out.get("blank_output_expected")
     return out
 
 
@@ -262,6 +238,7 @@ def compile_cleaning_params_to_spec(params: Mapping[str, Any]) -> dict[str, Any]
     spec["schema"] = {
         **spec["schema"],
         "canonical_profile": profile_name,
+        "template_expected_profile": str(params.get("template_expected_profile") or profile_name or "").strip().lower(),
         "fields": profile_spec,
         "defaults": copy.deepcopy(profile_spec.get("defaults", {})),
         "unique_keys": _merge_unique_strings(profile_spec.get("unique_keys", []), transform.get("deduplicate_by", [])),
@@ -380,6 +357,7 @@ def compile_preprocess_spec_to_spec(spec_obj: Mapping[str, Any]) -> dict[str, An
     }
     spec["schema"] = {
         "canonical_profile": profile_name,
+        "template_expected_profile": str(spec_obj.get("template_expected_profile") or profile_name or "").strip().lower(),
         "fields": profile_spec,
         "defaults": copy.deepcopy(profile_spec.get("defaults", {})),
         "unique_keys": _merge_unique_strings(
@@ -503,6 +481,7 @@ def cleaning_spec_to_transform_components(
         "schema_version": CLEANING_SPEC_V2_VERSION,
         "contract": CLEANING_SPEC_V2_CONTRACT,
         "canonical_profile": str(schema.get("canonical_profile") or "").strip().lower(),
+        "template_expected_profile": str(schema.get("template_expected_profile") or "").strip().lower(),
         "fields": _as_dict(schema.get("fields")),
         "defaults": _as_dict(schema.get("defaults")),
         "unique_keys": _as_str_list(schema.get("unique_keys")),

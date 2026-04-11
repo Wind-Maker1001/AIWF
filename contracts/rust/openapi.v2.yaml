@@ -883,6 +883,8 @@ components:
           type: integer
         allow_empty_output:
           type: boolean
+        blank_output_expected:
+          type: boolean
         numeric_parse_rate_min:
           type: number
         date_parse_rate_min:

@@ -10,6 +10,7 @@ import sys
 from fastapi.testclient import TestClient
 
 from aiwf import extensions
+from aiwf.flows.cleaning_errors import CleaningGuardrailError
 from aiwf.flows.registry import get_flow_registration, get_flow_runner, register_flow, unregister_flow
 from aiwf.governance_surface import (
     GOVERNANCE_CONTROL_PLANE_ROLE,
@@ -1025,6 +1026,71 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(payload["flow"], "cleaning")
         self.assertIn("seconds", payload)
         self.assertEqual(payload["custom"], "value")
+
+    @patch.object(glue_app, "_run_flow_with_runner")
+    def test_cleaning_guardrail_block_response_shape(self, run_flow_with_runner):
+        run_flow_with_runner.side_effect = CleaningGuardrailError(
+            error_code="profile_mismatch_blocked",
+            message="profile mismatch blocked",
+            reason_codes=["profile_mismatch_blocked"],
+            requested_profile="finance_statement",
+            recommended_profile="debate_evidence",
+            profile_confidence=0.93,
+            required_field_coverage=0.0,
+            template_id="finance_report_v1",
+            template_expected_profile="finance_statement",
+            blank_output_expected=False,
+            zero_output_unexpected=False,
+            blocking_reason_codes=["profile_mismatch", "profile_mismatch_blocked"],
+        )
+
+        resp = self.client.post(
+            "/jobs/job-guard/run/cleaning",
+            json={"actor": "local", "ruleset_version": "v1", "params": {"cleaning_template": "finance_report_v1"}},
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error_code"], "profile_mismatch_blocked")
+        self.assertEqual(payload["reason_codes"], ["profile_mismatch_blocked"])
+        self.assertEqual(payload["requested_profile"], "finance_statement")
+        self.assertEqual(payload["recommended_profile"], "debate_evidence")
+        self.assertEqual(payload["template_id"], "finance_report_v1")
+        self.assertEqual(payload["template_expected_profile"], "finance_statement")
+        self.assertEqual(payload["blocking_reason_codes"], ["profile_mismatch", "profile_mismatch_blocked"])
+        self.assertFalse(payload["blank_output_expected"])
+        self.assertFalse(payload["zero_output_unexpected"])
+
+    @patch.object(glue_app, "_run_flow_with_runner")
+    def test_cleaning_zero_output_guardrail_response_shape(self, run_flow_with_runner):
+        run_flow_with_runner.side_effect = CleaningGuardrailError(
+            error_code="zero_output_unexpected",
+            message="cleaning blocked: output_rows=0 while blank output is not expected",
+            reason_codes=["zero_output_unexpected"],
+            requested_profile="finance_statement",
+            recommended_profile="finance_statement",
+            profile_confidence=0.98,
+            required_field_coverage=1.0,
+            template_id="finance_report_v1",
+            template_expected_profile="finance_statement",
+            blank_output_expected=False,
+            zero_output_unexpected=True,
+            blocking_reason_codes=["zero_output_unexpected"],
+        )
+
+        resp = self.client.post(
+            "/jobs/job-zero/run/cleaning",
+            json={"actor": "local", "ruleset_version": "v1", "params": {"cleaning_template": "finance_report_v1"}},
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error_code"], "zero_output_unexpected")
+        self.assertTrue(payload["zero_output_unexpected"])
+        self.assertFalse(payload["blank_output_expected"])
+        self.assertEqual(payload["reason_codes"], ["zero_output_unexpected"])
 
     def test_run_reference_success_response_shape(self):
         with tempfile.TemporaryDirectory() as tmp:

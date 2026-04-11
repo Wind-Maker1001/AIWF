@@ -124,6 +124,8 @@ function normalizeTemplateEntry(entry, templatesDir) {
     file,
     label: String(entry.label || "").trim() || toTemplateLabel(id),
     description: String(entry.description || "").trim(),
+    template_expected_profile: String(entry.template_expected_profile || "").trim().toLowerCase(),
+    blank_output_expected: entry.blank_output_expected,
     rules: normalizedPayload.rules || null,
     cleaning_spec_v2: normalizedPayload.cleaning_spec_v2 || null,
     params_schema: normalizedPayload.params_schema || {},
@@ -199,6 +201,8 @@ function loadCleaningTemplates() {
       id: entry.id,
       label: entry.label,
       description: entry.description,
+      template_expected_profile: entry.template_expected_profile || "",
+      blank_output_expected: entry.blank_output_expected,
       file: entry.file,
       rules: entry.rules || null,
       cleaning_spec_v2: entry.cleaning_spec_v2 || null,
@@ -256,6 +260,12 @@ function createOfflineEngineConfig() {
     const template = cleaningTemplates.byId.get(templateId);
     if (!template) return nextParams;
     const withSpec = template.cleaning_spec_v2 ? applyCleaningSpecToParams(nextParams, template.cleaning_spec_v2) : nextParams;
+    if (!String(withSpec.template_expected_profile || "").trim() && template.template_expected_profile) {
+      withSpec.template_expected_profile = String(template.template_expected_profile).trim().toLowerCase();
+    }
+    if (withSpec.blank_output_expected === undefined && template.blank_output_expected !== undefined) {
+      withSpec.blank_output_expected = Boolean(template.blank_output_expected);
+    }
     if (!template.rules) return withSpec;
     withSpec.rules = { ...template.rules, ...(withSpec.rules || {}) };
     return withSpec;

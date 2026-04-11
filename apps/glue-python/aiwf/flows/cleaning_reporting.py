@@ -80,10 +80,40 @@ def build_quality_summary(
     )
     postprocess_engine = str(execution.get("postprocess_engine") or "none")
     quality_gate_engine = str(execution.get("quality_gate_engine") or "none")
+    profile_analysis = _as_dict(execution.get("profile_analysis"))
+    gate_result = _as_dict(quality_gate)
+    blank_output_expected = profile_analysis.get("blank_output_expected")
+    if blank_output_expected is None:
+        blank_output_expected = gate_result.get("blank_output_expected")
+    if blank_output_expected is None:
+        blank_output_expected = params_effective.get("blank_output_expected")
+    blank_output_expected = bool(blank_output_expected) if blank_output_expected is not None else False
+    output_rows = int(_as_dict(transform_quality).get("output_rows", 0) or 0)
+    zero_output_unexpected = bool(gate_result.get("zero_output_unexpected")) or (output_rows <= 0 and not blank_output_expected)
+    blocking_reason_codes = [
+        str(item).strip()
+        for item in _as_list(profile_analysis.get("blocking_reason_codes"))
+        if str(item).strip()
+    ]
+    if zero_output_unexpected and "zero_output_unexpected" not in blocking_reason_codes:
+        blocking_reason_codes.append("zero_output_unexpected")
+    if _as_dict(preprocess.get("summary")).get("blocked_reason_codes"):
+        for item in _as_list(_as_dict(preprocess.get("summary")).get("blocked_reason_codes")):
+            code = str(item).strip()
+            if code and code not in blocking_reason_codes:
+                blocking_reason_codes.append(code)
 
     return {
         "schema_version": QUALITY_SUMMARY_SCHEMA_VERSION,
         "quality_rule_set_id": str(params_effective.get("quality_rule_set_id") or ""),
+        "requested_profile": str(profile_analysis.get("requested_profile") or ""),
+        "recommended_profile": str(profile_analysis.get("recommended_profile") or ""),
+        "profile_confidence": float(profile_analysis.get("profile_confidence") or 0.0),
+        "profile_mismatch": bool(profile_analysis.get("profile_mismatch", False)),
+        "required_field_coverage": float(profile_analysis.get("required_field_coverage") or 0.0),
+        "blank_output_expected": blank_output_expected,
+        "zero_output_unexpected": zero_output_unexpected,
+        "blocking_reason_codes": blocking_reason_codes,
         "rule_set_provenance": provenance,
         "input_quality": {
             "mode": "preprocess" if preprocess else "direct",
@@ -96,9 +126,10 @@ def build_quality_summary(
             "failed_files": failed_files,
             "quality_report_path": str(preprocess.get("quality_report_path") or ""),
             "summary": _as_dict(preprocess.get("summary")),
+            "profile_analysis": profile_analysis,
         },
         "transform_quality": _as_dict(transform_quality),
-        "gate_result": _as_dict(quality_gate),
+        "gate_result": gate_result,
         "reason_counts": reason_counts,
         "reason_sample_counts": {
             str(key): len(items)
