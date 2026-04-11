@@ -70,3 +70,23 @@ test("aiwf:health reports glue sidecar status in offline_local mode", async () =
   assert.equal(out.glue_sidecar.ok, false);
   assert.match(String(out.message || ""), /glue sidecar/i);
 });
+
+test("aiwf:precheckCleaning uses local precheck worker even in base_api mode", async () => {
+  let seen = null;
+  const ipcMain = createCtx({
+    loadConfig: () => ({ mode: "base_api", baseUrl: "http://127.0.0.1:18080" }),
+    runOfflinePrecheckInWorker: async (payload, outRoot, merged) => {
+      seen = { payload, outRoot, merged };
+      return { ok: true, precheck: { ok: true, precheck_action: "allow" } };
+    },
+    runViaBaseApi: async () => {
+      throw new Error("should not be called");
+    },
+  });
+  const handler = ipcMain.handlers.get("aiwf:precheckCleaning");
+  const out = await handler({}, { params: { cleaning_template: "finance_report_v1" } }, { mode: "base_api" });
+  assert.equal(out.ok, true);
+  assert.equal(out.precheck.precheck_action, "allow");
+  assert.equal(seen.merged.mode, "base_api");
+  assert.match(String(seen.outRoot || ""), /AIWF/i);
+});

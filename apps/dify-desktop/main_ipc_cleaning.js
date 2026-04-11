@@ -100,11 +100,8 @@ function registerCleaningIpc(ctx, deps) {
 
   ipcMain.handle("aiwf:precheckCleaning", async (_evt, payload, cfg) => {
     const merged = { ...loadConfig(), ...(cfg || {}) };
-    if ((merged.mode || "offline_local") === "offline_local") {
-      const outRoot = resolveOutputRoot(merged);
-      return await runOfflinePrecheckInWorker(payload, outRoot, merged);
-    }
-    return { ok: false, error: "当前仅离线本地模式支持模板预检" };
+    const outRoot = resolveOutputRoot(merged);
+    return await runOfflinePrecheckInWorker(payload, outRoot, merged);
   });
 
   ipcMain.handle("aiwf:previewDebateStyle", async (_evt, payload, cfg) => {
