@@ -168,6 +168,26 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
     89,
   );
   registerManifestRustChiplet(
+    "postprocess_rows_v1",
+    "/operators/postprocess_rows_v1",
+    {
+      rows: [],
+      standardize_evidence: false,
+      evidence_schema: {},
+      chunk_mode: "none",
+      chunk_field: "",
+      chunk_max_chars: 500,
+      detect_conflicts: false,
+      conflict_topic_field: "",
+      conflict_stance_field: "",
+      conflict_text_field: "",
+      conflict_positive_words: [],
+      conflict_negative_words: [],
+      schema_hint: {},
+    },
+    88,
+  );
+  registerManifestRustChiplet(
     "join_rows_v2",
     "/operators/join_rows_v2",
     {
@@ -177,7 +197,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       right_on: ["id"],
       join_type: "inner",
     },
-    88,
+    87,
   );
   registerManifestRustChiplet(
     "join_rows_v3",
@@ -191,7 +211,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       strategy: "auto",
       chunk_size: 50000,
     },
-    87,
+    86,
   );
   registerManifestRustChiplet(
     "join_rows_v4",
@@ -206,7 +226,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       chunk_size: 50000,
       enable_bloom: true,
     },
-    86,
+    85,
   );
   registerManifestRustChiplet(
     "aggregate_rows_v2",
@@ -216,7 +236,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       group_by: [],
       aggregates: [{ op: "count", as: "row_count" }],
     },
-    85,
+    84,
   );
   registerManifestRustChiplet(
     "aggregate_rows_v3",
@@ -227,7 +247,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       aggregates: [{ op: "count", as: "row_count" }],
       approx_sample_size: 1024,
     },
-    84,
+    83,
   );
   registerManifestRustChiplet(
     "aggregate_rows_v4",
@@ -240,7 +260,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       verify_exact: false,
       parallel_workers: 1,
     },
-    83,
+    82,
   );
   registerManifestRustChiplet(
     "quality_check_v2",
@@ -249,7 +269,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       rows: [],
       rules: {},
     },
-    82,
+    81,
   );
   registerManifestRustChiplet(
     "quality_check_v3",
@@ -258,7 +278,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       rows: [],
       rules: {},
     },
-    81,
+    80,
   );
   registerManifestRustChiplet(
     "quality_check_v4",
@@ -268,7 +288,7 @@ function registerRustOpsDomainChiplets(registry, deps, helpers) {
       rules: {},
       rules_dsl: "",
     },
-    80,
+    79,
   );
   registerManifestRustChiplet(
     "plugin_registry_v1",

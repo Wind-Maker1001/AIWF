@@ -77,10 +77,12 @@ def build_success_result(
         "artifacts": artifacts,
         "profile": materialized["profile"],
         "execution": materialized.get("execution"),
+        "quality_summary": materialized.get("quality_summary"),
         "accel": {
             "attempted": accel_result["accel"].get("attempted", False),
             "ok": accel_result["accel"].get("ok", False),
             "used_fallback": not accel_result["use_accel_outputs"],
+            "legacy_cleaning_used": bool(accel_result["use_accel_outputs"]),
             "validation_error": accel_result["accel_validation_error"],
             "office_generation_mode": (accel_result["accel_resp"] or {}).get("office_generation_mode"),
             "office_generation_warning": (accel_result["accel_resp"] or {}).get("office_generation_warning"),

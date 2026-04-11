@@ -1,0 +1,3 @@
+{"account_no":"62220001","txn_date":"2026-03-01","debit_amount":120.5,"credit_amount":0.0,"amount":-120.5,"balance":12500.0,"counterparty_name":"张三","ref_no":"TXN-001"}
+{"account_no":"62220001","txn_date":"2026-03-02","debit_amount":0.0,"credit_amount":300.0,"amount":300.0,"balance":12800.0,"counterparty_name":"李四","ref_no":"TXN-002"}
+{"account_no":"62220001","txn_date":"2026-03-02","debit_amount":0.0,"credit_amount":300.0,"amount":300.0,"balance":12800.0,"counterparty_name":"李四","ref_no":"TXN-002"}

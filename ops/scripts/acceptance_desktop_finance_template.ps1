@@ -137,6 +137,28 @@ $result = Invoke-ShadowCleaningMode {
 Assert-ShadowCompareMatched -Result $result -Label "desktop_finance_template acceptance"
 [System.IO.File]::WriteAllText($resultPath, (($result | ConvertTo-Json -Depth 20) + "`n"), $utf8NoBom)
 
+$qualitySummary = if ($result.PSObject.Properties.Name -contains "quality_summary" -and $null -ne $result.quality_summary) {
+  $result.quality_summary
+} else {
+  $null
+}
+$q = if ($result.PSObject.Properties.Name -contains "quality" -and $null -ne $result.quality) {
+  $result.quality
+} elseif ($result.PSObject.Properties.Name -contains "profile" -and $result.profile.PSObject.Properties.Name -contains "quality") {
+  $result.profile.quality
+} else {
+  throw "finance acceptance result missing quality payload"
+}
+if ($null -eq $qualitySummary) {
+  throw "finance acceptance result missing quality_summary"
+}
+if (-not [bool]$qualitySummary.blank_output_expected -and [int]$q.output_rows -le 0) {
+  throw "finance acceptance produced zero rows while blank_output_expected=false"
+}
+if ([bool]$qualitySummary.zero_output_unexpected) {
+  throw "finance acceptance quality_summary.zero_output_unexpected=true"
+}
+
 $auditNodeScript = @'
 const fs = require("fs");
 const path = require("path");
@@ -183,13 +205,6 @@ if ($LASTEXITCODE -ne 0) {
 
 $reportPath = Join-Path $runDir "acceptance_report.md"
 $pc = $precheck.precheck
-$q = if ($result.PSObject.Properties.Name -contains "quality" -and $null -ne $result.quality) {
-  $result.quality
-} elseif ($result.PSObject.Properties.Name -contains "profile" -and $result.profile.PSObject.Properties.Name -contains "quality") {
-  $result.profile.quality
-} else {
-  throw "finance acceptance result missing quality payload"
-}
 $lines = @()
 $lines += "# Desktop Finance Template Acceptance"
 $lines += ""
@@ -214,6 +229,11 @@ $lines += "- output_rows: $($q.output_rows)"
 $lines += "- filtered_rows: $($q.filtered_rows)"
 $lines += "- invalid_rows: $($q.invalid_rows)"
 $lines += "- duplicate_rows_removed: $($q.duplicate_rows_removed)"
+$lines += "- requested_profile: $($qualitySummary.requested_profile)"
+$lines += "- recommended_profile: $($qualitySummary.recommended_profile)"
+$lines += "- blocking_reason_codes: $([string]::Join(', ', @($qualitySummary.blocking_reason_codes)))"
+$lines += "- blank_output_expected: $($qualitySummary.blank_output_expected)"
+$lines += "- zero_output_unexpected: $($qualitySummary.zero_output_unexpected)"
 $lines += ""
 $lines += "## Artifacts"
 $lines += "- xlsx: $($xlsx.path)"

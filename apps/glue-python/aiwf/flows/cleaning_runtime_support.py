@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from aiwf.accel_client import run_cleaning_operator, transform_rows_v2_operator
+from aiwf.accel_client import run_cleaning_operator, transform_rows_v3_operator
 from aiwf.cleaning_spec_v2 import (
     cleaning_spec_to_transform_components,
     compile_cleaning_params_to_spec,
@@ -102,7 +102,7 @@ def try_accel_cleaning(
     )
 
 
-def try_rust_transform_rows_v2(
+def try_rust_transform_rows_v3(
     raw_rows: List[Dict[str, Any]],
     params: Dict[str, Any],
     *,
@@ -115,7 +115,7 @@ def try_rust_transform_rows_v2(
         compiled_spec,
         input_rows=raw_rows,
     )
-    return transform_rows_v2_operator(
+    return transform_rows_v3_operator(
         raw_rows=raw_rows,
         params=params,
         rules=rules,

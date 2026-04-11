@@ -96,7 +96,7 @@ function failPayload(payload) {
     });
   }
 
-  function graph() {
+  function workflowDefinition() {
     return {
       workflow_id: "wf_schema_gate",
       version: "1.0.0",
@@ -206,7 +206,7 @@ function failPayload(payload) {
             schema_version: "workflow_version_snapshot.v1",
             workflow_id: "wf_schema_gate",
             workflow_name: "Schema Gate",
-            graph: graph(),
+            workflow_definition: workflowDefinition(),
           }],
         });
       }

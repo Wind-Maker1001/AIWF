@@ -3,20 +3,27 @@
     "platform_mode": "generic",
     "rename_map": {
       "CustomerName": "customer_name",
+      "Name": "customer_name",
+      "Customer": "customer_name",
+      "客户名称": "customer_name",
+      "姓名": "customer_name",
       "Phone": "phone",
+      "Mobile": "phone",
+      "Telephone": "phone",
+      "手机": "phone",
+      "手机号": "phone",
+      "电话": "phone",
       "City": "city",
-      "Amount": "amount"
+      "城市": "city"
     },
     "casts": {
       "customer_name": "string",
       "phone": "string",
-      "city": "string",
-      "amount": "float"
+      "city": "string"
     },
     "trim_strings": true,
-    "lowercase_fields": ["city"],
     "required_fields": ["customer_name", "phone"],
-    "include_fields": ["customer_name", "phone", "city", "amount"],
+    "include_fields": ["customer_name", "phone", "city"],
     "filters": [
       { "field": "phone", "op": "regex", "value": "^[0-9+\\-\\s]{6,20}$" }
     ],

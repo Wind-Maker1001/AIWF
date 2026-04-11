@@ -5,7 +5,7 @@ from typing import Any
 
 
 DEFAULT_HEADER_ALIASES: dict[str, list[str]] = {
-    "id": ["id", "record_id", "row_id", "identifier", "编号", "序号", "单号", "缂栧彿", "搴忓彿", "鍗曞彿"],
+    "id": ["id", "record_id", "row_id", "identifier", "编号", "序号", "单号"],
     "amount": [
         "amount",
         "amt",
@@ -17,25 +17,74 @@ DEFAULT_HEADER_ALIASES: dict[str, list[str]] = {
         "收款金额",
         "付款金额",
         "金额（万元）",
-        "閲戦",
-        "鎬婚噾棰",
-        "鍙戠敓棰",
-        "鏈湡閲戦",
-        "鏀舵閲戦",
-        "浠樻閲戦",
-        "閲戦锛堜竾鍏冿級",
+        "金额(万元)",
     ],
-    "currency": ["currency", "ccy", "币种", "货币", "结算币种", "甯佺", "璐у竵", "缁撶畻甯佺"],
-    "biz_date": ["biz_date", "date", "transaction_date", "业务日期", "发生日期", "交易日期", "记账日期", "入账日期", "涓氬姟鏃ユ湡", "鍙戠敓鏃ユ湡", "浜ゆ槗鏃ユ湡", "璁拌处鏃ユ湡", "鍏ヨ处鏃ユ湡"],
-    "published_at": ["published_at", "publish_date", "published_date", "发布日期", "发布时间", "发布时点", "鍙戝竷鏃ユ湡", "鍙戝竷鏃堕棿", "鍙戝竷鏃剁偣"],
-    "customer_name": ["customer_name", "name", "customer", "客户", "客户名称", "姓名", "瀹㈡埛", "瀹㈡埛鍚嶇О", "濮撳悕"],
-    "phone": ["phone", "mobile", "tel", "telephone", "手机", "电话", "联系电话", "鎵嬫満", "鐢佃瘽", "鑱旂郴鐢佃瘽"],
-    "claim_text": ["claim_text", "text", "content", "正文", "内容", "文本", "观点", "论点", "主张", "姝ｆ枃", "鍐呭", "鏂囨湰", "瑙傜偣", "璁虹偣", "涓诲紶"],
-    "source_url": ["source_url", "url", "link", "链接", "网址", "来源链接", "来源网址", "原文链接", "閾炬帴", "缃戝潃", "鏉ユ簮閾炬帴", "鏉ユ簮缃戝潃", "鍘熸枃閾炬帴"],
-    "source_title": ["source_title", "title", "标题", "来源标题", "文章标题", "文档标题", "鏍囬", "鏉ユ簮鏍囬", "鏂囩珷鏍囬", "鏂囨。鏍囬"],
-    "speaker": ["speaker", "author", "name", "作者", "发言人", "说话人", "发布者", "浣滆€", "鍙戣█浜", "璇磋瘽浜", "鍙戝竷鑰"],
-    "stance": ["stance", "立场", "态度", "绔嬪満", "鎬佸害"],
-    "confidence": ["confidence", "置信度", "可信度", "缃俊搴", "鍙俊搴"],
+    "currency": ["currency", "ccy", "币种", "货币", "结算币种"],
+    "biz_date": [
+        "biz_date",
+        "date",
+        "transaction_date",
+        "业务日期",
+        "发生日期",
+        "交易日期",
+        "记账日期",
+        "入账日期",
+    ],
+    "published_at": [
+        "published_at",
+        "publish_date",
+        "published_date",
+        "pub dt",
+        "pub_dt",
+        "发布日期",
+        "发布时间",
+        "发表时间",
+    ],
+    "account_no": ["account_no", "account", "账号", "账户", "账户号", "卡号"],
+    "txn_date": [
+        "txn_date",
+        "transaction_date",
+        "posting_date",
+        "交易日期",
+        "记账日期",
+        "入账日期",
+        "日期",
+    ],
+    "debit_amount": ["debit_amount", "debit", "out_amount", "借方金额", "支出", "付款金额"],
+    "credit_amount": ["credit_amount", "credit", "in_amount", "贷方金额", "收入", "收款金额"],
+    "balance": ["balance", "余额", "账户余额"],
+    "counterparty_name": ["counterparty_name", "counterparty", "cp", "对方户名", "对手方", "交易对手"],
+    "remark": ["remark", "memo", "摘要", "附言", "备注", "用途"],
+    "ref_no": ["ref_no", "reference_no", "ref no", "流水号", "交易流水号", "凭证号"],
+    "txn_type": ["txn_type", "transaction_type", "交易类型", "业务类型", "方向"],
+    "customer_name": [
+        "customer_name",
+        "customer",
+        "name",
+        "客户",
+        "客户名称",
+        "姓名",
+        "联系人",
+        "联系人姓名",
+    ],
+    "phone": [
+        "phone",
+        "mobile",
+        "tel",
+        "telephone",
+        "手机号",
+        "手机",
+        "电话号码",
+        "联系电话",
+        "座机",
+    ],
+    "city": ["city", "city_name", "city name", "城市", "所在城市"],
+    "claim_text": ["claim_text", "text", "content", "claim", "正文", "内容", "文本", "观点", "论点", "主张"],
+    "source_url": ["source_url", "url", "link", "src url", "链接", "网址", "来源链接", "来源网址", "原文链接"],
+    "source_title": ["source_title", "title", "src title", "标题", "来源标题", "文章标题", "文档标题"],
+    "speaker": ["speaker", "author", "speaker name", "作者", "发言人", "说话人", "发布者"],
+    "stance": ["stance", "立场", "态度"],
+    "confidence": ["confidence", "可信度", "置信度"],
 }
 
 
@@ -48,23 +97,59 @@ PROFILE_REGISTRY: dict[str, dict[str, Any]] = {
         "unique_keys": ["id"],
         "defaults": {"currency": "CNY"},
         "header_aliases": {
-            "id": ["编号", "序号", "单号", "缂栧彿", "搴忓彿", "鍗曞彿"],
-            "amount": ["金额", "总金额", "发生额", "本期金额", "收款金额", "付款金额", "金额（万元）", "閲戦", "鎬婚噾棰", "鍙戠敓棰", "鏈湡閲戦", "鏀舵閲戰", "浠樻閲戰"],
-            "currency": ["币种", "货币", "结算币种", "甯佺", "璐у竵", "缁撶畻甯佺"],
-            "biz_date": ["业务日期", "发生日期", "交易日期", "记账日期", "入账日期", "涓氬姟鏃ユ湡", "鍙戠敓鏃ユ湡", "浜ゆ槗鏃ユ湡", "璁拌处鏃ユ湡", "鍏ヨ处鏃ユ湡"],
-            "published_at": ["发布日期", "发布时间", "鍙戝竷鏃ユ湡", "鍙戝竷鏃堕棿"],
+            "id": ["编号", "序号", "单号"],
+            "amount": ["金额", "总金额", "发生额", "本期金额", "收款金额", "付款金额", "金额（万元）", "金额(万元)"],
+            "currency": ["币种", "货币", "结算币种"],
+            "biz_date": ["业务日期", "发生日期", "交易日期", "记账日期", "入账日期"],
+            "published_at": ["发布日期", "发布时间", "发表时间"],
+        },
+    },
+    "bank_statement": {
+        "required_fields": ["account_no", "txn_date"],
+        "string_fields": ["account_no", "currency", "counterparty_name", "remark", "ref_no", "txn_type"],
+        "numeric_fields": ["debit_amount", "credit_amount", "amount", "balance"],
+        "date_fields": ["txn_date"],
+        "unique_keys": ["account_no", "txn_date", "ref_no", "amount"],
+        "defaults": {"currency": "CNY"},
+        "header_aliases": {
+            "account_no": ["账号", "账户", "账户号", "卡号"],
+            "txn_date": ["交易日期", "记账日期", "入账日期", "日期"],
+            "debit_amount": ["借方金额", "支出", "付款金额"],
+            "credit_amount": ["贷方金额", "收入", "收款金额"],
+            "balance": ["余额", "账户余额"],
+            "counterparty_name": ["对方户名", "对手方", "交易对手"],
+            "remark": ["摘要", "附言", "备注", "用途"],
+            "ref_no": ["流水号", "交易流水号", "凭证号"],
+            "txn_type": ["交易类型", "业务类型", "方向"],
+            "currency": ["币种", "货币", "结算币种"],
         },
     },
     "customer_contact": {
         "required_fields": ["customer_name", "phone"],
-        "string_fields": ["customer_name", "city", "phone"],
+        "string_fields": ["customer_name", "phone", "city"],
         "numeric_fields": [],
         "date_fields": [],
         "unique_keys": ["phone"],
         "defaults": {},
         "header_aliases": {
-            "customer_name": ["客户", "客户名称", "姓名", "瀹㈡埛", "瀹㈡埛鍚嶇О", "濮撳悕"],
-            "phone": ["手机", "电话", "联系电话", "鎵嬫滿", "鐢佃瘽", "鑱旂郴鐢佃瘽"],
+            "customer_name": ["客户", "客户名称", "姓名", "联系人", "联系人姓名"],
+            "phone": ["手机", "手机号", "电话号码", "联系电话", "座机"],
+            "city": ["城市", "所在城市"],
+        },
+    },
+    "customer_ledger": {
+        "required_fields": ["customer_name", "phone", "amount", "biz_date"],
+        "string_fields": ["customer_name", "phone", "city"],
+        "numeric_fields": ["amount"],
+        "date_fields": ["biz_date"],
+        "unique_keys": ["phone", "biz_date", "amount"],
+        "defaults": {},
+        "header_aliases": {
+            "customer_name": ["客户", "客户名称", "姓名", "联系人", "联系人姓名"],
+            "phone": ["手机", "手机号", "电话号码", "联系电话", "座机"],
+            "city": ["城市", "所在城市"],
+            "amount": ["金额", "总金额", "发生额", "本期金额", "收款金额", "付款金额", "金额（万元）", "金额(万元)"],
+            "biz_date": ["业务日期", "发生日期", "交易日期", "记账日期", "入账日期"],
         },
     },
     "debate_evidence": {
@@ -75,15 +160,113 @@ PROFILE_REGISTRY: dict[str, dict[str, Any]] = {
         "unique_keys": ["source_path", "chunk_index", "claim_text"],
         "defaults": {},
         "header_aliases": {
-            "claim_text": ["正文", "内容", "文本", "观点", "论点", "主张", "姝ｆ枃", "鍐呭", "鏂囨湰", "瑙傜偣", "璁虹偣", "涓诲紶"],
-            "source_title": ["标题", "来源标题", "文章标题", "文档标题", "鏍囬", "鏉ユ簮鏍囬", "鏂囩珷鏍囬", "鏂囨。鏍囬"],
-            "source_url": ["链接", "网址", "来源链接", "来源网址", "原文链接", "閾炬帴", "缃戝潃", "鏉ユ簮閾炬帴", "鏉ユ簮缃戝潃", "鍘熸枃閾炬帴"],
-            "published_at": ["发布日期", "发布时间", "鍙戝竷鏃ユ湡", "鍙戝竷鏃堕棿"],
-            "speaker": ["作者", "发言人", "说话人", "发布者", "浣滆€", "鍙戣█浜", "璇磋瘽浜", "鍙戝竷鑰"],
-            "stance": ["立场", "态度", "绔嬪滿", "鎬佸害"],
+            "claim_text": ["正文", "内容", "文本", "观点", "论点", "主张"],
+            "source_title": ["标题", "来源标题", "文章标题", "文档标题"],
+            "source_url": ["链接", "网址", "来源链接", "来源网址", "原文链接"],
+            "published_at": ["发布日期", "发布时间", "发表时间"],
+            "speaker": ["作者", "发言人", "说话人", "发布者"],
+            "stance": ["立场", "态度"],
         },
     },
 }
+
+_CLEAN_UTF8_DEFAULT_ALIASES: dict[str, list[str]] = {
+    "id": ["编号", "序号", "单号", "记录编号"],
+    "amount": ["金额", "总金额", "发生额", "本期金额", "收款金额", "付款金额", "金额（万元）", "金额(万元)"],
+    "currency": ["币种", "货币", "结算币种"],
+    "biz_date": ["业务日期", "发生日期", "交易日期", "记账日期", "入账日期"],
+    "published_at": ["发布日期", "发布时间", "发表时间"],
+    "account_no": ["账号", "账户", "账户号", "卡号"],
+    "txn_date": ["交易日期", "记账日期", "入账日期", "日期"],
+    "debit_amount": ["借方金额", "支出", "付款金额"],
+    "credit_amount": ["贷方金额", "收入", "收款金额"],
+    "balance": ["余额", "账户余额"],
+    "counterparty_name": ["对方户名", "对手方", "交易对手"],
+    "remark": ["摘要", "附言", "备注", "用途"],
+    "ref_no": ["流水号", "交易流水号", "凭证号"],
+    "txn_type": ["交易类型", "业务类型", "方向"],
+    "customer_name": ["客户", "客户名称", "姓名", "联系人", "联系人姓名"],
+    "phone": ["手机号", "手机", "电话号码", "联系电话", "座机"],
+    "city": ["城市", "所在城市"],
+    "claim_text": ["正文", "内容", "文本", "观点", "论点", "主张"],
+    "source_url": ["链接", "网址", "来源链接", "来源网址", "原文链接"],
+    "source_title": ["标题", "来源标题", "文章标题", "文档标题"],
+    "speaker": ["作者", "发言人", "说话人", "发布者"],
+    "stance": ["立场", "态度"],
+    "confidence": ["可信度", "置信度"],
+}
+
+_CLEAN_UTF8_PROFILE_ALIASES: dict[str, dict[str, list[str]]] = {
+    "finance_statement": {
+        "id": ["编号", "序号", "单号", "记录编号"],
+        "amount": ["金额", "总金额", "发生额", "本期金额", "收款金额", "付款金额", "金额（万元）", "金额(万元)"],
+        "currency": ["币种", "货币", "结算币种"],
+        "biz_date": ["业务日期", "发生日期", "交易日期", "记账日期", "入账日期"],
+        "published_at": ["发布日期", "发布时间", "发表时间"],
+    },
+    "bank_statement": {
+        "account_no": ["账号", "账户", "账户号", "卡号"],
+        "txn_date": ["交易日期", "记账日期", "入账日期", "日期"],
+        "debit_amount": ["借方金额", "支出", "付款金额"],
+        "credit_amount": ["贷方金额", "收入", "收款金额"],
+        "balance": ["余额", "账户余额"],
+        "counterparty_name": ["对方户名", "对手方", "交易对手"],
+        "remark": ["摘要", "附言", "备注", "用途"],
+        "ref_no": ["流水号", "交易流水号", "凭证号"],
+        "txn_type": ["交易类型", "业务类型", "方向"],
+        "currency": ["币种", "货币", "结算币种"],
+    },
+    "customer_contact": {
+        "customer_name": ["客户", "客户名称", "姓名", "联系人", "联系人姓名"],
+        "phone": ["手机号", "手机", "电话号码", "联系电话", "座机"],
+        "city": ["城市", "所在城市"],
+    },
+    "customer_ledger": {
+        "customer_name": ["客户", "客户名称", "姓名", "联系人", "联系人姓名"],
+        "phone": ["手机号", "手机", "电话号码", "联系电话", "座机"],
+        "city": ["城市", "所在城市"],
+        "amount": ["金额", "总金额", "发生额", "本期金额", "收款金额", "付款金额", "金额（万元）", "金额(万元)"],
+        "biz_date": ["业务日期", "发生日期", "交易日期", "记账日期", "入账日期"],
+    },
+    "debate_evidence": {
+        "claim_text": ["正文", "内容", "文本", "观点", "论点", "主张"],
+        "source_title": ["标题", "来源标题", "文章标题", "文档标题"],
+        "source_url": ["链接", "网址", "来源链接", "来源网址", "原文链接"],
+        "published_at": ["发布日期", "发布时间", "发表时间"],
+        "speaker": ["作者", "发言人", "说话人", "发布者"],
+        "stance": ["立场", "态度"],
+    },
+}
+
+
+def _merge_alias_values(target: list[str], values: list[str]) -> list[str]:
+    seen = {str(item).strip() for item in target if str(item).strip()}
+    merged = list(target)
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        merged.append(text)
+    return merged
+
+
+def _apply_clean_utf8_aliases() -> None:
+    for field, values in _CLEAN_UTF8_DEFAULT_ALIASES.items():
+        DEFAULT_HEADER_ALIASES[field] = _merge_alias_values(DEFAULT_HEADER_ALIASES.get(field, []), values)
+    for profile_name, profile_aliases in _CLEAN_UTF8_PROFILE_ALIASES.items():
+        profile = PROFILE_REGISTRY.get(profile_name)
+        if not isinstance(profile, dict):
+            continue
+        header_aliases = profile.get("header_aliases")
+        if not isinstance(header_aliases, dict):
+            header_aliases = {}
+            profile["header_aliases"] = header_aliases
+        for field, values in profile_aliases.items():
+            header_aliases[field] = _merge_alias_values(header_aliases.get(field, []), values)
+
+
+_apply_clean_utf8_aliases()
 
 
 def resolve_profile_name(value: Any) -> str:

@@ -28,7 +28,6 @@ param(
   [switch]$SkipWorkflowContractSyncGate,
   [switch]$SkipGovernanceControlPlaneBoundaryGate,
   [switch]$SkipOperatorCatalogSyncGate,
-  [switch]$SkipFallbackGovernanceGate,
   [switch]$SkipCleaningRustV2RolloutGate,
   [switch]$SkipGovernanceStoreSchemaVersionsGate,
   [switch]$SkipLocalWorkflowStoreSchemaVersionsGate,
@@ -241,7 +240,7 @@ $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if ($Frontend -eq "Electron") {
   Warn "Electron release path is compatibility-only. WinUI is the primary frontend."
   $legacy = Join-Path $PSScriptRoot "release_electron_compatibility.ps1"
-  & $legacy -Version $Version -Channel $Channel -EnvFile $EnvFile -SkipSqlConnectivityGate:$SkipSqlConnectivityGate -SkipWorkflowContractSyncGate:$SkipWorkflowContractSyncGate -SkipGovernanceControlPlaneBoundaryGate:$SkipGovernanceControlPlaneBoundaryGate -SkipOperatorCatalogSyncGate:$SkipOperatorCatalogSyncGate -SkipFallbackGovernanceGate:$SkipFallbackGovernanceGate -SkipCleaningRustV2RolloutGate:$SkipCleaningRustV2RolloutGate -SkipGovernanceStoreSchemaVersionsGate:$SkipGovernanceStoreSchemaVersionsGate -SkipLocalWorkflowStoreSchemaVersionsGate:$SkipLocalWorkflowStoreSchemaVersionsGate -SkipTemplatePackContractSyncGate:$SkipTemplatePackContractSyncGate -SkipLocalTemplateStorageContractSyncGate:$SkipLocalTemplateStorageContractSyncGate -SkipOfflineTemplateCatalogSyncGate:$SkipOfflineTemplateCatalogSyncGate
+  & $legacy -Version $Version -Channel $Channel -EnvFile $EnvFile -SkipSqlConnectivityGate:$SkipSqlConnectivityGate -SkipWorkflowContractSyncGate:$SkipWorkflowContractSyncGate -SkipGovernanceControlPlaneBoundaryGate:$SkipGovernanceControlPlaneBoundaryGate -SkipOperatorCatalogSyncGate:$SkipOperatorCatalogSyncGate -SkipCleaningRustV2RolloutGate:$SkipCleaningRustV2RolloutGate -SkipGovernanceStoreSchemaVersionsGate:$SkipGovernanceStoreSchemaVersionsGate -SkipLocalWorkflowStoreSchemaVersionsGate:$SkipLocalWorkflowStoreSchemaVersionsGate -SkipTemplatePackContractSyncGate:$SkipTemplatePackContractSyncGate -SkipLocalTemplateStorageContractSyncGate:$SkipLocalTemplateStorageContractSyncGate -SkipOfflineTemplateCatalogSyncGate:$SkipOfflineTemplateCatalogSyncGate
   exit $LASTEXITCODE
 }
 
@@ -266,7 +265,6 @@ $workflowGate = Join-Path $PSScriptRoot "check_workflow_contract_sync.ps1"
 $governanceCapabilityExportScript = Join-Path $PSScriptRoot "export_governance_capabilities.ps1"
 $governanceControlPlaneBoundaryGate = Join-Path $PSScriptRoot "check_governance_control_plane_boundary.ps1"
 $operatorGate = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
-$fallbackGate = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
 $cleaningRustV2RolloutGate = Join-Path $PSScriptRoot "check_cleaning_rust_v2_rollout.ps1"
 $cleaningRustV2RolloutSummaryScript = Join-Path $PSScriptRoot "summarize_cleaning_rust_v2_rollout.ps1"
 $governanceStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_governance_store_schema_versions.ps1"
@@ -291,7 +289,6 @@ $workflowGateStatus = "skipped"
 $governanceCapabilityExportStatus = "skipped"
 $governanceControlPlaneBoundaryGateStatus = "skipped"
 $operatorGateStatus = "skipped"
-$fallbackGateStatus = "skipped"
 $cleaningRustV2RolloutGateStatus = "skipped"
 $governanceStoreSchemaVersionsGateStatus = "skipped"
 $localWorkflowStoreSchemaVersionsGateStatus = "skipped"
@@ -367,14 +364,6 @@ if (-not $SkipOperatorCatalogSyncGate) {
   if ($LASTEXITCODE -ne 0) { throw "release blocked by operator catalog gate" }
   $operatorGateStatus = "passed"
   Ok "operator catalog release gate passed"
-}
-
-if (-not $SkipFallbackGovernanceGate) {
-  Info "running fallback governance release gate"
-  powershell -ExecutionPolicy Bypass -File $fallbackGate
-  if ($LASTEXITCODE -ne 0) { throw "release blocked by fallback governance gate" }
-  $fallbackGateStatus = "passed"
-  Ok "fallback governance release gate passed"
 }
 
 if (-not $SkipCleaningRustV2RolloutGate) {
@@ -489,7 +478,6 @@ if ($SkipFrontendConvergenceGate) { $packageArgs += "-SkipFrontendConvergenceGat
 if ($SkipWorkflowContractSyncGate) { $packageArgs += "-SkipWorkflowContractSyncGate" }
 if ($SkipGovernanceControlPlaneBoundaryGate) { $packageArgs += "-SkipGovernanceControlPlaneBoundaryGate" }
 if ($SkipOperatorCatalogSyncGate) { $packageArgs += "-SkipOperatorCatalogSyncGate" }
-if ($SkipFallbackGovernanceGate) { $packageArgs += "-SkipFallbackGovernanceGate" }
 if ($SkipGovernanceStoreSchemaVersionsGate) { $packageArgs += "-SkipGovernanceStoreSchemaVersionsGate" }
 if ($SkipLocalWorkflowStoreSchemaVersionsGate) { $packageArgs += "-SkipLocalWorkflowStoreSchemaVersionsGate" }
 if ($SkipTemplatePackContractSyncGate) { $packageArgs += "-SkipTemplatePackContractSyncGate" }
@@ -535,7 +523,6 @@ $audit = [ordered]@{
     governance_capability_export = $governanceCapabilityExportStatus
     governance_control_plane_boundary = $governanceControlPlaneBoundaryGateStatus
     operator_catalog_sync = $operatorGateStatus
-    fallback_governance = $fallbackGateStatus
     cleaning_rust_v2_rollout = $cleaningRustV2RolloutGateStatus
     governance_store_schema_versions = $governanceStoreSchemaVersionsGateStatus
     local_workflow_store_schema_versions = $localWorkflowStoreSchemaVersionsGateStatus
@@ -563,7 +550,6 @@ if ($IncludeMsix) {
   if ($SkipWorkflowContractSyncGate) { $msixArgs += "-SkipWorkflowContractSyncGate" }
   if ($SkipGovernanceControlPlaneBoundaryGate) { $msixArgs += "-SkipGovernanceControlPlaneBoundaryGate" }
   if ($SkipOperatorCatalogSyncGate) { $msixArgs += "-SkipOperatorCatalogSyncGate" }
-  if ($SkipFallbackGovernanceGate) { $msixArgs += "-SkipFallbackGovernanceGate" }
   if ($SkipGovernanceStoreSchemaVersionsGate) { $msixArgs += "-SkipGovernanceStoreSchemaVersionsGate" }
   if ($SkipLocalWorkflowStoreSchemaVersionsGate) { $msixArgs += "-SkipLocalWorkflowStoreSchemaVersionsGate" }
   if ($SkipTemplatePackContractSyncGate) { $msixArgs += "-SkipTemplatePackContractSyncGate" }

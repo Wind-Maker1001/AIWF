@@ -33,7 +33,13 @@ def _block_type_from_text(text: str) -> str:
     normalized = str(text or "").strip()
     if not normalized:
         return "unknown"
-    if normalized.count("|") >= 2 or normalized.count("\t") >= 2:
+    if (
+        normalized.count("|") >= 2
+        or normalized.count("\t") >= 2
+        or normalized.count("丨") >= 2
+        or normalized.count("｜") >= 2
+        or normalized.count("¦") >= 2
+    ):
         return "table"
     return "text"
 
@@ -262,6 +268,10 @@ def extract_image_rows(
         table_cells = list(docling.table_cells or [])
         engine = "docling"
         engine_trace.extend(list(docling.engine_trace or []))
+        docling_text_blocks = [block for block in blocks if str(block.get("text") or "").strip()]
+        if not table_cells and len(docling_text_blocks) < 3:
+            blocks = []
+            engine = "none"
 
     if not blocks:
         try:
@@ -287,24 +297,31 @@ def extract_image_rows(
             engine_trace.append({"engine": "tesseract", "ok": False, "error": paddle_error})
 
     if not table_cells:
+        row_offset = 0
         for block in blocks:
             text = str(block.get("text") or "")
             if str(block.get("block_type") or "") != "table":
                 continue
             lines = [line.strip() for line in text.splitlines() if line.strip()]
             for row_index, line in enumerate(lines, start=1):
-                parts = [part.strip() for part in line.replace("\t", "|").split("|") if part.strip()]
+                effective_row = row_offset + row_index
+                parts = [
+                    part.strip()
+                    for part in line.replace("\t", "|").replace("丨", "|").replace("｜", "|").replace("¦", "|").split("|")
+                    if part.strip()
+                ]
                 for col_index, cell_text in enumerate(parts, start=1):
                     table_cells.append(
                         {
-                            "cell_id": f"{block.get('block_id')}_{row_index}_{col_index}",
-                            "row": row_index,
+                            "cell_id": f"{block.get('block_id')}_{effective_row}_{col_index}",
+                            "row": effective_row,
                             "col": col_index,
                             "text": cell_text,
                             "bbox": list(block.get("bbox") or [0, 0, 0, 0]),
                             "source_path": path,
                         }
                     )
+            row_offset += len(lines)
     if not table_cells:
         table_cells = _recover_table_cells_from_layout(blocks, path)
 

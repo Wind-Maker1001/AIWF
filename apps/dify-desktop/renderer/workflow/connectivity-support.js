@@ -3,6 +3,7 @@ const OFFLINE_LOCAL_NODE_TYPES = new Set([
   "clean_md",
   "compute_rust",
   "transform_rows_v3",
+  "postprocess_rows_v1",
   "join_rows_v2",
   "join_rows_v3",
   "join_rows_v4",

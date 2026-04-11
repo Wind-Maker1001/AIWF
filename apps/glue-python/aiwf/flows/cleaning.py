@@ -5,7 +5,13 @@ import os
 import time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
-from aiwf.cleaning_spec_v2 import CLEANING_SPEC_V2_VERSION, compile_cleaning_params_to_spec
+from aiwf.cleaning_spec_v2 import (
+    CLEANING_SPEC_V2_VERSION,
+    candidate_profiles_from_headers,
+    compile_cleaning_params_to_spec,
+    resolve_canonical_profile_name,
+)
+from aiwf.cleaning_templates import resolve_cleaning_template_params
 from aiwf.office_style import (
     office_rows_subset as _office_rows_subset,
     office_theme_settings as _office_theme_settings,
@@ -62,11 +68,16 @@ from aiwf.flows.cleaning_runtime_support import (
     post_json as _post_json_impl_runtime,
     sha256_file as _sha256_file_impl_runtime,
     try_accel_cleaning as _try_accel_cleaning_impl_runtime,
-    try_rust_transform_rows_v2 as _try_rust_transform_rows_v2_impl_runtime,
+    try_rust_transform_rows_v3 as _try_rust_transform_rows_v3_impl_runtime,
     utc_now_str as _utc_now_str_impl_runtime,
 )
 from aiwf.flows.cleaning_simple_rules import clean_rows_simple as _clean_rows_simple
 from aiwf.flows.cleaning_generic_rules import clean_rows_generic as _clean_rows_generic_external
+from aiwf.flows.cleaning_errors import (
+    CleaningGuardrailError,
+    guardrail_template_expected_profile,
+    guardrail_template_id,
+)
 from aiwf.paths import resolve_path
 
 
@@ -118,8 +129,8 @@ def _try_accel_cleaning(
     )
 
 
-def _try_rust_transform_rows_v2(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
-    return _try_rust_transform_rows_v2_impl_runtime(
+def _try_rust_transform_rows_v3(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    return _try_rust_transform_rows_v3_impl_runtime(
         raw_rows,
         params,
         rules_dict=_rules_dict,
@@ -322,6 +333,142 @@ def _maybe_preprocess_input(params: Dict[str, Any], job_root: str, stage_dir: st
     )
 
 
+def _prepare_cleaning_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    resolved = resolve_cleaning_template_params(params or {})
+    template_meta = resolved.get("_resolved_cleaning_template") if isinstance(resolved.get("_resolved_cleaning_template"), dict) else {}
+    template_driven = bool(template_meta) or (
+        str(resolved.get("cleaning_template") or "").strip().lower() not in {"", "default"}
+    )
+    if not str(resolved.get("template_expected_profile") or "").strip():
+        canonical_profile = str(resolved.get("canonical_profile") or "").strip().lower()
+        if canonical_profile:
+            resolved["template_expected_profile"] = canonical_profile
+    if "blank_output_expected" not in resolved:
+        resolved["blank_output_expected"] = False if (template_driven or bool(resolved.get("local_standalone"))) else True
+    if "profile_mismatch_action" not in resolved:
+        resolved["profile_mismatch_action"] = "block" if (template_driven or bool(resolved.get("local_standalone"))) else "warn"
+    return resolved
+
+
+def _ordered_headers_from_rows(rows: List[Dict[str, Any]]) -> List[str]:
+    seen: set[str] = set()
+    headers: List[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for key in row.keys():
+            header = str(key).strip()
+            if not header or header in seen:
+                continue
+            seen.add(header)
+            headers.append(header)
+    return headers
+
+
+def _sample_values_by_header_from_rows(rows: List[Dict[str, Any]], headers: List[str], max_samples: int = 10) -> Dict[str, List[Any]]:
+    samples: Dict[str, List[Any]] = {header: [] for header in headers}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for header in headers:
+            bucket = samples.setdefault(header, [])
+            if len(bucket) >= max_samples:
+                continue
+            value = row.get(header)
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            bucket.append(value)
+    return samples
+
+
+def _profile_analysis(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    requested_profile = resolve_canonical_profile_name(
+        params.get("template_expected_profile")
+        or params.get("canonical_profile")
+        or (params.get("quality_rules") or {}).get("canonical_profile")
+    )
+    headers = _ordered_headers_from_rows(raw_rows)
+    blank_output_expected = _to_bool(params.get("blank_output_expected"), default=False)
+    if not headers:
+        return {
+            "requested_profile": requested_profile,
+            "recommended_profile": "",
+            "profile_confidence": 0.0,
+            "profile_mismatch": False,
+            "required_field_coverage": 0.0,
+            "requested_profile_required_coverage": 0.0,
+            "recommended_profile_required_coverage": 0.0,
+            "candidate_profiles": [],
+            "blocking_reason_codes": [],
+            "blank_output_expected": blank_output_expected,
+            "should_block": False,
+        }
+
+    candidates = candidate_profiles_from_headers(
+        headers,
+        header_mapping_mode=str(params.get("header_mapping_mode") or "auto").strip().lower() or "auto",
+        sample_values_by_header=_sample_values_by_header_from_rows(raw_rows, headers),
+        signal_source="rows",
+    )
+    requested_candidate = next(
+        (
+            item
+            for item in candidates
+            if isinstance(item, dict) and str(item.get("profile") or "").strip().lower() == requested_profile
+        ),
+        {},
+    )
+    recommended_candidate = next(
+        (
+            item
+            for item in candidates
+            if isinstance(item, dict) and bool(item.get("recommended")) and str(item.get("profile") or "").strip()
+        ),
+        {},
+    )
+    if not recommended_candidate and candidates:
+        first = candidates[0]
+        if float(first.get("score") or 0.0) >= 0.78:
+            recommended_candidate = first
+
+    recommended_profile = str(recommended_candidate.get("profile") or "").strip().lower()
+    profile_confidence = float(recommended_candidate.get("score") or 0.0)
+    requested_coverage = float(requested_candidate.get("required_coverage") or 0.0)
+    recommended_coverage = float(recommended_candidate.get("required_coverage") or 0.0)
+    required_field_coverage = requested_coverage if requested_profile else recommended_coverage
+    profile_mismatch = bool(requested_profile and recommended_profile and requested_profile != recommended_profile)
+    mismatch_action = str(params.get("profile_mismatch_action") or "warn").strip().lower()
+    if mismatch_action not in {"warn", "block"}:
+        mismatch_action = "warn"
+    should_block = (
+        mismatch_action == "block"
+        and profile_mismatch
+        and profile_confidence >= 0.85
+        and recommended_coverage >= 0.75
+        and requested_coverage <= 0.25
+    )
+    blocking_reason_codes: List[str] = []
+    if should_block:
+        blocking_reason_codes.append("profile_mismatch")
+    return {
+        "requested_profile": requested_profile,
+        "recommended_profile": recommended_profile,
+        "profile_confidence": round(profile_confidence, 6),
+        "profile_mismatch": profile_mismatch,
+        "required_field_coverage": round(required_field_coverage, 6),
+        "requested_profile_required_coverage": round(requested_coverage, 6),
+        "recommended_profile_required_coverage": round(recommended_coverage, 6),
+        "candidate_profiles": list(candidates),
+        "blocking_reason_codes": blocking_reason_codes,
+        "blank_output_expected": blank_output_expected,
+        "template_id": guardrail_template_id(params),
+        "template_expected_profile": guardrail_template_expected_profile(params),
+        "should_block": should_block,
+    }
+
+
 def _cleaning_rust_v2_strategy(params: Dict[str, Any]) -> Dict[str, str]:
     env_mode = str(os.getenv("AIWF_CLEANING_RUST_V2_MODE", "off") or "off").strip().lower()
     if env_mode not in {"off", "shadow", "default"}:
@@ -373,8 +520,21 @@ def _shadow_compare_result(
 
 
 def _stable_rows_for_compare(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def normalize(value: Any) -> Any:
+        if isinstance(value, dict):
+            out: Dict[str, Any] = {}
+            for key, inner in value.items():
+                normalized_inner = normalize(inner)
+                if normalized_inner is None:
+                    continue
+                out[str(key)] = normalized_inner
+            return out
+        if isinstance(value, list):
+            return [normalize(item) for item in value]
+        return value
+
     return sorted(
-        [dict(item or {}) for item in rows],
+        [normalize(dict(item or {})) for item in rows],
         key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True),
     )
 
@@ -465,14 +625,43 @@ def _compare_python_and_rust_cleaning(
 
 
 def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+    params = _prepare_cleaning_params(params)
     compiled_spec = compile_cleaning_params_to_spec(params)
     strategy = _cleaning_rust_v2_strategy(params)
     verify_on_default = bool(params.get("local_standalone")) or _to_bool(os.getenv("AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT", "false"), default=False)
+    quality_rule_set_provenance = params.get("_quality_rule_set_provenance") if isinstance(params.get("_quality_rule_set_provenance"), dict) else {}
+    profile_analysis = _profile_analysis(raw_rows, params)
+
+    if profile_analysis.get("should_block"):
+        raise CleaningGuardrailError(
+            error_code="profile_mismatch_blocked",
+            message=(
+                "profile mismatch blocked: "
+                f"requested_profile={profile_analysis.get('requested_profile') or '<none>'}, "
+                f"recommended_profile={profile_analysis.get('recommended_profile') or '<none>'}, "
+                f"profile_confidence={float(profile_analysis.get('profile_confidence') or 0.0):.3f}, "
+                f"required_field_coverage={float(profile_analysis.get('required_field_coverage') or 0.0):.3f}"
+            ),
+            reason_codes=["profile_mismatch_blocked"],
+            requested_profile=str(profile_analysis.get("requested_profile") or ""),
+            recommended_profile=str(profile_analysis.get("recommended_profile") or ""),
+            profile_confidence=float(profile_analysis.get("profile_confidence") or 0.0),
+            required_field_coverage=float(profile_analysis.get("required_field_coverage") or 0.0),
+            template_id=str(profile_analysis.get("template_id") or ""),
+            template_expected_profile=str(profile_analysis.get("template_expected_profile") or ""),
+            blank_output_expected=bool(profile_analysis.get("blank_output_expected", False)),
+            zero_output_unexpected=False,
+            blocking_reason_codes=list(profile_analysis.get("blocking_reason_codes") or ["profile_mismatch"]),
+            details={
+                "candidate_profiles": list(profile_analysis.get("candidate_profiles") or []),
+            },
+        )
 
     def apply_execution_metadata(out: Dict[str, Any]) -> Dict[str, Any]:
         out["requested_rust_v2_mode"] = str(strategy.get("requested_mode") or "")
         out["effective_rust_v2_mode"] = str(strategy.get("effective_mode") or "")
         out["verify_on_default"] = bool(verify_on_default)
+        out["profile_analysis"] = dict(profile_analysis)
         return out
 
     def build_python_result(
@@ -499,16 +688,20 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
         q = dict(out.get("quality") or {})
         q["cleaning_spec_version"] = CLEANING_SPEC_V2_VERSION
         q["rust_v2_used"] = False
+        if quality_rule_set_provenance:
+            q["quality_rule_set_id"] = str(quality_rule_set_provenance.get("resolved_id") or params.get("quality_rule_set_id") or "")
         if rust_error:
             q["rust_v2_error"] = rust_error
         out["quality"] = q
+        reason_samples = out.get("reason_samples") if isinstance(out.get("reason_samples"), dict) else {}
         out["cleaning_spec"] = compiled_spec
         out["execution_mode"] = "python_legacy"
         out["execution_audit"] = {
             "schema": "python_cleaning.audit.v1",
+            "operator": "python_clean_rows",
             "rule_hits": dict(q.get("rule_hits") or {}),
             "reason_counts": _python_reason_counts(q),
-            "reason_samples": {
+            "reason_samples": reason_samples or {
                 "invalid_object": [],
                 "cast_failed": [],
                 "required_missing": [],
@@ -517,6 +710,18 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             },
             "rust_v2_error": rust_error,
         }
+        out["row_transform_engine"] = "python"
+        out["postprocess_engine"] = "none"
+        out["quality_gate_engine"] = "python"
+        out["materialization_engine"] = "python"
+        out["legacy_cleaning_operator_used"] = False
+        out["stage_provenance"] = [
+            {"stage": "row_transform", "engine": "python"},
+            {"stage": "quality_gate", "engine": "python"},
+            {"stage": "materialize", "engine": "python"},
+        ]
+        if quality_rule_set_provenance:
+            out["execution_audit"]["quality_rule_set_provenance"] = dict(quality_rule_set_provenance)
         if strategy["decision"] == "force_python":
             out["eligibility_reason"] = "forced_python"
         elif rust_error:
@@ -541,11 +746,16 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     ) -> Dict[str, Any]:
         quality = dict(rust_v2["quality"])
         quality["cleaning_spec_version"] = CLEANING_SPEC_V2_VERSION
+        if quality_rule_set_provenance:
+            quality["quality_rule_set_id"] = str(quality_rule_set_provenance.get("resolved_id") or params.get("quality_rule_set_id") or "")
         execution_audit = (
             rust_v2.get("audit")
             if isinstance(rust_v2.get("audit"), dict)
             else dict(quality.get("rust_v2_audit") or {})
         )
+        execution_audit["operator"] = str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3")
+        if quality_rule_set_provenance:
+            execution_audit["quality_rule_set_provenance"] = dict(quality_rule_set_provenance)
         return apply_execution_metadata({
             "rows": rust_v2["rows"],
             "quality": quality,
@@ -553,6 +763,16 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             "execution_mode": "rust_v2",
             "execution_audit": execution_audit,
             "eligibility_reason": "eligible",
+            "row_transform_engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3"),
+            "postprocess_engine": "none",
+            "quality_gate_engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3"),
+            "materialization_engine": "python",
+            "legacy_cleaning_operator_used": False,
+            "stage_provenance": [
+                {"stage": "row_transform", "engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3")},
+                {"stage": "quality_gate", "engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3")},
+                {"stage": "materialize", "engine": "python"},
+            ],
             "shadow_compare": shadow_compare or _shadow_compare_result(
                 status="skipped",
                 matched=False,
@@ -567,7 +787,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     if strategy["decision"] == "off":
         return build_python_result(skipped_reason="mode_off")
 
-    rust_v2 = _try_rust_transform_rows_v2(raw_rows, params)
+    rust_v2 = _try_rust_transform_rows_v3(raw_rows, params)
 
     if strategy["decision"] == "force_rust":
         if rust_v2.get("ok"):
@@ -757,6 +977,7 @@ def run_cleaning(
         base=base,
         hooks={
             "_ensure_dirs": _ensure_dirs,
+            "_prepare_cleaning_params": _prepare_cleaning_params,
             "_load_raw_rows": _load_raw_rows,
             "_clean_rows": _clean_rows,
             "_rules_dict": _rules_dict,

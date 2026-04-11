@@ -2,7 +2,7 @@
 const path = require("path");
 const crypto = require("crypto");
 const { runOfflineCleaning } = require("./offline_engine");
-const { defaultWorkflowGraph, normalizeWorkflow, validateGraph } = require("./workflow_graph");
+const { defaultWorkflowGraph, normalizeWorkflow, topoSort } = require("./workflow_graph");
 const {
   nowIso,
   collectFiles,
@@ -178,21 +178,6 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
   };
   const governance = mergeGovernanceProfile(payload, config);
   const actorRole = String(payload?.actor_role || payload?.actor?.role || "owner");
-  const validation = validateGraph(graph);
-  if (!validation.ok) {
-    return {
-      ok: false,
-      workflow_id: graph.workflow_id,
-      run_id: crypto.randomUUID().replace(/-/g, ""),
-      status: "invalid_graph",
-      error: validation.errors.join("; "),
-      error_code: "workflow_graph_invalid",
-      error_items: Array.isArray(validation.error_items) ? validation.error_items : [],
-      node_runs: graph.nodes.map(makeNodeRun),
-      workflow: graph,
-      workflow_contract: workflowContract,
-    };
-  }
   const authz = authorizeGraph(graph, actorRole, governance);
   if (!authz.ok) {
     return {
@@ -213,7 +198,10 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
 
   const runId = crypto.randomUUID().replace(/-/g, "");
   const nodeRunsById = new Map(graph.nodes.map((n) => [n.id, makeNodeRun(n)]));
-  const orderedNodeRuns = validation.ordered.map((n) => nodeRunsById.get(n.id));
+  const orderedGraphNodes = topoSort(graph.nodes, graph.edges);
+  const orderedNodeRuns = (orderedGraphNodes.length === graph.nodes.length ? orderedGraphNodes : graph.nodes)
+    .map((node) => nodeRunsById.get(node.id))
+    .filter(Boolean);
   const ctx = {
     payload,
     config,

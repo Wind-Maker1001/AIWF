@@ -146,7 +146,7 @@ test("workflow app publish ui publishes app and refreshes list", async () => {
   assert.equal(publishCalls.length, 1);
   assert.deepEqual(publishCalls[0], {
     name: "Finance App",
-    graph: { name: "Finance App", nodes: [], edges: [] },
+    workflow_definition: { name: "Finance App", nodes: [], edges: [] },
     params_schema: {
       region: { type: "string" },
       normalized: { type: "boolean" },

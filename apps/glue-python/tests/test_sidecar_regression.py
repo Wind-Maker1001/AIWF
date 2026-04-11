@@ -2,6 +2,7 @@ import unittest
 
 from aiwf.sidecar_regression import (
     _expected_reason_counts,
+    _derive_default_rust_rules,
     compare_expected_quality,
     compare_expected_rows,
     compute_common_python_metrics,
@@ -58,6 +59,104 @@ class SidecarRegressionTests(unittest.TestCase):
         )
         self.assertTrue(any("engine_ok_any_of" in item for item in errors))
 
+    def test_compare_expected_quality_can_require_recommended_profile_and_template(self):
+        payload = {
+            "quality_blocked": False,
+            "detected_structure": "tabular",
+            "engine_trace": [{"engine": "docling", "ok": True}],
+            "header_mapping": [
+                {"raw_header": "Acct No", "canonical_field": "account_no"},
+                {"raw_header": "Posting Dt", "canonical_field": "txn_date"},
+            ],
+            "candidate_profiles": [
+                {
+                    "profile": "bank_statement",
+                    "recommended": True,
+                    "recommended_template_id": "bank_statement_v1",
+                    "signal_source": "table_cells",
+                }
+            ],
+            "file_results": [{"quality_metrics": {"header_confidence": 0.91}}],
+        }
+        errors = compare_expected_quality(
+            payload,
+            {"quality_blocked": False, "header_confidence_min": 0.9},
+            {
+                "expected_detected_structure": "tabular",
+                "expected_recommended_profile": "bank_statement",
+                "expected_recommended_template_id": "bank_statement_v1",
+                "expected_signal_source": "table_cells",
+                "expected_header_mapping_fields": ["account_no", "txn_date"],
+            },
+        )
+        self.assertEqual(errors, [])
+
+    def test_compare_expected_rows_can_skip_ocr_row_compare(self):
+        errors = compare_expected_rows(
+            actual_rows=[{"text": "OCR line one"}],
+            expected_rows=[],
+            scenario={"skip_row_compare": True},
+        )
+        self.assertEqual(errors, [])
+
+    def test_compare_expected_quality_can_reject_forbidden_recommended_profiles(self):
+        payload = {
+            "quality_blocked": False,
+            "detected_structure": "text",
+            "engine_trace": [{"engine": "tesseract", "ok": True}],
+            "candidate_profiles": [
+                {"profile": "debate_evidence", "recommended": True, "recommended_template_id": "debate_evidence_v1"},
+                {"profile": "bank_statement", "recommended": True, "recommended_template_id": "bank_statement_v1"},
+            ],
+            "file_results": [{"quality_metrics": {"ocr_confidence_avg": 0.8}}],
+        }
+        errors = compare_expected_quality(
+            payload,
+            {"quality_blocked": False, "ocr_confidence_avg_min": 0.55},
+            {
+                "expected_detected_structure": "text",
+                "expected_recommended_profile": "debate_evidence",
+                "expected_recommended_template_id": "debate_evidence_v1",
+                "forbidden_recommended_profiles": ["finance_statement", "bank_statement", "customer_contact"],
+            },
+        )
+        self.assertTrue(any("forbidden recommended profiles" in item for item in errors))
+
+    def test_compare_expected_quality_can_require_customer_templates(self):
+        payload = {
+            "quality_blocked": False,
+            "detected_structure": "tabular",
+            "engine_trace": [{"engine": "docling", "ok": True}],
+            "header_mapping": [
+                {"raw_header": "Cust Name", "canonical_field": "customer_name"},
+                {"raw_header": "Mobile No", "canonical_field": "phone"},
+                {"raw_header": "City", "canonical_field": "city"},
+                {"raw_header": "Amt", "canonical_field": "amount"},
+                {"raw_header": "Biz Dt", "canonical_field": "biz_date"},
+            ],
+            "candidate_profiles": [
+                {
+                    "profile": "customer_ledger",
+                    "recommended": True,
+                    "recommended_template_id": "customer_ledger_v1",
+                    "signal_source": "table_cells",
+                }
+            ],
+            "file_results": [{"quality_metrics": {"header_confidence": 0.91}}],
+        }
+        errors = compare_expected_quality(
+            payload,
+            {"quality_blocked": False, "header_confidence_min": 0.9},
+            {
+                "expected_detected_structure": "tabular",
+                "expected_recommended_profile": "customer_ledger",
+                "expected_recommended_template_id": "customer_ledger_v1",
+                "expected_signal_source": "table_cells",
+                "expected_header_mapping_fields": ["customer_name", "phone", "city", "amount", "biz_date"],
+            },
+        )
+        self.assertEqual(errors, [])
+
     def test_compare_expected_rows_uses_subset_fields(self):
         actual = [
             {"customer_name": "Alice", "phone": "+8613800138000", "sheet_name": "S1", "ignored": 1},
@@ -88,6 +187,44 @@ class SidecarRegressionTests(unittest.TestCase):
         self.assertEqual(metrics["numeric_parse_rate"], 1.0)
         self.assertEqual(metrics["date_parse_rate"], 1.0)
         self.assertEqual(metrics["duplicate_key_ratio"], 0.0)
+
+    def test_compute_common_python_metrics_for_bank_statement_profile(self):
+        metrics = compute_common_python_metrics(
+            [
+                {"account_no": "6222", "txn_date": "2026-03-01", "ref_no": "A1", "amount": "100.00", "balance": "1000"},
+                {"account_no": "6222", "txn_date": "2026-03-01", "ref_no": "A1", "amount": "100.00", "balance": "900"},
+                {"account_no": "6222", "txn_date": "2026-03-02", "ref_no": "A2", "amount": "-50.00", "balance": "850"},
+            ],
+            {
+                "canonical_profile": "bank_statement",
+                "quality_rules": {
+                    "required_fields": ["account_no", "txn_date"],
+                },
+            },
+        )
+        self.assertEqual(metrics["required_missing_ratio"], 0.0)
+        self.assertEqual(metrics["numeric_parse_rate"], 1.0)
+        self.assertEqual(metrics["date_parse_rate"], 1.0)
+        self.assertEqual(metrics["duplicate_key_ratio"], 0.333333)
+
+    def test_derive_default_rust_rules_for_bank_statement(self):
+        rules = _derive_default_rust_rules(
+            {
+                "canonical_profile": "bank_statement",
+                "quality_rules": {
+                    "required_fields": ["account_no", "txn_date"],
+                    "unique_keys": ["account_no", "txn_date", "ref_no", "amount"],
+                },
+            }
+        )
+        self.assertEqual(rules["required_fields"], ["account_no", "txn_date"])
+        self.assertEqual(rules["deduplicate_by"], ["account_no", "txn_date", "ref_no", "amount"])
+        self.assertEqual(rules["deduplicate_keep"], "last")
+        self.assertEqual(rules["casts"]["debit_amount"], "float")
+        self.assertEqual(rules["casts"]["credit_amount"], "float")
+        self.assertEqual(rules["casts"]["amount"], "float")
+        self.assertEqual(rules["casts"]["balance"], "float")
+        self.assertEqual(rules["date_ops"], [{"field": "txn_date", "op": "parse_ymd", "as": "txn_date"}])
 
     def test_evaluate_consistency_report_fails_on_skipped_when_required(self):
         out = evaluate_consistency_report(

@@ -85,9 +85,14 @@ def write_deck_pptx_impl(
 
 
 def write_profile_json_impl(profile_path: str, profile: Dict[str, Any], params: Dict[str, Any]) -> None:
+    public_params = {
+        key: value
+        for key, value in (params or {}).items()
+        if not str(key).startswith("_")
+    }
     payload = {
         "profile": profile,
-        "params": params or {},
+        "params": public_params,
     }
     with open(profile_path, "w", encoding="utf-8") as file:
         json.dump(payload, file, ensure_ascii=False, indent=2)

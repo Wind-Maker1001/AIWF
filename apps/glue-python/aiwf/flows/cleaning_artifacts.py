@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
@@ -22,6 +23,8 @@ class CleaningArtifactContext:
     evidence_dir: str
     rows: List[Dict[str, Any]]
     profile: Dict[str, Any]
+    quality_summary: Dict[str, Any]
+    rejections: List[Dict[str, Any]]
     params_effective: Dict[str, Any]
     write_cleaned_csv: Callable[..., Any]
     write_cleaned_parquet: Callable[..., Any]
@@ -297,6 +300,14 @@ def _profile_local_path(context: CleaningArtifactContext) -> str:
     return os.path.join(context.evidence_dir, "profile.json")
 
 
+def _quality_summary_local_path(context: CleaningArtifactContext) -> str:
+    return os.path.join(context.evidence_dir, "quality_summary.json")
+
+
+def _rejections_local_path(context: CleaningArtifactContext) -> str:
+    return os.path.join(context.evidence_dir, "rejections.jsonl")
+
+
 def _write_csv_artifact(context: CleaningArtifactContext, output_path: str) -> None:
     context.write_cleaned_csv(output_path, context.rows)
 
@@ -309,12 +320,25 @@ def _write_profile_artifact(context: CleaningArtifactContext, output_path: str) 
     context.write_profile_json(output_path, context.profile, context.params_effective)
 
 
+def _write_quality_summary_artifact(context: CleaningArtifactContext, output_path: str) -> None:
+    with open(output_path, "w", encoding="utf-8") as handle:
+        json.dump(context.quality_summary, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+
+
+def _write_rejections_artifact(context: CleaningArtifactContext, output_path: str) -> None:
+    with open(output_path, "w", encoding="utf-8", newline="\n") as handle:
+        for item in context.rejections:
+            handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+
 def materialize_local_cleaning_artifacts(context: CleaningArtifactContext) -> Dict[str, Any]:
     out: Dict[str, Any] = {"core_artifacts": []}
     for registration in select_cleaning_artifact_registrations(context.params_effective):
         if registration.local_path_resolver is None or registration.local_writer is None:
             continue
         output_path = registration.local_path_resolver(context)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         registration.local_writer(context, output_path)
         sha = context.sha256_file(output_path)
         out[registration.path_key] = output_path
@@ -335,10 +359,27 @@ def materialize_accel_cleaning_artifacts(
     *,
     params_effective: Dict[str, Any],
     sha256_file: Callable[[str], str],
+    local_context: Optional[CleaningArtifactContext] = None,
 ) -> Dict[str, Any]:
     out: Dict[str, Any] = {"core_artifacts": []}
     for registration in select_cleaning_artifact_registrations(params_effective):
         if not registration.accel_output_key:
+            if local_context is None or registration.local_path_resolver is None or registration.local_writer is None:
+                continue
+            output_path = registration.local_path_resolver(local_context)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            registration.local_writer(local_context, output_path)
+            sha = local_context.sha256_file(output_path)
+            out[registration.path_key] = output_path
+            out[registration.sha_key] = sha
+            out["core_artifacts"].append(
+                {
+                    "artifact_id": registration.artifact_id,
+                    "kind": registration.kind,
+                    "path": output_path,
+                    "sha256": sha,
+                }
+            )
             continue
         obj = accel_outputs.get(registration.accel_output_key) or {}
         path = str(obj.get("path", "")) if isinstance(obj, dict) else ""

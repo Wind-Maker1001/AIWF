@@ -1,5 +1,6 @@
 use super::support::{parse_workflow_input, serialize_workflow_output};
 use super::*;
+use std::collections::HashMap;
 
 pub(super) fn workflow_transform_rows_v2_handler(
     state: &AppState,

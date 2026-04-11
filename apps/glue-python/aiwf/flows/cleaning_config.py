@@ -170,6 +170,11 @@ def validate_cleaning_rules_impl(
         "sheet_allowlist",
         "include_hidden_sheets",
         "canonical_profile",
+        "template_expected_profile",
+        "cleaning_template",
+        "cleaning_spec_v2",
+        "blank_output_expected",
+        "profile_mismatch_action",
         "force_local_cleaning",
         "use_rust_v2",
         "rust_v2_timeout_seconds",
@@ -193,6 +198,8 @@ def validate_cleaning_rules_impl(
         errors.append("casts must be an object")
     if "default_values" in rules and not isinstance(rules.get("default_values"), dict):
         errors.append("default_values must be an object")
+    if "cleaning_spec_v2" in rules and not isinstance(rules.get("cleaning_spec_v2"), dict):
+        errors.append("cleaning_spec_v2 must be an object")
     for key in ["quality_rules", "image_rules", "xlsx_rules", "sheet_profiles"]:
         if key in rules and not isinstance(rules.get(key), dict):
             errors.append(f"{key} must be an object")
@@ -202,6 +209,12 @@ def validate_cleaning_rules_impl(
             errors.append(f"{key} must be an array")
     if "include_hidden_sheets" in rules and not isinstance(rules.get("include_hidden_sheets"), bool):
         errors.append("include_hidden_sheets must be boolean")
+    if "blank_output_expected" in rules and not isinstance(rules.get("blank_output_expected"), bool):
+        errors.append("blank_output_expected must be boolean")
+    if "profile_mismatch_action" in rules:
+        action = str(rules.get("profile_mismatch_action", "")).strip().lower()
+        if action not in {"", "warn", "block"}:
+            errors.append("profile_mismatch_action must be 'warn' or 'block'")
 
     if "filters" in rules:
         filters = rules.get("filters")

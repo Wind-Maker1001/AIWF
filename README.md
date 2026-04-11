@@ -19,7 +19,7 @@ AIWF is a local-first workflow platform for turning raw files and tabular inputs
 - Native WinUI quickstart: [docs/quickstart_native_winui.md](docs/quickstart_native_winui.md)
 - Backend quickstart: [docs/quickstart_backend.md](docs/quickstart_backend.md)
 - Verification guide: [docs/verification.md](docs/verification.md)
-- Current architecture cognition review: [docs/architecture_cognition_review_20260328.md](docs/architecture_cognition_review_20260328.md)
+- Current authority convergence note: [docs/authority_execution_convergence_20260406.md](docs/authority_execution_convergence_20260406.md)
 
 ## Common Commands
 
@@ -87,7 +87,7 @@ Recommended current reading order:
 
 - [docs/quickstart.md](docs/quickstart.md)
 - [docs/verification.md](docs/verification.md)
-- [docs/architecture_cognition_review_20260328.md](docs/architecture_cognition_review_20260328.md)
+- [docs/authority_execution_convergence_20260406.md](docs/authority_execution_convergence_20260406.md)
 
 Compatibility-only docs remain in the repo, but are not the primary onboarding path:
 
@@ -102,5 +102,7 @@ Historical handoff and snapshot docs remain under [docs/archive/README.md](docs/
 
 - The canonical backend flow is `create_job -> run flow -> query steps/artifacts`.
 - `job_context` is the canonical flow path contract transported from `base-java` to `glue-python`.
+- `workflow_definition` is the canonical workflow field across workflow save/publish/governance paths.
+- `accel-rust` is the sole executable authority for workflow validation and workflow draft/reference execution.
 - Legacy path fields under `params` are not supported.
 - GitHub-hosted `Quick CI` and self-hosted `Full Integration (Self-Hosted)` are separate workflows; see [docs/verification.md](docs/verification.md) for the exact commands they run.

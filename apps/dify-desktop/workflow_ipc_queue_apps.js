@@ -2,7 +2,10 @@ const {
   NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
   WORKFLOW_CONTRACT_AUTHORITY,
 } = require("./workflow_contract");
-const { workflowStoreRemoteErrorResult } = require("./workflow_store_remote_error");
+const {
+  createWorkflowStoreRemoteError,
+  workflowStoreRemoteErrorResult,
+} = require("./workflow_store_remote_error");
 
 function registerWorkflowQueueAppsIpc(ctx, deps) {
   const {
@@ -78,12 +81,6 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
     });
   }
 
-  function allowJsCompatibilityFallback(cfg = null) {
-    const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });
-    return merged.workflowDraftExecutionCompatibilityEngine === true
-      || String(process.env.AIWF_WORKFLOW_DRAFT_ENGINE_COMPAT || "").trim() === "1";
-  }
-
   async function executeWorkflowPayloadAuthoritatively(effectivePayload, merged) {
     const runRequestKind = String(effectivePayload?.run_request_kind || "draft").trim().toLowerCase();
     if (
@@ -105,20 +102,24 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
           payload: effectivePayload,
           cfg: merged,
         });
-      } catch (error) {
-        if (!allowJsCompatibilityFallback(merged)) throw error;
+      }
+      catch (error) {
+        throw error;
       }
     }
-    const out = await runMinimalWorkflow({
-      payload: effectivePayload,
-      config: merged,
-      outputRoot: resolveOutputRoot(merged),
-      nodeCache: createNodeCacheApi(),
+    throw createWorkflowStoreRemoteError({
+      ok: false,
+      error: "workflow authoritative execution unavailable: accel-rust draft/reference execution surface is required",
+      error_code: "workflow_authoritative_execution_unavailable",
+      run_request_kind: runRequestKind || "draft",
     });
-    return {
-      ...out,
-      compatibility_fallback: true,
-    };
+  }
+
+  function resolveWorkflowDefinitionRequest(source = {}) {
+    if (source?.workflow_definition && typeof source.workflow_definition === "object") {
+      return source.workflow_definition;
+    }
+    return null;
   }
 
   function buildPublishedVersionId(graph, req) {
@@ -513,13 +514,13 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
   });
 
   ipcMain.handle("aiwf:publishWorkflowApp", async (_evt, req) => {
-    const graph = req?.graph && typeof req.graph === "object" ? req.graph : null;
-    const name = String(req?.name || graph?.name || "").trim();
-    if (!graph) return { ok: false, error: "graph required" };
+    const workflowDefinition = resolveWorkflowDefinitionRequest(req);
+    const name = String(req?.name || workflowDefinition?.name || "").trim();
+    if (!workflowDefinition) return { ok: false, error: "workflow_definition required" };
     if (!name) return { ok: false, error: "name required" };
     try {
       const merged = normalizeWorkflowConfig({ ...loadConfig() });
-      const validated = await validateWorkflowDefinition(graph, {
+      const validated = await validateWorkflowDefinition(workflowDefinition, {
         cfg: merged,
         requireNonEmptyNodes: true,
         validationScope: "publish",

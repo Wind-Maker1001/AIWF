@@ -27,6 +27,24 @@ pub(crate) async fn text_preprocess_v2_operator(
     }
 }
 
+pub(crate) async fn postprocess_rows_v1_operator(
+    Json(req): Json<PostprocessRowsV1Req>,
+) -> impl IntoResponse {
+    match run_postprocess_rows_v1(req) {
+        Ok(resp) => (StatusCode::OK, Json(resp)).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ErrResp {
+                ok: false,
+                operator: "postprocess_rows_v1".to_string(),
+                status: "failed".to_string(),
+                error: e,
+            }),
+        )
+            .into_response(),
+    }
+}
+
 pub(crate) async fn rules_compile_v1_operator(
     Json(req): Json<RulesCompileReq>,
 ) -> impl IntoResponse {

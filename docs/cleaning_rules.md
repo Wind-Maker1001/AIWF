@@ -1,7 +1,16 @@
 # Cleaning Flow Data Rules
 
-`glue-python` local cleaning fallback now supports structured input loading and configurable cleaning rules.
-Current mainline behavior is `cleaning_spec.v2` first: legacy `params.rules`, `params.preprocess`, and legacy template JSON are still accepted, but they are compiled into `contracts/glue/cleaning_spec.v2.schema.json` before execution.
+`glue-python` local cleaning runtime now uses `cleaning_spec.v2` as the single execution contract.
+Legacy `params.rules`, `params.preprocess`, and legacy template JSON are still accepted, but they are compiled into `contracts/glue/cleaning_spec.v2.schema.json` before execution.
+
+Current execution mainline:
+
+- cleaning row transform: `transform_rows_v3`
+- preprocess pipeline: `transform_rows_v3 -> postprocess_rows_v1 -> quality_check_v2 -> materialize`
+- legacy `accel cleaning` remains compatibility-only for the old finance-oriented artifact path and is not the generic row-transform mainline
+- ingest header mapping now supports `header_mapping_mode = strict|auto` and defaults to `strict`
+- OCR/PDF inputs now emit `detected_structure = tabular|text|mixed|unknown`
+- sidecar gold regression now includes real `image/pdf` OCR samples for both tabular and text paths
 
 ## Input Priority
 
@@ -14,8 +23,8 @@ Current mainline behavior is `cleaning_spec.v2` first: legacy `params.rules`, `p
    - `params.input_uri` (local path or `file://...`)
 4. Built-in sample rows (only if no input is provided)
 
-`glue-python` now compiles the effective cleaning config into `cleaning_spec.v2`, then passes the normalized transform/quality sections to `accel-rust`.
-This keeps accel/local output semantics aligned for the same request.
+`glue-python` now compiles the effective cleaning config into `cleaning_spec.v2`, then passes normalized transform, postprocess, and quality intent to `accel-rust`.
+This keeps Rust/Python output semantics aligned for the same request while still allowing Python to own input extraction and modality quality.
 
 ## Required Fields
 
@@ -67,6 +76,26 @@ You can put legacy rules under either:
 Preferred modern entry:
 - `params.cleaning_spec_v2`
 - template file payloads with top-level `schema_version = "cleaning_spec.v2"`
+- template registry metadata may additionally declare:
+  - `template_expected_profile`
+  - `blank_output_expected`
+
+Template/profile guardrails:
+- template-driven cleaning now resolves `params.cleaning_template` before execution
+- `template_expected_profile` is compared with runtime profile recommendation before materialization
+- default policy:
+  - template-driven or `local_standalone`: `profile_mismatch_action = block`
+  - general API calls: `profile_mismatch_action = warn`
+- structured guardrail errors currently include:
+  - `error_code`
+  - `reason_codes`
+  - `requested_profile`
+  - `recommended_profile`
+  - `profile_confidence`
+  - `required_field_coverage`
+  - `template_id`
+  - `blank_output_expected`
+  - `zero_output_unexpected`
 
 Cleaning local execution mode:
 - `AIWF_CLEANING_RUST_V2_MODE=off|shadow|default`
@@ -81,6 +110,36 @@ Cleaning local execution mode:
 - release/readiness governance entry:
   - `ops/scripts/check_cleaning_rust_v2_rollout.ps1`
   - consumes `run_mode_audit.jsonl`, `execution.shadow_compare`, and `sidecar_python_rust_consistency_report.json`
+
+Execution reporting:
+
+- `quality_summary.engine_path.row_transform_engine`: row-level transform engine, currently `transform_rows_v3` or `python`
+- `quality_summary.engine_path.postprocess_engine`: postprocess engine, currently `postprocess_rows_v1`, `python`, or `none`
+- `quality_summary.engine_path.quality_gate_engine`: final quality gate engine, currently `quality_check_v2`, `transform_rows_v3+python_verify`, `python`, or `none`
+- `quality_summary.engine_path.materialization_engine`: artifact writer engine, currently `python` or `legacy_accel_cleaning`
+- `quality_summary.engine_path.legacy_cleaning_operator_used`: whether the legacy accel cleaning operator participated
+- `execution_audit.stage_plan`: `preprocess_stage_plan.v1` stage-by-stage execution contract
+
+Standard evidence and audit outputs:
+
+- `quality_rule_set_id`: governance-owned quality gate selector merged into `quality_rules`
+- `quality_summary.json`: normalized run-level quality/audit summary
+- `rejections.jsonl`: sampled rejected rows from cast/required/filter/dedup paths
+- `preprocess_stage_plan.v1`: fixed stage-plan schema embedded in preprocess execution audit
+- `quality_summary.json` now also carries:
+  - `requested_profile`
+  - `recommended_profile`
+  - `profile_confidence`
+  - `profile_mismatch`
+  - `required_field_coverage`
+  - `blocking_reason_codes`
+  - `blank_output_expected`
+  - `zero_output_unexpected`
+
+Published but palette-hidden operator:
+
+- `postprocess_rows_v1` is a published Rust operator and desktop/runtime-exposable workflow node type
+- it is marked `palette_hidden=true`, so it remains executable and contract-checked but does not appear in the default hand-authored palette
 
 Generic rule keys (`params.rules`) for universal row cleaning:
 - `platform_mode: "generic"`
@@ -97,12 +156,22 @@ Generic rule keys (`params.rules`) for universal row cleaning:
 Legacy rule templates:
 - `rules/templates/generic_minimal.json`
 - `rules/templates/generic_finance_strict.json`
+- `rules/templates/generic_bank_statement_standardize.json`
 - `rules/templates/generic_customer_standardize.json`
+- `rules/templates/generic_customer_ledger_standardize.json`
 - `rules/templates/preprocess_finance_basic.json` (raw-to-cooked CSV preprocessing template)
 - `rules/templates/preprocess_debate_evidence.json` (raw-to-cooked debate evidence template)
 
 Spec-first template example:
 - `rules/templates/finance_report_v1.cleaning_spec_v2.json`
+- `rules/templates/bank_statement_v1.cleaning_spec_v2.json`
+- `rules/templates/customer_contact_v1.cleaning_spec_v2.json`
+- `rules/templates/customer_ledger_v1.cleaning_spec_v2.json`
+
+Bank statement template highlights:
+- canonical profile: `bank_statement`
+- normalized fields: `account_no`, `txn_date`, `debit_amount`, `credit_amount`, `amount`, `balance`, `counterparty_name`, `remark`, `ref_no`, `txn_type`
+- `amount` is the normalized signed amount; `debit_amount` and `credit_amount` are preserved side by side
 
 One-click mixed-format evidence ingest:
 - `ops/scripts/ingest_evidence_pack.ps1`
@@ -127,7 +196,7 @@ Preprocess-specific generic keys:
 - `chunk_max_chars` (used by `fixed` mode)
 - `detect_conflicts` (boolean, marks `conflict_flag/conflict_topic/conflict_polarity`)
 - `conflict_*` keys (topic/stance/text fields and positive/negative keyword lists)
-- `canonical_profile` (`finance_statement|customer_contact|debate_evidence`)
+- `canonical_profile` (`finance_statement|bank_statement|customer_contact|customer_ledger|debate_evidence`)
 - `quality_rules` (top-level authority for shared quality gates)
 - `image_rules` (image/OCR specific quality overrides)
 - `xlsx_rules` (xlsx specific quality overrides)
@@ -135,6 +204,10 @@ Preprocess-specific generic keys:
 
 Sidecar ingest contract:
 - `contracts/glue/ingest_extract.schema.json`
+- `header_mapping_mode: strict|auto`
+  - `strict`: exact / substring / conservative fuzzy only
+  - `auto`: stronger abbreviation matching, profile recommendation, and template recommendation for table inputs (`xlsx/csv/jsonl/image/pdf`)
+  - OCR/PDF policy: tabular OCR/PDF uses `table_cells`/sheet structure for mapping; pure text OCR/PDF only recommends `debate_evidence`
 
 Unified cleaning contract:
 - `contracts/glue/cleaning_spec.v2.schema.json`

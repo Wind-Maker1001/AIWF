@@ -11,9 +11,27 @@ async function loadPreflightRustHelpersModule() {
 test("preflight rust helpers build io-contract input with fallback file and operator-specific fields", async () => {
   const { buildIoContractInput, IO_CONTRACT_COMPATIBLE_OPERATORS } = await loadPreflightRustHelpersModule();
   assert.equal(IO_CONTRACT_COMPATIBLE_OPERATORS.has("transform_rows_v3"), true);
+  assert.equal(IO_CONTRACT_COMPATIBLE_OPERATORS.has("postprocess_rows_v1"), true);
   assert.deepEqual(
     buildIoContractInput("transform_rows_v3", {}, "D:/input.csv"),
     { input_uri: "D:/input.csv" }
+  );
+  assert.deepEqual(
+    buildIoContractInput("postprocess_rows_v1", { rows: [{ a: 1 }], chunk_mode: "sentence", detect_conflicts: true }),
+    {
+      rows: [{ a: 1 }],
+      standardize_evidence: false,
+      evidence_schema: {},
+      chunk_mode: "sentence",
+      chunk_field: "",
+      chunk_max_chars: undefined,
+      detect_conflicts: true,
+      conflict_topic_field: "",
+      conflict_stance_field: "",
+      conflict_text_field: "",
+      conflict_positive_words: [],
+      conflict_negative_words: [],
+    }
   );
   assert.deepEqual(
     buildIoContractInput("anomaly_explain_v1", { rows: [{ a: 1 }], score_field: "risk_score" }),

@@ -15,12 +15,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from aiwf import ingest
 from aiwf.cleaning_spec_v2 import (
     CLEANING_SPEC_V2_CONTRACT,
+    DEFAULT_HEADER_MAPPING_MODE,
+    HEADER_MAPPING_MODE_VALUES,
     build_header_mapping,
     build_quality_decisions,
     candidate_profiles_from_headers,
     get_canonical_profile_registry,
+    recommended_template_id_for_profile,
     reason_codes_from_quality_errors,
 )
+from aiwf.quality_contract import header_mapping_runtime_info, normalize_value_for_field
 from aiwf.runtime_catalog import get_runtime_catalog
 from aiwf.dependency_status import dependency_status
 from aiwf.flow_context import LegacyFlowPathParamsError, attach_job_context, normalize_job_context
@@ -29,11 +33,13 @@ from aiwf.governance_quality_rule_sets import (
     QUALITY_RULE_SET_OWNER,
     QUALITY_RULE_SET_SCHEMA_VERSION,
     QUALITY_RULE_SET_STORE_SCHEMA_VERSION,
+    apply_quality_rule_set_to_params,
     get_quality_rule_set,
     list_quality_rule_sets,
     remove_quality_rule_set,
     save_quality_rule_set,
 )
+from aiwf.flows.cleaning_reporting import QUALITY_SUMMARY_SCHEMA_VERSION
 from aiwf.governance_workflow_sandbox_rules import (
     WORKFLOW_SANDBOX_RULE_OWNER,
     WORKFLOW_SANDBOX_RULE_SCHEMA_VERSION,
@@ -109,6 +115,7 @@ from aiwf.workflow_validation_client import (
 )
 from aiwf.rust_client import workflow_reference_run_v1
 from aiwf.flows.cleaning_flow_materialization import materialize_accel_outputs
+from aiwf.flows.cleaning_errors import CleaningGuardrailError
 from aiwf.flows.cleaning_orchestrator_support import collect_materialized_artifacts, build_success_result
 from aiwf.flows.cleaning_runtime_support import sha256_file
 from aiwf.flows.cleaning_transport import (
@@ -144,7 +151,7 @@ WORKFLOW_GRAPH_ERROR_CODE = "workflow_graph_invalid"
 GOVERNANCE_VALIDATION_ERROR_CODE = "governance_validation_invalid"
 
 
-def _normalize_workflow_graph_error_messages(message: str) -> list[str]:
+def _normalize_workflow_definition_error_messages(message: str) -> list[str]:
     text = str(message or "").strip()
     if not text:
         return []
@@ -152,6 +159,8 @@ def _normalize_workflow_graph_error_messages(message: str) -> list[str]:
     node_config_prefixes = (
         "workflow app graph node config invalid: ",
         "workflow version graph node config invalid: ",
+        "workflow app workflow_definition node config invalid: ",
+        "workflow version workflow_definition node config invalid: ",
     )
     for prefix in node_config_prefixes:
         if text.startswith(prefix):
@@ -159,18 +168,18 @@ def _normalize_workflow_graph_error_messages(message: str) -> list[str]:
             return [item.strip() for item in tail.split(";") if item.strip()]
 
     replacements = [
-        (re.compile(r"^workflow (?:app|version) graph must be an object$"), "workflow must be an object"),
-        (re.compile(r"^workflow (?:app|version) graph requires workflow_id$"), "workflow.workflow_id is required"),
-        (re.compile(r"^workflow (?:app|version) graph requires version$"), "workflow.version is required"),
-        (re.compile(r"^workflow (?:app|version) graph requires nodes array$"), "workflow.nodes must be an array"),
-        (re.compile(r"^workflow (?:app|version) graph requires edges array$"), "workflow.edges must be an array"),
-        (re.compile(r"^workflow (?:app|version) graph contains unregistered node types: (.+)$"), lambda m: f"workflow contains unregistered node types: {m.group(1)}"),
-        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] must be an object$"), lambda m: f"workflow.nodes[{m.group(1)}] must be an object"),
-        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] requires id$"), lambda m: f"workflow.nodes[{m.group(1)}].id is required"),
-        (re.compile(r"^workflow (?:app|version) graph nodes\[(\d+)\] requires type$"), lambda m: f"workflow.nodes[{m.group(1)}].type is required"),
-        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] must be an object$"), lambda m: f"workflow.edges[{m.group(1)}] must be an object"),
-        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] requires from$"), lambda m: f"workflow.edges[{m.group(1)}].from is required"),
-        (re.compile(r"^workflow (?:app|version) graph edges\[(\d+)\] requires to$"), lambda m: f"workflow.edges[{m.group(1)}].to is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) must be an object$"), "workflow must be an object"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) requires workflow_id$"), "workflow.workflow_id is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) requires version$"), "workflow.version is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) requires nodes array$"), "workflow.nodes must be an array"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) requires edges array$"), "workflow.edges must be an array"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) contains unregistered node types: (.+)$"), lambda m: f"workflow contains unregistered node types: {m.group(1)}"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) nodes\[(\d+)\] must be an object$"), lambda m: f"workflow.nodes[{m.group(1)}] must be an object"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) nodes\[(\d+)\] requires id$"), lambda m: f"workflow.nodes[{m.group(1)}].id is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) nodes\[(\d+)\] requires type$"), lambda m: f"workflow.nodes[{m.group(1)}].type is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) edges\[(\d+)\] must be an object$"), lambda m: f"workflow.edges[{m.group(1)}] must be an object"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) edges\[(\d+)\] requires from$"), lambda m: f"workflow.edges[{m.group(1)}].from is required"),
+        (re.compile(r"^workflow (?:app|version) (?:graph|workflow_definition) edges\[(\d+)\] requires to$"), lambda m: f"workflow.edges[{m.group(1)}].to is required"),
     ]
     for pattern, replacement in replacements:
         match = pattern.match(text)
@@ -233,7 +242,7 @@ def _build_validation_error_items(errors: list[str]) -> list[dict[str, str]]:
 
 
 def _workflow_graph_error_response(provider: str, scope: str, exc: ValueError) -> JSONResponse:
-    normalized_errors = _normalize_workflow_graph_error_messages(str(exc))
+    normalized_errors = _normalize_workflow_definition_error_messages(str(exc))
     return JSONResponse(
         status_code=400,
         content={
@@ -321,6 +330,7 @@ class RunReq(BaseModel):
     actor: str = "glue"
     ruleset_version: str = "v1"
     trace_id: Optional[str] = None
+    quality_rule_set_id: str = ""
     job_context: Optional[Dict[str, str]] = None
     params: Dict[str, Any] = Field(default_factory=dict)
 
@@ -332,6 +342,7 @@ class RunReferenceReq(BaseModel):
     actor: str = "glue"
     ruleset_version: str = "v1"
     trace_id: Optional[str] = None
+    quality_rule_set_id: str = ""
     job_context: Optional[Dict[str, str]] = None
     params: Dict[str, Any] = Field(default_factory=dict)
 
@@ -366,7 +377,6 @@ class WorkflowAppReq(BaseModel):
     name: Optional[str] = None
     workflow_id: Optional[str] = None
     published_version_id: Optional[str] = None
-    graph: Optional[Dict[str, Any]] = None
     params_schema: Dict[str, Any] = Field(default_factory=dict)
     template_policy: Dict[str, Any] = Field(default_factory=dict)
 
@@ -382,7 +392,6 @@ class WorkflowVersionReq(BaseModel):
     workflow_name: Optional[str] = None
     path: Optional[str] = None
     workflow_definition: Optional[Dict[str, Any]] = None
-    graph: Dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowVersionUpsertReq(BaseModel):
@@ -429,6 +438,7 @@ class RunBaselineEnvelope(BaseModel):
 class IngestExtractReq(BaseModel):
     input_files: list[str] = Field(default_factory=list)
     input_path: str = ""
+    header_mapping_mode: str = DEFAULT_HEADER_MAPPING_MODE
     text_split_by_line: bool = False
     ocr_enabled: bool = True
     ocr_lang: Optional[str] = None
@@ -509,6 +519,9 @@ def _run_flow_with_runner(job_id: str, req: RunReq, runner):
         job_context=normalized_context,
         trace_id=req.trace_id,
     )
+    requested_quality_rule_set_id = str(getattr(req, "quality_rule_set_id", "") or "").strip()
+    if requested_quality_rule_set_id:
+        params_obj["quality_rule_set_id"] = requested_quality_rule_set_id
     params_json = json.dumps(params_obj, ensure_ascii=False)
     return _call_compatible(
         runner,
@@ -625,6 +638,10 @@ def _run_workflow_definition_reference(job_id: str, req: RunReferenceReq, versio
         job_context=normalized_context,
         trace_id=req.trace_id,
     )
+    requested_quality_rule_set_id = str(req.quality_rule_set_id or "").strip()
+    if requested_quality_rule_set_id:
+        params_obj["quality_rule_set_id"] = requested_quality_rule_set_id
+    params_obj = apply_quality_rule_set_to_params(params_obj)
     params_obj["workflow_reference"] = {
         "version_id": version_id,
         "published_version_id": published_version_id,
@@ -754,10 +771,31 @@ def capabilities():
         "extract_route": "/ingest/extract",
         "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
         "supported_modalities": ["txt", "docx", "pdf", "image", "xlsx"],
+        "header_mapping_modes": list(HEADER_MAPPING_MODE_VALUES),
+        "default_header_mapping_mode": DEFAULT_HEADER_MAPPING_MODE,
+        "auto_header_mapping_inputs": ["xlsx", "csv", "jsonl", "image", "pdf"],
+        "ocr_auto_profile_policy": "tabular_or_debate_text",
     }
     caps["cleaning_spec_v2"] = {
         "contract": CLEANING_SPEC_V2_CONTRACT,
         "profiles": sorted(get_canonical_profile_registry().keys()),
+    }
+    caps["cleaning_runtime"] = {
+        "quality_rule_set_id_supported": True,
+        "quality_rule_set_merge_scope": "quality_rules_only",
+        "quality_summary_schema_version": QUALITY_SUMMARY_SCHEMA_VERSION,
+        "quality_summary_artifacts": ["quality_summary_json", "rejections_jsonl"],
+        "row_transform_primary_engine": "transform_rows_v3",
+        "row_transform_fallback_engine": "python",
+        "postprocess_primary_engine": "postprocess_rows_v1",
+        "quality_gate_primary_engine": "quality_check_v2",
+        "published_stage_operators": ["transform_rows_v3", "postprocess_rows_v1", "quality_check_v2"],
+        "preprocess_stage_plan_schema_version": "preprocess_stage_plan.v1",
+        "preprocess_python_fallback_conditions": [
+            "custom_field_transform",
+            "custom_row_filter",
+            "flag_disabled",
+        ],
     }
     caps["governance"] = build_governance_capability_map()
     caps["governance_surface"] = {
@@ -778,28 +816,525 @@ def governance_control_plane_meta():
     }
 
 
+def _build_header_sample_values(
+    header_labels: list[str],
+    rows: list[dict[str, Any]],
+    sheet_frames: list[dict[str, Any]],
+) -> dict[str, list[Any]]:
+    samples: dict[str, list[Any]] = {str(label): [] for label in header_labels if str(label).strip()}
+    if sheet_frames:
+        for frame in sheet_frames:
+            if not isinstance(frame, dict):
+                continue
+            raw_headers = frame.get("header_labels") if isinstance(frame.get("header_labels"), list) else []
+            columns = frame.get("columns") if isinstance(frame.get("columns"), list) else []
+            sheet_name = str(frame.get("sheet_name") or "").strip()
+            matching_rows = [
+                row
+                for row in rows
+                if isinstance(row, dict) and (not sheet_name or str(row.get("sheet_name") or "").strip() == sheet_name)
+            ]
+            for index, raw_header in enumerate(raw_headers):
+                raw_text = str(raw_header).strip()
+                if not raw_text:
+                    continue
+                column = str(columns[index] or "").strip() if index < len(columns) else ""
+                bucket = samples.setdefault(raw_text, [])
+                for row in matching_rows:
+                    value = row.get(column) if column else row.get(raw_text)
+                    if value in {None, ""} or not str(value).strip():
+                        continue
+                    bucket.append(value)
+                    if len(bucket) >= 10:
+                        break
+    for raw_header in list(samples.keys()):
+        if len(samples[raw_header]) >= 10:
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            value = row.get(raw_header)
+            if value in {None, ""} or not str(value).strip():
+                continue
+            samples[raw_header].append(value)
+            if len(samples[raw_header]) >= 10:
+                break
+    return samples
+
+
+def _looks_numericish_text(value: Any) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    compact = re.sub(r"\s+", "", text)
+    if re.fullmatch(r"[\d,.\-+/%()]+", compact):
+        return True
+    if re.fullmatch(r"\d{4}[-/年.]\d{1,2}[-/月.]\d{1,2}(日)?", compact):
+        return True
+    return False
+
+
+def _recover_table_cells_from_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    text_blocks = [
+        block
+        for block in blocks
+        if isinstance(block, dict)
+        and str(block.get("text") or "").strip()
+        and str(block.get("block_type") or "text") != "figure"
+    ]
+    if len(text_blocks) < 4:
+        return []
+    sorted_blocks = sorted(
+        text_blocks,
+        key=lambda block: (
+            int((block.get("bbox") or [0, 0, 0, 0])[1]),
+            int((block.get("bbox") or [0, 0, 0, 0])[0]),
+        ),
+    )
+    row_clusters: list[list[dict[str, Any]]] = []
+    for block in sorted_blocks:
+        bbox = list(block.get("bbox") or [0, 0, 0, 0])
+        top = int(bbox[1]) if len(bbox) >= 2 else 0
+        bottom = int(bbox[3]) if len(bbox) >= 4 else top
+        height = max(1, bottom - top)
+        matched_cluster: Optional[list[dict[str, Any]]] = None
+        for cluster in row_clusters:
+            sample_bbox = list(cluster[0].get("bbox") or [0, 0, 0, 0])
+            sample_top = int(sample_bbox[1]) if len(sample_bbox) >= 2 else 0
+            sample_bottom = int(sample_bbox[3]) if len(sample_bbox) >= 4 else sample_top
+            tolerance = max(12, int(max(height, sample_bottom - sample_top) * 0.7))
+            if abs(top - sample_top) <= tolerance:
+                matched_cluster = cluster
+                break
+        if matched_cluster is None:
+            row_clusters.append([block])
+        else:
+            matched_cluster.append(block)
+    candidate_rows = [sorted(cluster, key=lambda block: int((block.get("bbox") or [0, 0, 0, 0])[0])) for cluster in row_clusters]
+    candidate_rows = [cluster for cluster in candidate_rows if len(cluster) >= 2]
+    if len(candidate_rows) < 2:
+        return []
+    cells: list[dict[str, Any]] = []
+    for row_index, cluster in enumerate(candidate_rows, start=1):
+        for col_index, block in enumerate(cluster, start=1):
+            cells.append(
+                {
+                    "cell_id": f"{str(block.get('block_id') or f'blk_{row_index}_{col_index}')}_{row_index}_{col_index}",
+                    "row": row_index,
+                    "col": col_index,
+                    "text": str(block.get("text") or "").strip(),
+                    "bbox": list(block.get("bbox") or [0, 0, 0, 0]),
+                    "source_path": str(block.get("source_path") or ""),
+                }
+            )
+    return cells if len(cells) >= 4 else []
+
+
+def _recover_inline_table_cells_from_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cells: list[dict[str, Any]] = []
+    row_offset = 0
+    header_width_hint: Optional[int] = None
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        text = str(block.get("text") or "").strip()
+        normalized_text = (
+            text.replace("\t", "|")
+            .replace("｜", "|")
+            .replace("¦", "|")
+            .replace("丨", "|")
+            .replace("ح", "|")
+        )
+        if "|" not in normalized_text:
+            continue
+        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+        if len(lines) < 2:
+            flat_parts = [part.strip() for part in normalized_text.split("|") if part.strip()]
+            if len(flat_parts) < 2:
+                continue
+            if header_width_hint is None and not any(_looks_numericish_text(part) for part in flat_parts):
+                header_width_hint = len(flat_parts)
+                lines = [" | ".join(flat_parts)]
+            elif header_width_hint is not None and len(flat_parts) >= header_width_hint:
+                width = header_width_hint
+                lines = [
+                    " | ".join(flat_parts[index : index + width])
+                    for index in range(0, len(flat_parts), width)
+                    if len(flat_parts[index : index + width]) == width
+                ]
+            else:
+                first_numeric = next((index for index, part in enumerate(flat_parts) if _looks_numericish_text(part)), -1)
+                if first_numeric >= 2 and len(flat_parts) >= first_numeric * 2:
+                    width = first_numeric
+                    header_width_hint = width
+                    lines = [
+                        " | ".join(flat_parts[index : index + width])
+                        for index in range(0, len(flat_parts), width)
+                        if len(flat_parts[index : index + width]) == width
+                    ]
+                else:
+                    continue
+        for row_index, line in enumerate(lines, start=1):
+            effective_row = row_offset + row_index
+            parts = [part.strip() for part in line.split("|") if part.strip()]
+            if len(parts) < 2:
+                continue
+            for col_index, cell_text in enumerate(parts, start=1):
+                cells.append(
+                    {
+                        "cell_id": f"{str(block.get('block_id') or 'blk')}_{effective_row}_{col_index}",
+                        "row": effective_row,
+                        "col": col_index,
+                        "text": cell_text,
+                        "bbox": list(block.get("bbox") or [0, 0, 0, 0]),
+                        "source_path": str(block.get("source_path") or ""),
+                    }
+                )
+        row_offset += len(lines)
+    return cells if len(cells) >= 4 else []
+
+
+def _recover_tabular_context_from_table_cells(table_cells: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    grouped: dict[int, dict[int, str]] = {}
+    for cell in table_cells:
+        if not isinstance(cell, dict):
+            continue
+        try:
+            row_index = int(cell.get("row") or 0)
+            col_index = int(cell.get("col") or 0)
+        except Exception:
+            continue
+        if row_index <= 0 or col_index <= 0:
+            continue
+        text = str(cell.get("text") or "").strip()
+        if not text:
+            continue
+        grouped.setdefault(row_index, {})
+        grouped[row_index][col_index] = text
+    if len(grouped) < 2:
+        return None
+    candidate_rows = sorted(grouped.items(), key=lambda item: item[0])
+    header_row_index: Optional[int] = None
+    for row_index, cols in candidate_rows:
+        ordered = [text for _col, text in sorted(cols.items()) if str(text).strip()]
+        if len(ordered) < 2:
+            continue
+        numericish = sum(1 for text in ordered if _looks_numericish_text(text))
+        text_ratio = (len(ordered) - numericish) / max(1, len(ordered))
+        numeric_ratio = numericish / max(1, len(ordered))
+        if text_ratio >= 0.6 and numeric_ratio <= 0.4:
+            header_row_index = row_index
+            break
+    if header_row_index is None:
+        fallback = next((row_index for row_index, cols in candidate_rows if len(cols) >= 2), None)
+        if fallback is None:
+            return None
+        header_row_index = fallback
+    header_cols = sorted(grouped.get(header_row_index, {}).items(), key=lambda item: item[0])
+    header_labels = [str(text).strip() for _col, text in header_cols if str(text).strip()]
+    if len(header_labels) < 2:
+        return None
+    sample_values_by_header: dict[str, list[Any]] = {header: [] for header in header_labels}
+    column_map = {col: header for col, header in header_cols if str(header).strip()}
+    data_rows: list[dict[str, Any]] = []
+    for row_index, cols in candidate_rows:
+        if row_index <= header_row_index:
+            continue
+        row_payload: dict[str, Any] = {}
+        for col, header in column_map.items():
+            value = str(cols.get(col) or "").strip()
+            if not value:
+                continue
+            row_payload[header] = value
+            bucket = sample_values_by_header.setdefault(header, [])
+            if len(bucket) < 10:
+                bucket.append(value)
+        if row_payload:
+            data_rows.append(row_payload)
+    return {
+        "header_labels": header_labels,
+        "sample_values_by_header": sample_values_by_header,
+        "header_row_index": header_row_index,
+        "data_rows": data_rows,
+    }
+
+
+def _extract_text_fragments(rows: list[dict[str, Any]], meta: Dict[str, Any]) -> list[str]:
+    texts: list[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        text = str(row.get("text") or "").strip()
+        if text:
+            texts.append(text)
+    if texts:
+        return texts
+    blocks = meta.get("image_blocks") if isinstance(meta.get("image_blocks"), list) else []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        text = str(block.get("text") or "").strip()
+        if text:
+            texts.append(text)
+    return texts
+
+
+def _stable_text_signal(texts: list[str]) -> bool:
+    non_empty = [text for text in texts if str(text).strip()]
+    if len(non_empty) < 3:
+        return False
+    avg_length = sum(len(text) for text in non_empty) / max(1, len(non_empty))
+    return avg_length >= 20.0
+
+
+def _detect_structure(rows: list[dict[str, Any]], meta: Dict[str, Any]) -> str:
+    sheet_frames = meta.get("sheet_frames") if isinstance(meta.get("sheet_frames"), list) else []
+    table_cells = meta.get("table_cells") if isinstance(meta.get("table_cells"), list) else []
+    has_tabular = bool(sheet_frames) or _recover_tabular_context_from_table_cells(table_cells) is not None
+    texts = _extract_text_fragments(rows, meta)
+    has_stable_text = _stable_text_signal(texts)
+    if has_tabular:
+        return "tabular"
+    if has_stable_text:
+        return "text"
+    if has_tabular and has_stable_text:
+        return "mixed"
+    return "unknown"
+
+
+def _content_candidate_profiles(rows: list[dict[str, Any]], meta: Dict[str, Any], req: IngestExtractReq) -> list[dict[str, Any]]:
+    canonical_profile = str(req.canonical_profile or "").strip().lower()
+    texts = [text for text in _extract_text_fragments(rows, meta) if str(text).strip()]
+    if not texts:
+        return []
+    if canonical_profile and canonical_profile != "debate_evidence":
+        return []
+    claim_text_signal = _stable_text_signal(texts)
+    url_signal = any(re.search(r"https?://|www\.", text, flags=re.I) for text in texts)
+    speaker_signal = any(re.match(r"^[A-Za-z\u4e00-\u9fff0-9_]{1,24}[:：]", text) for text in texts[:10])
+    explicit_debate = canonical_profile == "debate_evidence"
+    if not explicit_debate and not claim_text_signal:
+        return []
+    matched_fields: list[str] = []
+    if claim_text_signal or explicit_debate:
+        matched_fields.append("claim_text")
+    if url_signal:
+        matched_fields.append("source_url")
+    if speaker_signal:
+        matched_fields.append("speaker")
+    if not matched_fields:
+        return []
+    confidence = round(min(0.97, 0.82 + max(0, len(matched_fields) - 1) * 0.05), 6)
+    return [
+        {
+            "profile": "debate_evidence",
+            "score": confidence,
+            "required_hits": 1,
+            "required_total": 1,
+            "avg_confidence": confidence,
+            "required_coverage": 1.0,
+            "recommended": True,
+            "recommended_template_id": recommended_template_id_for_profile("debate_evidence"),
+            "signal_source": "content",
+            "matched_fields": matched_fields,
+        }
+    ]
+
+
+def _resolved_profile_for_tabular_metrics(
+    req: IngestExtractReq,
+    candidate_profiles: list[dict[str, Any]],
+) -> str:
+    canonical_profile = str(req.canonical_profile or "").strip().lower()
+    if canonical_profile:
+        return canonical_profile
+    recommended = next(
+        (
+            item
+            for item in candidate_profiles
+            if isinstance(item, dict) and bool(item.get("recommended")) and str(item.get("profile") or "").strip()
+        ),
+        {},
+    )
+    return str(recommended.get("profile") or "").strip().lower()
+
+
+def _derive_tabular_quality_metrics(
+    *,
+    req: IngestExtractReq,
+    header_mapping: list[dict[str, Any]],
+    candidate_profiles: list[dict[str, Any]],
+    tabular_context: Optional[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(tabular_context, dict):
+        return {}
+    profile_name = _resolved_profile_for_tabular_metrics(req, candidate_profiles)
+    profile = get_canonical_profile_registry().get(profile_name) if profile_name else None
+    if not isinstance(profile, dict):
+        return {}
+    data_rows = tabular_context.get("data_rows") if isinstance(tabular_context.get("data_rows"), list) else []
+    if not data_rows:
+        return {}
+    raw_to_canonical = {
+        str(item.get("raw_header") or "").strip(): str(item.get("canonical_field") or "").strip()
+        for item in header_mapping
+        if isinstance(item, dict)
+        and str(item.get("raw_header") or "").strip()
+        and str(item.get("canonical_field") or "").strip()
+    }
+    structured_rows: list[dict[str, Any]] = []
+    for row in data_rows:
+        if not isinstance(row, dict):
+            continue
+        payload: dict[str, Any] = {}
+        for raw_header, value in row.items():
+            canonical_field = raw_to_canonical.get(str(raw_header).strip())
+            if canonical_field:
+                payload[canonical_field] = value
+        if payload:
+            structured_rows.append(payload)
+    if not structured_rows:
+        return {}
+    required_fields = [str(item) for item in (profile.get("required_fields") or []) if str(item).strip()]
+    numeric_fields = [str(item) for item in (profile.get("numeric_fields") or []) if str(item).strip()]
+    date_fields = [str(item) for item in (profile.get("date_fields") or []) if str(item).strip()]
+    missing_cells = 0
+    required_missing: dict[str, int] = {}
+    for field in required_fields:
+        missing = sum(1 for row in structured_rows if row.get(field) in {None, ""} or not str(row.get(field)).strip())
+        required_missing[field] = missing
+        missing_cells += missing
+    required_total = len(structured_rows) * len(required_fields)
+    numeric_total = 0
+    numeric_parsed = 0
+    for field in numeric_fields:
+        for row in structured_rows:
+            value = row.get(field)
+            if value in {None, ""} or not str(value).strip():
+                continue
+            numeric_total += 1
+            normalized = normalize_value_for_field(value, field, raw_header=field)
+            try:
+                float(str(normalized).replace(",", ""))
+                numeric_parsed += 1
+            except Exception:
+                continue
+    date_total = 0
+    date_parsed = 0
+    for field in date_fields:
+        for row in structured_rows:
+            value = row.get(field)
+            if value in {None, ""} or not str(value).strip():
+                continue
+            date_total += 1
+            normalized = normalize_value_for_field(value, field, raw_header=field)
+            if normalized not in {None, ""}:
+                date_parsed += 1
+    confidences = [float(item.get("confidence") or 0.0) for item in header_mapping if isinstance(item, dict)]
+    return {
+        "header_confidence": round(sum(confidences) / len(confidences), 6) if confidences else 0.0,
+        "numeric_parse_rate": round((numeric_parsed / numeric_total) if numeric_total > 0 else 1.0, 6),
+        "date_parse_rate": round((date_parsed / date_total) if date_total > 0 else 1.0, 6),
+        "required_missing_ratio": round((missing_cells / required_total) if required_total > 0 else 0.0, 6),
+        "required_field_missing": required_missing,
+    }
+
+
+def _merge_detected_structures(file_results: list[dict[str, Any]]) -> str:
+    structures = {
+        str(item.get("detected_structure") or "").strip()
+        for item in file_results
+        if isinstance(item, dict) and str(item.get("detected_structure") or "").strip()
+    }
+    if not structures:
+        return "unknown"
+    if len(structures) == 1:
+        return next(iter(structures))
+    return "mixed"
+
+
+def _header_mapping_trace(req: IngestExtractReq) -> list[dict[str, Any]]:
+    runtime = header_mapping_runtime_info({"header_mapping_mode": req.header_mapping_mode})
+    requested_mode = str(runtime.get("requested_mode") or DEFAULT_HEADER_MAPPING_MODE)
+    if requested_mode != "auto":
+        return []
+    return [
+        {
+            "engine": "auto_header_mapping",
+            "ok": str(runtime.get("effective_mode") or DEFAULT_HEADER_MAPPING_MODE) == "auto",
+            "requested_mode": requested_mode,
+            "effective_mode": str(runtime.get("effective_mode") or DEFAULT_HEADER_MAPPING_MODE),
+            "reason": str(runtime.get("fallback_reason") or ""),
+            "value_affinity_available": bool(runtime.get("value_affinity_available", False)),
+        }
+    ]
+
+
 def _ingest_extract_metadata(rows: list[dict[str, Any]], meta: Dict[str, Any], req: IngestExtractReq) -> Dict[str, Any]:
     sheet_frames = meta.get("sheet_frames") if isinstance(meta.get("sheet_frames"), list) else []
+    image_blocks = meta.get("image_blocks") if isinstance(meta.get("image_blocks"), list) else []
+    table_cells = meta.get("table_cells") if isinstance(meta.get("table_cells"), list) else []
+    if not table_cells and image_blocks:
+        recovered_cells = _recover_inline_table_cells_from_blocks(image_blocks)
+        if not recovered_cells:
+            recovered_cells = _recover_table_cells_from_blocks(image_blocks)
+        if recovered_cells:
+            table_cells = recovered_cells
+    input_format = str(meta.get("input_format") or "").strip().lower()
+    structure_meta = dict(meta)
+    structure_meta["table_cells"] = table_cells
+    detected_structure = _detect_structure(rows, structure_meta)
+    recovered_tabular_context: Optional[dict[str, Any]] = None
     header_labels: list[str] = []
+    sample_values_by_header: dict[str, list[Any]] = {}
+    signal_source = "headers"
     for frame in sheet_frames:
         if not isinstance(frame, dict):
             continue
         labels = frame.get("header_labels")
         if isinstance(labels, list):
             header_labels.extend([str(item) for item in labels if str(item).strip()])
-    if not header_labels and rows:
+    if header_labels:
+        sample_values_by_header = _build_header_sample_values(header_labels, rows, sheet_frames)
+        signal_source = "headers"
+    elif table_cells:
+        recovered_tabular_context = _recover_tabular_context_from_table_cells(table_cells)
+        if isinstance(recovered_tabular_context, dict):
+            header_labels = [str(item) for item in (recovered_tabular_context.get("header_labels") or []) if str(item).strip()]
+            sample_values_by_header = dict(recovered_tabular_context.get("sample_values_by_header") or {})
+            signal_source = "table_cells"
+    elif input_format not in {"image", "pdf"} and rows:
         sample = rows[0] if isinstance(rows[0], dict) else {}
         header_labels.extend([str(item) for item in sample.keys() if str(item).strip()])
+        sample_values_by_header = _build_header_sample_values(header_labels, rows, sheet_frames)
+        signal_source = "headers"
     canonical_profile = str(req.canonical_profile or "").strip().lower()
-    header_mapping = build_header_mapping(
-        header_labels,
-        canonical_profile=canonical_profile,
-        sheet_profiles=req.sheet_profiles,
-    )
-    candidate_profiles = candidate_profiles_from_headers(
-        header_labels,
-        sheet_profiles=req.sheet_profiles,
-    )
+    if header_labels:
+        header_mapping = build_header_mapping(
+            header_labels,
+            canonical_profile=canonical_profile,
+            sheet_profiles=req.sheet_profiles,
+            header_mapping_mode=req.header_mapping_mode,
+            sample_values_by_header=sample_values_by_header,
+        )
+        candidate_profiles = candidate_profiles_from_headers(
+            header_labels,
+            sheet_profiles=req.sheet_profiles,
+            header_mapping_mode=req.header_mapping_mode,
+            sample_values_by_header=sample_values_by_header,
+            signal_source=signal_source,
+        )
+    else:
+        header_mapping = []
+        candidate_profiles = _content_candidate_profiles(rows, meta, req)
+    derived_quality_metrics = {}
+    if detected_structure in {"tabular", "mixed"}:
+        derived_quality_metrics = _derive_tabular_quality_metrics(
+            req=req,
+            header_mapping=header_mapping,
+            candidate_profiles=candidate_profiles,
+            tabular_context=recovered_tabular_context,
+        )
     quality_report = meta.get("quality_report") if isinstance(meta.get("quality_report"), dict) else {}
     quality_blocked = bool(meta.get("quality_blocked"))
     quality_decisions = build_quality_decisions(
@@ -813,6 +1348,10 @@ def _ingest_extract_metadata(rows: list[dict[str, Any]], meta: Dict[str, Any], r
         "quality_decisions": quality_decisions,
         "blocked_reason_codes": blocked_reason_codes,
         "sample_rows": rows[: min(5, len(rows))],
+        "header_mapping_trace": _header_mapping_trace(req),
+        "detected_structure": detected_structure,
+        "derived_quality_metrics": derived_quality_metrics,
+        "effective_table_cells": table_cells,
     }
 
 
@@ -872,9 +1411,15 @@ def ingest_extract(req: IngestExtractReq):
                     "quality_decisions": [],
                     "blocked_reason_codes": [],
                     "sample_rows": [],
+                    "detected_structure": "unknown",
                 }
             )
             continue
+        metadata = _ingest_extract_metadata(rows, meta, req)
+        quality_metrics = dict(meta.get("quality_metrics") or {}) if isinstance(meta.get("quality_metrics"), dict) else {}
+        if isinstance(metadata.get("derived_quality_metrics"), dict):
+            for key, value in metadata["derived_quality_metrics"].items():
+                quality_metrics[key] = value
         file_results.append(
             {
                 "path": path,
@@ -884,19 +1429,22 @@ def ingest_extract(req: IngestExtractReq):
                 "input_format": meta.get("input_format"),
                 "quality_blocked": bool(meta.get("quality_blocked")),
                 "quality_report": meta.get("quality_report"),
-                "quality_metrics": meta.get("quality_metrics"),
+                "quality_metrics": quality_metrics,
                 "image_blocks": meta.get("image_blocks") if isinstance(meta.get("image_blocks"), list) else [],
-                "table_cells": meta.get("table_cells") if isinstance(meta.get("table_cells"), list) else [],
+                "table_cells": list(metadata.get("effective_table_cells") or []),
                 "sheet_frames": meta.get("sheet_frames") if isinstance(meta.get("sheet_frames"), list) else [],
-                "engine_trace": meta.get("engine_trace") if isinstance(meta.get("engine_trace"), list) else [],
-                **_ingest_extract_metadata(rows, meta, req),
+                **metadata,
+                "engine_trace": (
+                    list(meta.get("engine_trace") or [])
+                    + list(metadata.get("header_mapping_trace") or [])
+                ),
             }
         )
         all_rows.extend(rows)
         all_image_blocks.extend(meta.get("image_blocks") if isinstance(meta.get("image_blocks"), list) else [])
-        all_table_cells.extend(meta.get("table_cells") if isinstance(meta.get("table_cells"), list) else [])
+        all_table_cells.extend(list(metadata.get("effective_table_cells") or []))
         all_sheet_frames.extend(meta.get("sheet_frames") if isinstance(meta.get("sheet_frames"), list) else [])
-        engine_trace.extend(meta.get("engine_trace") if isinstance(meta.get("engine_trace"), list) else [])
+        engine_trace.extend(file_results[-1].get("engine_trace") if isinstance(file_results[-1].get("engine_trace"), list) else [])
         if bool(meta.get("quality_blocked")):
             blocked_inputs.append(
                 {
@@ -935,6 +1483,7 @@ def ingest_extract(req: IngestExtractReq):
             }
         ),
         "sample_rows": all_rows[: min(5, len(all_rows))],
+        "detected_structure": _merge_detected_structures(file_results),
         "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
     }
 
@@ -1147,7 +1696,7 @@ def put_governance_workflow_version(version_id: str, req: WorkflowVersionUpsertR
         workflow_definition = (
             payload.get("workflow_definition")
             if isinstance(payload.get("workflow_definition"), dict)
-            else (payload.get("graph") if isinstance(payload.get("graph"), dict) else {})
+            else {}
         )
         validated = validate_workflow_definition_authoritatively(
             workflow_definition,
@@ -1159,7 +1708,6 @@ def put_governance_workflow_version(version_id: str, req: WorkflowVersionUpsertR
         normalized_workflow_definition = validated.get("normalized_workflow_definition")
         if isinstance(normalized_workflow_definition, dict):
             payload["workflow_definition"] = normalized_workflow_definition
-        payload.pop("graph", None)
         item = save_workflow_version(payload)
     except WorkflowValidationFailure as exc:
         return _workflow_graph_validation_failure_response(WORKFLOW_VERSION_OWNER, "workflow_version", exc)
@@ -1324,6 +1872,16 @@ def run_flow(job_id: str, flow: str, req: RunReq):
         )
     try:
         result = _run_flow_with_runner(job_id, req, runner)
+    except CleaningGuardrailError as exc:
+        return JSONResponse(
+            status_code=400,
+            content=exc.to_response(job_id=job_id, flow=flow),
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(exc), "job_id": job_id, "flow": flow},
+        )
     except LegacyFlowPathParamsError as exc:
         return JSONResponse(
             status_code=400,

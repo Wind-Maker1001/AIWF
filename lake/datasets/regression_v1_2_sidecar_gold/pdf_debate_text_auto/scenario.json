@@ -1,0 +1,18 @@
+{
+  "id": "pdf_debate_text_auto",
+  "input_files": ["input.pdf"],
+  "header_mapping_mode": "auto",
+  "ocr_enabled": true,
+  "image_rules": {
+    "ocr_confidence_avg_min": 0.55,
+    "empty_text_block_ratio_max": 0.2
+  },
+  "engine_ok_any_of": ["docling", "tesseract", "paddleocr"],
+  "expected_detected_structure": "text",
+  "expected_recommended_profile": "debate_evidence",
+  "expected_recommended_template_id": "debate_evidence_v1",
+  "expected_signal_source": "content",
+  "forbidden_recommended_profiles": ["finance_statement", "bank_statement", "customer_contact"],
+  "skip_row_compare": true,
+  "consistency_compare": false
+}

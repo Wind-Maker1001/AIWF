@@ -99,15 +99,12 @@ function createWorkflowRunAuditStore(deps = {}) {
   function normalizeProvider(value) {
     const raw = String(value || "").trim().toLowerCase();
     if (!raw) return "";
-    if (raw === "local_legacy") {
-      throw new Error("workflow run audit local_legacy provider has been retired; use explicit mode ownership");
-    }
     if (raw === "glue_http") {
-      throw new Error("workflow run audit glue_http provider has been retired; use base_http for remote lifecycle records");
+      throw new Error("workflow run audit provider unsupported: glue_http; use base_http for remote lifecycle records");
     }
     if (raw === BASE_PROVIDER) return BASE_PROVIDER;
     if (raw === LOCAL_PROVIDER) return LOCAL_PROVIDER;
-    return "";
+    throw new Error(`workflow run audit provider unsupported: ${raw}`);
   }
 
   function resolveProvider(cfg = null) {

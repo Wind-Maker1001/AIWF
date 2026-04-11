@@ -165,6 +165,12 @@ function mapByOperator(items) {
   const publishedOperators = generatedManifest.operators.filter((item) => item.published).map((item) => item.operator);
   const workflowExposableOperators = generatedManifest.operators.filter((item) => item.workflow_exposable).map((item) => item.operator);
   const desktopExposableOperators = generatedManifest.operators.filter((item) => item.desktop_exposable).map((item) => item.operator);
+  const paletteVisibleOperators = generatedManifest.operators
+    .filter((item) => item.desktop_exposable && !item.palette_hidden)
+    .map((item) => item.operator);
+  const publishedPaletteVisibleOperators = generatedManifest.operators
+    .filter((item) => item.published && item.desktop_exposable && !item.palette_hidden)
+    .map((item) => item.operator);
   const palettePolicyResult = rustPalettePolicyModule && typeof rustPalettePolicyModule.buildRustOperatorPalettePolicy === "function"
     ? rustPalettePolicyModule.buildRustOperatorPalettePolicy(
       Object.fromEntries((checkedInManifest ? checkedInManifest.operators : generatedManifest.operators)
@@ -205,6 +211,7 @@ function mapByOperator(items) {
   const rustKnownSet = new Set(generatedOperators);
   const workflowExposableSet = new Set(workflowExposableOperators);
   const desktopExposableSet = new Set(desktopExposableOperators);
+  const paletteVisibleSet = new Set(paletteVisibleOperators);
 
   const manifestMissingOperators = checkedInManifest ? generatedOperators.filter((operator) => !checkedInByOperator.has(operator)) : generatedOperators;
   const manifestStaleOperators = checkedInManifest ? checkedInOperators.filter((operator) => !generatedByOperator.has(operator)) : [];
@@ -234,9 +241,9 @@ function mapByOperator(items) {
 
   const defaultsCatalogRustOperators = defaultsCatalog.filter((operator) => rustKnownSet.has(operator));
   const rustCatalogItems = defaultsCatalogItems.filter((item) => rustKnownSet.has(String(item?.type || "").trim()));
-  const missingPublishedInCatalog = publishedOperators.filter((operator) => !defaultsCatalog.includes(operator));
+  const missingPublishedInCatalog = publishedPaletteVisibleOperators.filter((operator) => !defaultsCatalog.includes(operator));
   const missingPublishedInRouting = publishedOperators.filter((operator) => !rustMappedOperators.includes(operator));
-  const missingDesktopExposableInCatalog = desktopExposableOperators.filter((operator) => !defaultsCatalog.includes(operator));
+  const missingDesktopExposableInCatalog = paletteVisibleOperators.filter((operator) => !defaultsCatalog.includes(operator));
   const missingDesktopExposableInRouting = desktopExposableOperators.filter((operator) => !rustMappedOperators.includes(operator));
   const missingCatalogGroupEntries = rustCatalogItems
     .filter((item) => !String(item?.group || "").trim())
@@ -251,7 +258,7 @@ function mapByOperator(items) {
     .map((item) => String(item?.type || "").trim())
     .filter(Boolean);
   const staleRustRouting = rustMappedOperators.filter((operator) => !desktopExposableSet.has(operator));
-  const staleCatalogOperators = defaultsCatalogRustOperators.filter((operator) => !desktopExposableSet.has(operator));
+  const staleCatalogOperators = defaultsCatalogRustOperators.filter((operator) => !paletteVisibleSet.has(operator));
   const requiredPublishedMissing = requiredPublishedOperators.filter((operator) => !publishedOperators.includes(operator));
 
   const issues = [];

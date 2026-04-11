@@ -34,6 +34,26 @@ pub(crate) struct TextPreprocessReq {
     pub(crate) normalize_whitespace: Option<bool>,
 }
 
+#[derive(Deserialize)]
+pub(crate) struct PostprocessRowsV1Req {
+    pub(crate) run_id: Option<String>,
+    pub(crate) trace_id: Option<String>,
+    pub(crate) traceparent: Option<String>,
+    pub(crate) rows: Vec<Value>,
+    pub(crate) standardize_evidence: Option<bool>,
+    pub(crate) evidence_schema: Option<Value>,
+    pub(crate) chunk_mode: Option<String>,
+    pub(crate) chunk_field: Option<String>,
+    pub(crate) chunk_max_chars: Option<usize>,
+    pub(crate) detect_conflicts: Option<bool>,
+    pub(crate) conflict_topic_field: Option<String>,
+    pub(crate) conflict_stance_field: Option<String>,
+    pub(crate) conflict_text_field: Option<String>,
+    pub(crate) conflict_positive_words: Option<Vec<String>>,
+    pub(crate) conflict_negative_words: Option<Vec<String>>,
+    pub(crate) schema_hint: Option<Value>,
+}
+
 #[derive(Serialize)]
 pub(crate) struct ComputeMetrics {
     pub(crate) sections: usize,

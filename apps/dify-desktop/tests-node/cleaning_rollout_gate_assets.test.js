@@ -47,8 +47,6 @@ test("cleaning rollout governance docs and defaults are explicit", () => {
   const verification = readText("docs/verification.md");
   const desktopDoc = readText("docs/dify_desktop_app.md");
   const backendQuickstart = readText("docs/quickstart_backend.md");
-  const fallbackDoc = readText("docs/fallback_governance_20260320.md");
-  const backlogDoc = readText("docs/fallback_retirement_backlog_20260322.md");
 
   assert.match(envExample, /AIWF_CLEANING_RUST_V2_MODE=off/);
   assert.match(envExample, /AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT=false/);
@@ -68,6 +66,4 @@ test("cleaning rollout governance docs and defaults are explicit", () => {
   assert.match(backendQuickstart, /check_cleaning_rust_v2_rollout\.ps1/i);
   assert.match(backendQuickstart, /AIWF_CLEANING_RUST_V2_MODE=off\|shadow\|default/i);
 
-  assert.match(fallbackDoc, /cleaning default rust_v2 fallback to python_legacy/i);
-  assert.match(backlogDoc, /cleaning default rust_v2 fallback to python_legacy/i);
 });

@@ -84,6 +84,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrResp"
+  /operators/postprocess_rows_v1:
+    post:
+      summary: Row postprocessing for evidence standardization, chunking, and conflict detection
+      operationId: postprocessRowsV1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostprocessRowsV1Req"
+      responses:
+        "200":
+          description: postprocessed rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformRowsResp"
+        "500":
+          description: server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrResp"
   /operators/transform_rows_v2:
     post:
       summary: Generic row transform v2
@@ -94,6 +117,29 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/TransformRowsReq"
+      responses:
+        "200":
+          description: transformed rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformRowsResp"
+        "500":
+          description: server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrResp"
+  /operators/transform_rows_v3:
+    post:
+      summary: Generic row transform v3
+      operationId: transformRowsV3
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransformRowsV3Req"
       responses:
         "200":
           description: transformed rows
@@ -151,6 +197,23 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/QualityCheckReq"
+      responses:
+        "200":
+          description: quality check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QualityCheckResp"
+  /operators/quality_check_v2:
+    post:
+      summary: Run extended data quality checks on rows
+      operationId: qualityCheckV2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QualityCheckV2Req"
       responses:
         "200":
           description: quality check result
@@ -678,6 +741,53 @@ components:
           minimum: 0
         sha256:
           type: string
+    PostprocessRowsV1Req:
+      type: object
+      additionalProperties: false
+      required: [rows]
+      properties:
+        run_id:
+          type: string
+        trace_id:
+          type: string
+        traceparent:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        standardize_evidence:
+          type: boolean
+        evidence_schema:
+          type: object
+          additionalProperties: true
+        chunk_mode:
+          type: string
+        chunk_field:
+          type: string
+        chunk_max_chars:
+          type: integer
+          minimum: 1
+        detect_conflicts:
+          type: boolean
+        conflict_topic_field:
+          type: string
+        conflict_stance_field:
+          type: string
+        conflict_text_field:
+          type: string
+        conflict_positive_words:
+          type: array
+          items:
+            type: string
+        conflict_negative_words:
+          type: array
+          items:
+            type: string
+        schema_hint:
+          type: object
+          additionalProperties: true
     TransformRowsRuleSet:
       type: object
       additionalProperties: true
@@ -773,6 +883,8 @@ components:
           type: integer
         allow_empty_output:
           type: boolean
+        blank_output_expected:
+          type: boolean
         numeric_parse_rate_min:
           type: number
         date_parse_rate_min:
@@ -839,6 +951,20 @@ components:
           type: string
         idempotency_key:
           type: string
+    TransformRowsV3Req:
+      allOf:
+        - $ref: "#/components/schemas/TransformRowsReq"
+        - type: object
+          additionalProperties: false
+          properties:
+            computed_fields_v3:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            filter_expr_v3:
+              type: object
+              additionalProperties: true
     TransformRowsStreamReq:
       type: object
       additionalProperties: false
@@ -1131,6 +1257,24 @@ components:
             type: object
             additionalProperties: true
         rules:
+          type: object
+          additionalProperties: true
+    QualityCheckV2Req:
+      type: object
+      additionalProperties: false
+      required: [rows, rules]
+      properties:
+        run_id:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        rules:
+          type: object
+          additionalProperties: true
+        metrics:
           type: object
           additionalProperties: true
     QualityCheckResp:

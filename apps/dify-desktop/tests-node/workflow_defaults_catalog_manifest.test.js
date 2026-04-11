@@ -18,8 +18,14 @@ test("workflow defaults catalog keeps Rust palette surface aligned to renderer m
   const catalogTypes = NODE_CATALOG.map((item) => String(item?.type || "").trim()).filter(Boolean).sort();
   const catalogRustTypes = catalogTypes.filter((type) => rendererManifest.KNOWN_RUST_OPERATOR_TYPES.includes(type));
   const catalogLocalTypes = catalogTypes.filter((type) => localPolicy.LOCAL_NODE_TYPES.includes(type));
-  assert.deepEqual(catalogRustTypes, [...rendererManifest.DESKTOP_RUST_OPERATOR_TYPES]);
+  const visibleRustTypes = [...rendererManifest.DESKTOP_RUST_OPERATOR_TYPES].filter(
+    (type) => !rendererManifest.DESKTOP_RUST_OPERATOR_METADATA[type]?.palette_hidden,
+  );
+  assert.deepEqual(catalogRustTypes, visibleRustTypes);
   assert.deepEqual(catalogLocalTypes, [...localPolicy.LOCAL_NODE_TYPES].sort());
+  assert.equal(rendererManifest.DESKTOP_RUST_OPERATOR_TYPES.includes("postprocess_rows_v1"), true);
+  assert.equal(rendererManifest.DESKTOP_RUST_OPERATOR_METADATA.postprocess_rows_v1.palette_hidden, true);
+  assert.equal(catalogRustTypes.includes("postprocess_rows_v1"), false);
 
   for (const entry of NODE_CATALOG.filter((item) => rendererManifest.KNOWN_RUST_OPERATOR_TYPES.includes(String(item?.type || "").trim()))) {
     assert.ok(String(entry.name || "").trim(), `rust catalog entry name missing for ${entry.type}`);

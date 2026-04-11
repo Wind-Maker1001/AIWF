@@ -306,9 +306,19 @@ def office_max_rows(params: Optional[Dict[str, Any]] = None) -> int:
 
 def office_rows_subset(rows: List[Dict[str, Any]], params: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], bool]:
     n = office_max_rows(params)
-    if len(rows) <= n:
-        return rows, False
-    return rows[:n], True
+    selected = rows if len(rows) <= n else rows[:n]
+    sanitized: List[Dict[str, Any]] = []
+    for row in selected:
+        if not isinstance(row, dict):
+            continue
+        item: Dict[str, Any] = {}
+        for key, value in row.items():
+            if isinstance(value, (list, dict)):
+                item[key] = json.dumps(value, ensure_ascii=False)
+            else:
+                item[key] = value
+        sanitized.append(item)
+    return sanitized, len(rows) > n
 
 
 def add_picture_fit(slide: Any, image_path: str, x: Any, y: Any, box_w: Any, box_h: Any) -> None:

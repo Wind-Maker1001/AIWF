@@ -1,0 +1,8 @@
+{
+  "quality_blocked": false,
+  "header_confidence_min": 0.75,
+  "numeric_parse_rate_min": 0.9,
+  "date_parse_rate_min": 0.9,
+  "table_cells_min": 6,
+  "sheet_frames_min": 0
+}

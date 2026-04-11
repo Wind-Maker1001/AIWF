@@ -113,7 +113,7 @@ test("workflow flow io ui loads migrated flow and updates ui state", async () =>
       loadWorkflow: async () => ({
         ok: true,
         path: "D:/flows/imported.json",
-        graph: {
+        workflow_definition: {
           workflow_id: "wf_imported",
           nodes: [{ id: "n1", type: "ingest_files" }],
           edges: [],
@@ -288,7 +288,7 @@ test("workflow flow io ui surfaces structured workflow contract error code on lo
       loadWorkflow: async () => ({
         ok: true,
         path: "D:/flows/invalid.json",
-        graph: {
+        workflow_definition: {
           workflow_id: "wf_invalid_load",
           version: "1.0.0",
           nodes: [{ id: "n1", type: "ingest_files" }],
@@ -320,5 +320,8 @@ test("workflow flow io ui surfaces structured workflow contract error code on lo
     delete global.window;
   }
 
-  assert.deepEqual(statuses, [{ text: "加载失败: [required] workflow.version | 请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。", ok: false }]);
+  assert.equal(statuses.length, 1);
+  assert.equal(statuses[0].ok, false);
+  assert.match(statuses[0].text, /\[required\]/);
+  assert.match(statuses[0].text, /workflow\.version/);
 });

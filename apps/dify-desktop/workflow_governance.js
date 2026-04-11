@@ -137,11 +137,9 @@ function createGovernanceGlueStoreSupport(deps = {}) {
 
   function normalizeProvider(value) {
     const raw = String(value || "").trim().toLowerCase();
+    if (!raw) return "";
     if (raw === "glue_http") return "glue_http";
-    if (raw === "local_legacy") {
-      throw new Error(`${providerLabel} local_legacy provider has been retired; use glue_http`);
-    }
-    return "";
+    throw new Error(`${providerLabel} provider unsupported: ${raw}; use glue_http`);
   }
 
   function resolveProvider(cfg = null) {
@@ -197,7 +195,7 @@ function defaultGovernanceProfile() {
     version: 1,
     roles: {
       owner: { allow: ["*"] },
-      analyst: { allow: ["ingest_files", "clean_md", "compute_rust", "load_rows_v2", "load_rows_v3", "transform_rows_v3", "join_rows_v2", "join_rows_v3", "join_rows_v4", "aggregate_rows_v2", "aggregate_rows_v3", "aggregate_rows_v4", "quality_check_v2", "quality_check_v3", "quality_check_v4", "sql_chart_v1", "office_slot_fill_v1", "md_output"] },
+      analyst: { allow: ["ingest_files", "clean_md", "compute_rust", "load_rows_v2", "load_rows_v3", "transform_rows_v3", "postprocess_rows_v1", "join_rows_v2", "join_rows_v3", "join_rows_v4", "aggregate_rows_v2", "aggregate_rows_v3", "aggregate_rows_v4", "quality_check_v2", "quality_check_v3", "quality_check_v4", "sql_chart_v1", "office_slot_fill_v1", "md_output"] },
       reviewer: { allow: ["manual_review", "md_output", "ai_audit"] },
     },
     ai_budget: {

@@ -3,6 +3,17 @@
   "scenarios": [
     { "id": "xlsx_customer_multi_sheet", "dir": "xlsx_customer_multi_sheet" },
     { "id": "xlsx_finance_units", "dir": "xlsx_finance_units" },
+    { "id": "xlsx_bank_statement_cn_multiheader", "dir": "xlsx_bank_statement_cn_multiheader" },
+    { "id": "xlsx_bank_statement_abbrev_headers", "dir": "xlsx_bank_statement_abbrev_headers" },
+    { "id": "xlsx_customer_abbrev_headers", "dir": "xlsx_customer_abbrev_headers" },
+    { "id": "image_bank_statement_tabular_auto", "dir": "image_bank_statement_tabular_auto" },
+    { "id": "pdf_bank_statement_tabular_auto", "dir": "pdf_bank_statement_tabular_auto" },
+    { "id": "image_customer_contact_auto", "dir": "image_customer_contact_auto" },
+    { "id": "pdf_customer_contact_auto", "dir": "pdf_customer_contact_auto" },
+    { "id": "image_customer_ledger_auto", "dir": "image_customer_ledger_auto" },
+    { "id": "pdf_customer_ledger_auto", "dir": "pdf_customer_ledger_auto" },
+    { "id": "image_debate_text_auto", "dir": "image_debate_text_auto" },
+    { "id": "pdf_debate_text_auto", "dir": "pdf_debate_text_auto" },
     { "id": "image_blank_blocked", "dir": "image_blank_blocked" }
   ]
 }

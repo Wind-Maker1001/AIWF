@@ -20,6 +20,7 @@ test("rust ops domain registers representative operators", () => {
     },
   );
   assert.equal(registry.has("transform_rows_v3"), true);
+  assert.equal(registry.has("postprocess_rows_v1"), true);
   assert.equal(registry.has("plugin_operator_v1"), true);
   assert.equal(registry.has("explain_plan_v2"), true);
   assert.deepEqual([...registry.list()].sort(), [...DESKTOP_RUST_OPERATOR_TYPES]);

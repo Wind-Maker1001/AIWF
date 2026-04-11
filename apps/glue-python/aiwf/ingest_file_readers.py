@@ -3,8 +3,10 @@ from __future__ import annotations
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from aiwf.ingest_docling_pipeline import coerce_extraction_result, extract_with_docling
 from aiwf.ingest_image_pipeline import extract_image_rows
 from aiwf.ingest_xlsx_pipeline import extract_xlsx_rows
+from aiwf.quality_contract import build_image_quality_report
 
 
 def split_text_to_rows(text: str, path: str, source_type: str, by_line: bool = False) -> List[Dict[str, Any]]:
@@ -73,6 +75,29 @@ def read_pdf(path: str, *, by_line: bool = False) -> List[Dict[str, Any]]:
     return rows
 
 
+def _docling_blocks_to_pdf_rows(blocks: List[Dict[str, Any]], path: str) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            continue
+        text = str(block.get("text") or "").strip()
+        if not text:
+            continue
+        rows.append(
+            {
+                "text": text,
+                "source_file": os.path.basename(path),
+                "source_path": path,
+                "source_type": "pdf",
+                "page": int(block.get("page_no") or block.get("page") or 1),
+                "chunk_index": index,
+                "line_no": int(block.get("line_no") or index + 1),
+                "bbox": list(block.get("bbox") or []),
+            }
+        )
+    return rows
+
+
 def read_image(
     path: str,
     *,
@@ -111,6 +136,23 @@ def load_docx_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, 
 
 
 def load_pdf_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    docling = coerce_extraction_result(extract_with_docling(path))
+    if docling is not None:
+        rows = _docling_blocks_to_pdf_rows(list(docling.image_blocks or []), path)
+        if not rows:
+            rows = read_pdf(path, by_line=bool(options.get("text_by_line", False)))
+        quality_report = build_image_quality_report(rows, list(docling.image_blocks or []), options)
+        return rows, {
+            "input_format": "pdf",
+            "image_blocks": list(docling.image_blocks or []),
+            "table_cells": list(docling.table_cells or []),
+            "sheet_frames": list(docling.sheet_frames or []),
+            "engine_trace": list(docling.engine_trace or []),
+            "quality_blocked": bool(quality_report.get("blocked")),
+            "quality_report": quality_report,
+            "quality_metrics": quality_report.get("metrics") if isinstance(quality_report.get("metrics"), dict) else {},
+            "quality_error": "; ".join(quality_report.get("errors") or []),
+        }
     return read_pdf(path, by_line=bool(options.get("text_by_line", False))), {"input_format": "pdf"}
 
 

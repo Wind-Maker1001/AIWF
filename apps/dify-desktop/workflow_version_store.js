@@ -37,7 +37,7 @@ function createWorkflowVersionStore(deps = {}) {
   function resolveWorkflowDefinition(source = {}, current = {}) {
     const definition = source.workflow_definition !== undefined
       ? source.workflow_definition
-      : (current.workflow_definition !== undefined ? current.workflow_definition : (source.graph !== undefined ? source.graph : current.graph));
+      : current.workflow_definition;
     return definition && typeof definition === "object" ? definition : null;
   }
 
@@ -86,10 +86,10 @@ function createWorkflowVersionStore(deps = {}) {
   function compareVersionItems(itemA, itemB) {
     const workflowDefinitionA = itemA?.workflow_definition && typeof itemA.workflow_definition === "object"
       ? itemA.workflow_definition
-      : (itemA?.graph && typeof itemA.graph === "object" ? itemA.graph : {});
+      : {};
     const workflowDefinitionB = itemB?.workflow_definition && typeof itemB.workflow_definition === "object"
       ? itemB.workflow_definition
-      : (itemB?.graph && typeof itemB.graph === "object" ? itemB.graph : {});
+      : {};
     const nodesA = Array.isArray(workflowDefinitionA.nodes) ? workflowDefinitionA.nodes : [];
     const nodesB = Array.isArray(workflowDefinitionB.nodes) ? workflowDefinitionB.nodes : [];
     const edgesA = Array.isArray(workflowDefinitionA.edges) ? workflowDefinitionA.edges : [];

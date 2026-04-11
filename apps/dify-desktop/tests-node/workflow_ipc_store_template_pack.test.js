@@ -8,8 +8,6 @@ const { registerWorkflowStoreIpc } = require("../workflow_ipc_store");
 const { TEMPLATE_PACK_ENTRY_SCHEMA_VERSION } = require("../workflow_ipc_state");
 const { TEMPLATE_PACK_ARTIFACT_SCHEMA_VERSION } = require("../workflow_template_pack_contract");
 const {
-  buildValidationErrorItems,
-  normalizeWorkflowContract,
   WORKFLOW_CONTRACT_AUTHORITY,
   NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
 } = require("../workflow_contract");
@@ -22,6 +20,70 @@ function templateGraph() {
     name: "Template Graph",
     nodes: [{ id: "n1", type: "ingest_files", config: {} }],
     edges: [],
+  };
+}
+
+function normalizeValidationErrorItem(message) {
+  const text = String(message || "").trim();
+  if (/^workflow contains unregistered node types:/i.test(text)) {
+    return { path: "workflow.nodes", code: "unknown_node_type", message: text };
+  }
+  if (text === "workflow.version is required") {
+    return { path: "workflow.version", code: "required", message: text };
+  }
+  if (text === "workflow.nodes must contain at least one node") {
+    return { path: "workflow.nodes", code: "array_min_items", message: text };
+  }
+  return { path: text, code: "validation_error", message: text };
+}
+
+function validateWorkflowDefinitionForTest(workflowDefinition, options = {}) {
+  const source = workflowDefinition && typeof workflowDefinition === "object" ? workflowDefinition : {};
+  const notes = [];
+  const version = String(source.version || "").trim();
+  const nodes = Array.isArray(source.nodes) ? source.nodes : [];
+  const errors = [];
+  if (!String(source.workflow_id || "").trim()) errors.push("workflow.workflow_id is required");
+  if (!version) {
+    if (options.allowVersionMigration === true) {
+      notes.push("workflow.version migrated to 1.0.0");
+    } else {
+      errors.push("workflow.version is required");
+    }
+  }
+  if (!Array.isArray(source.nodes)) errors.push("workflow.nodes must be an array");
+  if (!Array.isArray(source.edges)) errors.push("workflow.edges must be an array");
+  if (options.requireNonEmptyNodes === true && nodes.length === 0) {
+    errors.push("workflow.nodes must contain at least one node");
+  }
+  const unknownTypes = nodes
+    .map((node) => String(node?.type || "").trim())
+    .filter(Boolean)
+    .filter((type) => type === "unknown_future_node");
+  if (unknownTypes.length > 0) {
+    errors.push(`workflow contains unregistered node types: ${Array.from(new Set(unknownTypes)).join(", ")}`);
+  }
+  if (errors.length > 0) {
+    throw createWorkflowStoreRemoteError({
+      ok: false,
+      error: errors.join("; "),
+      error_code: "workflow_graph_invalid",
+      graph_contract: WORKFLOW_CONTRACT_AUTHORITY,
+      error_item_contract: NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+      error_items: errors.map((message) => normalizeValidationErrorItem(message)),
+      notes,
+    });
+  }
+  return {
+    ok: true,
+    normalized_workflow_definition: {
+      ...source,
+      workflow_id: String(source.workflow_id || "").trim(),
+      version: version || "1.0.0",
+      nodes,
+      edges: Array.isArray(source.edges) ? source.edges : [],
+    },
+    notes,
   };
 }
 
@@ -68,28 +130,10 @@ function createIpcHarness(overrides = {}) {
         workflowDefinition,
         allowVersionMigration = false,
         requireNonEmptyNodes = false,
-      }) => {
-        const normalized = normalizeWorkflowContract(workflowDefinition, {
-          allowVersionMigration,
-          requireNonEmptyNodes,
-        });
-        if (!normalized.ok) {
-          throw createWorkflowStoreRemoteError({
-            ok: false,
-            error: normalized.errors.join("; "),
-            error_code: "workflow_graph_invalid",
-            graph_contract: WORKFLOW_CONTRACT_AUTHORITY,
-            error_item_contract: NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
-            error_items: buildValidationErrorItems(normalized.errors),
-            notes: normalized.notes || [],
-          });
-        }
-        return {
-          ok: true,
-          normalized_workflow_definition: normalized.graph || workflowDefinition,
-          notes: normalized.notes || [],
-        };
-      },
+      }) => validateWorkflowDefinitionForTest(workflowDefinition, {
+        allowVersionMigration,
+        requireNonEmptyNodes,
+      }),
     },
     workflowVersionStore: {
       recordVersion: async () => ({ ok: true }),
@@ -301,8 +345,8 @@ test("workflow ipc store loadWorkflow still accepts legacy graphs missing versio
   });
 
   assert.equal(out.ok, true);
-  assert.equal(out.graph.workflow_id, "wf_legacy");
-  assert.equal(out.graph.version, "1.0.0");
+  assert.equal(out.workflow_definition.workflow_id, "wf_legacy");
+  assert.equal(out.workflow_definition.version, "1.0.0");
   assert.ok(Array.isArray(out.notes));
   assert.match(out.notes.join(" | "), /workflow\.version migrated/i);
 });
@@ -328,7 +372,7 @@ test("workflow ipc store loadWorkflow can skip graph contract validation for non
 
   assert.equal(out.ok, true);
   assert.equal(out.path, templatePackPath);
-  assert.equal(out.graph.schema_version, "template_pack_artifact.v1");
+  assert.equal(out.workflow_definition.schema_version, "template_pack_artifact.v1");
 });
 
 test("workflow ipc store exposes authoritative workflow validation ipc", async () => {

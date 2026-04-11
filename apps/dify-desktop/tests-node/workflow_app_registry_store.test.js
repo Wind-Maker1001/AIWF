@@ -103,7 +103,7 @@ test("workflow app registry store uses glue provider for backend-owned registry"
   assert.equal(fetched.workflow_definition, undefined);
 });
 
-test("workflow app registry store rejects retired local legacy provider", async () => {
+test("workflow app registry store rejects unsupported provider override", async () => {
   const store = createWorkflowAppRegistryStore({
     loadConfig: () => ({ mode: "offline_local" }),
   });
@@ -115,10 +115,10 @@ test("workflow app registry store rejects retired local legacy provider", async 
     published_version_id: "wf_finance_published_002",
     params_schema: { region: { type: "string" } },
     template_policy: { version: 1 },
-  }, { mode: "offline_local", workflowAppRegistryProvider: "local_legacy" });
+  }, { mode: "offline_local", workflowAppRegistryProvider: "unsupported_provider" });
 
   assert.equal(published.ok, false);
-  assert.match(String(published.error || ""), /retired/i);
+  assert.match(String(published.error || ""), /unsupported|provider/i);
 });
 
 test("workflow app registry store preserves structured remote publish failure details", async () => {

@@ -1,0 +1,18 @@
+{
+  "id": "image_bank_statement_tabular_auto",
+  "input_files": ["input.png"],
+  "header_mapping_mode": "auto",
+  "ocr_enabled": true,
+  "image_rules": {
+    "ocr_confidence_avg_min": 0.55,
+    "empty_text_block_ratio_max": 0.2
+  },
+  "engine_ok_any_of": ["docling", "paddleocr", "tesseract"],
+  "expected_detected_structure": "tabular",
+  "expected_recommended_profile": "bank_statement",
+  "expected_recommended_template_id": "bank_statement_v1",
+  "expected_signal_source": "table_cells",
+  "expected_header_mapping_fields": ["account_no", "txn_date", "debit_amount", "credit_amount", "balance", "remark", "ref_no"],
+  "skip_row_compare": true,
+  "consistency_compare": false
+}

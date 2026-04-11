@@ -17,6 +17,9 @@ function executionAuditFields(result) {
   const quality = result && typeof result.quality === "object"
     ? result.quality
     : (result && result.profile && typeof result.profile.quality === "object" ? result.profile.quality : {});
+  const qualitySummary = result && typeof result.quality_summary === "object"
+    ? result.quality_summary
+    : (result && result.profile && typeof result.profile.quality_summary === "object" ? result.profile.quality_summary : {});
   const shadowCompare = normalizeShadowCompare(execution);
   return {
     execution_mode: String(execution.execution_mode || ""),
@@ -27,6 +30,16 @@ function executionAuditFields(result) {
     shadow_compare_status: String(shadowCompare.status || ""),
     shadow_compare_mismatch_count: Number(shadowCompare.mismatch_count || 0),
     rust_v2_used: !!quality.rust_v2_used,
+    template: String(result && result.template ? result.template : ""),
+    template_expected_profile: String(result && result.template_expected_profile ? result.template_expected_profile : ""),
+    requested_profile: String(qualitySummary.requested_profile || result?.requested_profile || ""),
+    recommended_profile: String(qualitySummary.recommended_profile || result?.recommended_profile || ""),
+    profile_mismatch: !!qualitySummary.profile_mismatch,
+    blocking_reason_codes: Array.isArray(qualitySummary.blocking_reason_codes)
+      ? qualitySummary.blocking_reason_codes
+      : (Array.isArray(result?.blocking_reason_codes) ? result.blocking_reason_codes : []),
+    blank_output_expected: qualitySummary.blank_output_expected === undefined ? undefined : !!qualitySummary.blank_output_expected,
+    zero_output_unexpected: qualitySummary.zero_output_unexpected === undefined ? undefined : !!qualitySummary.zero_output_unexpected,
   };
 }
 
@@ -90,6 +103,13 @@ function buildCleaningShadowRolloutEvidence({
       invalid_rows: Number(quality.invalid_rows || 0),
       filtered_rows: Number(quality.filtered_rows || 0),
       duplicate_rows_removed: Number(quality.duplicate_rows_removed || 0),
+    },
+    quality_summary: {
+      requested_profile: String(result?.quality_summary?.requested_profile || ""),
+      recommended_profile: String(result?.quality_summary?.recommended_profile || ""),
+      blocking_reason_codes: Array.isArray(result?.quality_summary?.blocking_reason_codes) ? result.quality_summary.blocking_reason_codes : [],
+      blank_output_expected: !!result?.quality_summary?.blank_output_expected,
+      zero_output_unexpected: !!result?.quality_summary?.zero_output_unexpected,
     },
     shadow_compare: shadowCompare,
     run_mode_audit_path: String(runModeAuditPath || ""),

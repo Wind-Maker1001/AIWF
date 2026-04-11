@@ -1,0 +1,27 @@
+{
+  "id": "xlsx_bank_statement_cn_multiheader",
+  "input_files": ["input.xlsx"],
+  "canonical_profile": "bank_statement",
+  "xlsx_all_sheets": true,
+  "sheet_allowlist": ["BankFlow"],
+  "include_hidden_sheets": false,
+  "quality_rules": {
+    "canonical_profile": "bank_statement",
+    "required_fields": ["account_no", "txn_date"],
+    "unique_keys": ["account_no", "txn_date", "ref_no", "amount"],
+    "max_required_missing_ratio": 0.0,
+    "duplicate_key_ratio_max": 0.34,
+    "numeric_parse_rate_min": 0.95,
+    "date_parse_rate_min": 0.95
+  },
+  "xlsx_rules": {
+    "required_columns": ["account_no", "txn_date", "debit_amount", "credit_amount", "amount", "balance", "counterparty_name", "ref_no"],
+    "header_confidence_min": 0.8,
+    "sheet_row_count_min": 1,
+    "cross_sheet_required_coverage_min": 1.0,
+    "numeric_parse_rate_min": 0.95,
+    "date_parse_rate_min": 0.95
+  },
+  "expected_row_fields": ["account_no", "txn_date", "debit_amount", "credit_amount", "amount", "balance", "counterparty_name", "ref_no"],
+  "consistency_compare": true
+}

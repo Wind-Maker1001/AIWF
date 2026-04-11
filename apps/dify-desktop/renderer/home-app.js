@@ -168,6 +168,26 @@ async function runDebateQuick() {
   await runMain();
 }
 
+function summarizeCleaningFailure(out){
+  const p = out && typeof out === "object" ? out : {};
+  const errorCode = String(p.error_code || "").trim();
+  const reasonCodes = Array.isArray(p.reason_codes) ? p.reason_codes : [];
+  const requestedProfile = String(p.requested_profile || p.quality_summary?.requested_profile || "").trim();
+  const recommendedProfile = String(p.recommended_profile || p.quality_summary?.recommended_profile || "").trim();
+  const templateId = String(p.template || p.template_id || "").trim();
+  if (errorCode === "profile_mismatch_blocked") {
+    const pair = requestedProfile && recommendedProfile
+      ? `${requestedProfile} -> ${recommendedProfile}`
+      : (requestedProfile || recommendedProfile || "profile_mismatch");
+    return `清洗被拦截: 模板画像不匹配 (${pair})${templateId ? ` | 模板 ${templateId}` : ""}`;
+  }
+  if (errorCode === "zero_output_unexpected" || reasonCodes.includes("zero_output_unexpected")) {
+    return `清洗被拦截: 输出为空且不允许空结果${templateId ? ` | 模板 ${templateId}` : ""}`;
+  }
+  if (errorCode) return `清洗失败: ${errorCode}`;
+  return `生成失败: ${p.error || "unknown"}`;
+}
+
 function buildDebateConfigPayload() {
   return {
     version: "debate_config_v1",
@@ -342,7 +362,7 @@ async function runMain(){
     }
     const j=await window.aiwfDesktop.runCleaning(payload,cfgFromUi());
     show(j);renderMetrics(j);
-    setStatus(j.ok?"生成完成":"生成失败",!!j.ok);
+    setStatus(j.ok ? "生成完成" : summarizeCleaningFailure(j), !!j.ok);
   }catch(e){setStatus("运行失败: "+e,false)}
 }
 

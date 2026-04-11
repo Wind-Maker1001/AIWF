@@ -71,6 +71,7 @@
         "published",
         "workflow_exposable",
         "desktop_exposable",
+        "palette_hidden",
         "direct_http_only",
         "internal_only",
         "capabilities"
@@ -97,6 +98,7 @@
         "published": { "type": "boolean" },
         "workflow_exposable": { "type": "boolean" },
         "desktop_exposable": { "type": "boolean" },
+        "palette_hidden": { "type": "boolean" },
         "direct_http_only": { "type": "boolean" },
         "internal_only": { "type": "boolean" },
         "contracts": {

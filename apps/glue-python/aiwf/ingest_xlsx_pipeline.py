@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from aiwf.ingest_docling_pipeline import coerce_extraction_result, extract_with_docling
@@ -80,13 +81,25 @@ def _normalize_header_piece(value: Any) -> str:
     return text
 
 
+def _header_looks_like_data(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    compact = re.sub(r"\s+", "", text)
+    if re.fullmatch(r"[0-9,.\-+/年月日:（）()]+", compact):
+        return True
+    if re.fullmatch(r"[A-Za-z0-9\-_/.]+", compact) and any(ch.isdigit() for ch in compact):
+        return True
+    return False
+
+
 def _candidate_header(
     ws: Any,
     *,
     merged_map: dict[tuple[int, int], Any],
     spec: dict[str, Any],
     max_scan_rows: int = 5,
-    max_header_rows: int = 3,
+    max_header_rows: int = 2,
 ) -> tuple[int, int, list[str], list[float], list[str]]:
     max_row = max(1, min(int(getattr(ws, "max_row", 1) or 1), max_scan_rows))
     max_col = max(1, int(getattr(ws, "max_column", 1) or 1))
@@ -104,6 +117,8 @@ def _candidate_header(
             raw_headers: list[str] = []
             recognized = 0
             placeholders = 0
+            data_like = 0
+            start_row_data_like = 0
             unique = set()
             for col_idx in range(1, max_col + 1):
                 parts = []
@@ -120,8 +135,22 @@ def _candidate_header(
                     placeholders += 1
                 if confidence >= 0.85:
                     recognized += 1
+                if _header_looks_like_data(raw_header):
+                    data_like += 1
+                start_raw = _normalize_header_piece(_merged_value(ws, start_row, col_idx, merged_map))
+                if _header_looks_like_data(start_raw):
+                    start_row_data_like += 1
                 unique.add(canonical)
-            score = (len(unique) / max_col) + (recognized / max_col) - (placeholders / max_col) * 0.4
+            avg_confidence = (sum(confidences) / len(confidences)) if confidences else 0.0
+            score = (
+                (len(unique) / max_col) * 0.4
+                + (recognized / max_col) * 0.8
+                + avg_confidence * 0.8
+                - (placeholders / max_col) * 0.4
+                - (data_like / max_col) * 0.9
+            )
+            if start_row > 1 and (start_row_data_like / max_col) >= 0.5:
+                score -= 1.5
             if score > best_score:
                 best_score = score
                 best_start = start_row

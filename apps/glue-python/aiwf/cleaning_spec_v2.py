@@ -9,34 +9,16 @@ from aiwf.canonical_profiles import get_profile_registry, resolve_profile_name
 
 CLEANING_SPEC_V2_VERSION = "cleaning_spec.v2"
 CLEANING_SPEC_V2_CONTRACT = "contracts/glue/cleaning_spec.v2.schema.json"
-
-
-CANONICAL_PROFILE_REGISTRY: dict[str, dict[str, Any]] = {
-    "finance_statement": {
-        "required_fields": ["id", "amount"],
-        "string_fields": ["currency"],
-        "numeric_fields": ["id", "amount"],
-        "date_fields": ["biz_date", "published_at"],
-        "unique_keys": ["id"],
-        "defaults": {"currency": "CNY"},
-    },
-    "customer_contact": {
-        "required_fields": ["customer_name", "phone"],
-        "string_fields": ["customer_name", "phone", "city"],
-        "numeric_fields": [],
-        "date_fields": [],
-        "unique_keys": ["phone"],
-        "defaults": {},
-    },
-    "debate_evidence": {
-        "required_fields": ["claim_text"],
-        "string_fields": ["claim_text", "speaker", "source_title", "source_url", "stance"],
-        "numeric_fields": ["confidence"],
-        "date_fields": ["published_at"],
-        "unique_keys": ["source_path", "chunk_index", "claim_text"],
-        "defaults": {},
-    },
+HEADER_MAPPING_MODE_VALUES = ["strict", "auto"]
+DEFAULT_HEADER_MAPPING_MODE = "strict"
+_PROFILE_TEMPLATE_RECOMMENDATIONS = {
+    "finance_statement": "finance_report_v1",
+    "bank_statement": "bank_statement_v1",
+    "customer_contact": "customer_contact_v1",
+    "customer_ledger": "customer_ledger_v1",
+    "debate_evidence": "debate_evidence_v1",
 }
+
 CANONICAL_PROFILE_REGISTRY = get_profile_registry()
 
 _QUALITY_GATE_KEYS = [
@@ -47,6 +29,7 @@ _QUALITY_GATE_KEYS = [
     "max_required_missing_ratio",
     "max_duplicate_rows_removed",
     "allow_empty_output",
+    "blank_output_expected",
     "numeric_parse_rate_min",
     "date_parse_rate_min",
     "duplicate_key_ratio_max",
@@ -136,6 +119,8 @@ def _quality_gates_from_sources(*sources: Mapping[str, Any]) -> dict[str, Any]:
         for key in _QUALITY_GATE_KEYS:
             if key in source:
                 out[key] = source.get(key)
+    if "allow_empty_output" not in out and "blank_output_expected" in out:
+        out["allow_empty_output"] = out.get("blank_output_expected")
     return out
 
 
@@ -166,6 +151,7 @@ def compile_cleaning_params_to_spec(params: Mapping[str, Any]) -> dict[str, Any]
         "input_format": str(params.get("input_format") or "").strip().lower(),
         "input_files": _as_str_list(params.get("input_files")),
         "input_path": str(params.get("input_path") or params.get("input_csv_path") or "").strip(),
+        "header_mapping_mode": str(params.get("header_mapping_mode") or DEFAULT_HEADER_MAPPING_MODE).strip().lower() or DEFAULT_HEADER_MAPPING_MODE,
         "text_split_by_line": bool(params.get("text_split_by_line", False)),
         "ocr_enabled": bool(params.get("ocr_enabled", True)),
         "ocr_lang": str(params.get("ocr_lang") or "").strip(),
@@ -252,6 +238,7 @@ def compile_cleaning_params_to_spec(params: Mapping[str, Any]) -> dict[str, Any]
     spec["schema"] = {
         **spec["schema"],
         "canonical_profile": profile_name,
+        "template_expected_profile": str(params.get("template_expected_profile") or profile_name or "").strip().lower(),
         "fields": profile_spec,
         "defaults": copy.deepcopy(profile_spec.get("defaults", {})),
         "unique_keys": _merge_unique_strings(profile_spec.get("unique_keys", []), transform.get("deduplicate_by", [])),
@@ -356,6 +343,7 @@ def compile_preprocess_spec_to_spec(spec_obj: Mapping[str, Any]) -> dict[str, An
         "input_format": str(spec_obj.get("input_format") or "").strip().lower(),
         "input_files": _as_str_list(spec_obj.get("input_files")),
         "input_path": str(spec_obj.get("input_path") or "").strip(),
+        "header_mapping_mode": str(spec_obj.get("header_mapping_mode") or DEFAULT_HEADER_MAPPING_MODE).strip().lower() or DEFAULT_HEADER_MAPPING_MODE,
         "text_split_by_line": bool(spec_obj.get("text_split_by_line", False)),
         "ocr_enabled": bool(spec_obj.get("ocr_enabled", True)),
         "ocr_lang": str(spec_obj.get("ocr_lang") or "").strip(),
@@ -369,6 +357,7 @@ def compile_preprocess_spec_to_spec(spec_obj: Mapping[str, Any]) -> dict[str, An
     }
     spec["schema"] = {
         "canonical_profile": profile_name,
+        "template_expected_profile": str(spec_obj.get("template_expected_profile") or profile_name or "").strip().lower(),
         "fields": profile_spec,
         "defaults": copy.deepcopy(profile_spec.get("defaults", {})),
         "unique_keys": _merge_unique_strings(
@@ -492,6 +481,7 @@ def cleaning_spec_to_transform_components(
         "schema_version": CLEANING_SPEC_V2_VERSION,
         "contract": CLEANING_SPEC_V2_CONTRACT,
         "canonical_profile": str(schema.get("canonical_profile") or "").strip().lower(),
+        "template_expected_profile": str(schema.get("template_expected_profile") or "").strip().lower(),
         "fields": _as_dict(schema.get("fields")),
         "defaults": _as_dict(schema.get("defaults")),
         "unique_keys": _as_str_list(schema.get("unique_keys")),
@@ -504,25 +494,52 @@ def candidate_profiles_from_headers(
     headers: Sequence[str],
     *,
     sheet_profiles: Optional[Mapping[str, Any]] = None,
+    header_mapping_mode: str = DEFAULT_HEADER_MAPPING_MODE,
+    sample_values_by_header: Optional[Mapping[str, Sequence[Any]]] = None,
+    signal_source: str = "headers",
     limit: int = 3,
 ) -> list[dict[str, Any]]:
-    from aiwf.quality_contract import canonicalize_header
+    from aiwf.quality_contract import analyze_header_mapping
 
     raw_headers = [str(item).strip() for item in headers if str(item).strip()]
     if not raw_headers:
         return []
     candidates: list[dict[str, Any]] = []
     for profile_name, profile in CANONICAL_PROFILE_REGISTRY.items():
+        field_universe = {
+            str(item)
+            for group in (
+                profile.get("required_fields", []),
+                profile.get("string_fields", []),
+                profile.get("numeric_fields", []),
+                profile.get("date_fields", []),
+            )
+            for item in group
+            if str(item).strip()
+        }
         matched_fields: dict[str, float] = {}
+        unresolved_required_ambiguity = 0
         for header in raw_headers:
-            field, confidence, _matched = canonicalize_header(
+            details = analyze_header_mapping(
                 header,
                 {
                     "canonical_profile": profile_name,
                     "sheet_profiles": dict(sheet_profiles or {}),
+                    "header_mapping_mode": header_mapping_mode,
                 },
+                sample_values=list((sample_values_by_header or {}).get(header) or []),
             )
+            field = str(details.get("canonical_field") or "")
+            confidence = float(details.get("confidence") or 0.0)
+            if field and field not in field_universe:
+                field = ""
             if not field or field.startswith("col_"):
+                alternatives = details.get("alternatives") if isinstance(details.get("alternatives"), list) else []
+                best_alt = alternatives[0] if alternatives else {}
+                if str(best_alt.get("field") or "").strip() in {
+                    str(item) for item in profile.get("required_fields", []) if str(item).strip()
+                }:
+                    unresolved_required_ambiguity += 1
                 continue
             previous = matched_fields.get(field)
             if previous is None or confidence > previous:
@@ -533,18 +550,48 @@ def candidate_profiles_from_headers(
             continue
         avg_confidence = sum(matched_fields.values()) / len(matched_fields)
         coverage = required_hits / max(1, len(required_fields))
-        score = round(avg_confidence * 0.6 + coverage * 0.4, 6)
+        matched_field_ratio = len(matched_fields) / max(1, len(field_universe))
+        score = round(
+            coverage * 0.55
+            + matched_field_ratio * 0.25
+            + avg_confidence * 0.20
+            - (0.08 if unresolved_required_ambiguity > 0 else 0.0),
+            6,
+        )
+        recommended = coverage == 1.0 or (required_hits > 0 and score >= 0.78)
         candidates.append(
             {
                 "profile": profile_name,
                 "score": score,
                 "required_hits": required_hits,
                 "required_total": len(required_fields),
+                "avg_confidence": round(avg_confidence, 6),
+                "required_coverage": round(coverage, 6),
+                "recommended": recommended,
+                "recommended_template_id": _PROFILE_TEMPLATE_RECOMMENDATIONS.get(profile_name, "") if recommended else "",
+                "signal_source": str(signal_source or "headers"),
                 "matched_fields": sorted(matched_fields.keys()),
             }
         )
+    contact_candidate = next((item for item in candidates if item.get("profile") == "customer_contact"), None)
+    ledger_candidate = next((item for item in candidates if item.get("profile") == "customer_ledger"), None)
+    if isinstance(contact_candidate, dict) and isinstance(ledger_candidate, dict):
+        ledger_fields = {str(item) for item in ledger_candidate.get("matched_fields", []) if str(item).strip()}
+        if (
+            float(ledger_candidate.get("required_coverage") or 0.0) >= 1.0
+            and {"amount", "biz_date"}.issubset(ledger_fields)
+        ):
+            ledger_candidate["score"] = round(float(ledger_candidate.get("score") or 0.0) + 0.03, 6)
+            ledger_candidate["recommended"] = True
+            ledger_candidate["recommended_template_id"] = _PROFILE_TEMPLATE_RECOMMENDATIONS.get("customer_ledger", "")
+            contact_candidate["recommended"] = False
+            contact_candidate["recommended_template_id"] = ""
     candidates.sort(key=lambda item: (-float(item.get("score", 0.0)), -int(item.get("required_hits", 0)), item["profile"]))
     return candidates[: max(1, int(limit or 3))]
+
+
+def recommended_template_id_for_profile(profile_name: str) -> str:
+    return str(_PROFILE_TEMPLATE_RECOMMENDATIONS.get(str(profile_name or "").strip().lower(), "") or "")
 
 
 def build_header_mapping(
@@ -552,25 +599,34 @@ def build_header_mapping(
     *,
     canonical_profile: str = "",
     sheet_profiles: Optional[Mapping[str, Any]] = None,
+    header_mapping_mode: str = DEFAULT_HEADER_MAPPING_MODE,
+    sample_values_by_header: Optional[Mapping[str, Sequence[Any]]] = None,
 ) -> list[dict[str, Any]]:
-    from aiwf.quality_contract import canonicalize_header
+    from aiwf.quality_contract import analyze_header_mapping
 
     spec = {
         "canonical_profile": resolve_canonical_profile_name(canonical_profile),
         "sheet_profiles": dict(sheet_profiles or {}),
+        "header_mapping_mode": str(header_mapping_mode or DEFAULT_HEADER_MAPPING_MODE).strip().lower() or DEFAULT_HEADER_MAPPING_MODE,
     }
     out: list[dict[str, Any]] = []
     for header in headers:
         raw_header = str(header).strip()
         if not raw_header:
             continue
-        canonical, confidence, matched = canonicalize_header(raw_header, spec)
+        details = analyze_header_mapping(
+            raw_header,
+            spec,
+            sample_values=list((sample_values_by_header or {}).get(raw_header) or []),
+        )
         out.append(
             {
                 "raw_header": raw_header,
-                "canonical_field": canonical,
-                "confidence": round(float(confidence), 6),
-                "matched_token": matched,
+                "canonical_field": str(details.get("canonical_field") or ""),
+                "confidence": round(float(details.get("confidence") or 0.0), 6),
+                "matched_token": str(details.get("matched_token") or ""),
+                "match_strategy": str(details.get("match_strategy") or "unresolved"),
+                "alternatives": list(details.get("alternatives") or []),
             }
         )
     return out

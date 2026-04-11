@@ -35,6 +35,12 @@
           "description": {
             "type": "string"
           },
+          "template_expected_profile": {
+            "type": "string"
+          },
+          "blank_output_expected": {
+            "type": "boolean"
+          },
           "template_format": {
             "type": "string"
           },

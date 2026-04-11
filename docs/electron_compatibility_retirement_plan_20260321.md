@@ -69,7 +69,7 @@ Deliverables:
 Inventory:
 
 - [electron_capability_inventory_20260321.md](electron_capability_inventory_20260321.md)
-- [fallback_retirement_backlog_20260322.md](fallback_retirement_backlog_20260322.md)
+- [archive/fallback_retirement_backlog_20260322.md](archive/fallback_retirement_backlog_20260322.md)
 
 Exit:
 

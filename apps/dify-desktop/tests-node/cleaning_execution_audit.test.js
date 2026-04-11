@@ -31,6 +31,14 @@ test("executionAuditFields extracts stable cleaning rollout fields", () => {
     shadow_compare_status: "matched",
     shadow_compare_mismatch_count: 0,
     rust_v2_used: false,
+    template: "",
+    template_expected_profile: "",
+    requested_profile: "",
+    recommended_profile: "",
+    profile_mismatch: false,
+    blocking_reason_codes: [],
+    blank_output_expected: undefined,
+    zero_output_unexpected: undefined,
   });
 });
 
@@ -64,6 +72,8 @@ test("appendRunModeAuditEntry writes one normalized jsonl line", () => {
   assert.equal(parsed.execution_mode, "rust_v2");
   assert.equal(parsed.requested_rust_v2_mode, "shadow");
   assert.equal(parsed.shadow_compare_status, "matched");
+  assert.equal(parsed.requested_profile, "");
+  assert.deepEqual(parsed.blocking_reason_codes, []);
   assert.equal(entry.execution_mode, "rust_v2");
 });
 
@@ -107,4 +117,6 @@ test("buildCleaningShadowRolloutEvidence produces stable acceptance evidence", (
   assert.equal(evidence.requested_rust_v2_mode, "shadow");
   assert.equal(evidence.shadow_compare.status, "matched");
   assert.equal(evidence.execution.execution_audit_schema, "python_cleaning.audit.v1");
+  assert.equal(evidence.quality_summary.requested_profile, "");
+  assert.deepEqual(evidence.quality_summary.blocking_reason_codes, []);
 });

@@ -39,9 +39,9 @@ test("workflow audit mirror support no longer writes local mirrors after retirem
   const support = createWorkflowAuditMirrorSupport({
     appendAudit: (action, detail) => localAudit.push({ action, detail }),
     appendRunHistory: (run, payload, config) => localRuns.push({ run, payload, config }),
-    loadConfig: () => ({ mode: "offline_local", workflowRunAuditProvider: "local_legacy" }),
+    loadConfig: () => ({ mode: "offline_local", workflowRunAuditProvider: "unsupported_provider" }),
     workflowRunAuditStore: {
-      resolveProvider: () => "local_legacy",
+      resolveProvider: () => "unsupported_provider",
       mirrorAudit: async (action, detail) => remoteAudit.push({ action, detail }),
       mirrorRun: async (run, payload, config) => remoteRuns.push({ run, payload, config }),
     },

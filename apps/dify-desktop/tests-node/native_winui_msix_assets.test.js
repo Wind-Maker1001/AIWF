@@ -22,7 +22,6 @@ test("native winui msix packaging assets stay wired", () => {
   assert.match(msixScript, /AppInstaller/);
   assert.match(msixScript, /Install_AIWF_Native_WinUI_MSIX\.ps1/);
   assert.match(msixScript, /Add-AppxPackage/);
-  assert.match(msixScript, /SkipFallbackGovernanceGate/);
   assert.match(msixScript, /SkipGovernanceControlPlaneBoundaryGate/);
   assert.match(msixScript, /export_governance_capabilities\.ps1/);
   assert.match(msixScript, /SkipGovernanceStoreSchemaVersionsGate/);

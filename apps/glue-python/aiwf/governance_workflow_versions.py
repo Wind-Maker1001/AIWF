@@ -37,10 +37,10 @@ def _clone(value: Any) -> Any:
     return json.loads(json.dumps(value))
 
 
-def validate_workflow_graph(graph: Any) -> Dict[str, Any]:
-    if not isinstance(graph, dict):
-        raise ValueError("workflow version graph must be an object")
-    return _clone(graph)
+def validate_workflow_definition(workflow_definition: Any) -> Dict[str, Any]:
+    if not isinstance(workflow_definition, dict):
+        raise ValueError("workflow version workflow_definition must be an object")
+    return _clone(workflow_definition)
 
 
 def resolve_workflow_definition(
@@ -52,11 +52,7 @@ def resolve_workflow_definition(
     workflow_definition = source.get("workflow_definition")
     if workflow_definition is None:
         workflow_definition = current.get("workflow_definition")
-    if workflow_definition is None:
-        workflow_definition = source.get("graph")
-    if workflow_definition is None:
-        workflow_definition = current.get("graph")
-    return validate_workflow_graph(workflow_definition)
+    return validate_workflow_definition(workflow_definition)
 
 
 def validate_version_id(value: str) -> str:

@@ -72,6 +72,35 @@ async function withGovernanceMock(runItems, fn) {
       });
       return;
     }
+    if (req.method === 'POST' && url.pathname === '/operators/workflow_contract_v1/validate') {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += String(chunk || '');
+      });
+      req.on('end', () => {
+        const payload = body ? JSON.parse(body) : {};
+        const workflowDefinition = payload?.workflow_definition && typeof payload.workflow_definition === 'object'
+          ? payload.workflow_definition
+          : {};
+        governanceJson(res, 200, {
+          ok: true,
+          valid: true,
+          status: 'valid',
+          graph_contract: 'contracts/workflow/workflow.schema.json',
+          error_item_contract: 'contracts/desktop/node_config_validation_errors.v1.json',
+          notes: [],
+          error_items: [],
+          normalized_workflow_definition: {
+            ...workflowDefinition,
+            workflow_id: String(workflowDefinition.workflow_id || ''),
+            version: String(workflowDefinition.version || '1.0.0'),
+            nodes: Array.isArray(workflowDefinition.nodes) ? workflowDefinition.nodes : [],
+            edges: Array.isArray(workflowDefinition.edges) ? workflowDefinition.edges : [],
+          },
+        });
+      });
+      return;
+    }
     governanceJson(res, 404, { ok: false, error: `mock route not found: ${req.method} ${url.pathname}` });
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -475,11 +504,11 @@ test('minimap element exists and has size', async () => {
 test('save/load workflow via mock dialog path', async () => {
   await withGovernanceMock([], async (glueUrl) => {
     const { electronApp, page } = await openWorkflow({
-      env: { AIWF_GLUE_URL: glueUrl },
+      env: { AIWF_GLUE_URL: glueUrl, AIWF_ACCEL_URL: glueUrl },
     });
     await page.evaluate(async (nextGlueUrl) => {
       const cfg = await window.aiwfDesktop.getConfig();
-      await window.aiwfDesktop.saveConfig({ ...cfg, glueUrl: nextGlueUrl });
+      await window.aiwfDesktop.saveConfig({ ...cfg, glueUrl: nextGlueUrl, accelUrl: nextGlueUrl });
     }, glueUrl);
     const fp = path.join(os.tmpdir(), `aiwf_workflow_${Date.now()}.json`);
     const saved = await page.evaluate(async (filePath) => {
@@ -499,7 +528,7 @@ test('save/load workflow via mock dialog path', async () => {
       return await window.aiwfDesktop.loadWorkflow({ mock: true, path: filePath });
     }, fp);
     expect(loaded && loaded.ok).toBeTruthy();
-    expect(loaded.graph && loaded.graph.workflow_id).toBe('t1');
+    expect(loaded.workflow_definition && loaded.workflow_definition.workflow_id).toBe('t1');
     await electronApp.close();
   });
 });

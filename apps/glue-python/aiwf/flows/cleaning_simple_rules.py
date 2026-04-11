@@ -13,6 +13,15 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
     to_decimal = hooks["to_decimal"]
     normalize_key = hooks["normalize_key"]
     quantize_decimal = hooks["quantize_decimal"]
+    try:
+        sample_limit = max(0, min(100, int(params.get("audit_sample_limit", 5) or 5)))
+    except Exception:
+        sample_limit = 5
+
+    def add_reason_sample(reason: str, payload: Dict[str, Any]) -> None:
+        items = reason_samples.setdefault(reason, [])
+        if len(items) < sample_limit:
+            items.append(dict(payload))
 
     if is_generic_rules_enabled(params):
         return clean_rows_generic(raw_rows, params)
@@ -42,6 +51,13 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
     negative_filtered_rows = 0
     min_filtered_rows = 0
     max_filtered_rows = 0
+    reason_samples: Dict[str, List[Dict[str, Any]]] = {
+        "invalid_object": [],
+        "cast_failed": [],
+        "required_missing": [],
+        "filter_rejected": [],
+        "duplicate_removed": [],
+    }
 
     for row in raw_rows:
         obj = {normalize_key(k): v for k, v in dict(row or {}).items()}
@@ -50,22 +66,64 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
         if id_val is None:
             invalid_id_rows += 1
             invalid_rows += 1
+            add_reason_sample(
+                "required_missing",
+                {
+                    "reason": "invalid_id",
+                    "field": normalize_key(id_field),
+                    "row": dict(obj),
+                },
+            )
             continue
         if amount_val is None:
             invalid_amount_rows += 1
             invalid_rows += 1
+            add_reason_sample(
+                "required_missing",
+                {
+                    "reason": "invalid_amount",
+                    "field": normalize_key(amount_field),
+                    "row": dict(obj),
+                },
+            )
             continue
         if drop_negative and amount_val < 0:
             negative_filtered_rows += 1
             filtered_rows += 1
+            add_reason_sample(
+                "filter_rejected",
+                {
+                    "reason": "filtered_negative",
+                    "field": "amount",
+                    "row": {"id": id_val, "amount": float(amount_val)},
+                },
+            )
             continue
         if min_amount is not None and amount_val < min_amount:
             min_filtered_rows += 1
             filtered_rows += 1
+            add_reason_sample(
+                "filter_rejected",
+                {
+                    "reason": "filtered_min_amount",
+                    "field": "amount",
+                    "threshold": float(min_amount),
+                    "row": {"id": id_val, "amount": float(amount_val)},
+                },
+            )
             continue
         if max_amount is not None and amount_val > max_amount:
             max_filtered_rows += 1
             filtered_rows += 1
+            add_reason_sample(
+                "filter_rejected",
+                {
+                    "reason": "filtered_max_amount",
+                    "field": "amount",
+                    "threshold": float(max_amount),
+                    "row": {"id": id_val, "amount": float(amount_val)},
+                },
+            )
             continue
         normalized.append({"id": id_val, "amount": float(quantize_decimal(amount_val, digits))})
 
@@ -77,8 +135,26 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
             for row in normalized:
                 if row["id"] not in deduped:
                     deduped[row["id"]] = row
+                else:
+                    add_reason_sample(
+                        "duplicate_removed",
+                        {
+                            "reason": "deduplicate_removed",
+                            "deduplicate_keep": dedup_keep,
+                            "row": dict(row),
+                        },
+                    )
         else:
             for row in normalized:
+                if row["id"] in deduped:
+                    add_reason_sample(
+                        "duplicate_removed",
+                        {
+                            "reason": "deduplicate_removed",
+                            "deduplicate_keep": dedup_keep,
+                            "row": dict(deduped[row["id"]]),
+                        },
+                    )
                 deduped[row["id"]] = row
         cleaned = list(deduped.values())
         duplicate_rows_removed = len(normalized) - len(cleaned)
@@ -127,4 +203,4 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
             "deduplicate_removed": duplicate_rows_removed,
         },
     }
-    return {"rows": cleaned, "quality": quality}
+    return {"rows": cleaned, "quality": quality, "reason_samples": reason_samples}

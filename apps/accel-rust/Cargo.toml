@@ -9,6 +9,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+sha1 = "0.10"
 parquet = { version = "53", features = ["json"] }
 regex = "1"
 ureq = { version = "2", features = ["json"] }

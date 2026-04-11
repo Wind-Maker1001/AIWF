@@ -95,7 +95,7 @@ function createWorkflowAppPublishUi(els, deps = {}) {
     }
     const out = await window.aiwfDesktop.publishWorkflowApp({
       name,
-      graph: authoringGraph,
+      workflow_definition: authoringGraph,
       params_schema: schema,
       template_policy: {
         version: 1,

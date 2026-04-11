@@ -55,7 +55,7 @@ test("workflow version store honors glue env override in offline_local mode", ()
   assert.equal(store.resolveProvider({ mode: "offline_local" }), GLUE_PROVIDER);
 });
 
-test("workflow version store rejects retired local legacy provider", async () => {
+test("workflow version store rejects unsupported provider override", async () => {
   const store = createWorkflowVersionStore({
     loadConfig: () => ({ mode: "offline_local" }),
   });
@@ -64,10 +64,10 @@ test("workflow version store rejects retired local legacy provider", async () =>
 
   const saved = await store.recordVersion(makeVersion("ver_local", graphA()), {
     mode: "offline_local",
-    workflowVersionProvider: "local_legacy",
+    workflowVersionProvider: "unsupported_provider",
   });
   assert.equal(saved.ok, false);
-  assert.match(String(saved.error || ""), /retired/i);
+  assert.match(String(saved.error || ""), /unsupported|provider/i);
 });
 
 test("workflow version store uses glue provider for backend-owned snapshots", async () => {

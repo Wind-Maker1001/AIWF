@@ -14,7 +14,6 @@ param(
   [switch]$SkipWorkflowContractSyncGate,
   [switch]$SkipGovernanceControlPlaneBoundaryGate,
   [switch]$SkipOperatorCatalogSyncGate,
-  [switch]$SkipFallbackGovernanceGate,
   [switch]$SkipGovernanceStoreSchemaVersionsGate,
   [switch]$SkipLocalWorkflowStoreSchemaVersionsGate,
   [switch]$SkipTemplatePackContractSyncGate,
@@ -130,7 +129,6 @@ $workflowGate = Join-Path $PSScriptRoot "check_workflow_contract_sync.ps1"
 $governanceCapabilityExportScript = Join-Path $PSScriptRoot "export_governance_capabilities.ps1"
 $governanceControlPlaneBoundaryGate = Join-Path $PSScriptRoot "check_governance_control_plane_boundary.ps1"
 $operatorGate = Join-Path $PSScriptRoot "check_operator_catalog_sync.ps1"
-$fallbackGate = Join-Path $PSScriptRoot "check_fallback_governance.ps1"
 $governanceStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_governance_store_schema_versions.ps1"
 $localWorkflowStoreSchemaVersionsGate = Join-Path $PSScriptRoot "check_local_workflow_store_schema_versions.ps1"
 $templatePackContractSyncGate = Join-Path $PSScriptRoot "check_template_pack_contract_sync.ps1"
@@ -167,12 +165,6 @@ if (-not $SkipOperatorCatalogSyncGate) {
   powershell -ExecutionPolicy Bypass -File $operatorGate
   if ($LASTEXITCODE -ne 0) { throw "msix blocked by operator catalog gate" }
   Ok "operator catalog msix gate passed"
-}
-if (-not $SkipFallbackGovernanceGate) {
-  Info "running fallback governance msix gate"
-  powershell -ExecutionPolicy Bypass -File $fallbackGate
-  if ($LASTEXITCODE -ne 0) { throw "msix blocked by fallback governance gate" }
-  Ok "fallback governance msix gate passed"
 }
 if (-not $SkipGovernanceStoreSchemaVersionsGate) {
   Info "running governance store schema version msix gate"

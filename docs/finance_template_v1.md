@@ -3,11 +3,20 @@
 ## 目的
 `finance_report_v1` 用于把财务报表类原始数据清洗成可计算、可复核的结构化数据，重点约束资产负债表/利润表/现金流相关金额字段。
 
+边界说明：
+
+- `finance_report_v1` 面向财报/报表类金额字段，不覆盖银行流水/对账单语义。
+- 银行流水请改用 `bank_statement_v1`，见 [docs/bank_statement_template_v1.md](bank_statement_template_v1.md)。
+
 ## 启用方式
 - GUI: 在“数据模板”选择 `财报模板 v1（资产/利润/现金流）`。
 - API payload: `params.cleaning_template = "finance_report_v1"`。
 - 模板主入口：`rules/templates/finance_report_v1.cleaning_spec_v2.json`。
 - 兼容入口：`rules/templates/generic_finance_strict.json` 仍保留，但会先编译为 `cleaning_spec.v2` 再执行。
+- 模板元数据：
+  - `template_expected_profile = finance_statement`
+  - `blank_output_expected = false`
+  - 模板驱动运行默认 `profile_mismatch_action = block`
 
 ## 运行前预检（GUI）
 - 点击 `模板预检`，会先做必填字段检查、金额可转换率检查、质量门槛预判。
@@ -48,6 +57,7 @@
 - 报错“必填字段缺失”：确认是否存在 `id`/`amount` 或对应重命名来源字段。
 - 报错“类型转换失败”：检查金额列是否包含非数值字符（如逗号、中文单位、空格）。
 - 输出为空被拒绝：说明过滤条件过严或输入数据异常，先检查 `amount` 范围。
+- 报错 `profile_mismatch_blocked`：当前输入更像证据/文本数据而不是财报数据；优先改用 `debate_evidence_v1` 或对应表格模板，而不是继续强跑 finance 模板。
 
 ## 扩展方式
 - 如需按你自己的财报字段命名，优先新增 `cleaning_spec.v2` 模板 JSON。

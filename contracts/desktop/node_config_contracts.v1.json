@@ -105,6 +105,25 @@
       ]
     },
     {
+      "type": "postprocess_rows_v1",
+      "quality": "nested_shape_constrained",
+      "validators": [
+        { "kind": "array", "path": "rows" },
+        { "kind": "boolean", "path": "standardize_evidence" },
+        { "kind": "json_object", "path": "evidence_schema" },
+        { "kind": "string", "path": "chunk_mode" },
+        { "kind": "string", "path": "chunk_field" },
+        { "kind": "integer_min", "path": "chunk_max_chars", "min": 1 },
+        { "kind": "boolean", "path": "detect_conflicts" },
+        { "kind": "string", "path": "conflict_topic_field" },
+        { "kind": "string", "path": "conflict_stance_field" },
+        { "kind": "string", "path": "conflict_text_field" },
+        { "kind": "array", "path": "conflict_positive_words" },
+        { "kind": "array", "path": "conflict_negative_words" },
+        { "kind": "json_object", "path": "schema_hint" }
+      ]
+    },
+    {
       "type": "join_rows_v2",
       "quality": "enum_constrained",
       "validators": [
@@ -120,7 +139,8 @@
       "quality": "nested_shape_constrained",
       "validators": [
         { "kind": "array", "path": "rows" },
-        { "kind": "rules_object", "path": "rules" }
+        { "kind": "rules_object", "path": "rules" },
+        { "kind": "json_object", "path": "metrics" }
       ]
     },
     {

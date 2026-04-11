@@ -1,0 +1,96 @@
+{
+  "schema_version": "cleaning_spec.v2",
+  "ingest": {},
+  "schema": {
+    "canonical_profile": "customer_ledger",
+    "defaults": {},
+    "unique_keys": ["phone", "biz_date", "amount"],
+    "header_aliases": {},
+    "auto_normalize_headers": false,
+    "header_normalizer": "none"
+  },
+  "transform": {
+    "rename_map": {
+      "CustomerName": "customer_name",
+      "Cust Name": "customer_name",
+      "Customer Name": "customer_name",
+      "Name": "customer_name",
+      "Customer": "customer_name",
+      "客户名称": "customer_name",
+      "客户": "customer_name",
+      "姓名": "customer_name",
+      "联系人": "customer_name",
+      "联系人姓名": "customer_name",
+      "Phone": "phone",
+      "Mobile": "phone",
+      "Mobile No": "phone",
+      "Telephone": "phone",
+      "Tel No": "phone",
+      "手机": "phone",
+      "手机号": "phone",
+      "电话号码": "phone",
+      "联系电话": "phone",
+      "座机": "phone",
+      "City": "city",
+      "City Name": "city",
+      "城市": "city",
+      "所在城市": "city",
+      "Amount": "amount",
+      "Amt": "amount",
+      "金额": "amount",
+      "金额（万元）": "amount",
+      "金额(万元)": "amount",
+      "Biz Date": "biz_date",
+      "Biz Dt": "biz_date",
+      "业务日期": "biz_date",
+      "发生日期": "biz_date",
+      "交易日期": "biz_date"
+    },
+    "casts": {
+      "customer_name": "string",
+      "phone": "string",
+      "city": "string",
+      "amount": "float",
+      "biz_date": "string"
+    },
+    "required_fields": ["customer_name", "phone", "amount", "biz_date"],
+    "default_values": {},
+    "include_fields": ["customer_name", "phone", "city", "amount", "biz_date"],
+    "exclude_fields": [],
+    "filters": [
+      { "field": "phone", "op": "regex", "value": "^[0-9+\\-\\s]{6,20}$" }
+    ],
+    "deduplicate_by": ["phone", "biz_date", "amount"],
+    "deduplicate_keep": "first",
+    "sort_by": [
+      { "field": "biz_date", "order": "asc" },
+      { "field": "customer_name", "order": "asc" }
+    ],
+    "aggregate": {},
+    "null_values": [],
+    "trim_strings": true,
+    "computed_fields": {},
+    "string_ops": [],
+    "date_ops": [],
+    "field_ops": []
+  },
+  "quality": {
+    "required_fields": ["customer_name", "phone", "amount", "biz_date"],
+    "gates": {
+      "max_required_missing_ratio": 0.0,
+      "duplicate_key_ratio_max": 0.1,
+      "numeric_parse_rate_min": 0.95,
+      "date_parse_rate_min": 0.95,
+      "allow_empty_output": false
+    },
+    "image_rules": {},
+    "xlsx_rules": {}
+  },
+  "artifacts": {},
+  "audit": {
+    "enabled": true,
+    "sample_limit": 5,
+    "lineage": true,
+    "warnings": []
+  }
+}

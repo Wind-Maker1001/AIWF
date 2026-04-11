@@ -354,6 +354,47 @@
       ]
     },
     {
+      "type": "postprocess_rows_v1",
+      "valid_cases": [
+        {
+          "id": "postprocess_rows_v1_valid_config",
+          "config": {
+            "rows": [],
+            "standardize_evidence": true,
+            "evidence_schema": {},
+            "chunk_mode": "sentence",
+            "chunk_field": "claim_text",
+            "chunk_max_chars": 500,
+            "detect_conflicts": true,
+            "conflict_topic_field": "topic",
+            "conflict_stance_field": "stance",
+            "conflict_text_field": "claim_text",
+            "conflict_positive_words": ["support"],
+            "conflict_negative_words": ["oppose"],
+            "schema_hint": {}
+          }
+        }
+      ],
+      "invalid_cases": [
+        {
+          "id": "postprocess_rows_v1_invalid_chunk_max_chars",
+          "config": {
+            "rows": [],
+            "chunk_max_chars": 0
+          },
+          "expected_error_contains": [
+            "workflow.nodes[0].config.chunk_max_chars must be >= 1"
+          ],
+          "expected_error_items": [
+            {
+              "path": "workflow.nodes[0].config.chunk_max_chars",
+              "code": "min_value"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "type": "lineage_v3",
       "valid_cases": [
         {
@@ -1116,7 +1157,14 @@
           "id": "quality_check_v2_valid_rules",
           "config": {
             "rows": [],
-            "rules": {}
+            "rules": {},
+            "metrics": {
+              "required_missing_ratio": 0,
+              "numeric_parse_rate": 1,
+              "date_parse_rate": 1,
+              "duplicate_key_ratio": 0,
+              "blank_row_ratio": 0
+            }
           }
         }
       ],

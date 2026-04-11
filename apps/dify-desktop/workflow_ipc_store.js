@@ -279,7 +279,7 @@ function registerWorkflowStoreIpc(ctx, deps) {
         workflow_name: String(normalizedPayload?.name || safeName),
         workflow_id: String(normalizedPayload?.workflow_id || "custom"),
         path: filePath,
-        graph: normalizedPayload,
+        workflow_definition: normalizedPayload,
       };
       const versionOut = await workflowVersionStore.recordVersion(versionItem);
       if (!versionOut?.ok) {
@@ -331,9 +331,9 @@ function registerWorkflowStoreIpc(ctx, deps) {
       }
       if (canceled || !filePaths || !filePaths.length) return { ok: false, canceled: true };
       const filePath = filePaths[0];
-      const graph = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      const workflowDefinition = JSON.parse(fs.readFileSync(filePath, "utf8"));
       if (validateGraphContract) {
-        const validated = await validateWorkflowDefinition(graph, {
+        const validated = await validateWorkflowDefinition(workflowDefinition, {
           allowVersionMigration: true,
           requireNonEmptyNodes: false,
           validationScope: "authoring",
@@ -343,14 +343,14 @@ function registerWorkflowStoreIpc(ctx, deps) {
           ok: true,
           canceled: false,
           path: filePath,
-          graph: validated?.normalized_workflow_definition && typeof validated.normalized_workflow_definition === "object"
+          workflow_definition: validated?.normalized_workflow_definition && typeof validated.normalized_workflow_definition === "object"
             ? validated.normalized_workflow_definition
-            : graph,
+            : workflowDefinition,
           notes: Array.isArray(validated?.notes) ? validated.notes : [],
         };
       }
       appendAudit("workflow_load", { path: filePath });
-      return { ok: true, canceled: false, path: filePath, graph };
+      return { ok: true, canceled: false, path: filePath, workflow_definition: workflowDefinition };
     } catch (error) {
       if (error && typeof error === "object" && String(error.code || "") === "workflow_contract_invalid") {
         return workflowContractFailure(error);

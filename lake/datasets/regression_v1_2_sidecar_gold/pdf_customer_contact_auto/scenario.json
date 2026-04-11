@@ -1,0 +1,19 @@
+{
+  "id": "pdf_customer_contact_auto",
+  "input_files": ["input.pdf"],
+  "header_mapping_mode": "auto",
+  "ocr_enabled": true,
+  "image_rules": {
+    "ocr_confidence_avg_min": 0.55,
+    "empty_text_block_ratio_max": 0.2
+  },
+  "engine_ok_any_of": ["docling", "tesseract", "paddleocr"],
+  "expected_detected_structure": "tabular",
+  "expected_recommended_profile": "customer_contact",
+  "expected_recommended_template_id": "customer_contact_v1",
+  "expected_signal_source": "table_cells",
+  "expected_header_mapping_fields": ["customer_name", "phone", "city"],
+  "forbidden_recommended_profiles": ["customer_ledger", "finance_statement", "bank_statement", "debate_evidence"],
+  "skip_row_compare": true,
+  "consistency_compare": false
+}

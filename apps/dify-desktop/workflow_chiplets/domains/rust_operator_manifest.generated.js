@@ -26,6 +26,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -43,6 +44,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -60,6 +62,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -77,6 +80,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -94,6 +98,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -111,6 +116,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -128,6 +134,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -145,6 +152,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -162,6 +170,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -179,6 +188,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -196,6 +206,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -213,6 +224,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -230,6 +242,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -247,6 +260,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": false,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -264,6 +278,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -281,6 +296,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -298,6 +314,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -315,6 +332,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -332,6 +350,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -349,6 +368,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -366,6 +386,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -383,6 +404,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -400,6 +422,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -417,6 +440,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -434,6 +458,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -451,6 +476,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -468,6 +494,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -485,6 +512,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -502,6 +530,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -519,6 +548,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -536,6 +566,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -553,6 +584,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -570,6 +602,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -587,6 +620,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -604,6 +638,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -621,6 +656,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -638,6 +674,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -655,6 +692,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -672,6 +710,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -689,6 +728,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -706,6 +746,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -723,6 +764,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -740,6 +782,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -757,6 +800,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": false,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -774,6 +818,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -791,6 +836,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -798,6 +844,24 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
       "cache": false,
       "checkpoint": false,
       "io_contract": false
+    }
+  },
+  "postprocess_rows_v1": {
+    "operator": "postprocess_rows_v1",
+    "version": "v1",
+    "domain": "transform",
+    "source_module": "misc_ops",
+    "published": true,
+    "workflow_exposable": true,
+    "desktop_exposable": true,
+    "palette_hidden": true,
+    "direct_http_only": false,
+    "internal_only": false,
+    "capabilities": {
+      "streaming": false,
+      "cache": false,
+      "checkpoint": false,
+      "io_contract": true
     }
   },
   "provenance_sign_v1": {
@@ -808,6 +872,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -825,6 +890,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -842,6 +908,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -859,6 +926,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -876,6 +944,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -893,6 +962,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -910,6 +980,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -927,6 +998,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -944,6 +1016,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -961,6 +1034,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -978,6 +1052,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": false,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -995,6 +1070,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1012,6 +1088,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1029,6 +1106,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1046,6 +1124,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1063,6 +1142,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": false,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -1080,6 +1160,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": false,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -1097,6 +1178,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": false,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -1114,6 +1196,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1131,6 +1214,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1148,6 +1232,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1165,6 +1250,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1182,6 +1268,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1199,6 +1286,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1216,6 +1304,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1233,6 +1322,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1250,6 +1340,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1267,6 +1358,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1284,6 +1376,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1301,6 +1394,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1318,6 +1412,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -1335,6 +1430,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1352,6 +1448,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1369,6 +1466,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": false,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "contracts": {
@@ -1393,6 +1491,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1410,6 +1509,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1427,6 +1527,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1444,6 +1545,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1461,6 +1563,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1478,6 +1581,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1495,6 +1599,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1512,6 +1617,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1529,6 +1635,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1546,6 +1653,7 @@ const KNOWN_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": false,
     "desktop_exposable": false,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": true,
     "capabilities": {
@@ -1567,6 +1675,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1584,6 +1693,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1601,6 +1711,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1618,6 +1729,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1635,6 +1747,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1652,6 +1765,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1669,6 +1783,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1686,6 +1801,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1703,6 +1819,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1720,6 +1837,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1737,6 +1855,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1754,6 +1873,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1771,6 +1891,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1788,6 +1909,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1805,6 +1927,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1822,6 +1945,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1839,6 +1963,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1856,6 +1981,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1873,6 +1999,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1890,6 +2017,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1907,6 +2035,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1924,6 +2053,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1941,6 +2071,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1958,6 +2089,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1975,6 +2107,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -1992,6 +2125,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2009,6 +2143,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2026,6 +2161,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2043,6 +2179,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2060,6 +2197,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2077,6 +2215,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2094,6 +2233,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2111,6 +2251,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2128,6 +2269,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2145,6 +2287,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2162,6 +2305,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2169,6 +2313,24 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
       "cache": false,
       "checkpoint": false,
       "io_contract": false
+    }
+  },
+  "postprocess_rows_v1": {
+    "operator": "postprocess_rows_v1",
+    "version": "v1",
+    "domain": "transform",
+    "source_module": "misc_ops",
+    "published": true,
+    "workflow_exposable": true,
+    "desktop_exposable": true,
+    "palette_hidden": true,
+    "direct_http_only": false,
+    "internal_only": false,
+    "capabilities": {
+      "streaming": false,
+      "cache": false,
+      "checkpoint": false,
+      "io_contract": true
     }
   },
   "provenance_sign_v1": {
@@ -2179,6 +2341,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2196,6 +2359,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2213,6 +2377,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2230,6 +2395,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2247,6 +2413,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2264,6 +2431,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2281,6 +2449,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2298,6 +2467,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2315,6 +2485,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2332,6 +2503,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2349,6 +2521,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2366,6 +2539,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2383,6 +2557,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2400,6 +2575,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2417,6 +2593,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2434,6 +2611,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2451,6 +2629,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2468,6 +2647,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2485,6 +2665,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2502,6 +2683,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2519,6 +2701,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2536,6 +2719,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2553,6 +2737,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2570,6 +2755,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2587,6 +2773,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2604,6 +2791,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2621,6 +2809,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2638,6 +2827,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2655,6 +2845,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2672,6 +2863,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2689,6 +2881,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2706,6 +2899,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2723,6 +2917,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": true,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {
@@ -2740,6 +2935,7 @@ const DESKTOP_RUST_OPERATOR_METADATA = deepFreeze({
     "published": false,
     "workflow_exposable": true,
     "desktop_exposable": true,
+    "palette_hidden": false,
     "direct_http_only": false,
     "internal_only": false,
     "capabilities": {

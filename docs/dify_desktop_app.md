@@ -52,6 +52,9 @@ Current built-in template choices in the UI:
 - `default`
 - `debate_evidence_v1`
 - `finance_report_v1`
+- `bank_statement_v1`
+- `customer_contact_v1`
+- `customer_ledger_v1`
 
 Current Fluent variants in the UI:
 

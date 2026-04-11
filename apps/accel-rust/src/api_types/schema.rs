@@ -86,7 +86,9 @@ pub(crate) struct WorkflowReferenceRunV1Req {
     pub(crate) version_id: Option<String>,
     pub(crate) published_version_id: Option<String>,
     pub(crate) job_id: Option<String>,
+    #[allow(dead_code)]
     pub(crate) actor: Option<String>,
+    #[allow(dead_code)]
     pub(crate) ruleset_version: Option<String>,
     pub(crate) run_id: Option<String>,
     pub(crate) trace_id: Option<String>,

@@ -19,6 +19,7 @@ test("lite packaging manifest keeps workflow runtime files in sync", () => {
   const required = [...fullFiles].filter((entry) => (
     entry === "main_ipc_workflow.js"
       || entry === "workflow_contract.js"
+      || entry === "cleaning_execution_audit.js"
       || entry === "workflow_governance.js"
       || entry.startsWith("workflow_")
       || entry.startsWith("workflow_chiplets/")
@@ -33,6 +34,8 @@ test("lite packaging manifest keeps workflow runtime files in sync", () => {
 
   assert.ok(fullFiles.has("workflow_contract.js"), "full packaging manifest must include workflow_contract.js");
   assert.ok(liteFiles.has("workflow_contract.js"), "lite packaging manifest must include workflow_contract.js");
+  assert.ok(fullFiles.has("cleaning_execution_audit.js"), "full packaging manifest must include cleaning_execution_audit.js");
+  assert.ok(liteFiles.has("cleaning_execution_audit.js"), "lite packaging manifest must include cleaning_execution_audit.js");
 
   const hasDesktopContracts = (entry) => (
     entry

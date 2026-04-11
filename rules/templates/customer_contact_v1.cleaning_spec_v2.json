@@ -1,0 +1,81 @@
+{
+  "schema_version": "cleaning_spec.v2",
+  "ingest": {},
+  "schema": {
+    "canonical_profile": "customer_contact",
+    "defaults": {},
+    "unique_keys": ["phone"],
+    "header_aliases": {},
+    "auto_normalize_headers": false,
+    "header_normalizer": "none"
+  },
+  "transform": {
+    "rename_map": {
+      "CustomerName": "customer_name",
+      "Cust Name": "customer_name",
+      "Customer Name": "customer_name",
+      "Name": "customer_name",
+      "Customer": "customer_name",
+      "客户名称": "customer_name",
+      "客户": "customer_name",
+      "姓名": "customer_name",
+      "联系人": "customer_name",
+      "联系人姓名": "customer_name",
+      "Phone": "phone",
+      "Mobile": "phone",
+      "Mobile No": "phone",
+      "Telephone": "phone",
+      "Tel No": "phone",
+      "手机": "phone",
+      "手机号": "phone",
+      "电话号码": "phone",
+      "联系电话": "phone",
+      "座机": "phone",
+      "City": "city",
+      "City Name": "city",
+      "城市": "city",
+      "所在城市": "city"
+    },
+    "casts": {
+      "customer_name": "string",
+      "phone": "string",
+      "city": "string"
+    },
+    "required_fields": ["customer_name", "phone"],
+    "default_values": {},
+    "include_fields": ["customer_name", "phone", "city"],
+    "exclude_fields": [],
+    "filters": [
+      { "field": "phone", "op": "regex", "value": "^[0-9+\\-\\s]{6,20}$" }
+    ],
+    "deduplicate_by": ["phone"],
+    "deduplicate_keep": "first",
+    "sort_by": [
+      { "field": "customer_name", "order": "asc" }
+    ],
+    "aggregate": {},
+    "null_values": [],
+    "trim_strings": true,
+    "computed_fields": {},
+    "string_ops": [],
+    "date_ops": [],
+    "field_ops": []
+  },
+  "quality": {
+    "required_fields": ["customer_name", "phone"],
+    "gates": {
+      "max_required_missing_ratio": 0.0,
+      "duplicate_key_ratio_max": 0.1,
+      "allow_empty_output": false
+    },
+    "image_rules": {},
+    "xlsx_rules": {}
+  },
+  "artifacts": {},
+  "audit": {
+    "enabled": true,
+    "sample_limit": 5,
+    "lineage": true,
+    "warnings": []
+  }
+}

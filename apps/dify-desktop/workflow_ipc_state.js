@@ -1,8 +1,3 @@
-const WORKFLOW_TASK_QUEUE_SCHEMA_VERSION = "workflow_task_queue_store.v1";
-const WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION = "workflow_queue_control.v1";
-const WORKFLOW_NODE_CACHE_SCHEMA_VERSION = "workflow_node_cache_store.v1";
-const WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION = "workflow_node_cache_metrics.v1";
-const TEMPLATE_MARKETPLACE_SCHEMA_VERSION = "template_marketplace_store.v1";
 const TEMPLATE_PACK_ENTRY_SCHEMA_VERSION = "template_pack_entry.v1";
 
 function createWorkflowIpcStateSupport(ctx) {
@@ -69,15 +64,11 @@ function createWorkflowIpcStateSupport(ctx) {
     fs.writeFileSync(filePath, `${JSON.stringify(obj, null, 2)}\n`, "utf8");
   }
 
-  function normalizeVersionedJsonContainer(raw, schemaVersion, fallback, normalizePayload) {
+  function normalizeJsonContainer(raw, fallback, normalizePayload) {
     const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-    const normalized = typeof normalizePayload === "function"
+    return typeof normalizePayload === "function"
       ? normalizePayload(source)
       : { ...(fallback && typeof fallback === "object" ? fallback : {}), ...source };
-    return {
-      ...normalized,
-      schema_version: schemaVersion,
-    };
   }
 
   function deepClone(value) {
@@ -235,9 +226,8 @@ function createWorkflowIpcStateSupport(ctx) {
   }
 
   function loadWorkflowQueue() {
-    const obj = normalizeVersionedJsonContainer(
+    const obj = normalizeJsonContainer(
       readJsonFile(workflowQueuePath(), { items: [] }),
-      WORKFLOW_TASK_QUEUE_SCHEMA_VERSION,
       { items: [] },
       (source) => ({
         items: Array.isArray(source?.items) ? source.items : (Array.isArray(source) ? source : []),
@@ -248,7 +238,6 @@ function createWorkflowIpcStateSupport(ctx) {
 
   function saveWorkflowQueue(items) {
     writeJsonFile(workflowQueuePath(), {
-      schema_version: WORKFLOW_TASK_QUEUE_SCHEMA_VERSION,
       items: Array.isArray(items) ? items : [],
     });
   }
@@ -276,9 +265,8 @@ function createWorkflowIpcStateSupport(ctx) {
   }
 
   function loadQueueControl() {
-    const container = normalizeVersionedJsonContainer(
+    const container = normalizeJsonContainer(
       readJsonFile(workflowQueueControlPath(), defaultQueueControl()),
-      WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION,
       defaultQueueControl(),
       (source) => normalizeQueueControl(source)
     );
@@ -286,16 +274,12 @@ function createWorkflowIpcStateSupport(ctx) {
   }
 
   function saveQueueControl(control) {
-    writeJsonFile(workflowQueueControlPath(), {
-      schema_version: WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION,
-      ...normalizeQueueControl(control),
-    });
+    writeJsonFile(workflowQueueControlPath(), normalizeQueueControl(control));
   }
 
   function loadNodeCacheStore() {
-    const obj = normalizeVersionedJsonContainer(
+    const obj = normalizeJsonContainer(
       readJsonFile(nodeCachePath(), { items: {}, order: [] }),
-      WORKFLOW_NODE_CACHE_SCHEMA_VERSION,
       { items: {}, order: [] },
       (source) => ({
         items: source && typeof source.items === "object" && !Array.isArray(source.items) ? source.items : {},
@@ -316,17 +300,12 @@ function createWorkflowIpcStateSupport(ctx) {
       const key = order.shift();
       if (key) delete items[key];
     }
-    writeJsonFile(nodeCachePath(), {
-      schema_version: WORKFLOW_NODE_CACHE_SCHEMA_VERSION,
-      items,
-      order,
-    });
+    writeJsonFile(nodeCachePath(), { items, order });
   }
 
   function loadNodeCacheMetrics() {
-    const metrics = normalizeVersionedJsonContainer(
+    const metrics = normalizeJsonContainer(
       readJsonFile(nodeCacheMetricsPath(), {}),
-      WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION,
       {},
       (source) => ({
         hits: Number(source?.hits || 0),
@@ -347,7 +326,6 @@ function createWorkflowIpcStateSupport(ctx) {
 
   function saveNodeCacheMetrics(metrics) {
     writeJsonFile(nodeCacheMetricsPath(), {
-      schema_version: WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION,
       hits: Number(metrics?.hits || 0),
       misses: Number(metrics?.misses || 0),
       sets: Number(metrics?.sets || 0),
@@ -424,9 +402,8 @@ function createWorkflowIpcStateSupport(ctx) {
   }
 
   function listTemplateMarketplace(limit = 500) {
-    const obj = normalizeVersionedJsonContainer(
+    const obj = normalizeJsonContainer(
       readJsonFile(templateMarketplacePath(), { items: [] }),
-      TEMPLATE_MARKETPLACE_SCHEMA_VERSION,
       { items: [] },
       (source) => ({
         items: Array.isArray(source?.items) ? source.items.map(normalizeTemplatePackItem) : [],
@@ -438,7 +415,6 @@ function createWorkflowIpcStateSupport(ctx) {
 
   function saveTemplateMarketplace(items) {
     writeJsonFile(templateMarketplacePath(), {
-      schema_version: TEMPLATE_MARKETPLACE_SCHEMA_VERSION,
       items: Array.isArray(items) ? items.map(normalizeTemplatePackItem) : [],
     });
   }
@@ -494,10 +470,5 @@ function createWorkflowIpcStateSupport(ctx) {
 
 module.exports = {
   TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
-  TEMPLATE_MARKETPLACE_SCHEMA_VERSION,
-  WORKFLOW_NODE_CACHE_METRICS_SCHEMA_VERSION,
-  WORKFLOW_NODE_CACHE_SCHEMA_VERSION,
-  WORKFLOW_QUEUE_CONTROL_SCHEMA_VERSION,
-  WORKFLOW_TASK_QUEUE_SCHEMA_VERSION,
   createWorkflowIpcStateSupport,
 };

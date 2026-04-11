@@ -1,4 +1,5 @@
 import os
+import json
 import tempfile
 import unittest
 from unittest.mock import patch, Mock
@@ -20,6 +21,7 @@ from aiwf.flows.office_artifacts import (
     register_office_artifact,
     unregister_office_artifact,
 )
+from aiwf.governance_quality_rule_sets import save_quality_rule_set
 
 
 def make_job_context(job_root: str) -> dict[str, str]:
@@ -311,7 +313,7 @@ class CleaningFlowTests(unittest.TestCase):
                     params=with_job_context(
                         local_job_root,
                         office_outputs_enabled=False,
-                        disabled_core_artifacts=["csv", "json"],
+                        disabled_core_artifacts=["csv", "json", "jsonl"],
                         rows=[{"id": 1, "amount": 10.0}],
                     ),
                 )
@@ -385,6 +387,185 @@ class CleaningFlowTests(unittest.TestCase):
 
             artifact_kinds = [a["kind"] for a in out["artifacts"]]
             self.assertEqual(artifact_kinds, ["parquet"])
+
+    def test_run_cleaning_applies_quality_rule_set_and_writes_quality_summary_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                save_quality_rule_set(
+                    {
+                        "id": "finance_default",
+                        "name": "Finance Default",
+                        "rules": {"min_output_rows": 1},
+                    }
+                )
+                with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                    "aiwf.flows.cleaning._base_artifact_upsert"
+                ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                    "aiwf.flows.cleaning._base_step_fail"
+                ), patch(
+                    "aiwf.flows.cleaning._try_accel_cleaning",
+                    return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+                ), patch(
+                    "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+                ):
+                    out = cleaning.run_cleaning(
+                        job_id="job-quality-summary",
+                        actor="test",
+                        params=with_job_context(
+                            local_job_root,
+                            office_outputs_enabled=False,
+                            quality_rule_set_id="finance_default",
+                            rules={"use_rust_v2": False},
+                            rows=[{"id": "1", "amount": "10"}, {"id": "bad", "amount": "20"}],
+                        ),
+                    )
+
+            self.assertEqual(out["quality_summary"]["rule_set_provenance"]["resolved_id"], "finance_default")
+            self.assertEqual(out["quality_summary"]["engine_path"]["execution_mode"], "python_legacy")
+            quality_summary_artifact = next(a for a in out["artifacts"] if a["artifact_id"] == "quality_summary_json_001")
+            rejections_artifact = next(a for a in out["artifacts"] if a["artifact_id"] == "rejections_jsonl_001")
+            with open(quality_summary_artifact["path"], "r", encoding="utf-8") as f:
+                quality_summary_payload = json.load(f)
+            self.assertEqual(quality_summary_payload["schema_version"], "cleaning_quality_summary.v1")
+            self.assertEqual(quality_summary_payload["rule_set_provenance"]["resolved_id"], "finance_default")
+            with open(rejections_artifact["path"], "r", encoding="utf-8") as f:
+                rejection_lines = [json.loads(line) for line in f if line.strip()]
+            self.assertTrue(any(item["reason_category"] == "required_missing" for item in rejection_lines))
+
+    def test_run_cleaning_quality_rule_set_keeps_explicit_quality_rule_overrides(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                save_quality_rule_set(
+                    {
+                        "id": "finance_override",
+                        "name": "Finance Override",
+                        "rules": {"min_output_rows": 2},
+                    }
+                )
+                with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                    "aiwf.flows.cleaning._base_artifact_upsert"
+                ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                    "aiwf.flows.cleaning._base_step_fail"
+                ), patch(
+                    "aiwf.flows.cleaning._try_accel_cleaning",
+                    return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+                ), patch(
+                    "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+                ):
+                    out = cleaning.run_cleaning(
+                        job_id="job-quality-override",
+                        actor="test",
+                        params=with_job_context(
+                            local_job_root,
+                            office_outputs_enabled=False,
+                            quality_rule_set_id="finance_override",
+                            quality_rules={"min_output_rows": 1},
+                            rules={"use_rust_v2": False},
+                            rows=[{"id": "1", "amount": "10"}],
+                        ),
+                    )
+
+            self.assertEqual(out["profile"]["quality_gate"]["min_output_rows"], 1)
+            self.assertIn("min_output_rows", out["quality_summary"]["rule_set_provenance"]["override_keys"])
+
+    def test_run_cleaning_accel_outputs_still_emit_quality_summary_and_rejections(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+            accel_stage = os.path.join(tmp, "accel")
+            os.makedirs(accel_stage, exist_ok=True)
+            cleaned_parquet = os.path.join(accel_stage, "cleaned.parquet")
+            with open(cleaned_parquet, "wb") as f:
+                f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={
+                    "attempted": True,
+                    "ok": True,
+                    "response": {
+                        "outputs": {
+                            "cleaned_parquet": {"path": cleaned_parquet, "sha256": "parquet-sha"},
+                        },
+                        "profile": {"rows": 1, "cols": 2},
+                    },
+                },
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-accel-quality-summary",
+                    actor="test",
+                    params=with_job_context(
+                        local_job_root,
+                        office_outputs_enabled=False,
+                        rules={"use_rust_v2": False},
+                        rows=[{"id": "1", "amount": "10"}, {"id": "bad", "amount": "20"}],
+                    ),
+                )
+
+            self.assertFalse(out["accel"]["used_fallback"])
+            self.assertEqual(out["quality_summary"]["engine_path"]["execution_mode"], "accel_operator")
+            self.assertEqual(out["quality_summary"]["engine_path"]["row_transform_engine"], "python")
+            self.assertEqual(out["quality_summary"]["engine_path"]["materialization_engine"], "legacy_accel_cleaning")
+            artifact_ids = {artifact["artifact_id"] for artifact in out["artifacts"]}
+            self.assertIn("quality_summary_json_001", artifact_ids)
+            self.assertIn("rejections_jsonl_001", artifact_ids)
+
+    def test_quality_summary_engine_path_legacy_cleaning_flag_matches_accel_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+            accel_stage = os.path.join(tmp, "accel")
+            os.makedirs(accel_stage, exist_ok=True)
+            cleaned_parquet = os.path.join(accel_stage, "cleaned.parquet")
+            with open(cleaned_parquet, "wb") as f:
+                f.write(b"PAR1dataPAR1")
+
+            with patch("aiwf.flows.cleaning._base_step_start"), patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ), patch("aiwf.flows.cleaning._base_step_done"), patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ), patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={
+                    "attempted": True,
+                    "ok": True,
+                    "response": {
+                        "outputs": {
+                            "cleaned_parquet": {"path": cleaned_parquet, "sha256": "parquet-sha"},
+                        },
+                        "profile": {"rows": 1, "cols": 2},
+                    },
+                },
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-legacy-flag",
+                    actor="test",
+                    params=with_job_context(
+                        local_job_root,
+                        office_outputs_enabled=False,
+                        rules={"use_rust_v2": False},
+                        rows=[{"id": "1", "amount": "10"}],
+                    ),
+                )
+
+            self.assertEqual(
+                out["quality_summary"]["engine_path"]["legacy_cleaning_operator_used"],
+                out["accel"]["legacy_cleaning_used"],
+            )
 
     def test_validate_cleaning_rules_ok(self):
         res = cleaning.validate_cleaning_rules(
@@ -507,6 +688,47 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertEqual(cleaned["quality"]["output_rows"], 1)
         self.assertEqual(cleaned["rows"][0]["name"], "alice")
         self.assertEqual(cleaned["rows"][0]["amount"], 12.4)
+
+    def test_clean_rows_generic_rules_supports_bank_statement_computed_amount(self):
+        raw_rows = [
+            {
+                "账号": "62220001",
+                "交易日期": "2026/03/01",
+                "借方金额": "120.50",
+                "贷方金额": "0",
+                "余额": "1000.00",
+                "流水号": "TXN-1",
+            }
+        ]
+        cleaned = cleaning._clean_rows(
+            raw_rows,
+            {
+                "rules": {
+                    "use_rust_v2": False,
+                    "platform_mode": "generic",
+                    "rename_map": {
+                        "账号": "account_no",
+                        "交易日期": "txn_date",
+                        "借方金额": "debit_amount",
+                        "贷方金额": "credit_amount",
+                        "余额": "balance",
+                        "流水号": "ref_no",
+                    },
+                    "casts": {
+                        "debit_amount": "float",
+                        "credit_amount": "float",
+                        "balance": "float",
+                    },
+                    "required_fields": ["account_no", "txn_date"],
+                    "computed_fields": {
+                        "amount": "sub($credit_amount,$debit_amount)",
+                    },
+                },
+            },
+        )
+        self.assertEqual(cleaned["rows"][0]["account_no"], "62220001")
+        self.assertEqual(cleaned["rows"][0]["txn_date"], "2026/03/01")
+        self.assertEqual(cleaned["rows"][0]["amount"], -120.5)
 
     def test_try_accel_cleaning_sends_params_payload(self):
         fake_resp = Mock()
@@ -1019,7 +1241,7 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertEqual(out["quality"].get("cleaning_spec_version"), "cleaning_spec.v2")
         self.assertEqual(out["execution_mode"], "rust_v2")
         self.assertEqual(out["eligibility_reason"], "eligible")
-        self.assertEqual(out["execution_audit"], {})
+        self.assertEqual(out["execution_audit"]["operator"], "transform_rows_v3")
 
     def test_clean_rows_use_rust_v2_for_generic_rules_after_spec_compile(self):
         fake_resp = Mock()

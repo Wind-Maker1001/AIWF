@@ -28,8 +28,11 @@ $requiredPaths = @(
   "/admin/reload_runtime_config",
   "/operators/compute_metrics",
   "/operators/transform_rows_v2",
+  "/operators/transform_rows_v3",
   "/operators/transform_rows_v2/stream",
+  "/operators/postprocess_rows_v1",
   "/operators/quality_check_v1",
+  "/operators/quality_check_v2",
   "/operators/aggregate_pushdown_v1",
   "/operators/plugin_exec_v1",
   "/operators/transform_rows_v2/submit",
@@ -61,8 +64,11 @@ $requiredClientFns = @(
   "def reload_runtime_config(",
   "def compute_metrics(",
   "def transform_rows_v2(",
+  "def transform_rows_v3(",
   "def transform_rows_v2_stream(",
+  "def postprocess_rows_v1(",
   "def quality_check_v1(",
+  "def quality_check_v2(",
   "def aggregate_pushdown_v1(",
   "def plugin_exec_v1(",
   "def submit_transform_rows_v2(",
@@ -96,6 +102,12 @@ if ($openapi -notmatch "TaskState:") {
 }
 if ($openapi -notmatch "TransformRowsResp:") {
   throw "openapi schema missing: TransformRowsResp"
+}
+if ($openapi -notmatch "PostprocessRowsV1Req:") {
+  throw "openapi schema missing: PostprocessRowsV1Req"
+}
+if ($openapi -notmatch "QualityCheckV2Req:") {
+  throw "openapi schema missing: QualityCheckV2Req"
 }
 if ($openapi -notmatch "StreamWindowV2Req:") {
   throw "openapi schema missing: StreamWindowV2Req"

@@ -103,6 +103,8 @@ test("operator manifest export writes a machine-readable Rust authority file", (
     assert.ok(Array.isArray(rendererModule.DESKTOP_RUST_OPERATOR_TYPES));
     assert.equal(rendererModule.DESKTOP_RUST_OPERATOR_TYPES.length, payload.summary.desktop_exposable_count);
     assert.deepEqual(rendererModule.DESKTOP_RUST_OPERATOR_TYPES, desktopModule.DESKTOP_RUST_OPERATOR_TYPES);
+    assert.equal(rendererModule.DESKTOP_RUST_OPERATOR_TYPES.includes("postprocess_rows_v1"), true);
+    assert.equal(rendererModule.DESKTOP_RUST_OPERATOR_METADATA.postprocess_rows_v1.palette_hidden, true);
     const stdoutPayload = parseJsonLine(`${result.stdout}\n${result.stderr}`);
     assert.ok(stdoutPayload, `expected structured JSON payload in output:\n${result.stdout}\n${result.stderr}`);
     assert.match(stdoutPayload.schemaPath, /operators_manifest\.schema\.json/i);

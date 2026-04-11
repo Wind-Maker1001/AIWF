@@ -87,7 +87,13 @@ test("offline engine config loads cleaning_spec.v2 template entries from registr
     "office_layouts_desktop.json": { schema_version: "office_layout_catalog.v1", layouts: {} },
     "cleaning_templates_desktop.json": {
       schema_version: "cleaning_template_registry.v1",
-      templates: [{ id: "finance_report_v1", file: "finance_report_v1.cleaning_spec_v2.json", label: "Finance Spec" }],
+      templates: [{
+        id: "finance_report_v1",
+        file: "finance_report_v1.cleaning_spec_v2.json",
+        label: "Finance Spec",
+        template_expected_profile: "finance_statement",
+        blank_output_expected: false,
+      }],
     },
     "finance_report_v1.cleaning_spec_v2.json": {
       schema_version: "cleaning_spec.v2",
@@ -101,10 +107,14 @@ test("offline engine config loads cleaning_spec.v2 template entries from registr
     const templates = config.listCleaningTemplates().templates;
     const finance = templates.find((item) => item.id === "finance_report_v1");
     assert.equal(finance.template_format, "cleaning_spec_v2");
+    assert.equal(finance.template_expected_profile, "finance_statement");
+    assert.equal(finance.blank_output_expected, false);
     assert.equal(finance.cleaning_spec_v2.schema_version, "cleaning_spec.v2");
     const resolved = config.resolveCleaningTemplateParams({ cleaning_template: "finance_report_v1" });
     assert.equal(resolved.cleaning_spec_v2.schema.canonical_profile, "finance_statement");
     assert.equal(resolved.quality_rules.min_output_rows, 1);
+    assert.equal(resolved.template_expected_profile, "finance_statement");
+    assert.equal(resolved.blank_output_expected, false);
   });
 });
 
