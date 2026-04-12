@@ -56,6 +56,11 @@ public sealed partial class MainWindow
         string Flow,
         JsonObject Payload);
 
+    private sealed record PrecheckRequestInput(
+        string BaseUrl,
+        string ApiKey,
+        JsonObject Payload);
+
     private RunRequestInput CollectRunRequestInput()
     {
         return new RunRequestInput(
@@ -67,6 +72,14 @@ public sealed partial class MainWindow
             BuildRunCleaningPayload());
     }
 
+    private PrecheckRequestInput CollectPrecheckRequestInput()
+    {
+        return new PrecheckRequestInput(
+            GetBridgeBaseUrlOrThrow(),
+            ApiKeyTextBox.Text.Trim(),
+            BuildCleaningPrecheckPayload());
+    }
+
     private async Task<RunFlowExecutionResult> ExecuteRunRequestAsync(RunRequestInput input)
     {
         return await _runFlowCoordinator.ExecuteAsync(
@@ -76,6 +89,26 @@ public sealed partial class MainWindow
             input.JobId,
             input.Flow,
             input.Payload);
+    }
+
+    private bool ValidatePrecheckInputs(out string message)
+    {
+        ResetValidationVisuals();
+        var hasError = false;
+        if (string.IsNullOrWhiteSpace(BridgeUrlTextBox.Text))
+        {
+            SetInputError(BridgeUrlTextBox, true);
+            hasError = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(InputCsvTextBox.Text))
+        {
+            SetInputError(InputCsvTextBox, true);
+            hasError = true;
+        }
+
+        message = hasError ? "预检需要桥接地址和输入路径。" : string.Empty;
+        return !hasError;
     }
 
     private bool TryApplyRunExecutionResult(RunFlowExecutionResult exec)
@@ -155,6 +188,45 @@ public sealed partial class MainWindow
         }
     }
 
+    private async void OnPrecheckCleaningClick(object sender, RoutedEventArgs e)
+    {
+        SyncViewModelFromInputs();
+        if (!ValidatePrecheckInputs(out var validationMessage))
+        {
+            SetInlineStatus(validationMessage, InlineStatusTone.Error);
+            return;
+        }
+
+        await SetBusyAsync(true, "Submitting cleaning precheck request...", InlineStatusTone.Busy);
+        try
+        {
+            RunReferenceTextBlock.Text = "Preparing precheck...";
+            var input = CollectPrecheckRequestInput();
+            var response = await _runnerAdapter.PrecheckCleaningAsync(input.BaseUrl, input.ApiKey, input.Payload);
+            RawResponseTextBox.Text = PrettyJson(response.ToJsonString());
+            var presentation = CleaningPrecheckPresenter.Create(response);
+            RunReferenceTextBlock.Text = presentation.ReferenceText;
+            SetInlineStatus(
+                presentation.StatusText,
+                presentation.Action switch
+                {
+                    "allow" => InlineStatusTone.Success,
+                    "block" => InlineStatusTone.Error,
+                    _ => InlineStatusTone.Neutral,
+                });
+            SetActiveSection(NavSection.Results);
+        }
+        catch (Exception ex)
+        {
+            RunReferenceTextBlock.Text = "Precheck request failed. Check service status.";
+            SetInlineStatus($"Precheck request error: {ex.Message}", InlineStatusTone.Error);
+        }
+        finally
+        {
+            await SetBusyAsync(false, StatusTextBlock.Text, InferToneFromStatus());
+        }
+    }
+
     private void SyncViewModelFromInputs()
     {
         _viewModel.BridgeUrl = BridgeUrlTextBox.Text.Trim();
@@ -175,6 +247,14 @@ public sealed partial class MainWindow
         return RunPayloadBuilder.BuildCleaningPayload(input);
     }
 
+    private JsonObject BuildCleaningPrecheckPayload()
+    {
+        var input = new CleaningPrecheckPayloadInput(
+            InputCsvTextBox.Text.Trim(),
+            CleaningTemplateTextBox.Text.Trim());
+        return RunPayloadBuilder.BuildCleaningPrecheckPayload(input);
+    }
+
     private static string ReadComboValue(ComboBox comboBox)
     {
         if (comboBox.SelectedItem is ComboBoxItem item && item.Content is string value)
@@ -188,8 +268,10 @@ public sealed partial class MainWindow
     private Task SetBusyAsync(bool busy, string message, InlineStatusTone tone)
     {
         HealthButton.IsEnabled = !busy;
+        PrecheckCleaningButton.IsEnabled = !busy;
         RunCleaningButton.IsEnabled = !busy;
         QuickHealthButton.IsEnabled = !busy;
+        QuickPrecheckButton.IsEnabled = !busy;
         QuickRunButton.IsEnabled = !busy;
         SetInlineStatus(message, tone);
         return Task.CompletedTask;

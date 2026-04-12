@@ -184,6 +184,7 @@ try {
 
   $bridgeUrlTextBox = Wait-VisibleElement $window "BridgeUrlTextBox" $TimeoutSeconds
   $ownerTextBox = Wait-VisibleElement $window "OwnerTextBox" $TimeoutSeconds
+  $quickPrecheckButton = Wait-VisibleElement $window "QuickPrecheckButton" $TimeoutSeconds
   $canvasStatePath = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) "AIWF\\canvas-workflow.json"
   $canvasStateBackupPath = $canvasStatePath + ".uia-smoke-backup"
   if (Test-Path $canvasStateBackupPath) {
@@ -194,6 +195,8 @@ try {
     Move-Item -Force $canvasStatePath $canvasStateBackupPath
   }
 
+  Set-ElementValue $ownerTextBox "uia-smoke-owner" "OwnerTextBox"
+  Invoke-Element $quickPrecheckButton "QuickPrecheckButton"
   Set-ElementValue $ownerTextBox "uia-smoke-owner" "OwnerTextBox"
   Ok "workspace controls are visible and editable"
 

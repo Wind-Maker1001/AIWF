@@ -48,6 +48,15 @@ public sealed class WorkflowRunnerAdapter
         return new WorkflowHttpResult(response.StatusCode, response.IsSuccessStatusCode, body);
     }
 
+    public async Task<JsonObject> PrecheckCleaningAsync(
+        string baseUrl,
+        string? apiKey,
+        JsonObject payload,
+        CancellationToken cancellationToken = default)
+    {
+        return await PostJsonAsync(baseUrl, apiKey, "/cleaning/precheck", payload, cancellationToken);
+    }
+
     public async Task<JsonObject> PostJsonAsync(
         string baseUrl,
         string? apiKey,

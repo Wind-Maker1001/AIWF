@@ -97,6 +97,26 @@ Template/profile guardrails:
   - `blank_output_expected`
   - `zero_output_unexpected`
 
+Authoritative precheck bridge:
+- `POST /cleaning/precheck`
+- contract: `contracts/glue/cleaning_precheck.schema.json`
+- combines:
+  - `/ingest/extract` profile recommendation and header mapping
+  - template/runtime defaults from `cleaning_spec.v2`
+  - lightweight row-cleaning prediction without artifact materialization
+- response fields include:
+  - `precheck_action` (`allow|warn|block`)
+  - `requested_profile`
+  - `recommended_profile`
+  - `recommended_template_id`
+  - `profile_confidence`
+  - `profile_mismatch`
+  - `predicted_zero_output_unexpected`
+  - `blank_output_expected`
+  - `blocking_reason_codes`
+  - `issues`
+  - `suggestions`
+
 Cleaning local execution mode:
 - `AIWF_CLEANING_RUST_V2_MODE=off|shadow|default`
   - `off`: always return Python legacy result

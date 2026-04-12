@@ -123,6 +123,9 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("customer_ledger", caps["cleaning_spec_v2"]["profiles"])
         self.assertTrue(caps["cleaning_runtime"]["quality_rule_set_id_supported"])
         self.assertEqual(caps["cleaning_runtime"]["quality_summary_schema_version"], "cleaning_quality_summary.v1")
+        self.assertEqual(caps["cleaning_runtime"]["cleaning_precheck_route"], "/cleaning/precheck")
+        self.assertEqual(caps["cleaning_runtime"]["cleaning_precheck_contract"], "contracts/glue/cleaning_precheck.schema.json")
+        self.assertEqual(caps["cleaning_runtime"]["cleaning_precheck_actions"], ["allow", "warn", "block"])
         self.assertIn("quality_summary_json", caps["cleaning_runtime"]["quality_summary_artifacts"])
         self.assertIn("rejections_jsonl", caps["cleaning_runtime"]["quality_summary_artifacts"])
         self.assertEqual(caps["cleaning_runtime"]["row_transform_primary_engine"], "transform_rows_v3")
@@ -188,6 +191,9 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(caps["control_plane_boundary"]["operator_semantics_authority_owner"], "accel-rust")
         self.assertEqual(caps["control_plane_boundary"]["meta_route"], GOVERNANCE_SURFACE_META_ROUTE)
         self.assertGreaterEqual(len(caps["control_plane_boundary"]["governance_surfaces"]), 7)
+        self.assertEqual(caps["cleaning_precheck"]["route"], "/cleaning/precheck")
+        self.assertEqual(caps["cleaning_precheck"]["contract"], "contracts/glue/cleaning_precheck.schema.json")
+        self.assertEqual(caps["cleaning_precheck"]["actions"], ["allow", "warn", "block"])
         self.assertIn("parquet", caps["artifacts"]["selection_tokens"]["core"])
         self.assertIn("xlsx", caps["artifacts"]["selection_tokens"]["office"])
         self.assertEqual(caps["registry"]["default_conflict_policy"], "replace")
@@ -309,6 +315,137 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(contact_resp.json()["candidate_profiles"][0]["recommended_template_id"], "customer_contact_v1")
         self.assertEqual(ledger_resp.json()["candidate_profiles"][0]["profile"], "customer_ledger")
         self.assertEqual(ledger_resp.json()["candidate_profiles"][0]["recommended_template_id"], "customer_ledger_v1")
+
+    def test_cleaning_precheck_allows_finance_template_when_profile_matches(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {"ID": "1", "Amt": "120.50", "currency": "usd"},
+                    {"ID": "2", "Amt": "99.90", "currency": "cny"},
+                ],
+                {
+                    "input_format": "csv",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {"header_confidence": 0.92},
+                    "engine_trace": [{"engine": "csv", "ok": True}],
+                },
+            )
+            resp = self.client.post(
+                "/cleaning/precheck",
+                json={
+                    "input_path": r"D:\data\finance.csv",
+                    "cleaning_template": "finance_report_v1",
+                    "header_mapping_mode": "auto",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["precheck_action"], "allow")
+        self.assertEqual(payload["requested_profile"], "finance_statement")
+        self.assertEqual(payload["recommended_profile"], "finance_statement")
+        self.assertEqual(payload["recommended_template_id"], "finance_report_v1")
+        self.assertFalse(payload["predicted_zero_output_unexpected"])
+        self.assertEqual(payload["contract"], "contracts/glue/cleaning_precheck.schema.json")
+
+    def test_cleaning_precheck_blocks_mismatched_template_from_extract_recommendation(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {"text": "Speaker A: this policy causes structural harm and should be rejected immediately."},
+                    {"text": "Speaker B: the evidence cites multiple studies and links to https://example.com/source."},
+                    {"text": "Moderator: the debate record includes claim text, source links, and speaker attributions."},
+                ],
+                {
+                    "input_format": "image",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "image_blocks": [
+                        {"block_id": "b1", "text": "Speaker A: this policy causes structural harm and should be rejected immediately."},
+                        {"block_id": "b2", "text": "Speaker B: the evidence cites multiple studies and links to https://example.com/source."},
+                        {"block_id": "b3", "text": "Moderator: the debate record includes claim text, source links, and speaker attributions."}
+                    ],
+                    "engine_trace": [{"engine": "ocr", "ok": True}],
+                },
+            )
+            resp = self.client.post(
+                "/cleaning/precheck",
+                json={
+                    "input_path": r"D:\data\evidence.png",
+                    "cleaning_template": "finance_report_v1",
+                    "header_mapping_mode": "auto",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["precheck_action"], "block")
+        self.assertEqual(payload["requested_profile"], "finance_statement")
+        self.assertEqual(payload["recommended_profile"], "debate_evidence")
+        self.assertTrue(payload["profile_mismatch"])
+        self.assertIn("profile_mismatch_blocked", payload["blocking_reason_codes"])
+
+    def test_cleaning_precheck_blocks_predicted_zero_output_when_blank_not_expected(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {"ID": "1", "Amt": "-10.00", "currency": "usd"},
+                ],
+                {
+                    "input_format": "csv",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {"header_confidence": 0.9},
+                    "engine_trace": [{"engine": "csv", "ok": True}],
+                },
+            )
+            resp = self.client.post(
+                "/cleaning/precheck",
+                json={
+                    "input_path": r"D:\data\finance-negative.csv",
+                    "cleaning_template": "finance_report_v1",
+                    "header_mapping_mode": "auto",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["precheck_action"], "block")
+        self.assertTrue(payload["predicted_zero_output_unexpected"])
+        self.assertIn("zero_output_unexpected", payload["blocking_reason_codes"])
+        self.assertFalse(payload["blank_output_expected"])
+
+    def test_cleaning_precheck_warns_when_recommendation_signal_is_unavailable(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [{"foo": "bar"}],
+                {
+                    "input_format": "csv",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {},
+                    "engine_trace": [{"engine": "text", "ok": True}],
+                },
+            )
+            resp = self.client.post(
+                "/cleaning/precheck",
+                json={
+                    "input_path": r"D:\data\note.txt",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["precheck_action"], "warn")
+        self.assertEqual(payload["requested_profile"], "")
+        self.assertEqual(payload["recommended_profile"], "")
+        self.assertEqual(payload["recommended_template_id"], "")
+        self.assertFalse(payload["predicted_zero_output_unexpected"])
 
     def test_ingest_extract_auto_mode_reports_fallback_to_strict_when_rapidfuzz_missing(self):
         with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows, patch.object(

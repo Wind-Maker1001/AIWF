@@ -194,6 +194,14 @@
                             <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
                         </Button.Resources>
                     </Button>
+                    <Button x:Name="QuickPrecheckButton" AutomationProperties.AutomationId="QuickPrecheckButton" Click="OnPrecheckCleaningClick" Content="预检" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
+                        <Button.Resources>
+                            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
+                            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE5E7EB" />
+                            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
+                        </Button.Resources>
+                    </Button>
                     <Button x:Name="QuickRunButton" AutomationProperties.AutomationId="QuickRunButton" Click="OnRunCleaningClick" Content="运行" UseSystemFocusVisuals="False" IsTabStop="False" MinHeight="40" Padding="16,0" MinWidth="120">
                         <Button.Resources>
                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF8E1B1B" />
@@ -272,6 +280,8 @@
                                 <TextBox x:Name="ReportTitleTextBox" AutomationProperties.AutomationId="ReportTitleTextBox" Style="{StaticResource TouchTextBoxStyle}" Text="Native WinUI Smoke Report" />
                                 <TextBlock Text="输入 CSV 路径（可选）" />
                                 <TextBox x:Name="InputCsvTextBox" AutomationProperties.AutomationId="InputCsvTextBox" Style="{StaticResource TouchTextBoxStyle}" />
+                                <TextBlock Text="清洗模板（可选）" />
+                                <TextBox x:Name="CleaningTemplateTextBox" AutomationProperties.AutomationId="CleaningTemplateTextBox" Style="{StaticResource TouchTextBoxStyle}" />
                                 <TextBlock Text="Office 主题" />
                                 <ComboBox x:Name="OfficeThemeComboBox" AutomationProperties.AutomationId="OfficeThemeComboBox" Style="{StaticResource TouchComboBoxStyle}" SelectedIndex="0">
                                     <ComboBoxItem Content="assignment" />
@@ -291,6 +301,14 @@
                             <StackPanel Spacing="10" VerticalAlignment="Bottom">
                                 <TextBlock Text="操作" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
                                 <Button x:Name="HealthButton" AutomationProperties.AutomationId="HealthButton" Click="OnHealthClick" Content="健康检查" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156">
+                                    <Button.Resources>
+                                        <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
+                                        <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />
+                                        <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FFE5E7EB" />
+                                        <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
+                                    </Button.Resources>
+                                </Button>
+                                <Button x:Name="PrecheckCleaningButton" AutomationProperties.AutomationId="PrecheckCleaningButton" Click="OnPrecheckCleaningClick" Content="预检" UseSystemFocusVisuals="True" MinHeight="44" MinWidth="156">
                                     <Button.Resources>
                                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFF1F1F1" />
                                         <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF6B7280" />

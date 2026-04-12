@@ -9,6 +9,10 @@ public sealed record RunPayloadInput(
     string ReportTitle,
     string? InputCsvPath);
 
+public sealed record CleaningPrecheckPayloadInput(
+    string InputPath,
+    string CleaningTemplate);
+
 public static class RunPayloadBuilder
 {
     public static JsonObject BuildCleaningPayload(RunPayloadInput input)
@@ -32,5 +36,24 @@ public static class RunPayloadBuilder
             ["ruleset_version"] = "v1",
             ["params"] = paramsObj
         };
+    }
+
+    public static JsonObject BuildCleaningPrecheckPayload(CleaningPrecheckPayloadInput input)
+    {
+        var payload = new JsonObject
+        {
+            ["input_path"] = (input.InputPath ?? string.Empty).Trim(),
+            ["header_mapping_mode"] = "auto",
+            ["blank_output_expected"] = false,
+            ["profile_mismatch_action"] = "block"
+        };
+
+        var template = (input.CleaningTemplate ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(template))
+        {
+            payload["cleaning_template"] = template;
+        }
+
+        return payload;
     }
 }

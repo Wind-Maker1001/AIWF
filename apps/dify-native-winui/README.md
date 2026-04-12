@@ -13,10 +13,12 @@ For this repository, the default release audience is personal/friend sideload di
 - IPC bridge contract draft for integrating existing AIWF runtime services
 - WinUI 3 MVP shell with:
   - run configuration inputs
+  - cleaning precheck trigger
   - run trigger buttons
   - artifacts/result panel
 - Minimal bridge integration:
   - `GET /health`
+  - `POST /cleaning/precheck`
   - `POST /jobs/{job_id}/run/{flow}`
 
 ## Build and smoke

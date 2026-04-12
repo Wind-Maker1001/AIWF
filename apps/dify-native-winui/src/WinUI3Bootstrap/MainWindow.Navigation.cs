@@ -126,6 +126,7 @@ public sealed partial class MainWindow
         var visuals = NavigationStylePresenter.CommandButtons();
         ApplyButtonVisual(QuickRunButton, visuals.RunButton);
         ApplyButtonVisual(QuickHealthButton, visuals.HealthButton);
+        ApplyButtonVisual(QuickPrecheckButton, visuals.HealthButton);
     }
 
     private static void ApplyButtonVisual(Button button, ButtonVisual visual)
@@ -158,6 +159,7 @@ public sealed partial class MainWindow
         yield return JobIdTextBox;
         yield return FlowTextBox;
         yield return ReportTitleTextBox;
+        yield return InputCsvTextBox;
     }
 
     private bool ValidateRunInputs(out string message)

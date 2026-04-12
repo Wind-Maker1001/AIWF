@@ -40,6 +40,8 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunInputValidator.cs" Link="Source\RunInputValidator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultParser.cs" Link="Source\RunResultParser.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultPresentationMapper.cs" Link="Source\RunResultPresentationMapper.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\CleaningPrecheckPresenter.cs" Link="Source\CleaningPrecheckPresenter.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunPayloadBuilder.cs" Link="Source\RunPayloadBuilder.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioModels.cs" Link="Source\SqlStudioModels.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioDraftController.cs" Link="Source\SqlStudioDraftController.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlAuthoringBuilderCompiler.cs" Link="Source\SqlAuthoringBuilderCompiler.cs" />
