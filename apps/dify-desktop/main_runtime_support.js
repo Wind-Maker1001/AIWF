@@ -22,6 +22,8 @@ function createRuntimeSupport({ app, fs, path, execFileSync, fork, iconv }) {
     runOfflinePreviewInWorker: bridge.runOfflinePreviewInWorker,
     runViaBaseApi: bridge.runViaBaseApi,
     baseHealth: bridge.baseHealth,
+    glueHealth: bridge.glueHealth,
+    runPrecheckViaGlue: bridge.runPrecheckViaGlue,
     getTaskStoreStatus: bridge.getTaskStoreStatus,
   };
 }

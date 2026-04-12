@@ -33,8 +33,10 @@ test("runtime support exports expected capabilities", () => {
     "checkPdftoppmRuntime",
     "checkTesseractLangs",
     "runOfflineCleaningInWorker",
+    "runPrecheckViaGlue",
     "runViaBaseApi",
     "baseHealth",
+    "glueHealth",
   ];
   for (const key of keys) assert.equal(typeof support[key], "function");
 });

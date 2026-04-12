@@ -126,6 +126,48 @@ function createBridgeSupport({ path, fork }) {
     }
   }
 
+  async function runPrecheckViaGlue(payload, cfg = {}) {
+    const glue = String((cfg && cfg.glueUrl) || process.env.AIWF_GLUE_URL || "http://127.0.0.1:18081").replace(/\/$/, "");
+    const params = payload && payload.params && typeof payload.params === "object" ? payload.params : {};
+    const request = {
+      input_path: String(params.input_path || params.input_csv_path || "").trim(),
+      input_files: String(params.input_files || "")
+        .split(/\r?\n/)
+        .map((item) => String(item || "").trim())
+        .filter(Boolean),
+      cleaning_template: String(params.cleaning_template || "").trim(),
+      cleaning_spec_v2: params.cleaning_spec_v2 && typeof params.cleaning_spec_v2 === "object" ? params.cleaning_spec_v2 : {},
+      rules: params.rules && typeof params.rules === "object" ? params.rules : {},
+      quality_rules: params.quality_rules && typeof params.quality_rules === "object" ? params.quality_rules : {},
+      image_rules: params.image_rules && typeof params.image_rules === "object" ? params.image_rules : {},
+      xlsx_rules: params.xlsx_rules && typeof params.xlsx_rules === "object" ? params.xlsx_rules : {},
+      sheet_profiles: params.sheet_profiles && typeof params.sheet_profiles === "object" ? params.sheet_profiles : {},
+      canonical_profile: String(params.canonical_profile || "").trim(),
+      template_expected_profile: String(params.template_expected_profile || "").trim(),
+      header_mapping_mode: "auto",
+    };
+    const resp = await fetch(`${glue}/cleaning/precheck`, {
+      method: "POST",
+      headers: headers(cfg.apiKey),
+      body: JSON.stringify(request),
+    });
+    const txt = await resp.text();
+    let obj = {};
+    try { obj = JSON.parse(txt || "{}"); } catch { obj = { ok: false, error: txt }; }
+    if (!resp.ok) {
+      const error = String((obj && obj.error) || `HTTP ${resp.status}`);
+      throw new Error(error);
+    }
+    return {
+      ok: true,
+      mode: "glue_authoritative",
+      template: String(params.cleaning_template || "default").trim().toLowerCase() || "default",
+      warnings: [],
+      precheck: obj,
+      raw: obj,
+    };
+  }
+
   function parsePrometheusMetrics(text) {
     const out = {};
     String(text || "")
@@ -166,6 +208,7 @@ function createBridgeSupport({ path, fork }) {
     runViaBaseApi,
     baseHealth,
     glueHealth,
+    runPrecheckViaGlue,
     getTaskStoreStatus,
   };
 }
