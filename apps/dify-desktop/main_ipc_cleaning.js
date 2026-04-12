@@ -10,6 +10,7 @@ function registerCleaningIpc(ctx, deps) {
     runOfflineCleaningInWorker,
     runOfflinePrecheckInWorker,
     runOfflinePreviewInWorker,
+    runPrecheckViaGlue,
     runViaBaseApi,
     listCleaningTemplates,
   } = ctx;
@@ -101,6 +102,23 @@ function registerCleaningIpc(ctx, deps) {
   ipcMain.handle("aiwf:precheckCleaning", async (_evt, payload, cfg) => {
     const merged = { ...loadConfig(), ...(cfg || {}) };
     const outRoot = resolveOutputRoot(merged);
+    if (typeof runPrecheckViaGlue === "function") {
+      try {
+        const remote = await runPrecheckViaGlue(payload, merged);
+        if (remote && remote.ok) {
+          return remote;
+        }
+      } catch (error) {
+        const local = await runOfflinePrecheckInWorker(payload, outRoot, merged);
+        const warnings = Array.isArray(local && local.warnings) ? local.warnings.slice() : [];
+        warnings.push(`authoritative precheck unavailable, fallback to local precheck: ${String(error && error.message ? error.message : error)}`);
+        return {
+          ...(local || { ok: false }),
+          warnings,
+          precheck_source: "local_fallback",
+        };
+      }
+    }
     return await runOfflinePrecheckInWorker(payload, outRoot, merged);
   });
 
