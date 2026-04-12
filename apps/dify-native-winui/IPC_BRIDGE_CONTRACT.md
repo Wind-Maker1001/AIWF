@@ -13,6 +13,7 @@ This file tracks the currently implemented WinUI bridge behavior, not the older 
 Current implemented endpoints used by the WinUI runtime code:
 
 1. `GET /health`
+2. `POST /cleaning/precheck`
 2. `POST /jobs/{job_id}/run/{flow}`
 
 Related control-plane endpoint used before execution:
@@ -37,13 +38,27 @@ Related control-plane endpoint used before execution:
 }
 ```
 
+`POST /cleaning/precheck` sends the authoritative backend precheck payload:
+
+```json
+{
+  "input_path": "D:\\data\\input.csv",
+  "cleaning_template": "finance_report_v1",
+  "header_mapping_mode": "auto",
+  "blank_output_expected": false,
+  "profile_mismatch_action": "block"
+}
+```
+
 ## Current Response Expectations
 
 - health responses are read as plain JSON and shown in the WinUI result panel
+- precheck responses return `allow|warn|block` plus requested/recommended profile details
 - run responses are parsed from the `/jobs/{job_id}/run/{flow}` body
 - successful runs may update the effective `job_id` in the UI when the coordinator auto-created a job first
 
 ## Notes
 
 - the older draft endpoints such as `/run-cleaning`, `/precheck-cleaning`, and `/preview-debate-style` are no longer the active contract
+- the official precheck route is now `POST /cleaning/precheck`
 - if a future local IPC layer replaces HTTP, this file should be updated from code, not from the old draft

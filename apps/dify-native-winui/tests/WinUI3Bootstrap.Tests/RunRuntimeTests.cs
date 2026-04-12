@@ -217,6 +217,46 @@ public sealed class RunRuntimeTests
         Assert.DoesNotContain(requests, uri => uri.AbsoluteUri == "http://127.0.0.1:18080/api/v1/jobs/create?owner=native");
     }
 
+    [Fact]
+    public async Task PrecheckCleaningAsync_PostsToAuthoritativePrecheckRoute()
+    {
+        var requests = new List<Uri>();
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            requests.Add(request.RequestUri!);
+            if (request.RequestUri!.AbsoluteUri == "http://127.0.0.1:18081/cleaning/precheck")
+            {
+                return Json(HttpStatusCode.OK, """{"ok":true,"precheck_action":"allow"}""");
+            }
+
+            return Json(HttpStatusCode.NotFound, """{"ok":false}""");
+        }));
+        var adapter = new WorkflowRunnerAdapter(http);
+
+        var result = await adapter.PrecheckCleaningAsync(
+            "http://127.0.0.1:18081",
+            apiKey: "",
+            payload: new JsonObject { ["input_path"] = "D:/tmp/input.csv" });
+
+        Assert.True(result["ok"]?.GetValue<bool>());
+        Assert.Equal("allow", result["precheck_action"]?.GetValue<string>());
+        Assert.Contains(requests, uri => uri.AbsoluteUri == "http://127.0.0.1:18081/cleaning/precheck");
+    }
+
+    [Fact]
+    public void BuildCleaningPrecheckPayload_UsesDesktopGuardrailDefaults()
+    {
+        var payload = RunPayloadBuilder.BuildCleaningPrecheckPayload(new CleaningPrecheckPayloadInput(
+            "D:/tmp/input.csv",
+            "finance_report_v1"));
+
+        Assert.Equal("D:/tmp/input.csv", payload["input_path"]?.GetValue<string>());
+        Assert.Equal("finance_report_v1", payload["cleaning_template"]?.GetValue<string>());
+        Assert.Equal("auto", payload["header_mapping_mode"]?.GetValue<string>());
+        Assert.False(payload["blank_output_expected"]?.GetValue<bool>() ?? true);
+        Assert.Equal("block", payload["profile_mismatch_action"]?.GetValue<string>());
+    }
+
     private static HttpResponseMessage Json(HttpStatusCode statusCode, string json)
     {
         return new HttpResponseMessage(statusCode)

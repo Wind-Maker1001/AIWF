@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiwf.local/contracts/glue/cleaning_precheck.schema.json",
+  "title": "AIWF Glue Cleaning Precheck Contract",
+  "type": "object",
+  "properties": {
+    "request": {
+      "type": "object",
+      "properties": {
+        "input_path": { "type": "string" },
+        "input_files": { "type": "array", "items": { "type": "string" } },
+        "cleaning_template": { "type": "string" },
+        "cleaning_spec_v2": { "type": "object" },
+        "rules": { "type": "object" },
+        "quality_rules": { "type": "object" },
+        "image_rules": { "type": "object" },
+        "xlsx_rules": { "type": "object" },
+        "sheet_profiles": { "type": "object" },
+        "canonical_profile": {
+          "type": "string",
+          "enum": ["", "finance_statement", "bank_statement", "customer_contact", "customer_ledger", "debate_evidence"]
+        },
+        "template_expected_profile": {
+          "type": "string",
+          "enum": ["", "finance_statement", "bank_statement", "customer_contact", "customer_ledger", "debate_evidence"]
+        },
+        "blank_output_expected": { "type": "boolean" },
+        "profile_mismatch_action": { "type": "string", "enum": ["", "warn", "block"] },
+        "header_mapping_mode": { "type": "string", "enum": ["strict", "auto"] },
+        "text_split_by_line": { "type": "boolean" },
+        "ocr_enabled": { "type": "boolean" },
+        "ocr_lang": { "type": "string" },
+        "ocr_config": { "type": "string" },
+        "ocr_preprocess": { "type": "string" },
+        "xlsx_all_sheets": { "type": "boolean" },
+        "include_hidden_sheets": { "type": "boolean" },
+        "sheet_allowlist": { "type": "array", "items": { "type": "string" } },
+        "on_file_error": { "type": "string", "enum": ["raise", "skip"] }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "ok",
+        "precheck_action",
+        "requested_profile",
+        "recommended_profile",
+        "recommended_template_id",
+        "profile_confidence",
+        "profile_mismatch",
+        "predicted_zero_output_unexpected",
+        "blank_output_expected",
+        "blocking_reason_codes",
+        "issues",
+        "suggestions",
+        "header_mapping",
+        "candidate_profiles",
+        "quality_decisions",
+        "sample_rows",
+        "contract"
+      ],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "precheck_action": { "type": "string", "enum": ["allow", "warn", "block"] },
+        "requested_profile": { "type": "string" },
+        "recommended_profile": { "type": "string" },
+        "recommended_template_id": { "type": "string" },
+        "profile_confidence": { "type": "number" },
+        "profile_mismatch": { "type": "boolean" },
+        "predicted_zero_output_unexpected": { "type": "boolean" },
+        "blank_output_expected": { "type": "boolean" },
+        "blocking_reason_codes": { "type": "array", "items": { "type": "string" } },
+        "issues": { "type": "array", "items": { "type": "string" } },
+        "suggestions": { "type": "array", "items": { "type": "string" } },
+        "header_mapping": { "type": "array", "items": { "type": "object" } },
+        "candidate_profiles": { "type": "array", "items": { "type": "object" } },
+        "quality_decisions": { "type": "array", "items": { "type": "object" } },
+        "sample_rows": { "type": "array", "items": { "type": "object" } },
+        "quality_blocked": { "type": "boolean" },
+        "prediction_quality": { "type": "object" },
+        "template_id": { "type": "string" },
+        "contract": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

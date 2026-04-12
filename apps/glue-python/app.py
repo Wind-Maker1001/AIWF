@@ -116,6 +116,7 @@ from aiwf.workflow_validation_client import (
 from aiwf.rust_client import workflow_reference_run_v1
 from aiwf.flows.cleaning_flow_materialization import materialize_accel_outputs
 from aiwf.flows.cleaning_errors import CleaningGuardrailError
+from aiwf.flows.cleaning_precheck import run_cleaning_precheck
 from aiwf.flows.cleaning_orchestrator_support import collect_materialized_artifacts, build_success_result
 from aiwf.flows.cleaning_runtime_support import sha256_file
 from aiwf.flows.cleaning_transport import (
@@ -147,6 +148,7 @@ runtime_catalog = get_runtime_catalog()
 
 WORKFLOW_GRAPH_CONTRACT_AUTHORITY = "contracts/workflow/workflow.schema.json"
 INGEST_EXTRACT_CONTRACT_AUTHORITY = "contracts/glue/ingest_extract.schema.json"
+CLEANING_PRECHECK_CONTRACT_AUTHORITY = "contracts/glue/cleaning_precheck.schema.json"
 WORKFLOW_GRAPH_ERROR_CODE = "workflow_graph_invalid"
 GOVERNANCE_VALIDATION_ERROR_CODE = "governance_validation_invalid"
 
@@ -452,6 +454,32 @@ class IngestExtractReq(BaseModel):
     xlsx_rules: Dict[str, Any] = Field(default_factory=dict)
     sheet_profiles: Dict[str, Any] = Field(default_factory=dict)
     canonical_profile: str = ""
+    on_file_error: str = "raise"
+
+
+class CleaningPrecheckReq(BaseModel):
+    input_files: list[str] = Field(default_factory=list)
+    input_path: str = ""
+    cleaning_template: str = ""
+    cleaning_spec_v2: Dict[str, Any] = Field(default_factory=dict)
+    rules: Dict[str, Any] = Field(default_factory=dict)
+    quality_rules: Dict[str, Any] = Field(default_factory=dict)
+    image_rules: Dict[str, Any] = Field(default_factory=dict)
+    xlsx_rules: Dict[str, Any] = Field(default_factory=dict)
+    sheet_profiles: Dict[str, Any] = Field(default_factory=dict)
+    canonical_profile: str = ""
+    template_expected_profile: str = ""
+    blank_output_expected: Optional[bool] = None
+    profile_mismatch_action: str = ""
+    header_mapping_mode: str = DEFAULT_HEADER_MAPPING_MODE
+    text_split_by_line: bool = False
+    ocr_enabled: bool = True
+    ocr_lang: Optional[str] = None
+    ocr_config: Optional[str] = None
+    ocr_preprocess: Optional[str] = None
+    xlsx_all_sheets: bool = True
+    include_hidden_sheets: bool = False
+    sheet_allowlist: list[str] = Field(default_factory=list)
     on_file_error: str = "raise"
 
 
@@ -784,6 +812,9 @@ def capabilities():
         "quality_rule_set_id_supported": True,
         "quality_rule_set_merge_scope": "quality_rules_only",
         "quality_summary_schema_version": QUALITY_SUMMARY_SCHEMA_VERSION,
+        "cleaning_precheck_route": "/cleaning/precheck",
+        "cleaning_precheck_contract": CLEANING_PRECHECK_CONTRACT_AUTHORITY,
+        "cleaning_precheck_actions": ["allow", "warn", "block"],
         "quality_summary_artifacts": ["quality_summary_json", "rejections_jsonl"],
         "row_transform_primary_engine": "transform_rows_v3",
         "row_transform_fallback_engine": "python",
@@ -796,6 +827,11 @@ def capabilities():
             "custom_row_filter",
             "flag_disabled",
         ],
+    }
+    caps["cleaning_precheck"] = {
+        "route": "/cleaning/precheck",
+        "contract": CLEANING_PRECHECK_CONTRACT_AUTHORITY,
+        "actions": ["allow", "warn", "block"],
     }
     caps["governance"] = build_governance_capability_map()
     caps["governance_surface"] = {
@@ -1486,6 +1522,72 @@ def ingest_extract(req: IngestExtractReq):
         "detected_structure": _merge_detected_structures(file_results),
         "contract": INGEST_EXTRACT_CONTRACT_AUTHORITY,
     }
+
+
+def _json_response_content(resp: JSONResponse) -> Dict[str, Any]:
+    try:
+        payload = json.loads(resp.body.decode("utf-8"))
+    except Exception:
+        return {"ok": False, "error": "invalid json response"}
+    return payload if isinstance(payload, dict) else {"ok": False, "error": "json object response expected"}
+
+
+def _build_ingest_extract_request_from_precheck(req: CleaningPrecheckReq) -> IngestExtractReq:
+    return IngestExtractReq(
+        input_files=list(req.input_files or []),
+        input_path=str(req.input_path or ""),
+        header_mapping_mode=str(req.header_mapping_mode or DEFAULT_HEADER_MAPPING_MODE),
+        text_split_by_line=bool(req.text_split_by_line),
+        ocr_enabled=bool(req.ocr_enabled),
+        ocr_lang=req.ocr_lang,
+        ocr_config=req.ocr_config,
+        ocr_preprocess=req.ocr_preprocess,
+        xlsx_all_sheets=bool(req.xlsx_all_sheets),
+        include_hidden_sheets=bool(req.include_hidden_sheets),
+        sheet_allowlist=list(req.sheet_allowlist or []),
+        quality_rules=dict(req.quality_rules or {}),
+        image_rules=dict(req.image_rules or {}),
+        xlsx_rules=dict(req.xlsx_rules or {}),
+        sheet_profiles=dict(req.sheet_profiles or {}),
+        canonical_profile=str(req.canonical_profile or ""),
+        on_file_error=str(req.on_file_error or "raise"),
+    )
+
+
+def _build_cleaning_precheck_params(req: CleaningPrecheckReq) -> Dict[str, Any]:
+    params: Dict[str, Any] = {
+        "cleaning_template": str(req.cleaning_template or "").strip(),
+        "cleaning_spec_v2": dict(req.cleaning_spec_v2 or {}),
+        "rules": dict(req.rules or {}),
+        "quality_rules": dict(req.quality_rules or {}),
+        "image_rules": dict(req.image_rules or {}),
+        "xlsx_rules": dict(req.xlsx_rules or {}),
+        "sheet_profiles": dict(req.sheet_profiles or {}),
+        "canonical_profile": str(req.canonical_profile or "").strip(),
+        "template_expected_profile": str(req.template_expected_profile or "").strip(),
+        "header_mapping_mode": str(req.header_mapping_mode or DEFAULT_HEADER_MAPPING_MODE).strip().lower() or DEFAULT_HEADER_MAPPING_MODE,
+    }
+    if req.blank_output_expected is not None:
+        params["blank_output_expected"] = bool(req.blank_output_expected)
+    if str(req.profile_mismatch_action or "").strip():
+        params["profile_mismatch_action"] = str(req.profile_mismatch_action or "").strip().lower()
+    return params
+
+
+@app.post("/cleaning/precheck")
+def cleaning_precheck(req: CleaningPrecheckReq):
+    extract_resp = ingest_extract(_build_ingest_extract_request_from_precheck(req))
+    extract_payload = _json_response_content(extract_resp) if isinstance(extract_resp, JSONResponse) else dict(extract_resp or {})
+    if not bool(extract_payload.get("ok")):
+        status_code = getattr(extract_resp, "status_code", 400) if isinstance(extract_resp, JSONResponse) else 400
+        return JSONResponse(status_code=status_code, content=extract_payload)
+
+    payload = run_cleaning_precheck(
+        params=_build_cleaning_precheck_params(req),
+        extract_payload=extract_payload,
+    )
+    payload["contract"] = CLEANING_PRECHECK_CONTRACT_AUTHORITY
+    return payload
 
 
 @app.get("/governance/quality-rule-sets")

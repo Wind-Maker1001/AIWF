@@ -72,6 +72,19 @@ class ExternalContractsTests(unittest.TestCase):
         self.assertEqual(candidate_item["signal_source"]["enum"], ["headers", "table_cells", "content"])
         self.assertEqual(response_properties["detected_structure"]["enum"], ["tabular", "text", "mixed", "unknown"])
 
+    def test_cleaning_precheck_contract_describes_authoritative_precheck_surface(self):
+        payload = json.loads((ROOT / "contracts" / "glue" / "cleaning_precheck.schema.json").read_text(encoding="utf-8"))
+        request_properties = payload["properties"]["request"]["properties"]
+        self.assertIn("cleaning_template", request_properties)
+        self.assertEqual(request_properties["header_mapping_mode"]["enum"], ["strict", "auto"])
+        self.assertEqual(request_properties["profile_mismatch_action"]["enum"], ["", "warn", "block"])
+        response_properties = payload["properties"]["response"]["properties"]
+        self.assertEqual(response_properties["precheck_action"]["enum"], ["allow", "warn", "block"])
+        self.assertIn("recommended_template_id", response_properties)
+        self.assertIn("predicted_zero_output_unexpected", response_properties)
+        self.assertIn("blocking_reason_codes", response_properties)
+        self.assertIn("contract", response_properties)
+
 
 if __name__ == "__main__":
     unittest.main()
