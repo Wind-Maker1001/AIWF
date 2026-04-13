@@ -32,7 +32,7 @@ function buildDraftRunPayload(els, graph, sandboxDedupWindowSec = 600) {
       md_only: true,
       paper_markdown_enabled: true,
       export_canonical_bundle: !!els.exportCanonicalBundle?.checked,
-      canonical_title: String(els.canonicalTitle?.value || "").trim() || "AIWF 鐔熻倝璇枡",
+      canonical_title: String(els.canonicalTitle?.value || "").trim() || "AIWF 熟肉语料",
       ocr_lang: "chi_sim+eng",
     },
     breakpoint_node_id: String(els.breakpointNodeId?.value || "").trim(),

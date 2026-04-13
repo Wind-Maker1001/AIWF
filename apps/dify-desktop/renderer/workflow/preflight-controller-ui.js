@@ -42,7 +42,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
         issues.push({
           level: "error",
           kind: "rust",
-          message: "Rust Endpoint 涓虹┖锛屾棤娉曟墽琛屽绾﹂妫€",
+          message: "Rust Endpoint 为空，无法执行契约预检",
         });
       }
     } else {
@@ -60,7 +60,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
           issues.push({
             level: rustRequired ? "error" : "warning",
             kind: "rust",
-            message: `workflow 濂戠害鏍￠獙璇锋眰澶辫触: ${workflowContractRes.error || "unknown"}`,
+            message: `workflow 契约校验请求失败: ${workflowContractRes.error || "unknown"}`,
           });
         } else {
           const body = workflowContractRes.body || {};
@@ -91,7 +91,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
         issues.push({
           level: rustRequired ? "error" : "warning",
           kind: "rust",
-          message: `workflow 濂戠害鏍￠獙寮傚父: ${String(error)}`,
+          message: `workflow 契约校验异常: ${String(error)}`,
         });
       }
 
@@ -103,14 +103,14 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
             issues.push({
               level: rustRequired ? "error" : "warning",
               kind: "rust",
-              message: `鑳藉姏鍙戠幇澶辫触: ${capRes.error || "unknown"}`,
+              message: `能力发现失败: ${capRes.error || "unknown"}`,
             });
           }
         } catch (error) {
           issues.push({
             level: rustRequired ? "error" : "warning",
             kind: "rust",
-            message: `鑳藉姏鍙戠幇寮傚父: ${String(error)}`,
+            message: `能力发现异常: ${String(error)}`,
           });
         }
 
@@ -129,7 +129,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
                 level: rustRequired ? "error" : "warning",
                 kind: "io_contract",
                 node_id: String(node?.id || ""),
-                message: `${operator} 濂戠害鏍￠獙璇锋眰澶辫触: ${out.error || "unknown"}`,
+                message: `${operator} 契约校验请求失败: ${out.error || "unknown"}`,
               });
               continue;
             }
@@ -141,7 +141,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
                 level: "error",
                 kind: "io_contract",
                 node_id: String(node?.id || ""),
-                message: `${operator} 濂戠害涓嶉€氳繃: ${errs.join("; ") || "unknown"}`,
+                message: `${operator} 契约未通过: ${errs.join("; ") || "unknown"}`,
               });
             }
           } catch (error) {
@@ -149,7 +149,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
               level: rustRequired ? "error" : "warning",
               kind: "io_contract",
               node_id: String(node?.id || ""),
-              message: `${operator} 濂戠害鏍￠獙寮傚父: ${String(error)}`,
+              message: `${operator} 契约校验异常: ${String(error)}`,
             });
           }
         }

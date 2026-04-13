@@ -123,7 +123,7 @@ function createWorkflowManualReviewStore(deps = {}) {
 
   async function listQueue(limit = 200, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteListQueue(limit, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -132,7 +132,7 @@ function createWorkflowManualReviewStore(deps = {}) {
 
   async function enqueue(items = [], cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteEnqueue(items, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -143,7 +143,7 @@ function createWorkflowManualReviewStore(deps = {}) {
     const limit = Number(req?.limit || 200);
     const filter = req?.filter && typeof req.filter === "object" ? req.filter : {};
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteListHistory(limit, filter, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -152,7 +152,7 @@ function createWorkflowManualReviewStore(deps = {}) {
 
   async function submit(req = {}, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteSubmit(req, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);

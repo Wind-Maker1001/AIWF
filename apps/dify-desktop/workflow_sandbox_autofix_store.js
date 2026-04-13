@@ -121,7 +121,7 @@ function createWorkflowSandboxAutoFixStore(deps = {}) {
 
   async function getState(cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteGetState(cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -129,13 +129,13 @@ function createWorkflowSandboxAutoFixStore(deps = {}) {
   }
 
   async function applyPayload(payload = {}, cfg = null) {
-    _ = resolveProvider(cfg);
+    resolveProvider(cfg);
     const out = await remoteGetState(cfg);
     return sandboxSupport.applySandboxAutoFixPayload(payload || {}, out?.state || {});
   }
 
   async function processRunAutoFix(run, payload = {}, cfg = null) {
-    _ = resolveProvider(cfg);
+    resolveProvider(cfg);
     const out = await remoteGetState(cfg);
     return await sandboxSupport.maybeApplySandboxAutoFix(run, payload || {}, {
       state: out?.state || {},
@@ -146,7 +146,7 @@ function createWorkflowSandboxAutoFixStore(deps = {}) {
 
   async function listActions(limit = 100, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteListActions(limit, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);

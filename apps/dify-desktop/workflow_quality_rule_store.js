@@ -129,7 +129,7 @@ function createWorkflowQualityRuleSetSupport(deps = {}) {
   }
 
   async function getQualityRuleSet(setId, cfg = null) {
-    _ = resolveProvider(cfg);
+    resolveProvider(cfg);
     return await remoteGetQualityRuleSet(setId, cfg);
   }
 

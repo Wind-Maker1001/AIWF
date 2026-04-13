@@ -54,7 +54,7 @@ public class GlobalApiExceptionHandler {
                 .body(new ApiErrorResp(
                         "data_store_unavailable",
                         "data store unavailable",
-                        Map.of("cause", String.valueOf(e.getMostSpecificCause()))
+                        Map.of()
                 ));
     }
 

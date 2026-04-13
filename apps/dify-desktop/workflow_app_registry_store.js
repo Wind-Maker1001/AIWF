@@ -121,7 +121,7 @@ function createWorkflowAppRegistryStore(deps = {}) {
 
   async function listApps(limit = 200, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteListApps(limit, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -129,13 +129,13 @@ function createWorkflowAppRegistryStore(deps = {}) {
   }
 
   async function getApp(appId, cfg = null) {
-    _ = resolveProvider(cfg);
+    resolveProvider(cfg);
     return remoteGetApp(appId, cfg);
   }
 
   async function publishApp(req, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remotePublishApp(req, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);

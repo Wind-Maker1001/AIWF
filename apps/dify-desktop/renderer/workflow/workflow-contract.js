@@ -4,40 +4,40 @@ const NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY = "contracts/desktop/node_
 const WORKFLOW_VALIDATION_GUIDANCE_SCHEMA_VERSION = "workflow_validation_guidance.v1";
 const WORKFLOW_VALIDATION_GUIDANCE_AUTHORITY = "apps/dify-desktop/renderer/workflow/workflow-contract.js";
 const WORKFLOW_VALIDATION_GUIDANCE_DEFAULTS_BY_CODE = Object.freeze({
-  array_min_items: "璇疯ˉ榻愭渶灏戞暟閲忚姹傘€?",
-  conditional_required: "璇疯ˉ榻愯瀛楁渚濊禆鐨勫繀濉惌閰嶉」銆?",
-  empty_key: "璇峰垹闄ょ┖閿悕锛屾垨琛ラ綈鏈夋晥閿悕銆?",
-  enum_not_allowed: "璇锋敼鎴愬绾﹀厑璁哥殑鏋氫妇鍊笺€?",
-  json_not_compatible: "璇锋敼鎴?JSON 鍏煎鐨勬暟鎹粨鏋勩€?",
-  membership_required: "璇风‘淇濊鍊煎嚭鐜板湪鍏佽鍒楄〃涓€?",
-  min_value: "璇锋妸璇ユ暟鍊艰皟鏁村埌濂戠害鍏佽鑼冨洿銆?",
-  missing_one_of: "璇疯嚦灏戣ˉ榻愪竴涓繀闇€璇嗗埆瀛楁銆?",
-  paired_required: "璇疯ˉ榻愯瀛楁渚濊禆鐨勫繀濉惌閰嶉」銆?",
-  required: "璇疯ˉ榻愯蹇呭～瀛楁銆?",
-  string_empty: "璇峰～鍐欓潪绌哄瓧绗︿覆鍊笺€?",
-  type_array: "璇蜂慨姝ｈ瀛楁鐨勬暟鎹被鍨嬨€?",
-  type_boolean: "璇蜂慨姝ｈ瀛楁鐨勬暟鎹被鍨嬨€?",
-  type_integer: "璇蜂慨姝ｈ瀛楁鐨勬暟鎹被鍨嬨€?",
-  type_number: "璇蜂慨姝ｈ瀛楁鐨勬暟鎹被鍨嬨€?",
-  type_object: "璇蜂慨姝ｈ瀛楁鐨勬暟鎹被鍨嬨€?",
-  type_string: "璇蜂慨姝ｈ瀛楁鐨勬暟鎹被鍨嬨€?",
-  undefined_not_allowed: "璇锋彁渚涙槑纭€硷紝涓嶈淇濈暀鏈畾涔夌姸鎬併€?",
-  unknown_node_type: "璇锋浛鎹㈣妭鐐圭被鍨嬶紝鎴栧厛鍚屾 Rust manifest / local node policy銆?",
-  unsupported_validator_kind: "褰撳墠杩愯鏃惰繕涓嶆敮鎸佽鏍￠獙鍣紝璇峰厛鍚屾 contract/runtime銆?",
-  validation_error: "璇锋牴鎹敊璇矾寰勬鏌ュ綋鍓嶆祦绋嬫垨鑺傜偣閰嶇疆銆?",
-  workflow_contract_invalid: "璇锋寜娴佺▼濂戠害淇褰撳墠 workflow銆?",
-  workflow_load_invalid_json: "鏃犳硶瑙ｆ瀽娴佺▼ JSON锛岃妫€鏌ユ枃浠舵槸鍚︽崯鍧忔垨鏍煎紡涓嶆纭€?",
-  workflow_load_failed: "鍔犺浇娴佺▼澶辫触锛岃妫€鏌ユ枃浠舵槸鍚﹀瓨鍦ㄦ垨鍐呭鏄惁鍙銆?",
+  array_min_items: "请补齐最少数量要求。",
+  conditional_required: "请补齐该字段依赖的必填搭配项。",
+  empty_key: "请删除空键名，或补齐有效键名。",
+  enum_not_allowed: "请改成契约允许的枚举值。",
+  json_not_compatible: "请改成 JSON 兼容的数据结构。",
+  membership_required: "请确认该值出现在允许列表中。",
+  min_value: "请把该数值调整到契约允许范围。",
+  missing_one_of: "请至少补齐一个必需识别字段。",
+  paired_required: "请补齐该字段依赖的必填搭配项。",
+  required: "请补齐该必填字段。",
+  string_empty: "请填写非空字符串值。",
+  type_array: "请修正该字段的数据类型。",
+  type_boolean: "请修正该字段的数据类型。",
+  type_integer: "请修正该字段的数据类型。",
+  type_number: "请修正该字段的数据类型。",
+  type_object: "请修正该字段的数据类型。",
+  type_string: "请修正该字段的数据类型。",
+  undefined_not_allowed: "请提供明确值，不要保留未定义状态。",
+  unknown_node_type: "请替换节点类型，或先同步 Rust manifest / local node policy。",
+  unsupported_validator_kind: "当前运行时还不支持该校验器，请先同步 contract/runtime。",
+  validation_error: "请根据错误路径检查当前流程或节点配置。",
+  workflow_contract_invalid: "请按流程契约修复当前 workflow。",
+  workflow_load_invalid_json: "无法解析流程 JSON，请检查文件是否损坏或格式不正确。",
+  workflow_load_failed: "加载流程失败，请检查文件是否存在或内容是否可读。",
 });
 const WORKFLOW_VALIDATION_GUIDANCE_PATH_OVERRIDES = Object.freeze([
   {
     code: "required",
     path: "workflow.version",
-    resolution_hint: "璇峰厛鎶婃祦绋嬭縼绉诲埌甯﹂《灞?version 鐨勬牸寮忓悗鍐嶄繚瀛樸€佽繍琛屾垨鍙戝竷銆?",
+    resolution_hint: "请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。",
   },
 ]);
 const WORKFLOW_VALIDATION_GUIDANCE_OVERRIDE_MAP = Object.freeze({
-  "required::workflow.version": "璇峰厛鎶婃祦绋嬭縼绉诲埌甯﹂《灞?version 鐨勬牸寮忓悗鍐嶄繚瀛樸€佽繍琛屾垨鍙戝竷銆?",
+  "required::workflow.version": "请先把流程迁移到带顶层 version 的格式后再保存、运行或发布。",
 });
 const WORKFLOW_VERSION_MIGRATION_NOTE = `workflow.version migrated to ${WORKFLOW_SCHEMA_VERSION}`;
 
@@ -147,7 +147,7 @@ function formatWorkflowContractError(error) {
   }
   const errorCode = String(error?.error_code || error?.code || "").trim();
   if (errorCode === "workflow_load_invalid_json") {
-    return `[${errorCode}] 鏃犳硶瑙ｆ瀽娴佺▼ JSON锛岃妫€鏌ユ枃浠舵槸鍚︽崯鍧忔垨鏍煎紡涓嶆纭€?`;
+    return `[${errorCode}] 无法解析流程 JSON，请检查文件是否损坏或格式不正确。`;
   }
   if (errorCode) {
     return `[${errorCode}] ${String(error?.error || error?.message || "unknown error")}`;

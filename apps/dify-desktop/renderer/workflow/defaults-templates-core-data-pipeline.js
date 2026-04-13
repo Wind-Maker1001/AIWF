@@ -2,7 +2,7 @@ export const NODE_CONFIG_TEMPLATES_CORE_DATA_PIPELINE = {
   ingest_files: {},
   clean_md: {
     export_canonical_bundle: false,
-    canonical_title: "AIWF 鐔熻倝璇枡",
+    canonical_title: "AIWF 熟肉语料",
   },
   compute_rust: {},
   transform_rows_v3: {},

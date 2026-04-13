@@ -9,7 +9,7 @@ function createWorkflowGraphShellUi(els, deps = {}) {
     setSelectedEdge = () => {},
     renderAll = () => {},
     setStatus = () => {},
-    getResetWorkflowName = () => "鑷敱缂栨帓娴佺▼",
+    getResetWorkflowName = () => "自由编排流程",
     renderMigrationReport = () => {},
   } = deps;
 

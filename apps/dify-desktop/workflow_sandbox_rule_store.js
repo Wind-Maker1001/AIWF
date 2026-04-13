@@ -174,7 +174,7 @@ function createWorkflowSandboxRuleStore(deps = {}) {
 
   async function getRuntimeRules(cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteGetRules(cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -203,7 +203,7 @@ function createWorkflowSandboxRuleStore(deps = {}) {
 
   async function getRules(cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteGetRules(cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -212,7 +212,7 @@ function createWorkflowSandboxRuleStore(deps = {}) {
 
   async function saveRules(req, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteSaveRules(req, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -221,7 +221,7 @@ function createWorkflowSandboxRuleStore(deps = {}) {
 
   async function muteAlert(req, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteMute(req, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -230,7 +230,7 @@ function createWorkflowSandboxRuleStore(deps = {}) {
 
   async function listVersions(limit = 100, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteListVersions(limit, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -239,7 +239,7 @@ function createWorkflowSandboxRuleStore(deps = {}) {
 
   async function compareVersions(versionA, versionB, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteCompareVersions(versionA, versionB, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -248,7 +248,7 @@ function createWorkflowSandboxRuleStore(deps = {}) {
 
   async function rollbackVersion(versionId, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteRollback(versionId, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);

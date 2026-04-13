@@ -198,7 +198,9 @@ class JobControllerContractTest {
         mockMvc.perform(get("/api/v1/jobs/job-db-down"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.ok").value(false))
-                .andExpect(jsonPath("$.error").value("data_store_unavailable"));
+                .andExpect(jsonPath("$.error").value("data_store_unavailable"))
+                .andExpect(jsonPath("$.message").value("data store unavailable"))
+                .andExpect(jsonPath("$.cause").doesNotExist());
     }
 
     @Test

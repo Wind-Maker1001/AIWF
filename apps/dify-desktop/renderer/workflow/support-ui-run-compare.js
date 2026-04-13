@@ -15,33 +15,33 @@ function createWorkflowSupportRunCompare(els, deps = {}) {
     const runA = String(els.compareRunA?.value || "").trim();
     const runB = String(els.compareRunB?.value || "").trim();
     if (!runA || !runB) {
-      setStatus("璇峰～鍐?Run A / Run B", false);
+      setStatus("请先填写 Run A / Run B", false);
       return;
     }
     const out = await window.aiwfDesktop.compareWorkflowRuns({ run_a: runA, run_b: runB });
     setLastCompareResult(out);
     els.log.textContent = JSON.stringify(out, null, 2);
     renderer.renderCompareResult(out);
-    setStatus(out?.ok ? "杩愯瀵规瘮瀹屾垚" : `杩愯瀵规瘮澶辫触: ${formatAiwfError(out)}`, !!out?.ok);
+    setStatus(out?.ok ? "运行对比完成" : `运行对比失败: ${formatAiwfError(out)}`, !!out?.ok);
   }
 
   async function exportCompareReport() {
     const runA = String(els.compareRunA?.value || "").trim();
     const runB = String(els.compareRunB?.value || "").trim();
     if (!runA || !runB) {
-      setStatus("璇峰厛濉啓 Run A / Run B", false);
+      setStatus("请先填写 Run A / Run B", false);
       return;
     }
     try {
       const format = String(els.compareReportFormat?.value || "md").trim() || "md";
       const out = await window.aiwfDesktop.exportCompareReport({ run_a: runA, run_b: runB, format });
       if (!out?.ok) {
-        if (!out?.canceled) setStatus(`瀵煎嚭瀵规瘮鎶ュ憡澶辫触: ${formatAiwfError(out)}`, false);
+        if (!out?.canceled) setStatus(`导出运行对比报告失败: ${formatAiwfError(out)}`, false);
         return;
       }
-      setStatus(`瀵规瘮鎶ュ憡宸插鍑? ${out.path}`, true);
+      setStatus(`运行对比报告已导出: ${out.path}`, true);
     } catch (error) {
-      setStatus(`瀵煎嚭瀵规瘮鎶ュ憡澶辫触: ${error}`, false);
+      setStatus(`导出运行对比报告失败: ${error}`, false);
     }
   }
 

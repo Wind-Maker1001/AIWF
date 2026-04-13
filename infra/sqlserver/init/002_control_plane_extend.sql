@@ -32,7 +32,7 @@ BEGIN
 END
 GO
 
--- llm_calls (閸欘亝鏂侀懘杈ㄦ櫛閸氬海娈?meta閿涘苯鍩嗛弨鎯у斧婵妲戠紒?
+-- llm_calls (request/response metadata)
 IF OBJECT_ID('dbo.llm_calls','U') IS NULL
 BEGIN
   CREATE TABLE dbo.llm_calls (

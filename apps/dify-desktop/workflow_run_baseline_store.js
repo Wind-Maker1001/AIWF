@@ -96,7 +96,7 @@ function createWorkflowRunBaselineStore(deps = {}) {
 
   async function list(limit = 200, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteList(limit, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -105,7 +105,7 @@ function createWorkflowRunBaselineStore(deps = {}) {
 
   async function save(req, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteSave(req, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);

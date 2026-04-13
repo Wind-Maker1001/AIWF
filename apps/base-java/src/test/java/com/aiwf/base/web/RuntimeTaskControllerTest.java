@@ -125,4 +125,17 @@ class RuntimeTaskControllerTest {
                 .andExpect(jsonPath("$.error").value("runtime_task_status_invalid"))
                 .andExpect(jsonPath("$.status").value("weird"));
     }
+
+    @Test
+    void getTaskReturnsStoreUnavailableShapeWithoutCause() throws Exception {
+        when(tasks.getTask(eq("db-down")))
+                .thenThrow(ApiException.serviceUnavailable("runtime_task_store_unavailable", "runtime task store unavailable"));
+
+        mockMvc.perform(get("/api/v1/runtime/tasks/db-down"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("runtime_task_store_unavailable"))
+                .andExpect(jsonPath("$.message").value("runtime task store unavailable"))
+                .andExpect(jsonPath("$.cause").doesNotExist());
+    }
 }

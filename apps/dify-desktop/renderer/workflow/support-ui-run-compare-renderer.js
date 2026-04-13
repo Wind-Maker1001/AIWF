@@ -4,8 +4,8 @@ function createWorkflowSupportRunCompareRenderer(els) {
   function renderCompareResult(out) {
     if (!els.compareSummary || !els.compareRows) return;
     if (!out?.ok) {
-      els.compareSummary.textContent = `瀵规瘮澶辫触: ${formatAiwfError(out)}`;
-      els.compareRows.innerHTML = '<tr><td colspan="5" style="color:#74879b">鏆傛棤</td></tr>';
+      els.compareSummary.textContent = `运行对比失败: ${formatAiwfError(out)}`;
+      els.compareRows.innerHTML = '<tr><td colspan="5" style="color:#74879b">暂无</td></tr>';
       return;
     }
     const summary = out.summary || {};
@@ -20,9 +20,9 @@ function createWorkflowSupportRunCompareRenderer(els) {
       if (onlyChanged && !(row.status_changed || delta >= safeDelta)) return false;
       return true;
     });
-    els.compareSummary.textContent = `A:${summary.run_a || "-"} | B:${summary.run_b || "-"} | changed_nodes:${summary.changed_nodes || 0} | visible:${rows.length}/${sourceRows.length}`;
+    els.compareSummary.textContent = `Run A: ${summary.run_a || "-"} | Run B: ${summary.run_b || "-"} | 变更节点: ${summary.changed_nodes || 0} | 当前显示: ${rows.length}/${sourceRows.length}`;
     if (!rows.length) {
-      els.compareRows.innerHTML = '<tr><td colspan="5" style="color:#74879b">鏆傛棤</td></tr>';
+      els.compareRows.innerHTML = '<tr><td colspan="5" style="color:#74879b">暂无</td></tr>';
       return;
     }
     els.compareRows.innerHTML = "";

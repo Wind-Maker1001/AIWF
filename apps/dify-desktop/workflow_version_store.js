@@ -206,7 +206,7 @@ function createWorkflowVersionStore(deps = {}) {
 
   async function recordVersion(item, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteRecordVersion(item, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -215,7 +215,7 @@ function createWorkflowVersionStore(deps = {}) {
 
   async function listVersions(limit = 200, workflowName = "", cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteListVersions(limit, workflowName, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);
@@ -223,13 +223,13 @@ function createWorkflowVersionStore(deps = {}) {
   }
 
   async function getVersion(versionId, cfg = null) {
-    _ = resolveProvider(cfg);
+    resolveProvider(cfg);
     return remoteGetVersion(versionId, cfg);
   }
 
   async function compareVersions(versionA, versionB, cfg = null) {
     try {
-      _ = resolveProvider(cfg);
+      resolveProvider(cfg);
       return await remoteCompareVersions(versionA, versionB, cfg);
     } catch (error) {
       return workflowStoreRemoteErrorResult(error);

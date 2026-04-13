@@ -64,15 +64,15 @@ function createWorkflowReportSupport(deps) {
     const summary = output.summary || {};
     const rows = Array.isArray(output.node_diff) ? output.node_diff : [];
     const lines = [
-      "# AIWF 杩愯瀵规瘮鎶ュ憡",
+      "# AIWF 运行对比报告",
       "",
-      `- 鐢熸垚鏃堕棿: ${new Date().toISOString()}`,
+      `- 生成时间: ${new Date().toISOString()}`,
       `- Run A: ${summary.run_a || "-"}`,
       `- Run B: ${summary.run_b || "-"}`,
-      `- 鍙樺寲鑺傜偣鏁? ${Number(summary.changed_nodes || 0)}`,
+      `- 变更节点数: ${Number(summary.changed_nodes || 0)}`,
       "",
-      "| 鑺傜偣 | 鐘舵€丄 | 鐘舵€丅 | 鑰楁椂A(s) | 鑰楁椂B(s) | 螖(s) |",
-      "|---|---|---:|---:|---:|---:|",
+      "| 节点 | 状态A | 状态B | 耗时A(s) | 耗时B(s) | 差值(s) |",
+      "|---|---|---|---:|---:|---:|",
     ];
     rows.forEach((row) => {
       lines.push(`| ${String(row.id || "")}(${String(row.type || "")}) | ${String(row.status_a || "")} | ${String(row.status_b || "")} | ${Number(row.seconds_a || 0).toFixed(3)} | ${Number(row.seconds_b || 0).toFixed(3)} | ${Number(row.seconds_delta || 0).toFixed(3)} |`);
@@ -88,7 +88,7 @@ function createWorkflowReportSupport(deps) {
       const bg = changed ? " style=\"background:#fff8f2\"" : "";
       return `<tr${bg}><td>${String(row.id || "")}(${String(row.type || "")})</td><td>${String(row.status_a || "")}</td><td>${String(row.status_b || "")}</td><td>${Number(row.seconds_a || 0).toFixed(3)}</td><td>${Number(row.seconds_b || 0).toFixed(3)}</td><td>${Number(row.seconds_delta || 0).toFixed(3)}</td></tr>`;
     }).join("");
-    return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/><title>AIWF 杩愯瀵规瘮鎶ュ憡</title><style>body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;padding:16px;color:#1f2d3d}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d8e1ec;padding:6px 8px;font-size:13px}th{background:#f3f7fd;text-align:left}</style></head><body><h2>AIWF 杩愯瀵规瘮鎶ュ憡</h2><p>鐢熸垚鏃堕棿: ${new Date().toISOString()}<br/>Run A: ${summary.run_a || "-"}<br/>Run B: ${summary.run_b || "-"}<br/>鍙樺寲鑺傜偣鏁? ${Number(summary.changed_nodes || 0)}</p><table><thead><tr><th>鑺傜偣</th><th>鐘舵€丄</th><th>鐘舵€丅</th><th>鑰楁椂A(s)</th><th>鑰楁椂B(s)</th><th>螖(s)</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
+    return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"/><title>AIWF 运行对比报告</title><style>body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;padding:16px;color:#1f2d3d}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d8e1ec;padding:6px 8px;font-size:13px}th{background:#f3f7fd;text-align:left}</style></head><body><h2>AIWF 运行对比报告</h2><p>生成时间: ${new Date().toISOString()}<br/>Run A: ${summary.run_a || "-"}<br/>Run B: ${summary.run_b || "-"}<br/>变更节点数: ${Number(summary.changed_nodes || 0)}</p><table><thead><tr><th>节点</th><th>状态A</th><th>状态B</th><th>耗时A(s)</th><th>耗时B(s)</th><th>差值(s)</th></tr></thead><tbody>${tableRows}</tbody></table></body></html>`;
   }
 
   function renderPreflightMarkdown(report) {
@@ -96,17 +96,17 @@ function createWorkflowReportSupport(deps) {
     const issues = Array.isArray(safeReport.issues) ? safeReport.issues : [];
     const risk = safeReport && typeof safeReport.risk === "object" ? safeReport.risk : null;
     const lines = [
-      "# AIWF 杩愯鍓嶉妫€鎶ュ憡",
+      "# AIWF 预检报告",
       "",
-      `- 鐢熸垚鏃堕棿: ${new Date().toISOString()}`,
-      `- 棰勬鏃堕棿: ${String(safeReport.ts || "") || "-"}`,
-      `- 鏄惁閫氳繃: ${safeReport.ok ? "true" : "false"}`,
-      `- 闂鏁? ${issues.length}`,
+      `- 生成时间: ${new Date().toISOString()}`,
+      `- 预检时间: ${String(safeReport.ts || "") || "-"}`,
+      `- 是否通过: ${safeReport.ok ? "true" : "false"}`,
+      `- 问题数: ${issues.length}`,
       "",
-      "| 绾у埆 | 绫诲瀷 | 鑺傜偣ID | 璇存槑 |",
+      "| 级别 | 类型 | 节点ID | 说明 |",
       "|---|---|---|---|",
     ];
-    if (risk) lines.splice(5, 0, `- 椋庨櫓绛夌骇: ${String(risk.label || "")} (${Number(risk.score || 0)}/100)`);
+    if (risk) lines.splice(5, 0, `- 风险等级: ${String(risk.label || "")} (${Number(risk.score || 0)}/100)`);
     issues.forEach((item) => {
       lines.push(`| ${String(item.level || "")} | ${String(item.kind || "")} | ${String(item.node_id || "")} | ${String(item.message || "").replace(/\|/g, "\\|")} |`);
     });
@@ -135,15 +135,15 @@ function createWorkflowReportSupport(deps) {
     const after = safeReport.after && typeof safeReport.after === "object" ? safeReport.after : {};
     const fix = safeReport.auto_fix && typeof safeReport.auto_fix === "object" ? safeReport.auto_fix : {};
     return [
-      "# AIWF 妯℃澘楠屾敹鎶ュ憡",
+      "# AIWF 模板验收报告",
       "",
-      `- 鐢熸垚鏃堕棿: ${new Date().toISOString()}`,
-      `- 妯℃澘ID: ${String(safeReport.template_id || "-")}`,
-      `- 妯℃澘鍚嶇О: ${String(safeReport.template_name || "-")}`,
-      `- 楠屾敹缁撹: ${safeReport.accepted ? "閫氳繃" : "鏈€氳繃"}`,
-      `- 棰勬鍓? ${before.ok ? "閫氳繃" : "鏈€氳繃"} / 椋庨櫓 ${Number(before?.risk?.score || 0)}/100`,
-      `- 棰勬鍚? ${after.ok ? "閫氳繃" : "鏈€氳繃"} / 椋庨櫓 ${Number(after?.risk?.score || 0)}/100`,
-      `- 鑷姩淇: 閲嶅杩炵嚎 ${Number(fix.removed_dup_edges || 0)}锛岃嚜鐜?${Number(fix.removed_self_loops || 0)}锛屾柇瑁傝繛绾?${Number(fix.removed_broken_edges || 0)}锛屽绔嬭妭鐐?${Number(fix.removed_isolated_nodes || 0)}`,
+      `- 生成时间: ${new Date().toISOString()}`,
+      `- 模板ID: ${String(safeReport.template_id || "-")}`,
+      `- 模板名称: ${String(safeReport.template_name || "-")}`,
+      `- 验收结果: ${safeReport.accepted ? "通过" : "未通过"}`,
+      `- 预检前: ${before.ok ? "通过" : "未通过"} / 风险 ${Number(before?.risk?.score || 0)}/100`,
+      `- 预检后: ${after.ok ? "通过" : "未通过"} / 风险 ${Number(after?.risk?.score || 0)}/100`,
+      `- 自动修复: 重复连线 ${Number(fix.removed_dup_edges || 0)}，自环 ${Number(fix.removed_self_loops || 0)}，断裂连线 ${Number(fix.removed_broken_edges || 0)}，孤立节点 ${Number(fix.removed_isolated_nodes || 0)}`,
       "",
     ].join("\n");
   }

@@ -63,6 +63,38 @@ if ($strictEnv.ToLowerInvariant() -in @("1","true","yes","on")) {
   $strictMojibake = $true
 }
 
+$cjkMojibakeSourceFiles = @(
+  (Join-Path $Root "apps/dify-desktop/renderer/workflow/workflow-contract.js"),
+  (Join-Path $Root "apps/dify-desktop/renderer/workflow/preflight-controller-ui.js"),
+  (Join-Path $Root "apps/dify-desktop/renderer/workflow/support-ui-run-compare.js"),
+  (Join-Path $Root "apps/dify-desktop/renderer/workflow/support-ui-run-compare-renderer.js"),
+  (Join-Path $Root "apps/dify-desktop/renderer/workflow/graph-shell-ui.js"),
+  (Join-Path $Root "apps/dify-desktop/renderer/workflow/static-config.js"),
+  (Join-Path $Root "apps/dify-desktop/renderer/workflow/defaults-templates-core-data-pipeline.js"),
+  (Join-Path $Root "apps/dify-desktop/renderer/workflow/run-payload-support.js"),
+  (Join-Path $Root "infra/sqlserver/init/002_control_plane_extend.sql"),
+  (Join-Path $Root "apps/dify-desktop/workflow_ipc_reports.js"),
+  (Join-Path $Root "apps/dify-desktop/workflow_ipc_store.js")
+) | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
+
+$cjkMojibakeFileSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($item in $cjkMojibakeSourceFiles) {
+  $null = $cjkMojibakeFileSet.Add($item)
+}
+
+$privateUseAllowedFiles = @(
+  (Join-Path $Root "apps/dify-desktop/tests-node/active_copy_regression.test.js"),
+  (Join-Path $Root "ops/scripts/check_encoding_health.ps1")
+) | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
+
+$privateUseAllowedFileSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($item in $privateUseAllowedFiles) {
+  $null = $privateUseAllowedFileSet.Add($item)
+}
+
+$cjkMojibakePattern = '(?:婵傛垹瀹.|閺嶏繝鐛.|閺夆晜鍔橀.|濡澘瀚ˉ|閺嗗倹妫.|閻旂喕鍊.|娑撹櫣鈹.|鐞涒偓缂.|閸╄櫣鍤.|濞翠胶鈻煎)'
+$cjkPrivateUsePattern = "[\uE000-\uF8FF]"
+
 foreach ($f in $files) {
   $text = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
   if ($text.Contains([char]0xFFFD)) {
@@ -70,6 +102,15 @@ foreach ($f in $files) {
   }
   if ($text -match $mojibakePattern) {
     $warns += ("{0}: contains likely mojibake glyphs" -f $f.FullName)
+  }
+  $fullPath = [System.IO.Path]::GetFullPath($f.FullName)
+  if (($text -match $cjkPrivateUsePattern) -and (-not $privateUseAllowedFileSet.Contains($fullPath))) {
+    $warns += ("{0}: contains private-use glyphs" -f $f.FullName)
+  }
+  if ($cjkMojibakeFileSet.Contains($fullPath)) {
+    if ($text -match $cjkMojibakePattern) {
+      $warns += ("{0}: contains likely CJK mojibake patterns" -f $f.FullName)
+    }
   }
 }
 

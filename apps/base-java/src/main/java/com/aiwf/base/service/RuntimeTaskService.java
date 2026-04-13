@@ -66,7 +66,7 @@ public class RuntimeTaskService {
             );
             return new RuntimeTaskUpsertResp(true, effective.taskId(), effective.tenantId(), effective.status().toDb());
         } catch (DataAccessException e) {
-            throw ApiException.serviceUnavailable("runtime_task_store_unavailable", String.valueOf(e.getMostSpecificCause()));
+            throw ApiException.serviceUnavailable("runtime_task_store_unavailable", "runtime task store unavailable");
         }
     }
 
@@ -75,7 +75,7 @@ public class RuntimeTaskService {
         try {
             row = tasks.getTask(taskId);
         } catch (DataAccessException e) {
-            throw ApiException.serviceUnavailable("runtime_task_store_unavailable", String.valueOf(e.getMostSpecificCause()));
+            throw ApiException.serviceUnavailable("runtime_task_store_unavailable", "runtime task store unavailable");
         }
         if (row == null) {
             throw ApiException.notFound("task_not_found", "task not found", Map.of("task_id", taskId));
@@ -89,7 +89,7 @@ public class RuntimeTaskService {
         try {
             out = tasks.cancelTask(taskId, now);
         } catch (DataAccessException e) {
-            throw ApiException.serviceUnavailable("runtime_task_store_unavailable", String.valueOf(e.getMostSpecificCause()));
+            throw ApiException.serviceUnavailable("runtime_task_store_unavailable", "runtime task store unavailable");
         }
         RuntimeTaskRow task = out.task();
         if (task == null) {
@@ -107,7 +107,7 @@ public class RuntimeTaskService {
                     tasks.listTasksByTenant(effectiveTenantId, limit).stream().map(RuntimeTaskServiceSupport::toRuntimeTaskResp).toList()
             );
         } catch (DataAccessException e) {
-            throw ApiException.serviceUnavailable("runtime_task_store_unavailable", String.valueOf(e.getMostSpecificCause()));
+            throw ApiException.serviceUnavailable("runtime_task_store_unavailable", "runtime task store unavailable");
         }
     }
 }

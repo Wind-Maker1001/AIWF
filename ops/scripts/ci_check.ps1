@@ -2764,7 +2764,30 @@ if (-not $SkipDesktopUiTests) {
   }
   Ok "desktop workflow UI tests passed"
 
-  if (-not $SkipDesktopRealSampleAcceptance) {
+  $isCi = Test-IsCiEnvironment
+  $desktopAcceptanceBootstrapTimeoutSeconds = if ($isCi) { 600 } else { 90 }
+  $runDesktopRealSampleAcceptance = -not $SkipDesktopRealSampleAcceptance
+  $runDesktopFinanceTemplateAcceptance = -not $SkipDesktopFinanceTemplateAcceptance
+  if ($runDesktopRealSampleAcceptance -or $runDesktopFinanceTemplateAcceptance) {
+    if (Test-Path $restartServicesScript) {
+      Info "ensuring base/glue/accel services are healthy before desktop acceptance"
+      powershell -ExecutionPolicy Bypass -File $restartServicesScript -EnvFile $EnvFile -TimeoutSeconds $desktopAcceptanceBootstrapTimeoutSeconds
+      if ($LASTEXITCODE -ne 0) {
+        if ($isCi) {
+          throw "service bootstrap before desktop acceptance failed"
+        }
+        Warn "service bootstrap before desktop acceptance failed in local mode; skip desktop acceptance checks"
+        $runDesktopRealSampleAcceptance = $false
+        $runDesktopFinanceTemplateAcceptance = $false
+      } else {
+        Ok "service bootstrap before desktop acceptance passed"
+      }
+    } else {
+      Warn "restart services script not found, continue without desktop acceptance bootstrap: $restartServicesScript"
+    }
+  }
+
+  if ($runDesktopRealSampleAcceptance) {
     if (-not (Test-Path $desktopRealSampleScript)) {
       throw "desktop real sample acceptance script not found: $desktopRealSampleScript"
     }
@@ -2778,7 +2801,7 @@ if (-not $SkipDesktopUiTests) {
     Warn "skip desktop real sample acceptance"
   }
 
-  if (-not $SkipDesktopFinanceTemplateAcceptance) {
+  if ($runDesktopFinanceTemplateAcceptance) {
     if (-not (Test-Path $desktopFinanceTemplateScript)) {
       throw "desktop finance template acceptance script not found: $desktopFinanceTemplateScript"
     }

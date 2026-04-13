@@ -95,7 +95,7 @@ class RuntimeTaskServiceTest {
 
         assertThatThrownBy(() -> service.listTasksByTenant("tenant-a", 100))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("sql down");
+                .hasMessageContaining("runtime task store unavailable");
     }
 
     @Test
