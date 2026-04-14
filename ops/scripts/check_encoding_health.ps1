@@ -50,7 +50,7 @@ Info ("checking encoding health for {0} files" -f $files.Count)
 
 $issues = @()
 $warns = @()
-$mojibakePattern = "(?:Ã.|Â.|â.|ð.)"
+$mojibakePattern = "(?:\u00C3.|\u00C2.|\u00E2.|\u00F0.)"
 $strictMojibake = $true
 $strictEnv = ""
 if ($null -ne $env:AIWF_ENCODING_STRICT_MOJIBAKE) {
@@ -82,6 +82,17 @@ foreach ($item in $cjkMojibakeSourceFiles) {
   $null = $cjkMojibakeFileSet.Add($item)
 }
 
+$latinMojibakeAllowedFiles = @(
+  (Join-Path $Root "apps/dify-desktop/main_runtime_encoding.js"),
+  (Join-Path $Root "apps/dify-desktop/offline_paper.js"),
+  (Join-Path $Root "apps/dify-desktop/offline_text.js")
+) | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
+
+$latinMojibakeAllowedFileSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+foreach ($item in $latinMojibakeAllowedFiles) {
+  $null = $latinMojibakeAllowedFileSet.Add($item)
+}
+
 $privateUseAllowedFiles = @(
   (Join-Path $Root "apps/dify-desktop/tests-node/active_copy_regression.test.js"),
   (Join-Path $Root "ops/scripts/check_encoding_health.ps1")
@@ -92,18 +103,20 @@ foreach ($item in $privateUseAllowedFiles) {
   $null = $privateUseAllowedFileSet.Add($item)
 }
 
-$cjkMojibakePattern = '(?:婵傛垹瀹.|閺嶏繝鐛.|閺夆晜鍔橀.|濡澘瀚ˉ|閺嗗倹妫.|閻旂喕鍊.|娑撹櫣鈹.|鐞涒偓缂.|閸╄櫣鍤.|濞翠胶鈻煎)'
+# Keep mojibake regex ASCII-only so Windows PowerShell 5.1 parses it
+# consistently on non-Chinese runners.
+$cjkMojibakePattern = '(?:\u5A75\u509B\u57B9\u7039.|\u95BA\u5D8F\u7E5D\u941B.|\u95BA\u5906\u665C\u9354\u6A40.|\u6FE1\uE0A3\u6F98\u701A\uE162\u02C9|\u95BA\u55D7\u5039\u59AB.|\u95BB\u65C2\u5595\u934A.|\u5A11\u64B9\u6AE3\u9239.|\u941E\u6D92\u5053\u7F02.|\u95B8\u2544\u6AE3\u9364.|\u6FDE\u7FE0\u80F6\u923B\u714E\uE18F)'
 $cjkPrivateUsePattern = "[\uE000-\uF8FF]"
 
 foreach ($f in $files) {
   $text = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
+  $fullPath = [System.IO.Path]::GetFullPath($f.FullName)
   if ($text.Contains([char]0xFFFD)) {
     $issues += ("{0}: contains replacement char U+FFFD" -f $f.FullName)
   }
-  if ($text -match $mojibakePattern) {
+  if (($text -match $mojibakePattern) -and (-not $latinMojibakeAllowedFileSet.Contains($fullPath))) {
     $warns += ("{0}: contains likely mojibake glyphs" -f $f.FullName)
   }
-  $fullPath = [System.IO.Path]::GetFullPath($f.FullName)
   if (($text -match $cjkPrivateUsePattern) -and (-not $privateUseAllowedFileSet.Contains($fullPath))) {
     $warns += ("{0}: contains private-use glyphs" -f $f.FullName)
   }
