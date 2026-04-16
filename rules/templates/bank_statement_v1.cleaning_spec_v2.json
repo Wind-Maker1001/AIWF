@@ -84,9 +84,20 @@
     },
     "include_fields": [],
     "exclude_fields": [],
-    "filters": [],
+    "filters": [
+      { "op": "blank_row" },
+      { "op": "subtotal_row" },
+      { "op": "note_row" },
+      { "op": "header_repeat_row", "header_values": ["account_no", "txn_date", "debit_amount", "credit_amount", "balance"], "min_matches": 2 }
+    ],
     "deduplicate_by": ["account_no", "txn_date", "ref_no", "amount"],
     "deduplicate_keep": "last",
+    "survivorship": {
+      "keys": ["account_no", "txn_date", "ref_no", "amount"],
+      "prefer_non_null_fields": ["counterparty_name", "remark", "ref_no"],
+      "prefer_latest_fields": ["txn_date"],
+      "tie_breaker": "last"
+    },
     "sort_by": [
       { "field": "txn_date", "order": "asc" },
       { "field": "ref_no", "order": "asc" }
@@ -100,8 +111,19 @@
     "string_ops": [
       { "field": "currency", "op": "upper" }
     ],
-    "date_ops": [],
-    "field_ops": []
+    "date_ops": [
+      { "field": "txn_date", "op": "parse_ymd" }
+    ],
+    "field_ops": [
+      { "field": "account_no", "op": "normalize_account_no" },
+      { "field": "counterparty_name", "op": "normalize_name" },
+      { "field": "debit_amount", "op": "strip_currency_symbol" },
+      { "field": "debit_amount", "op": "strip_thousands_sep" },
+      { "field": "credit_amount", "op": "strip_currency_symbol" },
+      { "field": "credit_amount", "op": "strip_thousands_sep" },
+      { "field": "balance", "op": "strip_currency_symbol" },
+      { "field": "balance", "op": "strip_thousands_sep" }
+    ]
   },
   "quality": {
     "required_fields": ["account_no", "txn_date"],
@@ -111,6 +133,13 @@
       "numeric_parse_rate_min": 0.95,
       "date_parse_rate_min": 0.95,
       "allow_empty_output": false
+    },
+    "advanced_rules": {
+      "anomaly_iqr": [
+        { "field": "amount", "max_ratio": 0.1 },
+        { "field": "balance", "max_ratio": 0.1 }
+      ],
+      "block_on_advanced_rules": false
     },
     "image_rules": {},
     "xlsx_rules": {}

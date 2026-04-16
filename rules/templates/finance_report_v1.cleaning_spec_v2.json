@@ -28,6 +28,10 @@
     "include_fields": [],
     "exclude_fields": [],
     "filters": [
+      { "op": "blank_row" },
+      { "op": "subtotal_row" },
+      { "op": "note_row" },
+      { "op": "header_repeat_row", "header_values": ["id", "amount", "currency"], "min_matches": 2 },
       { "field": "amount", "op": "gte", "value": 0 },
       { "field": "amount", "op": "lte", "value": 100000000 }
     ],
@@ -44,7 +48,10 @@
       { "field": "currency", "op": "upper" }
     ],
     "date_ops": [],
-    "field_ops": []
+    "field_ops": [
+      { "field": "amount", "op": "strip_currency_symbol" },
+      { "field": "amount", "op": "strip_thousands_sep" }
+    ]
   },
   "quality": {
     "required_fields": ["id", "amount"],
@@ -54,6 +61,15 @@
       "max_filtered_rows": 100,
       "min_output_rows": 1,
       "allow_empty_output": false
+    },
+    "advanced_rules": {
+      "outlier_zscore": [
+        { "field": "amount", "max_z": 4.0 }
+      ],
+      "anomaly_iqr": [
+        { "field": "amount", "max_ratio": 0.1 }
+      ],
+      "block_on_advanced_rules": false
     },
     "image_rules": {},
     "xlsx_rules": {}

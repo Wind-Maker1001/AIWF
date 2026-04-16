@@ -116,6 +116,12 @@ Authoritative precheck bridge:
   - `blocking_reason_codes`
   - `issues`
   - `suggestions`
+  - `issue_summary`
+  - `suggested_repairs`
+  - `header_ambiguities`
+  - `duplicate_key_risk`
+  - `review_required`
+  - `review_items`
 
 Cleaning local execution mode:
 - `AIWF_CLEANING_RUST_V2_MODE=off|shadow|default`
@@ -155,6 +161,10 @@ Standard evidence and audit outputs:
   - `blocking_reason_codes`
   - `blank_output_expected`
   - `zero_output_unexpected`
+  - `advanced_quality`
+  - `review_analysis`
+  - `manual_review_queue`
+  - `row_samples.before/after`
 
 Published but palette-hidden operator:
 
@@ -171,7 +181,31 @@ Generic rule keys (`params.rules`) for universal row cleaning:
 - `trim_strings` / `lowercase_fields` / `uppercase_fields`
 - `filters: [{"field":"x","op":"gte","value":10}, ...]`
 - `deduplicate_by: ["field1", ...]` + `deduplicate_keep`
+- row-cleaning filters also support:
+  - `blank_row`
+  - `subtotal_row`
+  - `header_repeat_row`
+  - `note_row`
+- field normalization ops also support:
+  - `strip_currency_symbol`
+  - `strip_thousands_sep`
+  - `scale_by_header_unit`
+  - `normalize_phone_cn`
+  - `normalize_account_no`
+  - `normalize_name`
+  - `fix_ocr_digits`
+  - `sign_amount_from_debit_credit`
+- survivorship-based dedup:
+  - `survivorship.keys`
+  - `survivorship.score_fields`
+  - `survivorship.prefer_non_null_fields`
+  - `survivorship.prefer_latest_fields`
+  - `survivorship.tie_breaker`
 - `sort_by: [{"field":"x","order":"asc|desc"}]`
+- advanced quality:
+  - `quality.advanced_rules.outlier_zscore`
+  - `quality.advanced_rules.anomaly_iqr`
+  - `quality.advanced_rules.block_on_advanced_rules`
 
 Legacy rule templates:
 - `rules/templates/generic_minimal.json`

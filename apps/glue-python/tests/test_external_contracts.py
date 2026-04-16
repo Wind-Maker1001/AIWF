@@ -83,6 +83,12 @@ class ExternalContractsTests(unittest.TestCase):
         self.assertIn("recommended_template_id", response_properties)
         self.assertIn("predicted_zero_output_unexpected", response_properties)
         self.assertIn("blocking_reason_codes", response_properties)
+        self.assertIn("issue_summary", response_properties)
+        self.assertIn("suggested_repairs", response_properties)
+        self.assertIn("header_ambiguities", response_properties)
+        self.assertIn("duplicate_key_risk", response_properties)
+        self.assertIn("review_required", response_properties)
+        self.assertIn("review_items", response_properties)
         self.assertIn("contract", response_properties)
 
 
