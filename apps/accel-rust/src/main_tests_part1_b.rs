@@ -808,6 +808,191 @@ fn transform_rows_v2_supports_field_ops() {
 }
 
 #[test]
+fn transform_rows_v2_supports_table_cleaning_field_ops_and_row_filters() {
+    let req = TransformRowsReq {
+        run_id: Some("field-op-table-1".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!({
+                "amount":"¥ 12.5",
+                "phone":"138 0013 8000",
+                "account_no":" 6222-0011 8899 "
+            }),
+            json!({"c1":"ID","c2":"Amount","c3":"Txn Date"}),
+            json!({"note":"note: imported from OCR"}),
+            json!({"amount":"Subtotal","note":"subtotal line"}),
+            json!({"amount":"", "note":"   "}),
+        ]),
+        rules: Some(json!({
+            "execution_engine":"columnar_v1",
+            "filters":[
+                {"op":"header_repeat_row","header_values":["id","amount","txn_date"],"min_matches":2},
+                {"op":"note_row","keywords":["note"]},
+                {"op":"subtotal_row","keywords":["subtotal"]},
+                {"op":"blank_row"}
+            ],
+            "field_ops":[
+                {"field":"amount","op":"strip_currency_symbol"},
+                {"field":"amount","op":"parse_number"},
+                {"field":"amount","op":"scale_by_header_unit","unit":"万元"},
+                {"field":"phone","op":"normalize_phone_cn"},
+                {"field":"account_no","op":"normalize_account_no"}
+            ]
+        })),
+        quality_gates: Some(json!({"min_output_rows":1})),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("table cleaning transform");
+    let row = out
+        .rows
+        .first()
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(out.rows.len(), 1);
+    assert_eq!(row.get("phone").and_then(|v| v.as_str()).unwrap_or(""), "+8613800138000");
+    assert_eq!(row.get("account_no").and_then(|v| v.as_str()).unwrap_or(""), "622200118899");
+    assert_eq!(row.get("amount").and_then(|v| v.as_f64()).unwrap_or_default(), 125000.0);
+    assert_eq!(out.stats.filtered_rows, 4);
+    assert_eq!(out.audit.get("engine").and_then(|v| v.as_str()).unwrap_or(""), "row_v1");
+}
+
+#[test]
+fn transform_rows_v2_supports_survivorship_and_duplicate_explain() {
+    let req = TransformRowsReq {
+        run_id: Some("survivorship-1".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!({
+                "account_no":"6222-0011",
+                "phone":"",
+                "biz_date":"2026-03-01"
+            }),
+            json!({
+                "account_no":"62220011",
+                "phone":"13800138000",
+                "biz_date":"2026-03-02"
+            }),
+        ]),
+        rules: Some(json!({
+            "execution_engine":"columnar_v1",
+            "deduplicate_by":["account_no"],
+            "field_ops":[
+                {"field":"account_no","op":"normalize_account_no"},
+                {"field":"phone","op":"normalize_phone_cn"},
+                {"field":"biz_date","op":"parse_date"}
+            ],
+            "survivorship":{
+                "keys":["account_no"],
+                "prefer_non_null_fields":["phone"],
+                "prefer_latest_fields":["biz_date"],
+                "tie_breaker":"last"
+            }
+        })),
+        quality_gates: Some(json!({"min_output_rows":1})),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("survivorship transform");
+    let row = out
+        .rows
+        .first()
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    let samples = out
+        .audit
+        .get("reason_samples")
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    let duplicate_sample = samples
+        .get("duplicate_removed")
+        .and_then(|v| v.as_array())
+        .and_then(|items| items.first())
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(out.rows.len(), 1);
+    assert_eq!(row.get("phone").and_then(|v| v.as_str()).unwrap_or(""), "+8613800138000");
+    assert_eq!(row.get("biz_date").and_then(|v| v.as_str()).unwrap_or(""), "2026-03-02");
+    assert!(out.quality.get("survivorship_applied").and_then(|v| v.as_bool()).unwrap_or(false));
+    assert_eq!(out.audit.get("engine").and_then(|v| v.as_str()).unwrap_or(""), "row_v1");
+    assert_eq!(duplicate_sample.get("winner_row_id").and_then(|v| v.as_u64()).unwrap_or(0), 2);
+    assert_eq!(duplicate_sample.get("loser_row_id").and_then(|v| v.as_u64()).unwrap_or(0), 1);
+    assert!(
+        duplicate_sample
+            .get("decision_basis")
+            .and_then(|v| v.as_array())
+            .map(|items| items.iter().any(|item| item.as_str() == Some("prefer_non_null_fields:phone")))
+            .unwrap_or(false)
+    );
+}
+
+#[test]
+fn transform_rows_v2_applies_survivorship_keys_without_deduplicate_by() {
+    let req = TransformRowsReq {
+        run_id: Some("survivorship-keys-only".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!({
+                "account_no":"6222-0011",
+                "phone":"",
+                "biz_date":"2026-03-01"
+            }),
+            json!({
+                "account_no":"62220011",
+                "phone":"13800138000",
+                "biz_date":"2026-03-02"
+            }),
+        ]),
+        rules: Some(json!({
+            "execution_engine":"columnar_v1",
+            "field_ops":[
+                {"field":"account_no","op":"normalize_account_no"},
+                {"field":"phone","op":"normalize_phone_cn"},
+                {"field":"biz_date","op":"parse_date"}
+            ],
+            "survivorship":{
+                "keys":["account_no"],
+                "prefer_non_null_fields":["phone"],
+                "prefer_latest_fields":["biz_date"],
+                "tie_breaker":"last"
+            }
+        })),
+        quality_gates: Some(json!({"min_output_rows":1})),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("survivorship keys only transform");
+    assert_eq!(out.rows.len(), 1);
+    assert_eq!(
+        out.quality.get("duplicate_rows_removed").and_then(|v| v.as_u64()).unwrap_or(0),
+        1
+    );
+    assert!(out.quality.get("survivorship_applied").and_then(|v| v.as_bool()).unwrap_or(false));
+}
+
+#[test]
 fn workflow_supports_schema_registry_ops() {
     let run_id = format!(
         "wf-schema-{}",

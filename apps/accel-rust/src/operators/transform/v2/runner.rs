@@ -1,5 +1,5 @@
 use super::*;
-use crate::api_types::CompiledFilter;
+use crate::api_types::{CompiledFilter, FilterOp};
 use std::time::Instant;
 
 struct TransformPrepared {
@@ -21,6 +21,8 @@ struct TransformPrepared {
     exclude_fields: Vec<String>,
     deduplicate_by: Vec<String>,
     dedup_keep: String,
+    survivorship: Value,
+    survivorship_keys: Vec<String>,
     sort_by: Vec<Value>,
     requested_engine: String,
     engine: String,

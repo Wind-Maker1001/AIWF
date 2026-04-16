@@ -675,3 +675,46 @@ async fn workflow_incremental_plan_reuses_http_transform_cache() {
         Some("cache_reuse")
     );
 }
+
+#[test]
+fn quality_check_v4_supports_multiple_outlier_rules() {
+    let q = run_quality_check_v4(QualityCheckV4Req {
+        run_id: Some("q4-outlier-list".to_string()),
+        rows: vec![
+            json!({"amount":1.0,"balance":1.0}),
+            json!({"amount":2.0,"balance":2.0}),
+            json!({"amount":3.0,"balance":3.0}),
+            json!({"amount":4.0,"balance":4.0}),
+            json!({"amount":1000.0,"balance":1000.0}),
+        ],
+        rules: json!({
+            "outlier_zscore": [
+                {"field":"amount","max_z":1.0},
+                {"field":"balance","max_z":1.0}
+            ]
+        }),
+        rules_dsl: None,
+    })
+    .expect("quality_check_v4 multiple outlier rules");
+
+    let violations = q
+        .report
+        .get("violations")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let outlier_details = violations
+        .iter()
+        .find(|item| item.get("rule").and_then(|v| v.as_str()) == Some("outlier_zscore"))
+        .and_then(|item| item.get("details"))
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let fields = outlier_details
+        .iter()
+        .filter_map(|item| item.get("field").and_then(|v| v.as_str()))
+        .collect::<Vec<_>>();
+    assert!(!q.passed);
+    assert!(fields.contains(&"amount"));
+    assert!(fields.contains(&"balance"));
+}

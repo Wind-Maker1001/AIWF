@@ -80,12 +80,23 @@ pub(super) fn prepare_transform_request(
         .and_then(|v| v.as_str())
         .unwrap_or("last")
         .to_lowercase();
+    let survivorship = rule_get(&rules, "survivorship")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let survivorship_keys = {
+        let keys = as_array_str(rule_get(&survivorship, "keys"));
+        if keys.is_empty() {
+            deduplicate_by.clone()
+        } else {
+            keys
+        }
+    };
     let sort_by = rule_get(&rules, "sort_by")
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
     let requested_engine = resolve_transform_engine(&rules);
-    let (engine, engine_reason) = if requested_engine == "auto_v1" {
+    let (mut engine, mut engine_reason) = if requested_engine == "auto_v1" {
         auto_select_engine(input_rows, estimated_bytes, &rules)
     } else {
         (
@@ -93,6 +104,37 @@ pub(super) fn prepare_transform_request(
             format!("requested: {}", requested_engine),
         )
     };
+    let has_row_scoped_filters = compiled_filters.iter().any(|filter| {
+        matches!(
+            &filter.op,
+            FilterOp::BlankRow
+                | FilterOp::SubtotalRow(_)
+                | FilterOp::HeaderRepeatRow { .. }
+                | FilterOp::NoteRow(_)
+        )
+    });
+    let has_survivorship = survivorship
+        .as_object()
+        .map(|obj| !obj.is_empty())
+        .unwrap_or(false)
+        && !survivorship_keys.is_empty();
+    if (engine == "columnar_v1" || engine == "columnar_arrow_v1")
+        && (has_row_scoped_filters || has_survivorship)
+    {
+        let mut reasons: Vec<&str> = Vec::new();
+        if has_row_scoped_filters {
+            reasons.push("row_scoped_filters");
+        }
+        if has_survivorship {
+            reasons.push("survivorship");
+        }
+        engine = "row_v1".to_string();
+        engine_reason = format!(
+            "{}; forced row_v1 for {}",
+            engine_reason,
+            reasons.join("+")
+        );
+    }
     let use_columnar = engine == "columnar_v1" || engine == "columnar_arrow_v1";
     let audit_sample_limit = req
         .schema_hint
@@ -122,6 +164,8 @@ pub(super) fn prepare_transform_request(
         exclude_fields,
         deduplicate_by,
         dedup_keep,
+        survivorship,
+        survivorship_keys,
         sort_by,
         requested_engine,
         engine,

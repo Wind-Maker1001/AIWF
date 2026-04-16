@@ -15,6 +15,13 @@ pub(crate) enum FilterOp {
     Gte(f64),
     Lt(f64),
     Lte(f64),
+    BlankRow,
+    SubtotalRow(Vec<String>),
+    HeaderRepeatRow {
+        header_values: Vec<String>,
+        min_matches: usize,
+    },
+    NoteRow(Vec<String>),
     Invalid,
     Passthrough,
 }

@@ -4,6 +4,53 @@ import re
 from typing import Any, Callable, Dict, List, Tuple
 
 
+_SUBTOTAL_KEYWORDS = (
+    "subtotal",
+    "sub total",
+    "total",
+    "grand total",
+    "合计",
+    "小计",
+    "本页合计",
+    "累计",
+    "汇总",
+)
+_NOTE_KEYWORDS = (
+    "note",
+    "notes",
+    "备注",
+    "说明",
+    "注",
+    "附注",
+)
+_HEADER_REPEAT_HINTS = {
+    "id",
+    "amount",
+    "currency",
+    "biz_date",
+    "account_no",
+    "txn_date",
+    "debit_amount",
+    "credit_amount",
+    "balance",
+    "counterparty_name",
+    "remark",
+    "ref_no",
+    "txn_type",
+    "customer_name",
+    "phone",
+    "city",
+}
+
+
+def _is_missing(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
 def _normalize_null(v: Any, null_tokens: List[str]) -> Any:
     if v is None:
         return None
@@ -34,10 +81,81 @@ def _cast_value(v: Any, cast_type: str, *, to_int: Callable[..., Any], to_float:
     return v, True
 
 
+def _row_text_values(row: Dict[str, Any]) -> List[str]:
+    return [
+        str(value).strip()
+        for key, value in row.items()
+        if not str(key).startswith("_") and not _is_missing(value)
+    ]
+
+
+def _first_non_missing_text(row: Dict[str, Any]) -> str:
+    for key, value in row.items():
+        if str(key).startswith("_"):
+            continue
+        if _is_missing(value):
+            continue
+        return str(value).strip()
+    return ""
+
+
+def _contains_keyword(text: str, keywords: Tuple[str, ...]) -> bool:
+    lowered = str(text or "").strip().lower()
+    if not lowered:
+        return False
+    return any(keyword in lowered for keyword in keywords)
+
+
+def _looks_like_blank_row(row: Dict[str, Any]) -> bool:
+    values = [value for key, value in row.items() if not str(key).startswith("_")]
+    if not values:
+        return True
+    meaningful = 0
+    for value in values:
+        if _is_missing(value):
+            continue
+        if isinstance(value, str) and re.sub(r"[\W_]+", "", value, flags=re.UNICODE) == "":
+            continue
+        meaningful += 1
+    return meaningful == 0
+
+
+def _looks_like_subtotal_row(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    keywords = tuple(str(item).strip().lower() for item in (cfg.get("keywords") or _SUBTOTAL_KEYWORDS) if str(item).strip())
+    return any(_contains_keyword(value, keywords) for value in _row_text_values(row))
+
+
+def _looks_like_note_row(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    keywords = tuple(str(item).strip().lower() for item in (cfg.get("keywords") or _NOTE_KEYWORDS) if str(item).strip())
+    first_text = _first_non_missing_text(row)
+    return bool(first_text) and _contains_keyword(first_text, keywords)
+
+
+def _looks_like_header_repeat_row(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
+    header_values = {str(item).strip().lower() for item in (cfg.get("header_values") or []) if str(item).strip()}
+    if not header_values:
+        header_values = set(_HEADER_REPEAT_HINTS)
+    matched = 0
+    for value in _row_text_values(row):
+        normalized = re.sub(r"[\s\-\/]+", "_", str(value).strip().lower())
+        normalized = re.sub(r"[^0-9a-z_\u4e00-\u9fff]+", "", normalized).strip("_")
+        if normalized in header_values:
+            matched += 1
+    return matched >= int(cfg.get("min_matches", 2) or 2)
+
+
 def _filter_match(row: Dict[str, Any], f: Dict[str, Any], *, to_float: Callable[..., Any]) -> bool:
     field = str(f.get("field") or "").strip()
     op = str(f.get("op") or "eq").strip().lower()
     target = f.get("value")
+    if op == "blank_row":
+        return not _looks_like_blank_row(row)
+    if op == "subtotal_row":
+        return not _looks_like_subtotal_row(row, f)
+    if op == "header_repeat_row":
+        return not _looks_like_header_repeat_row(row, f)
+    if op == "note_row":
+        return not _looks_like_note_row(row, f)
     if not field:
         return True
     val = row.get(field)
@@ -163,7 +281,62 @@ def _round_half_up(value: float, digits: int) -> float:
     return round(value * factor) / factor
 
 
-def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, to_float: Callable[..., Any]) -> tuple[Any, bool]:
+def _normalize_phone_cn(value: Any) -> Any:
+    digits = re.sub(r"\D+", "", str(value or ""))
+    if not digits:
+        return value
+    if digits.startswith("86") and len(digits) >= 11:
+        digits = digits[2:]
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+86{digits}"
+    return value
+
+
+def _normalize_account_no(value: Any) -> Any:
+    text = str(value or "").strip()
+    if not text:
+        return value
+    normalized = re.sub(r"[^0-9A-Za-z]", "", text).upper()
+    return normalized or value
+
+
+def _normalize_name(value: Any) -> Any:
+    text = str(value or "").replace("\u3000", " ").strip()
+    if not text:
+        return value
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _fix_ocr_digit_text(text: str) -> str:
+    translation = str.maketrans({
+        "O": "0",
+        "o": "0",
+        "I": "1",
+        "l": "1",
+        "|": "1",
+        "S": "5",
+        "s": "5",
+        "B": "8",
+    })
+    return text.translate(translation)
+
+
+def _detect_amount_multiplier(text: str) -> float:
+    normalized = str(text or "")
+    lowered = normalized.strip().lower()
+    if "亿元" in normalized or "亿" in normalized or "billion" in lowered:
+        return 100000000.0
+    if "million" in lowered:
+        return 1000000.0
+    if "万元" in normalized or "万" in normalized:
+        return 10000.0
+    if "千元" in normalized or "千" in normalized or "thousand" in lowered:
+        return 1000.0
+    return 1.0
+
+
+def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, row: Dict[str, Any], to_float: Callable[..., Any]) -> tuple[Any, bool]:
     kind = str(op_obj.get("op") or "").strip().lower()
     if not kind:
         return current, False
@@ -203,6 +376,12 @@ def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, to_float: Callable[
     if kind == "parse_number":
         parsed = to_float(cur.replace(",", "").replace("$", "").strip())
         return (parsed if parsed is not None else current), (parsed is not None)
+    if kind == "strip_currency_symbol":
+        stripped = re.sub(r"(?i)(cny|rmb|usd|eur|jpy|人民币|元|圆|￥|¥|\$|€|£)", "", cur).strip()
+        return stripped, stripped != cur
+    if kind == "strip_thousands_sep":
+        stripped = re.sub(r"(?<=\d)[,\s](?=\d{3}\b)", "", cur)
+        return stripped, stripped != cur
     if kind == "round_number":
         parsed = to_float(current)
         if parsed is None:
@@ -220,6 +399,38 @@ def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, to_float: Callable[
         if key in mapping:
             return mapping[key], True
         return current, False
+    if kind == "fix_ocr_digits":
+        fixed = _fix_ocr_digit_text(cur)
+        return fixed, fixed != cur
+    if kind == "normalize_phone_cn":
+        normalized = _normalize_phone_cn(cur)
+        return normalized, normalized != current
+    if kind == "normalize_account_no":
+        normalized = _normalize_account_no(cur)
+        return normalized, normalized != current
+    if kind == "normalize_name":
+        normalized = _normalize_name(cur)
+        return normalized, normalized != current
+    if kind == "scale_by_header_unit":
+        parsed = to_float(current)
+        if parsed is None:
+            return current, False
+        multiplier = to_float(op_obj.get("multiplier"))
+        if multiplier is None:
+            multiplier = _detect_amount_multiplier(
+                str(op_obj.get("raw_header") or op_obj.get("header_text") or op_obj.get("unit") or "")
+            )
+        if multiplier is None:
+            return current, False
+        return float(parsed) * float(multiplier), True
+    if kind == "sign_amount_from_debit_credit":
+        debit_field = str(op_obj.get("debit_field") or "debit_amount").strip()
+        credit_field = str(op_obj.get("credit_field") or "credit_amount").strip()
+        debit = to_float(row.get(debit_field))
+        credit = to_float(row.get(credit_field))
+        if debit is None and credit is None:
+            return current, False
+        return float(credit or 0.0) - float(debit or 0.0), True
     if kind == "parse_date":
         parsed = _parse_ymd_simple(cur)
         if parsed is None:
@@ -227,6 +438,74 @@ def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, to_float: Callable[
         year, month, day = parsed
         return f"{year:04d}-{month:02d}-{day:02d}", True
     return current, False
+
+
+def _survivorship_keys(
+    survivorship: Dict[str, Any],
+    deduplicate_by: List[str],
+) -> List[str]:
+    keys = survivorship.get("keys") if isinstance(survivorship.get("keys"), list) else []
+    out = [str(item).strip() for item in keys if str(item).strip()]
+    return out or [str(item).strip() for item in deduplicate_by if str(item).strip()]
+
+
+def _survivor_compare_value(value: Any, *, to_float: Callable[..., Any]) -> tuple[int, Any]:
+    if value is None:
+        return (0, None)
+    if isinstance(value, str):
+        parsed_date = _parse_ymd_simple(value)
+        if parsed_date is not None:
+            year, month, day = parsed_date
+            return (3, year * 10000 + month * 100 + day)
+    parsed_number = to_float(value)
+    if parsed_number is not None:
+        return (2, float(parsed_number))
+    return (1, str(value))
+
+
+def _choose_survivor(
+    winner: Dict[str, Any],
+    candidate: Dict[str, Any],
+    *,
+    winner_index: int,
+    candidate_index: int,
+    survivorship: Dict[str, Any],
+    to_float: Callable[..., Any],
+) -> tuple[Dict[str, Any], Dict[str, Any], List[str]]:
+    decision_basis: List[str] = []
+
+    for field in [str(item).strip() for item in (survivorship.get("score_fields") or []) if str(item).strip()]:
+        winner_value = _survivor_compare_value(winner.get(field), to_float=to_float)
+        candidate_value = _survivor_compare_value(candidate.get(field), to_float=to_float)
+        if candidate_value > winner_value:
+            return candidate, winner, [f"score_fields:{field}"]
+        if candidate_value < winner_value:
+            return winner, candidate, [f"score_fields:{field}"]
+        if candidate_value[0] > 0:
+            decision_basis.append(f"score_fields:{field}=tie")
+
+    for field in [str(item).strip() for item in (survivorship.get("prefer_non_null_fields") or []) if str(item).strip()]:
+        winner_has = not _is_missing(winner.get(field))
+        candidate_has = not _is_missing(candidate.get(field))
+        if candidate_has and not winner_has:
+            return candidate, winner, [f"prefer_non_null_fields:{field}"]
+        if winner_has and not candidate_has:
+            return winner, candidate, [f"prefer_non_null_fields:{field}"]
+
+    for field in [str(item).strip() for item in (survivorship.get("prefer_latest_fields") or []) if str(item).strip()]:
+        winner_value = _survivor_compare_value(winner.get(field), to_float=to_float)
+        candidate_value = _survivor_compare_value(candidate.get(field), to_float=to_float)
+        if candidate_value > winner_value:
+            return candidate, winner, [f"prefer_latest_fields:{field}"]
+        if candidate_value < winner_value:
+            return winner, candidate, [f"prefer_latest_fields:{field}"]
+        if candidate_value[0] > 0:
+            decision_basis.append(f"prefer_latest_fields:{field}=tie")
+
+    tie_breaker = str(survivorship.get("tie_breaker") or survivorship.get("deduplicate_keep") or "last").strip().lower()
+    if tie_breaker == "first":
+        return (winner, candidate, decision_basis or ["tie_breaker:first"]) if winner_index <= candidate_index else (candidate, winner, decision_basis or ["tie_breaker:first"])
+    return (winner, candidate, decision_basis or ["tie_breaker:last"]) if winner_index >= candidate_index else (candidate, winner, decision_basis or ["tie_breaker:last"])
 
 
 def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], hooks: Dict[str, Callable[..., Any]]) -> Dict[str, Any]:
@@ -252,6 +531,7 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
     deduplicate_keep = str(rules.get("deduplicate_keep", "last")).strip().lower()
     if deduplicate_keep not in {"first", "last"}:
         deduplicate_keep = "last"
+    survivorship = rules.get("survivorship") if isinstance(rules.get("survivorship"), dict) else {}
     sort_by = rules.get("sort_by") if isinstance(rules.get("sort_by"), list) else []
     trim_strings = to_bool(rules.get("trim_strings"), default=True)
     lowercase_fields = set(str(x) for x in (rules.get("lowercase_fields") or []))
@@ -287,18 +567,21 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
         "duplicate_removed": [],
     }
 
-    for raw in raw_rows:
+    for row_index, raw in enumerate(raw_rows, start=1):
         if not isinstance(raw, dict):
             invalid_rows += 1
             add_reason_sample(
                 "invalid_object",
                 {
                     "reason": "invalid_object",
+                    "reason_code": "invalid_object",
+                    "row_index": row_index,
                     "value": raw,
                 },
             )
             continue
         row = dict(raw or {})
+        row["_row_index"] = row_index
 
         for k, v in list(row.items()):
             vv = _normalize_null(v, null_values)
@@ -366,6 +649,8 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
                 "cast_failed",
                 {
                     "reason": "cast_failed",
+                    "reason_code": "cast_failed",
+                    "row_index": row_index,
                     "fields": failed_fields,
                     "row": dict(row),
                 },
@@ -404,7 +689,7 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
             out_field = str(op.get("as") or field).strip()
             if not field or not out_field or field not in row:
                 continue
-            next_value, changed = _apply_field_op(row.get(field), op, to_float=to_float)
+            next_value, changed = _apply_field_op(row.get(field), op, row=row, to_float=to_float)
             row[out_field] = next_value
             if changed:
                 field_ops_applied += 1
@@ -418,6 +703,8 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
                 "required_missing",
                 {
                     "reason": "required_failed",
+                    "reason_code": "required_missing",
+                    "row_index": row_index,
                     "fields": missing_fields,
                     "row": dict(row),
                 },
@@ -439,6 +726,8 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
                 "filter_rejected",
                 {
                     "reason": "filtered_rules",
+                    "reason_code": "filter_rejected",
+                    "row_index": row_index,
                     "filter": dict(failed_filter),
                     "row": dict(row),
                 },
@@ -448,38 +737,92 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
         out.append(row)
 
     duplicate_rows_removed = 0
-    if deduplicate_by:
-        key_fields = [str(x) for x in deduplicate_by]
+    duplicate_review_required_count = 0
+    survivorship_keys = _survivorship_keys(survivorship, deduplicate_by)
+    if survivorship_keys:
+        key_fields = [str(x) for x in survivorship_keys]
         d: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
-        if deduplicate_keep == "first":
+        d_index: Dict[Tuple[Any, ...], int] = {}
+        use_survivorship = bool(survivorship)
+        if deduplicate_keep == "first" and not use_survivorship:
             for r in out:
                 key = tuple(r.get(k) for k in key_fields)
                 if key not in d:
                     d[key] = r
                 else:
+                    duplicate_review_required_count += 1
                     add_reason_sample(
                         "duplicate_removed",
                         {
                             "reason": "deduplicate_removed",
+                            "reason_code": "duplicate_removed",
                             "key": list(key),
                             "deduplicate_keep": deduplicate_keep,
-                            "row": dict(r),
+                            "row_index": int(r.get("_row_index") or 0),
+                            "row": {k: v for k, v in dict(r).items() if not str(k).startswith("_")},
                         },
                     )
-        else:
+        elif not use_survivorship:
             for r in out:
                 key = tuple(r.get(k) for k in key_fields)
                 if key in d:
+                    duplicate_review_required_count += 1
                     add_reason_sample(
                         "duplicate_removed",
                         {
                             "reason": "deduplicate_removed",
+                            "reason_code": "duplicate_removed",
                             "key": list(key),
                             "deduplicate_keep": deduplicate_keep,
-                            "row": dict(d[key]),
+                            "row_index": int(d[key].get("_row_index") or 0),
+                            "row": {k: v for k, v in dict(d[key]).items() if not str(k).startswith("_")},
                         },
                     )
                 d[key] = r
+        else:
+            survivorship_cfg = {
+                **survivorship,
+                "tie_breaker": str(survivorship.get("tie_breaker") or deduplicate_keep).strip().lower() or deduplicate_keep,
+            }
+            for r in out:
+                key = tuple(r.get(k) for k in key_fields)
+                if key not in d:
+                    d[key] = r
+                    d_index[key] = int(r.get("_row_index") or 0)
+                    continue
+                current_winner = d[key]
+                winner, loser, decision_basis = _choose_survivor(
+                    current_winner,
+                    r,
+                    winner_index=d_index.get(key, int(current_winner.get("_row_index") or 0)),
+                    candidate_index=int(r.get("_row_index") or 0),
+                    survivorship=survivorship_cfg,
+                    to_float=to_float,
+                )
+                d[key] = winner
+                d_index[key] = int(winner.get("_row_index") or 0)
+                needs_review = (
+                    not decision_basis
+                    or any("tie" in str(item) for item in decision_basis)
+                    or int(winner.get("_row_index") or 0) <= 0
+                    or int(loser.get("_row_index") or 0) <= 0
+                )
+                if needs_review:
+                    duplicate_review_required_count += 1
+                add_reason_sample(
+                    "duplicate_removed",
+                    {
+                        "reason": "deduplicate_removed",
+                        "reason_code": "duplicate_removed",
+                        "key": list(key),
+                        "deduplicate_keep": survivorship_cfg.get("tie_breaker"),
+                        "winner_row_id": int(winner.get("_row_index") or 0),
+                        "loser_row_id": int(loser.get("_row_index") or 0),
+                        "winner_row": {k: v for k, v in dict(winner).items() if not str(k).startswith("_")},
+                        "loser_row": {k: v for k, v in dict(loser).items() if not str(k).startswith("_")},
+                        "decision_basis": list(decision_basis),
+                    },
+                )
         deduped = list(d.values())
         duplicate_rows_removed = len(out) - len(deduped)
         out = deduped
@@ -519,6 +862,9 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
         "invalid_rows": invalid_rows,
         "filtered_rows": filtered_rows,
         "duplicate_rows_removed": duplicate_rows_removed,
+        "duplicate_review_required_count": duplicate_review_required_count,
+        "survivorship_applied": bool(survivorship_keys and survivorship),
+        "survivorship_keys": [str(item) for item in survivorship_keys],
         "required_fields": [str(item) for item in gate_required_fields],
         "required_missing_cells": required_missing_cells,
         "required_missing_by_field": required_missing_by_field,
@@ -533,4 +879,8 @@ def clean_rows_generic(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], h
             "field_ops": field_ops_applied,
         },
     }
-    return {"rows": out, "quality": quality, "reason_samples": reason_samples}
+    cleaned_rows = [
+        {key: value for key, value in row.items() if not str(key).startswith("_")}
+        for row in out
+    ]
+    return {"rows": cleaned_rows, "quality": quality, "reason_samples": reason_samples}

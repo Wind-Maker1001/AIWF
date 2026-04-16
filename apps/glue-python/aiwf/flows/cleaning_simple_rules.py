@@ -128,6 +128,7 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
         normalized.append({"id": id_val, "amount": float(quantize_decimal(amount_val, digits))})
 
     duplicate_rows_removed = 0
+    duplicate_review_required_count = 0
     cleaned = normalized
     if deduplicate:
         deduped: Dict[int, Dict[str, Any]] = {}
@@ -136,6 +137,7 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
                 if row["id"] not in deduped:
                     deduped[row["id"]] = row
                 else:
+                    duplicate_review_required_count += 1
                     add_reason_sample(
                         "duplicate_removed",
                         {
@@ -147,6 +149,7 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
         else:
             for row in normalized:
                 if row["id"] in deduped:
+                    duplicate_review_required_count += 1
                     add_reason_sample(
                         "duplicate_removed",
                         {
@@ -190,6 +193,7 @@ def clean_rows_simple(raw_rows: List[Dict[str, Any]], params: Dict[str, Any], ho
         "invalid_rows": invalid_rows,
         "filtered_rows": filtered_rows,
         "duplicate_rows_removed": duplicate_rows_removed,
+        "duplicate_review_required_count": duplicate_review_required_count,
         "required_fields": [str(item) for item in required_fields],
         "required_missing_cells": required_missing_cells,
         "required_missing_by_field": required_missing_by_field,

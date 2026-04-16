@@ -14,6 +14,7 @@ from aiwf.flows.office_artifacts import (
     select_office_artifact_registrations,
 )
 from aiwf.flows.cleaning_errors import CleaningGuardrailError, guardrail_template_expected_profile, guardrail_template_id
+from aiwf.flows.cleaning_advanced_quality import evaluate_advanced_quality
 from aiwf.flows.cleaning_reporting import build_quality_summary, flatten_rejection_records
 
 
@@ -96,6 +97,7 @@ def materialize_accel_outputs(
     local_profile: Optional[Dict[str, Any]] = None,
     local_execution: Optional[Dict[str, Any]] = None,
     preprocess_result: Optional[Dict[str, Any]] = None,
+    input_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     transform_execution = (
         dict(local_execution)
@@ -136,12 +138,22 @@ def materialize_accel_outputs(
     )
     transform_quality = profile.get("quality") if isinstance(profile.get("quality"), dict) else {}
     quality_gate = profile.get("quality_gate") if isinstance(profile.get("quality_gate"), dict) else {}
+    advanced_quality = evaluate_advanced_quality(
+        rows=list(local_rows or []),
+        params_effective=params_effective,
+    )
+    quality_gate["advanced_quality"] = advanced_quality
     summary_execution = {
         **transform_execution,
         **execution,
         "execution_audit": dict(transform_execution.get("execution_audit") or {}),
         "shadow_compare": dict(transform_execution.get("shadow_compare") or execution.get("shadow_compare") or {}),
         "stage_provenance": list(transform_execution.get("stage_provenance") or execution.get("stage_provenance") or []),
+        "advanced_quality": advanced_quality,
+        "row_samples": {
+            "before": list(input_rows or [])[:5],
+            "after": list(local_rows or [])[:5],
+        },
     }
     quality_summary = build_quality_summary(
         params_effective=params_effective,
@@ -159,9 +171,9 @@ def materialize_accel_outputs(
     if preprocess_result is not None:
         profile["preprocess"] = preprocess_result
     if transform_execution:
-        profile["execution"] = transform_execution
+        profile["execution"] = summary_execution
     else:
-        profile["execution"] = execution
+        profile["execution"] = summary_execution
     out = {
         "profile": profile,
         "execution": execution,
@@ -209,6 +221,7 @@ def materialize_local_outputs(
     artifacts_dir: str,
     evidence_dir: str,
     params_effective: Dict[str, Any],
+    input_rows: List[Dict[str, Any]],
     rows: List[Dict[str, Any]],
     quality: Dict[str, Any],
     execution_report: Dict[str, Any],
@@ -228,6 +241,11 @@ def materialize_local_outputs(
     materialize_office_outputs_fn: Callable[..., Dict[str, Any]],
 ) -> Dict[str, Any]:
     quality_gate = apply_quality_gates(quality, params_effective)
+    advanced_quality = evaluate_advanced_quality(
+        rows=rows,
+        params_effective=params_effective,
+    )
+    quality_gate["advanced_quality"] = advanced_quality
     allow_empty_output_default = params_effective.get("blank_output_expected", True)
     if not rows and not to_bool(rule_param(params_effective, "allow_empty_output", allow_empty_output_default), default=True):
         execution_profile_analysis = (
@@ -260,6 +278,27 @@ def materialize_local_outputs(
         execution_effective["quality_gate_engine"] = "python"
     execution_effective["materialization_engine"] = "python"
     execution_effective["legacy_cleaning_operator_used"] = False
+    execution_effective["advanced_quality"] = advanced_quality
+    execution_effective["row_samples"] = {
+        "before": list(input_rows or [])[:5],
+        "after": list(rows or [])[:5],
+    }
+
+    if advanced_quality.get("blocked"):
+        report = dict(advanced_quality.get("report") or {})
+        violations = report.get("violations") if isinstance(report.get("violations"), list) else []
+        message = "; ".join(str(item) for item in violations if str(item).strip()) or "advanced quality blocked"
+        raise CleaningGuardrailError(
+            error_code="advanced_quality_blocked",
+            message=message,
+            reason_codes=["advanced_quality_blocked"],
+            template_id=guardrail_template_id(params_effective),
+            template_expected_profile=guardrail_template_expected_profile(params_effective),
+            blank_output_expected=bool(params_effective.get("blank_output_expected", False)),
+            zero_output_unexpected=False,
+            blocking_reason_codes=["advanced_quality_blocked"],
+            details={"advanced_quality": advanced_quality},
+        )
 
     profile = build_profile(rows, quality, source)
     profile["quality_gate"] = quality_gate

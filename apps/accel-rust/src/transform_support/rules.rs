@@ -12,7 +12,7 @@ pub(crate) use basics::{
 
 #[path = "rules/expr.rs"]
 mod expr;
-pub(crate) use expr::{apply_expression_fields, apply_string_and_date_ops};
+pub(crate) use expr::{apply_expression_fields, apply_string_and_date_ops, parse_ymd_simple};
 
 #[path = "rules/filters.rs"]
 mod filters;

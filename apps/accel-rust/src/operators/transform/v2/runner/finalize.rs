@@ -7,7 +7,7 @@ pub(super) fn finalize_transform_response(
     started: Instant,
 ) -> Result<TransformRowsResp, String> {
     let TransformExecution {
-        rows,
+        mut rows,
         invalid_rows,
         filtered_rows,
         duplicate_rows_removed,
@@ -18,6 +18,9 @@ pub(super) fn finalize_transform_response(
         rule_hits,
         mut reason_samples,
     } = executed;
+    for row in &mut rows {
+        row.remove("__aiwf_row_index");
+    }
 
     let aggregate = compute_aggregate(&rows, rule_get(&prepared.rules, "aggregate"));
     let output_rows = rows.len();
@@ -93,6 +96,13 @@ pub(super) fn finalize_transform_response(
         "required_missing_cells": required_missing_cells,
         "required_missing_by_field": required_missing_by_field,
         "required_missing_ratio": required_missing_ratio,
+        "survivorship_applied": prepared
+            .survivorship
+            .as_object()
+            .map(|obj| !obj.is_empty())
+            .unwrap_or(false)
+            && !prepared.survivorship_keys.is_empty(),
+        "survivorship_keys": prepared.survivorship_keys.clone(),
     });
 
     let gate_result = evaluate_quality_gates(&quality, &prepared.gates);

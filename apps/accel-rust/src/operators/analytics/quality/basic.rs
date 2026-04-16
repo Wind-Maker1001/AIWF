@@ -76,7 +76,20 @@ pub(crate) fn run_quality_check_v1(req: QualityCheckReq) -> Result<QualityCheckR
         violations.push(json!({"rule":"required_fields", "details": null_violations}));
     }
     let mut outlier_report = Vec::new();
-    if let Some(oz) = rules.get("outlier_zscore").and_then(|v| v.as_object()) {
+    let outlier_rules = rules
+        .get("outlier_zscore")
+        .and_then(|v| {
+            if let Some(items) = v.as_array() {
+                Some(items.clone())
+            } else {
+                v.as_object().map(|obj| vec![Value::Object(obj.clone())])
+            }
+        })
+        .unwrap_or_default();
+    for oz_value in outlier_rules {
+        let Some(oz) = oz_value.as_object() else {
+            continue;
+        };
         let field = oz.get("field").and_then(|v| v.as_str()).unwrap_or("");
         let max_z = oz
             .get("max_z")
