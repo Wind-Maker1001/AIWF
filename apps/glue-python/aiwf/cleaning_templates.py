@@ -105,6 +105,7 @@ def derive_legacy_rules_from_cleaning_spec(spec: Any) -> Dict[str, Any]:
         "string_ops": _as_list(transform.get("string_ops")),
         "date_ops": _as_list(transform.get("date_ops")),
         "field_ops": _as_list(transform.get("field_ops")),
+        "survivorship": _as_dict(transform.get("survivorship")),
     }
     required_fields = _as_str_list(quality.get("required_fields"))
     if required_fields and not rules["required_fields"]:
@@ -253,6 +254,9 @@ def apply_cleaning_spec_to_params(
         **gates,
         **(_as_dict(next_params.get("quality_rules"))),
     }
+    advanced_rules = _as_dict(quality.get("advanced_rules"))
+    if advanced_rules and "advanced_rules" not in _as_dict(next_params.get("quality_rules")):
+        quality_rules["advanced_rules"] = advanced_rules
     required_fields = _as_str_list(quality.get("required_fields"))
     if required_fields and "required_fields" not in _as_dict(next_params.get("quality_rules")):
         quality_rules["required_fields"] = required_fields

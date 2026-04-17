@@ -348,6 +348,10 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(payload["recommended_profile"], "finance_statement")
         self.assertEqual(payload["recommended_template_id"], "finance_report_v1")
         self.assertFalse(payload["predicted_zero_output_unexpected"])
+        self.assertIn("issue_summary", payload)
+        self.assertIn("suggested_repairs", payload)
+        self.assertIn("review_required", payload)
+        self.assertFalse(payload["review_required"])
         self.assertEqual(payload["contract"], "contracts/glue/cleaning_precheck.schema.json")
 
     def test_cleaning_precheck_blocks_mismatched_template_from_extract_recommendation(self):
@@ -446,6 +450,57 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(payload["recommended_profile"], "")
         self.assertEqual(payload["recommended_template_id"], "")
         self.assertFalse(payload["predicted_zero_output_unexpected"])
+
+    def test_cleaning_precheck_warns_when_review_required_for_ambiguous_headers(self):
+        with patch.object(glue_app, "ingest_extract") as ingest_extract:
+            ingest_extract.return_value = {
+                "ok": True,
+                "rows": [
+                    {"Name": "Alice", "Mobile": "13800138000", "City": "Shanghai"},
+                    {"Name": "Bob", "Mobile": "13900139000", "City": "Hangzhou"},
+                ],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "header_mapping": [
+                    {
+                        "raw_header": "Name",
+                        "canonical_field": "customer_name",
+                        "confidence": 0.74,
+                        "match_strategy": "fuzzy",
+                        "alternatives": [
+                            {"field": "customer_name", "confidence": 0.74},
+                            {"field": "contact_name", "confidence": 0.71},
+                        ],
+                    }
+                ],
+                "candidate_profiles": [
+                    {
+                        "profile": "customer_contact",
+                        "score": 0.84,
+                        "required_coverage": 1.0,
+                        "recommended": True,
+                        "recommended_template_id": "customer_contact_v1",
+                    }
+                ],
+            }
+            resp = self.client.post(
+                "/cleaning/precheck",
+                json={
+                    "input_path": r"D:\data\contact.csv",
+                    "cleaning_template": "customer_contact_v1",
+                    "header_mapping_mode": "auto",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["precheck_action"], "warn")
+        self.assertTrue(payload["review_required"])
+        self.assertEqual(len(payload["header_ambiguities"]), 1)
+        self.assertGreaterEqual(payload["issue_summary"]["header_ambiguity_count"], 1)
 
     def test_ingest_extract_auto_mode_reports_fallback_to_strict_when_rapidfuzz_missing(self):
         with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows, patch.object(

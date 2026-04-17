@@ -1,5 +1,8 @@
 use super::*;
 use crate::FilterOp;
+use std::cmp::Ordering;
+
+const INTERNAL_ROW_INDEX_FIELD: &str = "__aiwf_row_index";
 
 fn reason_sample_keys() -> [&'static str; 5] {
     [
@@ -19,8 +22,31 @@ fn empty_reason_samples() -> HashMap<String, Vec<Value>> {
     out
 }
 
+fn row_index_value(row: &Map<String, Value>) -> usize {
+    row.get(INTERNAL_ROW_INDEX_FIELD)
+        .and_then(|value| value.as_u64())
+        .map(|value| value as usize)
+        .or_else(|| {
+            row.get(INTERNAL_ROW_INDEX_FIELD)
+                .and_then(|value| value.as_i64())
+                .map(|value| value.max(0) as usize)
+        })
+        .unwrap_or(0)
+}
+
 fn row_excerpt(row: &Map<String, Value>) -> Value {
-    Value::Object(row.clone())
+    let mut clean = row.clone();
+    clean.remove(INTERNAL_ROW_INDEX_FIELD);
+    Value::Object(clean)
+}
+
+fn key_values(row: &Map<String, Value>, fields: &[String]) -> Value {
+    Value::Array(
+        fields
+            .iter()
+            .map(|field| row.get(field).cloned().unwrap_or(Value::Null))
+            .collect(),
+    )
 }
 
 fn push_reason_sample(
@@ -29,9 +55,7 @@ fn push_reason_sample(
     sample_limit: usize,
     sample: Value,
 ) {
-    let items = reason_samples
-        .entry(reason_code.to_string())
-        .or_default();
+    let items = reason_samples.entry(reason_code.to_string()).or_default();
     if items.len() < sample_limit {
         items.push(sample);
     }
@@ -53,6 +77,10 @@ fn filter_detail(filter: &CompiledFilter) -> String {
         FilterOp::Gte(_) => "gte",
         FilterOp::Lt(_) => "lt",
         FilterOp::Lte(_) => "lte",
+        FilterOp::BlankRow => "blank_row",
+        FilterOp::SubtotalRow(_) => "subtotal_row",
+        FilterOp::HeaderRepeatRow { .. } => "header_repeat_row",
+        FilterOp::NoteRow(_) => "note_row",
         FilterOp::Invalid => "invalid",
         FilterOp::Passthrough => "passthrough",
     };
@@ -68,6 +96,122 @@ fn null_or_string(value: Option<&str>) -> Value {
         Some(text) if !text.trim().is_empty() => Value::String(text.to_string()),
         _ => Value::Null,
     }
+}
+
+#[derive(Clone)]
+enum SurvivorshipValue {
+    Missing,
+    Text(String),
+    Number(f64),
+    Date(i64),
+}
+
+impl SurvivorshipValue {
+    fn rank(&self) -> i32 {
+        match self {
+            SurvivorshipValue::Missing => 0,
+            SurvivorshipValue::Text(_) => 1,
+            SurvivorshipValue::Number(_) => 2,
+            SurvivorshipValue::Date(_) => 3,
+        }
+    }
+}
+
+fn survivorship_value(value: Option<&Value>) -> SurvivorshipValue {
+    if is_missing(value) {
+        return SurvivorshipValue::Missing;
+    }
+    if let Some(text) = value.map(value_to_string)
+        && let Some((year, month, day)) = parse_ymd_simple(&text)
+    {
+        return SurvivorshipValue::Date(year * 10_000 + month * 100 + day);
+    }
+    if let Some(number) = value.and_then(value_to_f64) {
+        return SurvivorshipValue::Number(number);
+    }
+    SurvivorshipValue::Text(value.map(value_to_string).unwrap_or_default())
+}
+
+fn compare_survivorship_values(left: Option<&Value>, right: Option<&Value>) -> Ordering {
+    let left_value = survivorship_value(left);
+    let right_value = survivorship_value(right);
+    let rank_order = left_value.rank().cmp(&right_value.rank());
+    if rank_order != Ordering::Equal {
+        return rank_order;
+    }
+    match (left_value, right_value) {
+        (SurvivorshipValue::Missing, SurvivorshipValue::Missing) => Ordering::Equal,
+        (SurvivorshipValue::Text(a), SurvivorshipValue::Text(b)) => a.cmp(&b),
+        (SurvivorshipValue::Number(a), SurvivorshipValue::Number(b)) => {
+            a.partial_cmp(&b).unwrap_or(Ordering::Equal)
+        }
+        (SurvivorshipValue::Date(a), SurvivorshipValue::Date(b)) => a.cmp(&b),
+        _ => Ordering::Equal,
+    }
+}
+
+fn survivorship_fields(survivorship: &Value, key: &str) -> Vec<String> {
+    survivorship
+        .as_object()
+        .and_then(|obj| obj.get(key))
+        .map(|value| as_array_str(Some(value)))
+        .unwrap_or_default()
+}
+
+fn choose_survivor(
+    winner: &Map<String, Value>,
+    candidate: &Map<String, Value>,
+    survivorship: &Value,
+    tie_breaker: &str,
+) -> (bool, Vec<String>) {
+    let mut decision_basis: Vec<String> = Vec::new();
+
+    for field in survivorship_fields(survivorship, "score_fields") {
+        match compare_survivorship_values(candidate.get(&field), winner.get(&field)) {
+            Ordering::Greater => return (true, vec![format!("score_fields:{field}")]),
+            Ordering::Less => return (false, vec![format!("score_fields:{field}")]),
+            Ordering::Equal => {
+                if !matches!(survivorship_value(candidate.get(&field)), SurvivorshipValue::Missing) {
+                    decision_basis.push(format!("score_fields:{field}=tie"));
+                }
+            }
+        }
+    }
+
+    for field in survivorship_fields(survivorship, "prefer_non_null_fields") {
+        let winner_has = !is_missing(winner.get(&field));
+        let candidate_has = !is_missing(candidate.get(&field));
+        if candidate_has && !winner_has {
+            return (true, vec![format!("prefer_non_null_fields:{field}")]);
+        }
+        if winner_has && !candidate_has {
+            return (false, vec![format!("prefer_non_null_fields:{field}")]);
+        }
+    }
+
+    for field in survivorship_fields(survivorship, "prefer_latest_fields") {
+        match compare_survivorship_values(candidate.get(&field), winner.get(&field)) {
+            Ordering::Greater => return (true, vec![format!("prefer_latest_fields:{field}")]),
+            Ordering::Less => return (false, vec![format!("prefer_latest_fields:{field}")]),
+            Ordering::Equal => {
+                if !matches!(survivorship_value(candidate.get(&field)), SurvivorshipValue::Missing) {
+                    decision_basis.push(format!("prefer_latest_fields:{field}=tie"));
+                }
+            }
+        }
+    }
+
+    let winner_index = row_index_value(winner);
+    let candidate_index = row_index_value(candidate);
+    let candidate_wins = if tie_breaker == "first" {
+        candidate_index < winner_index
+    } else {
+        candidate_index >= winner_index
+    };
+    if decision_basis.is_empty() {
+        decision_basis.push(format!("tie_breaker:{tie_breaker}"));
+    }
+    (candidate_wins, decision_basis)
 }
 
 pub(super) fn execute_transform_rows(
@@ -238,11 +382,11 @@ pub(super) fn execute_transform_rows(
                     "filter_rejected",
                     prepared.audit_sample_limit,
                     json!({
-                    "reason_code": "filter_rejected",
-                    "row_index": row_index + 1,
-                    "field": filter.field.clone(),
-                    "key": Value::Null,
-                    "row_excerpt": row_excerpt(&out),
+                        "reason_code": "filter_rejected",
+                        "row_index": row_index + 1,
+                        "field": null_or_string(if filter.field.trim().is_empty() { None } else { Some(filter.field.as_str()) }),
+                        "key": Value::Null,
+                        "row_excerpt": row_excerpt(&out),
                         "detail": filter_detail(filter)
                     }),
                 );
@@ -262,6 +406,10 @@ pub(super) fn execute_transform_rows(
         for field in &prepared.exclude_fields {
             out.remove(field);
         }
+        out.insert(
+            INTERNAL_ROW_INDEX_FIELD.to_string(),
+            Value::Number(((row_index + 1) as u64).into()),
+        );
         rows.push(out);
     }
 
@@ -357,12 +505,40 @@ pub(super) fn execute_transform_rows(
             before.saturating_sub(rows.len())
         };
     } else {
-        if !prepared.deduplicate_by.is_empty() {
-            let mut deduped: HashMap<String, Map<String, Value>> = HashMap::new();
-            if prepared.dedup_keep == "first" {
+        let has_survivorship = prepared
+            .survivorship
+            .as_object()
+            .map(|obj| !obj.is_empty())
+            .unwrap_or(false)
+            && !prepared.survivorship_keys.is_empty();
+        let dedup_key_fields = if has_survivorship {
+            &prepared.survivorship_keys
+        } else {
+            &prepared.deduplicate_by
+        };
+        if !dedup_key_fields.is_empty() {
+            let before = rows.len();
+            if has_survivorship {
+                let key_fields = dedup_key_fields;
+                let tie_breaker = prepared
+                    .survivorship
+                    .as_object()
+                    .and_then(|obj| obj.get("tie_breaker"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or(prepared.dedup_keep.as_str())
+                    .to_ascii_lowercase();
+                let mut deduped: HashMap<String, Map<String, Value>> = HashMap::new();
                 for row in rows {
-                    let key = dedup_key(&row, &prepared.deduplicate_by);
-                    if deduped.contains_key(&key) {
+                    let key = dedup_key(&row, key_fields);
+                    if let Some(previous) = deduped.get(&key).cloned() {
+                        let (candidate_wins, decision_basis) =
+                            choose_survivor(&previous, &row, &prepared.survivorship, &tie_breaker);
+                        let (winner, loser) = if candidate_wins {
+                            (row.clone(), previous.clone())
+                        } else {
+                            (previous.clone(), row.clone())
+                        };
+                        deduped.insert(key.clone(), winner.clone());
                         push_reason_sample(
                             &mut reason_samples,
                             "duplicate_removed",
@@ -371,41 +547,79 @@ pub(super) fn execute_transform_rows(
                                 "reason_code": "duplicate_removed",
                                 "row_index": Value::Null,
                                 "field": Value::Null,
-                                "key": key.clone(),
-                                "row_excerpt": row_excerpt(&row),
-                                "detail": "duplicate removed while keeping first"
+                                "key": key_values(&winner, key_fields),
+                                "deduplicate_keep": tie_breaker,
+                                "winner_row_id": row_index_value(&winner),
+                                "loser_row_id": row_index_value(&loser),
+                                "winner_row": row_excerpt(&winner),
+                                "loser_row": row_excerpt(&loser),
+                                "decision_basis": decision_basis,
+                                "detail": "duplicate removed via survivorship"
                             }),
                         );
                     } else {
                         deduped.insert(key, row);
                     }
                 }
+                rows = deduped.into_values().collect();
             } else {
-                for row in rows {
-                    let key = dedup_key(&row, &prepared.deduplicate_by);
-                    if let Some(previous) = deduped.get(&key) {
-                        push_reason_sample(
-                            &mut reason_samples,
-                            "duplicate_removed",
-                            prepared.audit_sample_limit,
-                            json!({
-                                "reason_code": "duplicate_removed",
-                                "row_index": Value::Null,
-                                "field": Value::Null,
-                                "key": key.clone(),
-                                "row_excerpt": row_excerpt(previous),
-                                "detail": "duplicate removed while keeping last"
-                            }),
-                        );
+                let key_fields = dedup_key_fields;
+                let mut deduped: HashMap<String, Map<String, Value>> = HashMap::new();
+                if prepared.dedup_keep == "first" {
+                    for row in rows {
+                        let key = dedup_key(&row, key_fields);
+                        if let Some(previous) = deduped.get(&key).cloned() {
+                            push_reason_sample(
+                                &mut reason_samples,
+                                "duplicate_removed",
+                                prepared.audit_sample_limit,
+                                json!({
+                                    "reason_code": "duplicate_removed",
+                                    "row_index": Value::Null,
+                                    "field": Value::Null,
+                                    "key": key_values(&row, key_fields),
+                                    "deduplicate_keep": "first",
+                                    "winner_row_id": row_index_value(&previous),
+                                    "loser_row_id": row_index_value(&row),
+                                    "winner_row": row_excerpt(&previous),
+                                    "loser_row": row_excerpt(&row),
+                                    "decision_basis": ["tie_breaker:first"],
+                                    "detail": "duplicate removed while keeping first"
+                                }),
+                            );
+                        } else {
+                            deduped.insert(key, row);
+                        }
                     }
-                    deduped.insert(key, row);
+                } else {
+                    for row in rows {
+                        let key = dedup_key(&row, key_fields);
+                        if let Some(previous) = deduped.get(&key).cloned() {
+                            push_reason_sample(
+                                &mut reason_samples,
+                                "duplicate_removed",
+                                prepared.audit_sample_limit,
+                                json!({
+                                    "reason_code": "duplicate_removed",
+                                    "row_index": Value::Null,
+                                    "field": Value::Null,
+                                    "key": key_values(&row, key_fields),
+                                    "deduplicate_keep": "last",
+                                    "winner_row_id": row_index_value(&row),
+                                    "loser_row_id": row_index_value(&previous),
+                                    "winner_row": row_excerpt(&row),
+                                    "loser_row": row_excerpt(&previous),
+                                    "decision_basis": ["tie_breaker:last"],
+                                    "detail": "duplicate removed while keeping last"
+                                }),
+                            );
+                        }
+                        deduped.insert(key, row);
+                    }
                 }
+                rows = deduped.into_values().collect();
             }
-            let out_len = deduped.len();
-            duplicate_rows_removed = prepared
-                .input_rows
-                .saturating_sub(invalid_rows + filtered_rows + out_len);
-            rows = deduped.into_values().collect();
+            duplicate_rows_removed = before.saturating_sub(rows.len());
         }
 
         if !prepared.sort_by.is_empty() {

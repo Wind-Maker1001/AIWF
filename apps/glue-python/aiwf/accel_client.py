@@ -431,3 +431,41 @@ def quality_check_v2_operator(
         }
     except Exception as exc:
         return _error_result(url, str(exc))
+
+
+def quality_check_v4_operator(
+    *,
+    rows: list[dict[str, Any]],
+    params: Dict[str, Any],
+    rules: Dict[str, Any],
+    metrics: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    base_url = resolve_accel_base_url(params)
+    timeout = resolve_accel_timeout(
+        params,
+        param_key="quality_check_timeout_seconds",
+        env_key="AIWF_QUALITY_CHECK_TIMEOUT",
+        default=8.0,
+    )
+    url = operator_url(base_url, "/operators/quality_check_v4")
+    payload = {
+        "run_id": str(params.get("job_id") or ""),
+        "rows": rows,
+        "rules": rules,
+        "metrics": metrics or {},
+    }
+    try:
+        result = _post_operator_payload(url, payload, timeout=timeout)
+        if not result.get("ok"):
+            return result
+        response = QualityCheckV2OperatorResponse.from_body(result["response"])
+        return {
+            "attempted": True,
+            "ok": True,
+            "url": url,
+            "passed": response.passed,
+            "report": response.report,
+            "response": response.raw,
+        }
+    except Exception as exc:
+        return _error_result(url, str(exc))

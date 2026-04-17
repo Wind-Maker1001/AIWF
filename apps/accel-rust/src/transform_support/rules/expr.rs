@@ -58,14 +58,13 @@ pub(crate) fn eval_simple_expr(expr: &str, row: &Map<String, Value>) -> Value {
         "div" => {
             let a = args.first().and_then(value_to_f64).unwrap_or(0.0);
             let b = args.get(1).and_then(value_to_f64).unwrap_or(0.0);
-            if b == 0.0 { Value::Null } else { json!(a / b) }
+            if b == 0.0 {
+                Value::Null
+            } else {
+                json!(a / b)
+            }
         }
-        "concat" => Value::String(
-            args.iter()
-                .map(value_to_string)
-                .collect::<Vec<_>>()
-                .join(""),
-        ),
+        "concat" => Value::String(args.iter().map(value_to_string).collect::<Vec<_>>().join("")),
         "coalesce" => args
             .into_iter()
             .find(|v| !is_missing(Some(v)))
@@ -119,10 +118,9 @@ pub(crate) fn parse_ymd_simple(s: &str) -> Option<(i64, i64, i64)> {
         return None;
     }
     t = t
-        .replace('年', "-")
+        .replace(['年', '.'], "-")
         .replace('月', "-")
         .replace('日', "")
-        .replace('.', "-")
         .replace('/', "-");
     let digits_only = t.chars().all(|ch| ch.is_ascii_digit());
     if digits_only && t.len() == 8 {
@@ -160,7 +158,67 @@ fn collapse_ws_text(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-fn apply_field_op(current: &Value, obj: &Map<String, Value>) -> Option<Value> {
+fn normalize_phone_cn(value: &str) -> String {
+    let mut digits = value
+        .chars()
+        .filter(|ch| ch.is_ascii_digit())
+        .collect::<String>();
+    if digits.starts_with("86") && digits.len() >= 11 {
+        digits = digits[2..].to_string();
+    }
+    if digits.len() == 11 && digits.starts_with('1') {
+        format!("+86{digits}")
+    } else {
+        value.to_string()
+    }
+}
+
+fn normalize_account_no(value: &str) -> String {
+    let normalized = value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_uppercase();
+    if normalized.is_empty() {
+        value.to_string()
+    } else {
+        normalized
+    }
+}
+
+fn normalize_name(value: &str) -> String {
+    collapse_ws_text(&value.replace('\u{3000}', " "))
+}
+
+fn fix_ocr_digit_text(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| match ch {
+            'O' | 'o' => '0',
+            'I' | 'l' | '|' => '1',
+            'S' | 's' => '5',
+            'B' => '8',
+            _ => ch,
+        })
+        .collect()
+}
+
+fn detect_amount_multiplier(text: &str) -> f64 {
+    let lowered = text.trim().to_lowercase();
+    if lowered.contains("billion") || text.contains('亿') {
+        100_000_000.0
+    } else if lowered.contains("million") {
+        1_000_000.0
+    } else if lowered.contains("thousand") || text.contains('千') {
+        1_000.0
+    } else if text.contains('万') {
+        10_000.0
+    } else {
+        1.0
+    }
+}
+
+fn apply_field_op(current: &Value, obj: &Map<String, Value>, row: &Map<String, Value>) -> Option<Value> {
     let kind = obj
         .get("op")
         .and_then(|v| v.as_str())
@@ -202,7 +260,14 @@ fn apply_field_op(current: &Value, obj: &Map<String, Value>) -> Option<Value> {
                 .map(|matched| Value::String(matched.as_str().to_string()))
         }
         "parse_number" => {
-            let normalized = cur.replace(',', "").replace('，', "").replace('$', "").replace('￥', "").replace('¥', "");
+            let normalized = cur
+                .replace(',', "")
+                .replace('，', "")
+                .replace('$', "")
+                .replace('¥', "")
+                .replace('￥', "")
+                .replace('€', "")
+                .replace('£', "");
             normalized
                 .trim()
                 .parse::<f64>()
@@ -210,6 +275,12 @@ fn apply_field_op(current: &Value, obj: &Map<String, Value>) -> Option<Value> {
                 .and_then(serde_json::Number::from_f64)
                 .map(Value::Number)
         }
+        "strip_currency_symbol" => Regex::new(r"(?i)(cny|rmb|usd|eur|jpy|人民币|元|圆|\$|¥|￥|€|£)")
+            .ok()
+            .map(|re| Value::String(re.replace_all(&cur, "").trim().to_string())),
+        "strip_thousands_sep" => Regex::new(r"(?<=\d)[,\s](?=\d{3}\b)")
+            .ok()
+            .map(|re| Value::String(re.replace_all(&cur, "").to_string())),
         "round_number" => {
             let digits = obj.get("digits").and_then(value_to_i64).unwrap_or(2) as i32;
             value_to_f64(current)
@@ -228,6 +299,43 @@ fn apply_field_op(current: &Value, obj: &Map<String, Value>) -> Option<Value> {
             let mapping = obj.get("mapping").and_then(|v| v.as_object())?;
             let key = cur.trim().to_string();
             mapping.get(&key).cloned().or_else(|| Some(current.clone()))
+        }
+        "fix_ocr_digits" => Some(Value::String(fix_ocr_digit_text(&cur))),
+        "normalize_phone_cn" => Some(Value::String(normalize_phone_cn(&cur))),
+        "normalize_account_no" => Some(Value::String(normalize_account_no(&cur))),
+        "normalize_name" => Some(Value::String(normalize_name(&cur))),
+        "scale_by_header_unit" => {
+            let parsed = value_to_f64(current)?;
+            let multiplier = obj
+                .get("multiplier")
+                .and_then(value_to_f64)
+                .unwrap_or_else(|| {
+                    detect_amount_multiplier(
+                        &obj.get("raw_header")
+                            .or_else(|| obj.get("header_text"))
+                            .or_else(|| obj.get("unit"))
+                            .map(value_to_string)
+                            .unwrap_or_default(),
+                    )
+                });
+            serde_json::Number::from_f64(parsed * multiplier).map(Value::Number)
+        }
+        "sign_amount_from_debit_credit" => {
+            let debit_field = obj
+                .get("debit_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("debit_amount");
+            let credit_field = obj
+                .get("credit_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("credit_amount");
+            if is_missing(row.get(debit_field)) && is_missing(row.get(credit_field)) {
+                None
+            } else {
+                let debit = row.get(debit_field).and_then(value_to_f64).unwrap_or(0.0);
+                let credit = row.get(credit_field).and_then(value_to_f64).unwrap_or(0.0);
+                serde_json::Number::from_f64(credit - debit).map(Value::Number)
+            }
         }
         "parse_date" => parse_ymd_simple(&cur).map(|(y, m, d)| Value::String(format!("{y:04}-{m:02}-{d:02}"))),
         _ => None,
@@ -321,7 +429,7 @@ pub(crate) fn apply_string_and_date_ops(
                 continue;
             }
             let current = r.get(field).cloned().unwrap_or(Value::Null);
-            let next = apply_field_op(&current, obj).unwrap_or(current);
+            let next = apply_field_op(&current, obj, r).unwrap_or(current);
             r.insert(out_field.to_string(), next);
             *rule_hits.entry("field_ops".to_string()).or_insert(0) += 1;
         }

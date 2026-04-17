@@ -18,6 +18,7 @@ from aiwf.flows.cleaning_orchestrator_support import (
     collect_materialized_artifacts,
     register_artifacts,
 )
+from aiwf.governance_manual_reviews import enqueue_manual_reviews
 from aiwf.governance_quality_rule_sets import apply_quality_rule_set_to_params
 
 
@@ -74,6 +75,28 @@ def run_cleaning_flow(
     layout = prepare_job_layout(job_id, params, ensure_dirs=ensure_dirs)
     local_standalone = bool(params.get("local_standalone"))
 
+    def _template_driven_run(params_obj: Dict[str, Any]) -> bool:
+        template_meta = params_obj.get("_resolved_cleaning_template") if isinstance(params_obj.get("_resolved_cleaning_template"), dict) else {}
+        return bool(template_meta) or str(params_obj.get("cleaning_template") or "").strip().lower() not in {"", "default"}
+
+    def _manual_review_queue_payload(review_analysis: Dict[str, Any]) -> list[Dict[str, Any]]:
+        payload: list[Dict[str, Any]] = []
+        for index, item in enumerate(review_analysis.get("review_items") or [], start=1):
+            if not isinstance(item, dict):
+                continue
+            kind = str(item.get("kind") or "review").strip().lower() or "review"
+            message = str(item.get("message") or f"{kind} requires manual review").strip()
+            payload.append(
+                {
+                    "run_id": job_id,
+                    "workflow_id": "cleaning",
+                    "node_id": "cleaning/manual_review",
+                    "review_key": f"cleaning::{kind}::{index}",
+                    "comment": message,
+                }
+            )
+        return payload
+
     step_id = "cleaning"
     try:
         if not local_standalone:
@@ -98,6 +121,36 @@ def run_cleaning_flow(
             clean_rows=clean_rows,
             rules_dict=rules_dict,
         )
+        review_analysis = (
+            dict(local_cache["local_execution"].get("review_analysis") or {})
+            if isinstance(local_cache.get("local_execution"), dict)
+            else {}
+        )
+        manual_review_queue = {
+            "review_required": bool(review_analysis.get("review_required", False)),
+            "auto_enqueued": False,
+            "enqueued_count": 0,
+            "pending_total": 0,
+            "items": [],
+        }
+        if manual_review_queue["review_required"] and (local_standalone or _template_driven_run(params_effective)):
+            queue_items = _manual_review_queue_payload(review_analysis)
+            if queue_items:
+                queued = enqueue_manual_reviews(queue_items)
+                manual_review_queue = {
+                    "review_required": True,
+                    "auto_enqueued": True,
+                    "enqueued_count": len(queue_items),
+                    "pending_total": len(queued),
+                    "items": [
+                        {
+                            "review_key": str(item.get("review_key") or ""),
+                            "comment": str(item.get("comment") or ""),
+                        }
+                        for item in queue_items
+                    ],
+                }
+        local_cache["local_execution"]["manual_review_queue"] = manual_review_queue
         profile_analysis = (
             dict(local_cache["local_execution"].get("profile_analysis") or {})
             if isinstance(local_cache.get("local_execution"), dict)
@@ -177,6 +230,7 @@ def run_cleaning_flow(
                 local_profile=local_profile,
                 local_execution=local_cache["local_execution"],
                 preprocess_result=preprocess_result,
+                input_rows=local_cache["raw_rows"],
             )
         else:
             materialized = materialize_local_outputs(
@@ -185,6 +239,7 @@ def run_cleaning_flow(
                 artifacts_dir=layout["artifacts_dir"],
                 evidence_dir=layout["evidence_dir"],
                 params_effective=params_effective,
+                input_rows=local_cache["raw_rows"],
                 rows=local_cache["local_rows"],
                 quality=local_cache["local_quality"],
                 execution_report=local_cache["local_execution"],

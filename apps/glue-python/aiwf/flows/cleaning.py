@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from aiwf.cleaning_spec_v2 import (
     CLEANING_SPEC_V2_VERSION,
+    build_header_mapping,
     candidate_profiles_from_headers,
     compile_cleaning_params_to_spec,
     resolve_canonical_profile_name,
@@ -57,6 +58,7 @@ from aiwf.flows.cleaning_outputs import (
 )
 from aiwf.flows.cleaning_profile import build_profile_impl
 from aiwf.flows.cleaning_quality import apply_quality_gates_impl
+from aiwf.flows.cleaning_review_support import build_review_analysis
 from aiwf.flows.cleaning_runtime_support import (
     base_artifact_upsert as _base_artifact_upsert_impl_runtime,
     base_step_done as _base_step_done_impl_runtime,
@@ -469,6 +471,27 @@ def _profile_analysis(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) ->
     }
 
 
+def _runtime_header_mapping(
+    raw_rows: List[Dict[str, Any]],
+    params: Dict[str, Any],
+    profile_analysis: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    headers = _ordered_headers_from_rows(raw_rows)
+    if not headers:
+        return []
+    canonical_profile = (
+        str(profile_analysis.get("requested_profile") or "").strip().lower()
+        or str(profile_analysis.get("recommended_profile") or "").strip().lower()
+    )
+    return build_header_mapping(
+        headers,
+        canonical_profile=canonical_profile,
+        sheet_profiles=params.get("sheet_profiles") if isinstance(params.get("sheet_profiles"), dict) else {},
+        header_mapping_mode=str(params.get("header_mapping_mode") or "auto").strip().lower() or "auto",
+        sample_values_by_header=_sample_values_by_header_from_rows(raw_rows, headers),
+    )
+
+
 def _cleaning_rust_v2_strategy(params: Dict[str, Any]) -> Dict[str, str]:
     env_mode = str(os.getenv("AIWF_CLEANING_RUST_V2_MODE", "off") or "off").strip().lower()
     if env_mode not in {"off", "shadow", "default"}:
@@ -631,6 +654,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     verify_on_default = bool(params.get("local_standalone")) or _to_bool(os.getenv("AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT", "false"), default=False)
     quality_rule_set_provenance = params.get("_quality_rule_set_provenance") if isinstance(params.get("_quality_rule_set_provenance"), dict) else {}
     profile_analysis = _profile_analysis(raw_rows, params)
+    runtime_header_mapping = _runtime_header_mapping(raw_rows, params, profile_analysis)
 
     if profile_analysis.get("should_block"):
         raise CleaningGuardrailError(
@@ -662,6 +686,36 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
         out["effective_rust_v2_mode"] = str(strategy.get("effective_mode") or "")
         out["verify_on_default"] = bool(verify_on_default)
         out["profile_analysis"] = dict(profile_analysis)
+        return out
+
+    def attach_review_analysis(out: Dict[str, Any]) -> Dict[str, Any]:
+        quality = dict(out.get("quality") or {})
+        execution_audit = dict(out.get("execution_audit") or {})
+        allow_empty_output = _to_bool(
+            _rule_param(
+                params,
+                "allow_empty_output",
+                params.get("blank_output_expected", True),
+            ),
+            default=bool(params.get("blank_output_expected", True)),
+        )
+        blocking_reason_codes = [str(item).strip() for item in profile_analysis.get("blocking_reason_codes") or [] if str(item).strip()]
+        zero_output_unexpected = bool(int(quality.get("output_rows", 0) or 0) <= 0 and not allow_empty_output)
+        if zero_output_unexpected and "zero_output_unexpected" not in blocking_reason_codes:
+            blocking_reason_codes.append("zero_output_unexpected")
+        review_profile_analysis = dict(profile_analysis)
+        review_profile_analysis["zero_output_unexpected"] = zero_output_unexpected
+        review_analysis = build_review_analysis(
+            header_mapping=runtime_header_mapping,
+            profile_analysis=review_profile_analysis,
+            quality=quality,
+            execution_audit=execution_audit,
+            blocking_reason_codes=blocking_reason_codes,
+        )
+        execution_audit["review_analysis"] = review_analysis
+        out["execution_audit"] = execution_audit
+        out["header_mapping"] = list(runtime_header_mapping)
+        out["review_analysis"] = review_analysis
         return out
 
     def build_python_result(
@@ -736,7 +790,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             mismatches=[],
             skipped_reason=skipped_reason,
         )
-        return apply_execution_metadata(out)
+        return attach_review_analysis(apply_execution_metadata(out))
 
     def build_rust_result(
         rust_v2: Dict[str, Any],
@@ -756,7 +810,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
         execution_audit["operator"] = str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3")
         if quality_rule_set_provenance:
             execution_audit["quality_rule_set_provenance"] = dict(quality_rule_set_provenance)
-        return apply_execution_metadata({
+        return attach_review_analysis(apply_execution_metadata({
             "rows": rust_v2["rows"],
             "quality": quality,
             "cleaning_spec": compiled_spec,
@@ -779,7 +833,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
                 mismatches=[],
                 skipped_reason=skipped_reason,
             ),
-        })
+        }))
 
     if strategy["decision"] == "force_python":
         return build_python_result(skipped_reason="forced_python")

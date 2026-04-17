@@ -88,6 +88,8 @@ def prepare_local_clean_cache(
             "legacy_cleaning_operator_used": bool(cleaned_local.get("legacy_cleaning_operator_used", False)),
             "stage_provenance": list(cleaned_local.get("stage_provenance") or []),
             "profile_analysis": dict(cleaned_local.get("profile_analysis") or {}),
+            "review_analysis": dict(cleaned_local.get("review_analysis") or {}),
+            "header_mapping": list(cleaned_local.get("header_mapping") or []),
         },
         "params_for_accel": params_for_accel,
     }

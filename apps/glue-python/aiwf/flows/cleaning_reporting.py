@@ -33,13 +33,16 @@ def flatten_rejection_records(reason_samples: Any) -> List[Dict[str, Any]]:
     normalized = _normalize_reason_samples(reason_samples)
     for reason_category in sorted(normalized.keys()):
         for sample_index, sample in enumerate(normalized[reason_category]):
-            out.append(
-                {
-                    "reason_category": reason_category,
-                    "sample_index": sample_index,
-                    "sample": dict(sample),
-                }
-            )
+            record = {
+                "reason_category": reason_category,
+                "sample_index": sample_index,
+                "reason_code": str(sample.get("reason_code") or reason_category),
+                "rule_id": str(sample.get("rule_id") or ""),
+                "source_sheet": str(sample.get("source_sheet") or ""),
+                "row_index": sample.get("row_index"),
+                "sample": dict(sample),
+            }
+            out.append(record)
     return out
 
 
@@ -69,6 +72,10 @@ def build_quality_summary(
     if not isinstance(stage_provenance, list):
         stage_provenance = execution_audit.get("stage_provenance")
     stage_provenance = list(stage_provenance) if isinstance(stage_provenance, list) else []
+    advanced_quality = _as_dict(execution.get("advanced_quality"))
+    row_samples = _as_dict(execution.get("row_samples"))
+    review_analysis = _as_dict(execution.get("review_analysis") or execution_audit.get("review_analysis"))
+    manual_review_queue = _as_dict(execution.get("manual_review_queue"))
     row_transform_engine = str(
         execution.get("row_transform_engine")
         or execution_audit.get("operator")
@@ -130,6 +137,9 @@ def build_quality_summary(
         },
         "transform_quality": _as_dict(transform_quality),
         "gate_result": gate_result,
+        "advanced_quality": advanced_quality,
+        "review_analysis": review_analysis,
+        "manual_review_queue": manual_review_queue,
         "reason_counts": reason_counts,
         "reason_sample_counts": {
             str(key): len(items)
@@ -156,5 +166,9 @@ def build_quality_summary(
             "sample_limit": _as_dict(execution_audit.get("limits")).get("sample_limit"),
             "sampled_record_count": sum(len(items) for items in reason_samples.values()),
             "sampled": True,
+        },
+        "row_samples": {
+            "before": _as_list(row_samples.get("before"))[:5],
+            "after": _as_list(row_samples.get("after"))[:5],
         },
     }

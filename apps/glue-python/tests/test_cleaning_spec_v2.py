@@ -45,6 +45,35 @@ class CleaningSpecV2Tests(unittest.TestCase):
         self.assertTrue(any(item["op"] == "trim" for item in spec["transform"]["field_ops"]))
         self.assertEqual(spec["transform"]["filters"][0]["op"], "exists")
 
+    def test_compile_cleaning_spec_preserves_survivorship_and_advanced_rules(self):
+        spec = compile_cleaning_params_to_spec(
+            {
+                "canonical_profile": "customer_ledger",
+                "rules": {
+                    "platform_mode": "generic",
+                    "deduplicate_by": ["phone", "biz_date", "amount"],
+                    "survivorship": {
+                        "keys": ["phone", "biz_date", "amount"],
+                        "prefer_non_null_fields": ["customer_name"],
+                        "prefer_latest_fields": ["biz_date"],
+                        "tie_breaker": "last",
+                    },
+                },
+                "quality_rules": {
+                    "advanced_rules": {
+                        "outlier_zscore": [{"field": "amount", "threshold": 3.0}],
+                        "anomaly_iqr": [{"field": "amount", "multiplier": 1.5}],
+                        "block_on_advanced_rules": True,
+                    }
+                },
+            }
+        )
+        rules, _, _ = cleaning_spec_to_transform_components(spec)
+        self.assertEqual(rules["survivorship"]["keys"], ["phone", "biz_date", "amount"])
+        self.assertEqual(rules["survivorship"]["prefer_latest_fields"], ["biz_date"])
+        self.assertEqual(spec["quality"]["advanced_rules"]["outlier_zscore"][0]["field"], "amount")
+        self.assertTrue(spec["quality"]["advanced_rules"]["block_on_advanced_rules"])
+
     def test_transform_components_expand_auto_header_mapping(self):
         spec = compile_preprocess_spec_to_spec({})
         rules, quality_gates, schema_hint = cleaning_spec_to_transform_components(

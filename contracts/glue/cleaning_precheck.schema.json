@@ -58,6 +58,12 @@
         "candidate_profiles",
         "quality_decisions",
         "sample_rows",
+        "issue_summary",
+        "suggested_repairs",
+        "header_ambiguities",
+        "duplicate_key_risk",
+        "review_required",
+        "review_items",
         "contract"
       ],
       "properties": {
@@ -79,6 +85,12 @@
         "sample_rows": { "type": "array", "items": { "type": "object" } },
         "quality_blocked": { "type": "boolean" },
         "prediction_quality": { "type": "object" },
+        "issue_summary": { "type": "object" },
+        "suggested_repairs": { "type": "array", "items": { "type": "string" } },
+        "header_ambiguities": { "type": "array", "items": { "type": "object" } },
+        "duplicate_key_risk": { "type": "object" },
+        "review_required": { "type": "boolean" },
+        "review_items": { "type": "array", "items": { "type": "object" } },
         "template_id": { "type": "string" },
         "contract": { "type": "string" }
       },

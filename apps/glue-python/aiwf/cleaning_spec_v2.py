@@ -53,6 +53,24 @@ _SUPPORTED_PREPROCESS_FIELD_OPS = {
 }
 
 
+def _normalize_advanced_rules(value: Any) -> dict[str, Any]:
+    source = _as_dict(value)
+    out: dict[str, Any] = {}
+    outlier = source.get("outlier_zscore")
+    if isinstance(outlier, dict):
+        out["outlier_zscore"] = dict(outlier)
+    elif isinstance(outlier, list):
+        out["outlier_zscore"] = [dict(item) for item in outlier if isinstance(item, dict)]
+    anomaly = source.get("anomaly_iqr")
+    if isinstance(anomaly, dict):
+        out["anomaly_iqr"] = [dict(anomaly)]
+    elif isinstance(anomaly, list):
+        out["anomaly_iqr"] = [dict(item) for item in anomaly if isinstance(item, dict)]
+    if "block_on_advanced_rules" in source:
+        out["block_on_advanced_rules"] = bool(source.get("block_on_advanced_rules"))
+    return out
+
+
 def empty_cleaning_spec_v2() -> dict[str, Any]:
     return {
         "schema_version": CLEANING_SPEC_V2_VERSION,
@@ -146,6 +164,11 @@ def compile_cleaning_params_to_spec(params: Mapping[str, Any]) -> dict[str, Any]
     sheet_profiles = _as_dict(params.get("sheet_profiles"))
     profile_name = _canonical_profile_from_params(params)
     profile_spec = resolve_canonical_profile_spec(profile_name)
+    advanced_rules = _normalize_advanced_rules(
+        params.get("advanced_rules")
+        or quality_rules.get("advanced_rules")
+        or rules.get("advanced_rules")
+    )
 
     spec["ingest"] = {
         "input_format": str(params.get("input_format") or "").strip().lower(),
@@ -182,6 +205,7 @@ def compile_cleaning_params_to_spec(params: Mapping[str, Any]) -> dict[str, Any]
         "string_ops": list(rules.get("string_ops")) if isinstance(rules.get("string_ops"), list) else [],
         "date_ops": list(rules.get("date_ops")) if isinstance(rules.get("date_ops"), list) else [],
         "field_ops": list(rules.get("field_ops")) if isinstance(rules.get("field_ops"), list) else [],
+        "survivorship": _as_dict(rules.get("survivorship")),
     }
 
     is_generic = str(rules.get("platform_mode") or "").strip().lower() == "generic" or any(
@@ -201,6 +225,8 @@ def compile_cleaning_params_to_spec(params: Mapping[str, Any]) -> dict[str, Any]
             "date_ops",
             "field_ops",
             "computed_fields",
+            "survivorship",
+            "advanced_rules",
         )
     )
     if not is_generic:
@@ -251,6 +277,7 @@ def compile_cleaning_params_to_spec(params: Mapping[str, Any]) -> dict[str, Any]
             profile_spec.get("required_fields", []),
         ),
         "gates": _quality_gates_from_sources(params, rules, quality_rules),
+        "advanced_rules": advanced_rules,
         "image_rules": image_rules,
         "xlsx_rules": xlsx_rules,
     }
@@ -386,6 +413,7 @@ def compile_preprocess_spec_to_spec(spec_obj: Mapping[str, Any]) -> dict[str, An
         "string_ops": [],
         "date_ops": [],
         "field_ops": field_ops,
+        "survivorship": _as_dict(spec_obj.get("survivorship")),
         "postprocess": {
             "standardize_evidence": bool(spec_obj.get("standardize_evidence", False)),
             "evidence_schema": _as_dict(spec_obj.get("evidence_schema")),
@@ -407,6 +435,9 @@ def compile_preprocess_spec_to_spec(spec_obj: Mapping[str, Any]) -> dict[str, An
             profile_spec.get("required_fields", []),
         ),
         "gates": _quality_gates_from_sources(spec_obj, quality_rules),
+        "advanced_rules": _normalize_advanced_rules(
+            spec_obj.get("advanced_rules") or quality_rules.get("advanced_rules")
+        ),
         "image_rules": image_rules,
         "xlsx_rules": xlsx_rules,
     }
@@ -472,6 +503,7 @@ def cleaning_spec_to_transform_components(
         "string_ops": list(transform.get("string_ops")) if isinstance(transform.get("string_ops"), list) else [],
         "date_ops": list(transform.get("date_ops")) if isinstance(transform.get("date_ops"), list) else [],
         "field_ops": list(transform.get("field_ops")) if isinstance(transform.get("field_ops"), list) else [],
+        "survivorship": _as_dict(transform.get("survivorship")),
     }
     quality_gates = {
         **_as_dict(quality.get("gates")),

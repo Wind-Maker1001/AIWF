@@ -58,10 +58,20 @@
     "include_fields": ["customer_name", "phone", "city", "amount", "biz_date"],
     "exclude_fields": [],
     "filters": [
+      { "op": "blank_row" },
+      { "op": "note_row" },
+      { "op": "subtotal_row" },
+      { "op": "header_repeat_row", "header_values": ["customer_name", "phone", "city", "amount", "biz_date"], "min_matches": 2 },
       { "field": "phone", "op": "regex", "value": "^[0-9+\\-\\s]{6,20}$" }
     ],
     "deduplicate_by": ["phone", "biz_date", "amount"],
     "deduplicate_keep": "first",
+    "survivorship": {
+      "keys": ["phone", "biz_date", "amount"],
+      "prefer_non_null_fields": ["customer_name", "city"],
+      "prefer_latest_fields": ["biz_date"],
+      "tie_breaker": "last"
+    },
     "sort_by": [
       { "field": "biz_date", "order": "asc" },
       { "field": "customer_name", "order": "asc" }
@@ -71,8 +81,15 @@
     "trim_strings": true,
     "computed_fields": {},
     "string_ops": [],
-    "date_ops": [],
-    "field_ops": []
+    "date_ops": [
+      { "field": "biz_date", "op": "parse_ymd" }
+    ],
+    "field_ops": [
+      { "field": "customer_name", "op": "normalize_name" },
+      { "field": "phone", "op": "normalize_phone_cn" },
+      { "field": "amount", "op": "strip_currency_symbol" },
+      { "field": "amount", "op": "strip_thousands_sep" }
+    ]
   },
   "quality": {
     "required_fields": ["customer_name", "phone", "amount", "biz_date"],
@@ -82,6 +99,15 @@
       "numeric_parse_rate_min": 0.95,
       "date_parse_rate_min": 0.95,
       "allow_empty_output": false
+    },
+    "advanced_rules": {
+      "outlier_zscore": [
+        { "field": "amount", "max_z": 4.0 }
+      ],
+      "anomaly_iqr": [
+        { "field": "amount", "max_ratio": 0.1 }
+      ],
+      "block_on_advanced_rules": false
     },
     "image_rules": {},
     "xlsx_rules": {}

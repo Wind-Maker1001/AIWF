@@ -46,10 +46,18 @@
     "include_fields": ["customer_name", "phone", "city"],
     "exclude_fields": [],
     "filters": [
+      { "op": "blank_row" },
+      { "op": "note_row" },
+      { "op": "header_repeat_row", "header_values": ["customer_name", "phone", "city"], "min_matches": 2 },
       { "field": "phone", "op": "regex", "value": "^[0-9+\\-\\s]{6,20}$" }
     ],
     "deduplicate_by": ["phone"],
     "deduplicate_keep": "first",
+    "survivorship": {
+      "keys": ["phone"],
+      "prefer_non_null_fields": ["customer_name", "city"],
+      "tie_breaker": "first"
+    },
     "sort_by": [
       { "field": "customer_name", "order": "asc" }
     ],
@@ -59,7 +67,10 @@
     "computed_fields": {},
     "string_ops": [],
     "date_ops": [],
-    "field_ops": []
+    "field_ops": [
+      { "field": "customer_name", "op": "normalize_name" },
+      { "field": "phone", "op": "normalize_phone_cn" }
+    ]
   },
   "quality": {
     "required_fields": ["customer_name", "phone"],

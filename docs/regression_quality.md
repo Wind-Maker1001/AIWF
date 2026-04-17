@@ -17,6 +17,12 @@ This document tracks the regression datasets and commands used by the repository
     - `xlsx_customer_multi_sheet`
     - `xlsx_finance_units`
     - `image_blank_blocked`
+    - `xlsx_dirty_header_repeat`
+    - `xlsx_dirty_subtotal_note_rows`
+    - `xlsx_bank_signed_amount_conflict`
+    - `xlsx_customer_ocr_phone_account_fix`
+    - `xlsx_hidden_sheet_formula_gap`
+    - `xlsx_utf8_gbk_mixed_text`
   - per-scenario assets:
     - `scenario.json`
     - `expected_rows.jsonl`
@@ -76,6 +82,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_productize.ps1 -V
 
 - treat the generated reports as the source of truth for current pass/fail state
 - smoke and gold serve different purposes; do not replace one with the other
+- dirty-table coverage should exercise both Python and Rust row transforms before new rules move from shadow to default
 - local desktop fixture tests may skip real XLSX reads when `apps/dify-desktop/node_modules/exceljs/package.json` is absent; use `ops/scripts/check_desktop_fixture_deps.ps1` before treating that as a problem
 - do not rely on static "current status" text in this document
 - see [verification.md](verification.md) for the wider CI matrix

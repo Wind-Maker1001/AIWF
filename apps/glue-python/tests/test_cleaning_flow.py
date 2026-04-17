@@ -8,6 +8,7 @@ os.environ.setdefault("NUMEXPR_MAX_THREADS", "8")
 os.environ.setdefault("AIWF_ALLOW_EXTERNAL_JOB_ROOT", "1")
 
 from aiwf.flows import cleaning
+from aiwf.flows import cleaning_flow_materialization
 from aiwf.flows.cleaning_artifacts import (
     list_cleaning_artifact_details,
     list_cleaning_artifact_domains,
@@ -15,12 +16,14 @@ from aiwf.flows.cleaning_artifacts import (
     register_cleaning_artifact,
     unregister_cleaning_artifact,
 )
+from aiwf.flows.cleaning_advanced_quality import evaluate_advanced_quality
 from aiwf.flows.office_artifacts import (
     list_office_artifact_details,
     list_office_artifact_domains,
     register_office_artifact,
     unregister_office_artifact,
 )
+from aiwf.governance_manual_reviews import list_manual_reviews
 from aiwf.governance_quality_rule_sets import save_quality_rule_set
 
 
@@ -41,6 +44,111 @@ def with_job_context(job_root: str, **params):
 
 
 class CleaningFlowTests(unittest.TestCase):
+    def test_evaluate_advanced_quality_supports_report_only_and_block_modes(self):
+        rows = [
+            {"amount": 1},
+            {"amount": 2},
+            {"amount": 3},
+            {"amount": 4},
+            {"amount": 1000},
+        ]
+
+        with patch("aiwf.flows.cleaning_advanced_quality.quality_check_v4_operator", return_value={"ok": False, "error": "offline"}):
+            report_only = evaluate_advanced_quality(
+                rows=rows,
+                params_effective={
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "outlier_zscore": {"field": "amount", "max_z": 1.0},
+                        }
+                    }
+                },
+            )
+            blocked = evaluate_advanced_quality(
+                rows=rows,
+                params_effective={
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "outlier_zscore": {"field": "amount", "max_z": 1.0},
+                            "block_on_advanced_rules": True,
+                        }
+                    }
+                },
+            )
+
+        self.assertTrue(report_only["enabled"])
+        self.assertTrue(report_only["report_only"])
+        self.assertFalse(report_only["blocked"])
+        self.assertFalse(report_only["passed"])
+        self.assertTrue(report_only["fallback_used"])
+        self.assertFalse(blocked["report_only"])
+        self.assertTrue(blocked["blocked"])
+
+    def test_evaluate_advanced_quality_preserves_multiple_outlier_rules(self):
+        rows = [
+            {"amount": 1, "balance": 1},
+            {"amount": 2, "balance": 2},
+            {"amount": 3, "balance": 3},
+            {"amount": 4, "balance": 4},
+            {"amount": 1000, "balance": 1000},
+        ]
+
+        with patch("aiwf.flows.cleaning_advanced_quality.quality_check_v4_operator", return_value={"ok": False, "error": "offline"}):
+            out = evaluate_advanced_quality(
+                rows=rows,
+                params_effective={
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "outlier_zscore": [
+                                {"field": "amount", "max_z": 1.0},
+                                {"field": "balance", "max_z": 1.0},
+                            ]
+                        }
+                    }
+                },
+            )
+
+        self.assertIsInstance(out["rules"]["outlier_zscore"], list)
+        self.assertEqual(len(out["rules"]["outlier_zscore"]), 2)
+        details = out["report"]["violations"][0]["details"]
+        self.assertEqual({item["field"] for item in details}, {"amount", "balance"})
+
+    def test_clean_rows_supports_dirty_row_filters_and_table_field_ops(self):
+        out = cleaning._clean_rows(
+            [
+                {"amount": "¥ 12.5", "phone": "138 0013 8000", "account_no": " 6222-0011 8899 "},
+                {"c1": "ID", "c2": "Amount", "c3": "Txn Date"},
+                {"note": "note: imported from OCR"},
+                {"amount": "Subtotal", "note": "subtotal line"},
+                {"amount": "", "note": "   "},
+            ],
+            {
+                "rules": {
+                    "use_rust_v2": False,
+                    "platform_mode": "generic",
+                    "filters": [
+                        {"op": "header_repeat_row", "header_values": ["id", "amount", "txn_date"], "min_matches": 2},
+                        {"op": "note_row", "keywords": ["note"]},
+                        {"op": "subtotal_row", "keywords": ["subtotal"]},
+                        {"op": "blank_row"},
+                    ],
+                    "field_ops": [
+                        {"field": "amount", "op": "strip_currency_symbol"},
+                        {"field": "amount", "op": "parse_number"},
+                        {"field": "amount", "op": "scale_by_header_unit", "unit": "万元"},
+                        {"field": "phone", "op": "normalize_phone_cn"},
+                        {"field": "account_no", "op": "normalize_account_no"},
+                    ],
+                }
+            },
+        )
+
+        self.assertEqual(len(out["rows"]), 1)
+        self.assertEqual(out["rows"][0]["phone"], "+8613800138000")
+        self.assertEqual(out["rows"][0]["account_no"], "622200118899")
+        self.assertEqual(out["rows"][0]["amount"], 125000.0)
+        self.assertEqual(out["quality"]["filtered_rows"], 4)
+
     def test_office_theme_settings(self):
         t = cleaning._office_theme_settings({"office_theme": "debate"})
         self.assertEqual(t["name"], "debate")
@@ -437,6 +545,140 @@ class CleaningFlowTests(unittest.TestCase):
             with open(rejections_artifact["path"], "r", encoding="utf-8") as f:
                 rejection_lines = [json.loads(line) for line in f if line.strip()]
             self.assertTrue(any(item["reason_category"] == "required_missing" for item in rejection_lines))
+            self.assertTrue(all("reason_code" in item for item in rejection_lines))
+
+    def test_run_cleaning_auto_enqueues_manual_review_for_survivorship_tie(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-manual-review",
+                    actor="test",
+                    params=with_job_context(
+                        local_job_root,
+                        local_standalone=True,
+                        office_outputs_enabled=False,
+                        cleaning_template="customer_contact_v1",
+                        rules={
+                            "use_rust_v2": False,
+                            "platform_mode": "generic",
+                            "deduplicate_by": ["phone"],
+                            "survivorship": {
+                                "keys": ["phone"],
+                                "tie_breaker": "last",
+                            },
+                        },
+                        rows=[
+                            {"phone": "13800138000", "customer_name": "Alice"},
+                            {"phone": "13800138000", "customer_name": "Alicia"},
+                        ],
+                    ),
+                )
+                queued = list_manual_reviews()
+
+            self.assertTrue(out["quality_summary"]["review_analysis"]["review_required"])
+            self.assertTrue(out["quality_summary"]["manual_review_queue"]["auto_enqueued"])
+            self.assertEqual(len(queued), 1)
+            self.assertEqual(queued[0]["review_key"], "cleaning::duplicate_key_risk::1")
+
+    def test_run_cleaning_enqueues_manual_review_when_risky_duplicate_is_outside_sample(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-manual-review-sampled",
+                    actor="test",
+                    params=with_job_context(
+                        local_job_root,
+                        local_standalone=True,
+                        office_outputs_enabled=False,
+                        audit_sample_limit=1,
+                        rules={
+                            "use_rust_v2": False,
+                            "platform_mode": "generic",
+                            "deduplicate_by": ["phone"],
+                            "survivorship": {
+                                "keys": ["phone"],
+                                "prefer_non_null_fields": ["customer_name"],
+                                "prefer_latest_fields": ["biz_date"],
+                                "tie_breaker": "last",
+                            },
+                        },
+                        rows=[
+                            {"phone": "safe", "customer_name": "", "biz_date": "2026-01-01"},
+                            {"phone": "safe", "customer_name": "Alice", "biz_date": "2026-01-02"},
+                            {"phone": "risk", "customer_name": "Bob", "biz_date": "2026-01-01"},
+                            {"phone": "risk", "customer_name": "Bobby", "biz_date": "2026-01-01"},
+                        ],
+                    ),
+                )
+                queued = list_manual_reviews()
+
+            duplicate_risk = out["quality_summary"]["review_analysis"]["duplicate_key_risk"]
+            self.assertEqual(duplicate_risk["duplicate_rows_removed"], 2)
+            self.assertTrue(duplicate_risk["review_required"])
+            self.assertTrue(out["quality_summary"]["manual_review_queue"]["auto_enqueued"])
+            self.assertEqual(len(queued), 1)
+            self.assertEqual(queued[0]["review_key"], "cleaning::duplicate_key_risk::1")
+
+    def test_clean_rows_scales_english_header_units_in_python_path(self):
+        out = cleaning._clean_rows(
+            [{"amount": "12.5"}],
+            {
+                "rules": {
+                    "use_rust_v2": False,
+                    "platform_mode": "generic",
+                    "field_ops": [
+                        {"field": "amount", "op": "parse_number"},
+                        {"field": "amount", "op": "scale_by_header_unit", "unit": "million"},
+                    ],
+                }
+            },
+        )
+
+        self.assertEqual(out["rows"][0]["amount"], 12500000.0)
+
+    def test_materialize_accel_outputs_blocks_when_advanced_quality_blocks(self):
+        with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:
+            cleaning_flow_materialization.materialize_accel_outputs(
+                params_effective={
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "outlier_zscore": {"field": "amount", "max_z": 1.0},
+                            "block_on_advanced_rules": True,
+                        }
+                    }
+                },
+                accel_outputs={"cleaned_parquet": {"path": "D:/tmp/fake.parquet"}},
+                accel_profile={"quality": {"output_rows": 5}, "quality_gate": {}},
+                sha256_file=lambda _path: "sha",
+                local_rows=[
+                    {"amount": 1},
+                    {"amount": 2},
+                    {"amount": 3},
+                    {"amount": 4},
+                    {"amount": 1000},
+                ],
+                local_profile={"quality": {"output_rows": 5}, "quality_gate": {}},
+                local_execution={},
+                preprocess_result={},
+                input_rows=[],
+            )
+        self.assertEqual(ctx.exception.error_code, "advanced_quality_blocked")
 
     def test_run_cleaning_quality_rule_set_keeps_explicit_quality_rule_overrides(self):
         with tempfile.TemporaryDirectory() as tmp:
