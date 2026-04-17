@@ -865,6 +865,39 @@ fn transform_rows_v2_supports_table_cleaning_field_ops_and_row_filters() {
 }
 
 #[test]
+fn transform_rows_v2_parse_number_keeps_full_width_comma_normalization() {
+    let req = TransformRowsReq {
+        run_id: Some("field-op-full-width-comma".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![json!({"amount":"1，234.56"})]),
+        rules: Some(json!({
+            "execution_engine":"columnar_v1",
+            "field_ops":[
+                {"field":"amount","op":"parse_number"}
+            ]
+        })),
+        quality_gates: Some(json!({"min_output_rows":1})),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("full-width comma parse_number transform");
+    let row = out
+        .rows
+        .first()
+        .and_then(|v| v.as_object())
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(out.rows.len(), 1);
+    assert_eq!(row.get("amount").and_then(|v| v.as_f64()).unwrap_or_default(), 1234.56);
+}
+
+#[test]
 fn transform_rows_v2_supports_survivorship_and_duplicate_explain() {
     let req = TransformRowsReq {
         run_id: Some("survivorship-1".to_string()),

@@ -8,6 +8,7 @@ os.environ.setdefault("NUMEXPR_MAX_THREADS", "8")
 os.environ.setdefault("AIWF_ALLOW_EXTERNAL_JOB_ROOT", "1")
 
 from aiwf.flows import cleaning
+from aiwf.flows import cleaning_flow_materialization
 from aiwf.flows.cleaning_artifacts import (
     list_cleaning_artifact_details,
     list_cleaning_artifact_domains,
@@ -650,6 +651,34 @@ class CleaningFlowTests(unittest.TestCase):
         )
 
         self.assertEqual(out["rows"][0]["amount"], 12500000.0)
+
+    def test_materialize_accel_outputs_blocks_when_advanced_quality_blocks(self):
+        with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:
+            cleaning_flow_materialization.materialize_accel_outputs(
+                params_effective={
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "outlier_zscore": {"field": "amount", "max_z": 1.0},
+                            "block_on_advanced_rules": True,
+                        }
+                    }
+                },
+                accel_outputs={"cleaned_parquet": {"path": "D:/tmp/fake.parquet"}},
+                accel_profile={"quality": {"output_rows": 5}, "quality_gate": {}},
+                sha256_file=lambda _path: "sha",
+                local_rows=[
+                    {"amount": 1},
+                    {"amount": 2},
+                    {"amount": 3},
+                    {"amount": 4},
+                    {"amount": 1000},
+                ],
+                local_profile={"quality": {"output_rows": 5}, "quality_gate": {}},
+                local_execution={},
+                preprocess_result={},
+                input_rows=[],
+            )
+        self.assertEqual(ctx.exception.error_code, "advanced_quality_blocked")
 
     def test_run_cleaning_quality_rule_set_keeps_explicit_quality_rule_overrides(self):
         with tempfile.TemporaryDirectory() as tmp:

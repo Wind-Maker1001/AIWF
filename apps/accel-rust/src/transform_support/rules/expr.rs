@@ -262,6 +262,7 @@ fn apply_field_op(current: &Value, obj: &Map<String, Value>, row: &Map<String, V
         "parse_number" => {
             let normalized = cur
                 .replace(',', "")
+                .replace('，', "")
                 .replace('$', "")
                 .replace('¥', "")
                 .replace('￥', "")

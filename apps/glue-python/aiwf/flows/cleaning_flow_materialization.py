@@ -143,6 +143,21 @@ def materialize_accel_outputs(
         params_effective=params_effective,
     )
     quality_gate["advanced_quality"] = advanced_quality
+    if advanced_quality.get("blocked"):
+        report = dict(advanced_quality.get("report") or {})
+        violations = report.get("violations") if isinstance(report.get("violations"), list) else []
+        message = "; ".join(str(item) for item in violations if str(item).strip()) or "advanced quality blocked"
+        raise CleaningGuardrailError(
+            error_code="advanced_quality_blocked",
+            message=message,
+            reason_codes=["advanced_quality_blocked"],
+            template_id=guardrail_template_id(params_effective),
+            template_expected_profile=guardrail_template_expected_profile(params_effective),
+            blank_output_expected=bool(params_effective.get("blank_output_expected", False)),
+            zero_output_unexpected=False,
+            blocking_reason_codes=["advanced_quality_blocked"],
+            details={"advanced_quality": advanced_quality},
+        )
     summary_execution = {
         **transform_execution,
         **execution,
