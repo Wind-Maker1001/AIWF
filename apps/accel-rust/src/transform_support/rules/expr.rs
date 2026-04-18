@@ -268,6 +268,9 @@ fn apply_field_op(current: &Value, obj: &Map<String, Value>, row: &Map<String, V
                 .replace('￥', "")
                 .replace('€', "")
                 .replace('£', "");
+            if normalized.trim().is_empty() {
+                return Some(Value::Null);
+            }
             normalized
                 .trim()
                 .parse::<f64>()

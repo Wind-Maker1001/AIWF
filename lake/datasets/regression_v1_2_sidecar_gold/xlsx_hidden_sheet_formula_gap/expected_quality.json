@@ -1,0 +1,9 @@
+{
+  "quality_blocked": false,
+  "required_fields": [
+    "id",
+    "amount"
+  ],
+  "header_confidence_min": 0.8,
+  "sheet_frames_min": 1
+}

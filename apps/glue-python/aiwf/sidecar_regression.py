@@ -109,6 +109,13 @@ def load_jsonl(path: str | Path) -> List[Dict[str, Any]]:
     return out
 
 
+def load_jsonl_if_exists(path: str | Path) -> List[Dict[str, Any]]:
+    file_path = Path(path)
+    if not file_path.exists():
+        return []
+    return load_jsonl(file_path)
+
+
 def load_sidecar_dataset(dataset_dir: str | Path) -> List[Dict[str, Any]]:
     dataset_root = Path(dataset_dir)
     manifest = load_json(dataset_root / "expectations.json")
@@ -272,6 +279,47 @@ def compare_expected_quality(
         errors.append(
             f"quality_blocked={bool(payload.get('quality_blocked'))} != expected {bool(expected_blocked)}"
         )
+    expected_blocked_reason_codes = (
+        sorted({str(item).strip() for item in scenario_obj.get("expected_blocked_reason_codes", []) if str(item).strip()})
+        if isinstance(scenario_obj.get("expected_blocked_reason_codes"), list)
+        else []
+    )
+    if expected_blocked_reason_codes:
+        actual_blocked_reason_codes = sorted(
+            {str(item).strip() for item in (payload.get("blocked_reason_codes") or []) if str(item).strip()}
+        )
+        if actual_blocked_reason_codes != expected_blocked_reason_codes:
+            errors.append(
+                "blocked_reason_codes="
+                f"{actual_blocked_reason_codes} != {expected_blocked_reason_codes}"
+            )
+    expected_quality_decision_reason_codes = (
+        sorted(
+            {
+                str(item).strip()
+                for item in scenario_obj.get("expected_quality_decision_reason_codes", [])
+                if str(item).strip()
+            }
+        )
+        if isinstance(scenario_obj.get("expected_quality_decision_reason_codes"), list)
+        else []
+    )
+    if expected_quality_decision_reason_codes:
+        quality_decisions = payload.get("quality_decisions") if isinstance(payload.get("quality_decisions"), list) else []
+        actual_quality_decision_reason_codes = sorted(
+            {
+                str(code).strip()
+                for decision in quality_decisions
+                if isinstance(decision, dict)
+                for code in (decision.get("reason_codes") or [])
+                if str(code).strip()
+            }
+        )
+        if actual_quality_decision_reason_codes != expected_quality_decision_reason_codes:
+            errors.append(
+                "quality_decision_reason_codes="
+                f"{actual_quality_decision_reason_codes} != {expected_quality_decision_reason_codes}"
+            )
     expected_structure = str(scenario_obj.get("expected_detected_structure") or "").strip()
     if expected_structure and str(payload.get("detected_structure") or "").strip() != expected_structure:
         errors.append(
@@ -309,6 +357,23 @@ def compare_expected_quality(
         else []
     )
     candidate_profiles = payload.get("candidate_profiles") if isinstance(payload.get("candidate_profiles"), list) else []
+    expected_candidate_profiles = (
+        sorted({str(item).strip() for item in scenario_obj.get("expected_candidate_profiles", []) if str(item).strip()})
+        if isinstance(scenario_obj.get("expected_candidate_profiles"), list)
+        else []
+    )
+    if expected_candidate_profiles:
+        actual_candidate_profiles = sorted(
+            {
+                str(item.get("profile") or "").strip()
+                for item in candidate_profiles
+                if isinstance(item, dict) and bool(item.get("recommended")) and str(item.get("profile") or "").strip()
+            }
+        )
+        if actual_candidate_profiles != expected_candidate_profiles:
+            errors.append(
+                f"recommended_candidate_profiles={actual_candidate_profiles} != {expected_candidate_profiles}"
+            )
     if expected_profile or expected_template_id:
         recommended = next(
             (
@@ -484,6 +549,92 @@ def _rust_available(accel_url: str) -> bool:
         return False
 
 
+def _resolve_consistency_rows(scenario_dir: str | Path, scenario: Dict[str, Any], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    scenario_path = Path(scenario_dir)
+    rel_path = str(scenario.get("consistency_rows_file") or "").strip()
+    if rel_path:
+        return load_jsonl_if_exists(scenario_path / rel_path)
+    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    return [dict(item) for item in rows if isinstance(item, dict)]
+
+
+def _build_rust_gates(scenario: Dict[str, Any]) -> Dict[str, Any]:
+    quality_rules = dict(scenario.get("quality_rules") or {})
+    rust_gates: Dict[str, Any] = {}
+    if "required_fields" in quality_rules:
+        rust_gates["required_fields"] = quality_rules.get("required_fields")
+    for key in [
+        "max_required_missing_ratio",
+        "max_duplicate_rows_removed",
+        "allow_empty_output",
+        "numeric_parse_rate_min",
+        "date_parse_rate_min",
+        "duplicate_key_ratio_max",
+        "blank_row_ratio_max",
+    ]:
+        if key in quality_rules:
+            rust_gates[key] = quality_rules[key]
+    return rust_gates
+
+
+def _run_transform_consistency(
+    rows: List[Dict[str, Any]],
+    scenario: Dict[str, Any],
+    accel_url: str,
+) -> Dict[str, Any]:
+    from aiwf.flows import cleaning as cleaning_flow
+
+    rust_rules = dict(scenario.get("rust_rules") or {})
+    if not rust_rules:
+        rust_rules = _derive_default_rust_rules(scenario)
+    rust_gates = _build_rust_gates(scenario)
+    python_rules = dict(scenario.get("python_rules") or rust_rules)
+    python_rules.setdefault("platform_mode", "generic")
+    python_rules["use_rust_v2"] = False
+    python_params = {
+        "rules": python_rules,
+        "quality_rules": dict(rust_gates),
+        "canonical_profile": str(scenario.get("canonical_profile") or "").strip(),
+    }
+    python_out = cleaning_flow._clean_rows(rows, python_params)
+    rust_out = rust_client.transform_rows_v3(
+        rows=rows,
+        rules=rust_rules,
+        quality_gates=rust_gates,
+        schema_hint={"source": "sidecar_regression", "audit": {"sample_limit": 5}},
+        base_url=accel_url,
+        timeout=10.0,
+    )
+    if not bool(rust_out.get("ok")):
+        return {
+            "ok": False,
+            "status": "failed",
+            "error": str(rust_out.get("error") or "rust transform failed"),
+        }
+    shadow_compare = cleaning_flow._compare_python_and_rust_cleaning(
+        python_rows=python_out.get("rows") if isinstance(python_out.get("rows"), list) else [],
+        python_quality=python_out.get("quality") if isinstance(python_out.get("quality"), dict) else {},
+        python_execution_audit=python_out.get("execution_audit") if isinstance(python_out.get("execution_audit"), dict) else {},
+        rust_rows=rust_out.get("rows") if isinstance(rust_out.get("rows"), list) else [],
+        rust_quality=rust_out.get("quality") if isinstance(rust_out.get("quality"), dict) else {},
+        rust_execution_audit=rust_out.get("audit") if isinstance(rust_out.get("audit"), dict) else {},
+    )
+    mismatches = list(shadow_compare.get("mismatches") or [])
+    return {
+        "ok": len(mismatches) == 0,
+        "status": "passed" if len(mismatches) == 0 else "failed",
+        "mode": "transform_compare",
+        "shadow_compare": shadow_compare,
+        "python_rows": python_out.get("rows") if isinstance(python_out.get("rows"), list) else [],
+        "python_quality": python_out.get("quality") if isinstance(python_out.get("quality"), dict) else {},
+        "python_execution_audit": python_out.get("execution_audit") if isinstance(python_out.get("execution_audit"), dict) else {},
+        "rust_rows": rust_out.get("rows") if isinstance(rust_out.get("rows"), list) else [],
+        "rust_quality": rust_out.get("quality") if isinstance(rust_out.get("quality"), dict) else {},
+        "rust_audit": rust_out.get("audit") if isinstance(rust_out.get("audit"), dict) else {},
+        "mismatches": mismatches,
+    }
+
+
 def _expected_reason_counts(rows: List[Dict[str, Any]], rust_rules: Dict[str, Any]) -> Dict[str, int]:
     counts = {
         "invalid_object": 0,
@@ -605,27 +756,16 @@ def run_python_rust_consistency(scenario_dir: str | Path, scenario: Dict[str, An
     if result["status_code"] != 200:
         return {"ok": False, "status": "failed", "error": f"sidecar extract http {result['status_code']}"}
     payload = result["payload"]
-    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    rows = _resolve_consistency_rows(scenario_dir, scenario, payload)
     if not _rust_available(accel_url):
         return {"ok": True, "status": "skipped", "reason": "rust service unavailable"}
+    if bool(scenario.get("consistency_transform_compare", False)):
+        return _run_transform_consistency(rows, scenario, accel_url)
     quality_rules = dict(scenario.get("quality_rules") or {})
     rust_rules = dict(scenario.get("rust_rules") or {})
     if not rust_rules:
         rust_rules = _derive_default_rust_rules(scenario)
-    rust_gates = {}
-    if "required_fields" in quality_rules:
-        rust_gates["required_fields"] = quality_rules.get("required_fields")
-    for key in [
-        "max_required_missing_ratio",
-        "max_duplicate_rows_removed",
-        "allow_empty_output",
-        "numeric_parse_rate_min",
-        "date_parse_rate_min",
-        "duplicate_key_ratio_max",
-        "blank_row_ratio_max",
-    ]:
-        if key in quality_rules:
-            rust_gates[key] = quality_rules[key]
+    rust_gates = _build_rust_gates(scenario)
     rust_out = rust_client.transform_rows_v3(
         rows=rows,
         rules=rust_rules,

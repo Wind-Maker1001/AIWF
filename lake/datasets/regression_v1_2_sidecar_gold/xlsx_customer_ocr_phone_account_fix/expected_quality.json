@@ -1,0 +1,10 @@
+{
+  "quality_blocked": false,
+  "required_fields": [
+    "customer_name",
+    "phone"
+  ],
+  "header_confidence_min": 0.8,
+  "duplicate_key_ratio_max": 0.0,
+  "sheet_frames_min": 1
+}

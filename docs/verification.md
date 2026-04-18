@@ -19,13 +19,15 @@ The quick profile still runs:
 - encoding checks
 - Rust / Java / Python tests
 - rust transform benchmark self-test
+- quick sidecar regression quality checks
+- quick sidecar Python/Rust consistency checks
 - desktop unit and UI checks
 - native WinUI primary frontend smoke outside CI unless you explicitly skip it
 
 The quick profile now auto-skips:
 
 - Electron compatibility packaged-startup checks
-- regression quality and heavier benchmark / chaos suites
+- full regression quality and heavier benchmark / chaos suites
 
 Default / full local profile:
 

@@ -374,7 +374,7 @@ def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, row: Dict[str, Any]
         except IndexError:
             return current, False
     if kind == "parse_number":
-        parsed = to_float(cur.replace(",", "").replace("$", "").strip())
+        parsed = to_float(cur.replace(",", "").replace("，", "").replace("$", "").strip())
         return (parsed if parsed is not None else current), (parsed is not None)
     if kind == "strip_currency_symbol":
         stripped = re.sub(r"(?i)(cny|rmb|usd|eur|jpy|人民币|元|圆|￥|¥|\$|€|£)", "", cur).strip()

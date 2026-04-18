@@ -1,0 +1,91 @@
+{
+  "id": "xlsx_dirty_subtotal_note_rows",
+  "input_files": [
+    "input.xlsx"
+  ],
+  "canonical_profile": "finance_statement",
+  "xlsx_all_sheets": true,
+  "sheet_allowlist": [
+    "Finance"
+  ],
+  "include_hidden_sheets": false,
+  "quick_gate": true,
+  "consistency_compare": true,
+  "consistency_transform_compare": true,
+  "quality_rules": {
+    "canonical_profile": "finance_statement",
+    "required_fields": [
+      "id",
+      "amount"
+    ],
+    "unique_keys": [
+      "id"
+    ],
+    "max_required_missing_ratio": 0.25,
+    "duplicate_key_ratio_max": 0.0,
+    "numeric_parse_rate_min": 1.0,
+    "date_parse_rate_min": 0.0
+  },
+  "xlsx_rules": {
+    "required_columns": [
+      "id",
+      "amount"
+    ],
+    "header_confidence_min": 0.8,
+    "sheet_row_count_min": 1,
+    "cross_sheet_required_coverage_min": 0.75,
+    "numeric_parse_rate_min": 1.0,
+    "date_parse_rate_min": 0.0
+  },
+  "expected_row_fields": [
+    "id",
+    "amount",
+    "biz_date"
+  ],
+  "expected_recommended_profile": "finance_statement",
+  "expected_recommended_template_id": "finance_report_v1",
+  "expected_candidate_profiles": [
+    "finance_statement"
+  ],
+  "expected_header_mapping_fields": [
+    "id",
+    "amount",
+    "biz_date"
+  ],
+  "expected_blocked_reason_codes": [
+    "numeric_parse_low"
+  ],
+  "expected_quality_decision_reason_codes": [
+    "numeric_parse_low"
+  ],
+  "rust_rules": {
+    "platform_mode": "generic",
+    "filters": [
+      {
+        "op": "note_row",
+        "keywords": [
+          "note"
+        ]
+      },
+      {
+        "op": "subtotal_row",
+        "keywords": [
+          "subtotal"
+        ]
+      },
+      {
+        "op": "blank_row"
+      }
+    ],
+    "field_ops": [
+      {
+        "field": "amount",
+        "op": "parse_number"
+      },
+      {
+        "field": "biz_date",
+        "op": "parse_date"
+      }
+    ]
+  }
+}

@@ -652,6 +652,22 @@ class CleaningFlowTests(unittest.TestCase):
 
         self.assertEqual(out["rows"][0]["amount"], 12500000.0)
 
+    def test_clean_rows_parse_number_supports_full_width_comma_in_python_path(self):
+        out = cleaning._clean_rows(
+            [{"amount": "1，234.56"}],
+            {
+                "rules": {
+                    "use_rust_v2": False,
+                    "platform_mode": "generic",
+                    "field_ops": [
+                        {"field": "amount", "op": "parse_number"},
+                    ],
+                }
+            },
+        )
+
+        self.assertEqual(out["rows"][0]["amount"], 1234.56)
+
     def test_materialize_accel_outputs_blocks_when_advanced_quality_blocks(self):
         with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:
             cleaning_flow_materialization.materialize_accel_outputs(

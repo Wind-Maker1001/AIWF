@@ -23,8 +23,11 @@ test("ci check wires sidecar python/rust consistency as a first-class gate", () 
   const compatibilitySkipMatch = ciCheck.match(/\$compatibilitySkipParams = @\(([\s\S]*?)\n  \)/);
   assert.ok(quickSkipMatch, "quick profile skip list not found");
   assert.ok(compatibilitySkipMatch, "compatibility profile skip list not found");
-  assert.match(quickSkipMatch[1], /"SkipSidecarPythonRustConsistency"/);
+  assert.doesNotMatch(quickSkipMatch[1], /"SkipSidecarPythonRustConsistency"/);
   assert.match(compatibilitySkipMatch[1], /"SkipSidecarPythonRustConsistency"/);
+  assert.match(ciCheck, /run_sidecar_python_rust_consistency\.ps1/i);
+  assert.match(ciCheck, /run_sidecar_regression_quality\.ps1/i);
+  assert.match(ciCheck, /-Quick\b/i);
 
   assert.match(backendQuickstart, /run_sidecar_python_rust_consistency\.ps1/i);
   assert.match(backendQuickstart, /-RequireEnhancedIngest/i);

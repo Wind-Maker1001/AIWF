@@ -1,0 +1,2 @@
+{"account_no": "6222-0001", "txn_date": "2026-03-01", "debit_amount": "120.50", "credit_amount": "", "amount": "999.00", "balance": "10000.00", "counterparty_name": "??", "ref_no": "TXN-001"}
+{"account_no": "6222-0001", "txn_date": "2026-03-02", "debit_amount": "", "credit_amount": "300.00", "amount": "-999.00", "balance": "10300.00", "counterparty_name": "??", "ref_no": "TXN-002"}

@@ -1,0 +1,2 @@
+{"customer_name": "张三 UTF8", "phone": "+8613800138000", "city": "深圳"}
+{"customer_name": "李四 GBK 样式", "phone": "+8613800138001", "city": "广州(测试)"}
