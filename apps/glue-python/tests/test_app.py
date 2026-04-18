@@ -665,6 +665,69 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("signed_amount_conflict", payload["blocking_reason_codes"])
         self.assertTrue(any(item["kind"] == "signed_amount_conflict" for item in payload["review_items"]))
 
+    def test_cleaning_precheck_blocks_on_signed_amount_conflict_when_filtered_rows_exist(self):
+        with patch.object(glue_app, "ingest_extract") as ingest_extract:
+            ingest_extract.return_value = {
+                "ok": True,
+                "rows": [
+                    {
+                        "row_index": 1,
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "debit_amount": "120.50",
+                        "credit_amount": "",
+                        "amount": "999.00",
+                        "balance": "10000.00",
+                        "ref_no": "TXN-001",
+                    },
+                    {
+                        "row_index": 2,
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "amount": "50.00",
+                        "balance": "10050.00",
+                        "remark": "subtotal row",
+                        "ref_no": "TXN-SUBTOTAL",
+                    },
+                ],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "score": 0.96,
+                        "required_coverage": 1.0,
+                        "recommended": True,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+            }
+            resp = self.client.post(
+                "/cleaning/precheck",
+                json={
+                    "input_path": r"D:\data\bank-signed-conflict-filtered.xlsx",
+                    "cleaning_template": "bank_statement_v1",
+                    "header_mapping_mode": "auto",
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "bank_statement_semantics": {
+                                "block_on_semantic_conflicts": True,
+                            }
+                        }
+                    },
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["precheck_action"], "block")
+        self.assertIn("signed_amount_conflict", payload["blocking_reason_codes"])
+        self.assertTrue(any(item["kind"] == "signed_amount_conflict" for item in payload["review_items"]))
+
     def test_ingest_extract_auto_mode_reports_fallback_to_strict_when_rapidfuzz_missing(self):
         with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows, patch.object(
             glue_app,
@@ -2476,6 +2539,78 @@ class AppRouteTests(unittest.TestCase):
             ):
                 resp = self.client.post(
                     "/jobs/job-bank-signed-filtered/run/cleaning",
+                    json={
+                        "actor": "local",
+                        "ruleset_version": "v1",
+                        "job_context": make_job_context(local_job_root),
+                        "params": {
+                            "cleaning_template": "bank_statement_v1",
+                            "office_outputs_enabled": False,
+                            "rules": {"use_rust_v2": False},
+                            "quality_rules": {
+                                "advanced_rules": {
+                                    "bank_statement_semantics": {
+                                        "block_on_semantic_conflicts": True,
+                                    }
+                                }
+                            },
+                            "rows": [
+                                {
+                                    "row_index": 1,
+                                    "account_no": "6222-0001",
+                                    "txn_date": "2026-03-01",
+                                    "debit_amount": "120.50",
+                                    "credit_amount": "",
+                                    "amount": "999.00",
+                                    "balance": "10000.00",
+                                    "ref_no": "TXN-001",
+                                },
+                                {
+                                    "row_index": 2,
+                                    "account_no": "6222-0001",
+                                    "txn_date": "2026-03-01",
+                                    "amount": "50.00",
+                                    "balance": "10050.00",
+                                    "remark": "subtotal row",
+                                    "ref_no": "TXN-SUBTOTAL",
+                                },
+                            ],
+                        },
+                    },
+                )
+
+            self.assertEqual(resp.status_code, 400)
+            payload = resp.json()
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["error_code"], "advanced_quality_blocked")
+            self.assertEqual(payload["blocking_reason_codes"], ["advanced_quality_blocked", "signed_amount_conflict"])
+            self.assertEqual(
+                payload["details"]["advanced_quality"]["semantic_checks"]["summary"]["counts"]["signed_amount_conflict"],
+                1,
+            )
+            step_start.assert_called_once()
+            step_fail.assert_called_once()
+            step_done.assert_not_called()
+            artifact_upsert.assert_not_called()
+
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_returns_signed_amount_conflict_when_filtered_rows_exist(self, _make_base_client):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            with patch("aiwf.flows.cleaning._base_step_start") as step_start, patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ) as artifact_upsert, patch("aiwf.flows.cleaning._base_step_done") as step_done, patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ) as step_fail, patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._require_local_parquet_dependencies"
+            ):
+                resp = self.client.post(
+                    "/jobs/job-bank-signed-filtered-align/run/cleaning",
                     json={
                         "actor": "local",
                         "ruleset_version": "v1",
