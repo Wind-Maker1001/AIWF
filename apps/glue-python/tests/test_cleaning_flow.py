@@ -711,6 +711,65 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertEqual(out["rows"][1]["amount"], 300.0)
         self.assertEqual(out["rows"][2]["amount"], -120.5)
 
+    def test_evaluate_advanced_quality_preserves_custom_direction_field_for_bank_semantics(self):
+        out = evaluate_advanced_quality(
+            rows=[
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "drcr": "debit",
+                    "amount": "120.50",
+                    "balance": "10000.00",
+                }
+            ],
+            params_effective={
+                "canonical_profile": "bank_statement",
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "direction_field": "drcr",
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+        )
+
+        self.assertTrue(out["enabled"])
+        self.assertFalse(out["passed"])
+        self.assertEqual(
+            out["semantic_checks"]["summary"]["counts"]["signed_amount_conflict"],
+            1,
+        )
+
+    def test_evaluate_advanced_quality_handles_non_numeric_row_index_for_bank_semantics(self):
+        out = evaluate_advanced_quality(
+            rows=[
+                {
+                    "row_index": "A1",
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "debit_amount": "120.50",
+                    "credit_amount": "",
+                    "amount": "999.00",
+                    "balance": "10000.00",
+                }
+            ],
+            params_effective={
+                "canonical_profile": "bank_statement",
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+        )
+
+        self.assertTrue(out["enabled"])
+        self.assertEqual(out["semantic_checks"]["items"][0]["row_index"], 1)
+
     def test_evaluate_advanced_quality_reports_bank_statement_semantic_conflicts(self):
         out = evaluate_advanced_quality(
             rows=[

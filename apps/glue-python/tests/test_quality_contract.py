@@ -1,6 +1,7 @@
 import unittest
 
 from aiwf.canonical_profiles import get_profile_registry
+from aiwf.flows.cleaning_config import to_int
 from aiwf.quality_contract import analyze_header_mapping, canonicalize_header, normalize_value_for_field
 
 
@@ -108,6 +109,12 @@ class QualityContractTests(unittest.TestCase):
     def test_normalize_value_for_field_handles_currency_and_unit_mixed_amount_text(self):
         self.assertEqual(normalize_value_for_field("\uffe51.2\u4e07\u5143", "amount"), 12000.0)
         self.assertEqual(normalize_value_for_field("USD 1,234.50", "amount"), 1234.5)
+
+    def test_normalize_value_for_field_preserves_large_integer_ids(self):
+        self.assertEqual(normalize_value_for_field("9007199254740993", "id"), 9007199254740993)
+
+    def test_to_int_preserves_large_integer_strings(self):
+        self.assertEqual(to_int("9007199254740993"), 9007199254740993)
 
 
 if __name__ == "__main__":

@@ -40,6 +40,26 @@ def _normalize_token(value: Any) -> str:
     return text
 
 
+def _coerce_row_index(value: Any, fallback: int) -> int:
+    if value is None or isinstance(value, bool):
+        return fallback
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if math.isfinite(value) else fallback
+    text = str(value).strip()
+    if not text:
+        return fallback
+    try:
+        return int(text)
+    except Exception:
+        try:
+            parsed = float(text)
+            return int(parsed) if math.isfinite(parsed) else fallback
+        except Exception:
+            return fallback
+
+
 def _semantic_profile_is_bank(
     params_effective: Mapping[str, Any],
     profile_analysis: Mapping[str, Any] | None = None,
@@ -105,7 +125,11 @@ def _resolve_direction_sign(direction: Any, cfg: Mapping[str, Any]) -> float | N
     return None
 
 
-def _normalize_row_for_semantics(row: Mapping[str, Any], rename_map: Mapping[str, Any]) -> Dict[str, Any]:
+def _normalize_row_for_semantics(
+    row: Mapping[str, Any],
+    rename_map: Mapping[str, Any],
+    cfg: Mapping[str, Any],
+) -> Dict[str, Any]:
     source = dict(row or {})
     normalized_source = dict(source)
     for old_key, new_key in rename_map.items():
@@ -115,6 +139,11 @@ def _normalize_row_for_semantics(row: Mapping[str, Any], rename_map: Mapping[str
             continue
         if old_text in normalized_source and new_text not in normalized_source:
             normalized_source[new_text] = normalized_source.get(old_text)
+    direction_field = str(cfg.get("direction_field") or "txn_type").strip() or "txn_type"
+    direction_value = normalized_source.get(direction_field)
+    if direction_value in {None, ""}:
+        direction_value = normalized_source.get("txn_type", normalized_source.get("direction"))
+    direction_text = str(direction_value or "").strip()
     out = {
         "account_no": _normalize_account_no(normalized_source.get("account_no")),
         "txn_date": normalize_value_for_field(normalized_source.get("txn_date"), "txn_date"),
@@ -122,12 +151,14 @@ def _normalize_row_for_semantics(row: Mapping[str, Any], rename_map: Mapping[str
         "credit_amount": normalize_value_for_field(normalized_source.get("credit_amount"), "credit_amount"),
         "amount": normalize_value_for_field(normalized_source.get("amount"), "amount"),
         "balance": normalize_value_for_field(normalized_source.get("balance"), "balance"),
-        "txn_type": str(normalized_source.get("txn_type") or normalized_source.get("direction") or "").strip(),
+        "txn_type": str(normalized_source.get("txn_type") or normalized_source.get("direction") or direction_text).strip(),
         "ref_no": str(normalized_source.get("ref_no") or "").strip(),
         "counterparty_name": str(normalized_source.get("counterparty_name") or "").strip(),
         "row_index": normalized_source.get("row_index", normalized_source.get("_row_index")),
         "sheet_name": str(normalized_source.get("sheet_name") or "").strip(),
     }
+    if direction_field not in out:
+        out[direction_field] = direction_text
     return out
 
 
@@ -165,7 +196,7 @@ def evaluate_bank_statement_semantics(
         }
     rules = _as_dict(params_effective.get("rules"))
     rename_map = _as_dict(rules.get("rename_map"))
-    normalized_rows = [_normalize_row_for_semantics(dict(item or {}), rename_map) for item in rows if isinstance(item, dict)]
+    normalized_rows = [_normalize_row_for_semantics(dict(item or {}), rename_map, cfg) for item in rows if isinstance(item, dict)]
     items: List[Dict[str, Any]] = []
     counts = {"signed_amount_conflict": 0, "balance_gap": 0}
     signed_tolerance = float(cfg["signed_amount_conflict_tolerance"])
@@ -174,7 +205,7 @@ def evaluate_bank_statement_semantics(
     previous_balance_by_account: Dict[str, float] = {}
     for ordinal, row in enumerate(normalized_rows, start=1):
         account_key = str(row.get("account_no") or "__global__")
-        row_index = int(row.get("row_index") or ordinal)
+        row_index = _coerce_row_index(row.get("row_index"), ordinal)
         reported_amount = _to_float(row.get("amount"))
         expected_amount = _expected_signed_amount(row, cfg)
         if reported_amount is not None and expected_amount is not None:

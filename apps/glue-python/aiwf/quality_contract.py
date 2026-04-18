@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 import math
 import re
 import unicodedata
@@ -335,12 +336,15 @@ def _parse_amount_value(value: Any, *, raw_header: Any = None) -> Optional[float
 
 
 def _parse_int_like(value: Any) -> Optional[int]:
-    text = _normalize_numeric_text(value).replace(",", "")
+    text = _normalize_numeric_text(value).replace(",", "").replace("，", "")
     if not text:
         return None
     try:
-        return int(float(text))
-    except Exception:
+        parsed = Decimal(text)
+        if not parsed.is_finite():
+            return None
+        return int(parsed)
+    except (InvalidOperation, ValueError):
         return None
 
 

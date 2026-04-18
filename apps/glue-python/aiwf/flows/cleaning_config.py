@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Callable, Dict, List, Optional
@@ -12,14 +13,22 @@ def normalize_key(value: str) -> str:
 
 
 def to_int(value: Any) -> Optional[int]:
-    if value is None:
+    if value is None or isinstance(value, bool):
         return None
-    parsed = to_float(value)
-    if parsed is None:
+    normalized = normalize_value_for_field(value, "id")
+    if isinstance(normalized, int) and not isinstance(normalized, bool):
+        return normalized
+    if isinstance(normalized, float):
+        return int(normalized) if math.isfinite(normalized) else None
+    text = str(normalized if normalized is not None else value).strip()
+    if not text:
         return None
     try:
+        parsed = Decimal(text)
+        if not parsed.is_finite():
+            return None
         return int(parsed)
-    except Exception:
+    except (InvalidOperation, ValueError):
         return None
 
 
