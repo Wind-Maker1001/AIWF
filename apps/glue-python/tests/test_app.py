@@ -1284,6 +1284,51 @@ class AppRouteTests(unittest.TestCase):
         self.assertFalse(payload["blank_output_expected"])
         self.assertEqual(payload["reason_codes"], ["zero_output_unexpected"])
 
+    @patch.object(glue_app, "_run_flow_with_runner")
+    def test_cleaning_advanced_quality_guardrail_response_preserves_semantic_codes(self, run_flow_with_runner):
+        run_flow_with_runner.side_effect = CleaningGuardrailError(
+            error_code="advanced_quality_blocked",
+            message="advanced quality blocked",
+            reason_codes=["advanced_quality_blocked"],
+            requested_profile="bank_statement",
+            recommended_profile="bank_statement",
+            profile_confidence=0.97,
+            required_field_coverage=1.0,
+            template_id="bank_statement_v1",
+            template_expected_profile="bank_statement",
+            blank_output_expected=False,
+            zero_output_unexpected=False,
+            blocking_reason_codes=["advanced_quality_blocked", "balance_gap"],
+            details={
+                "advanced_quality": {
+                    "semantic_checks": {
+                        "summary": {
+                            "counts": {
+                                "signed_amount_conflict": 0,
+                                "balance_gap": 1,
+                            }
+                        }
+                    }
+                }
+            },
+        )
+
+        resp = self.client.post(
+            "/jobs/job-bank-gap/run/cleaning",
+            json={"actor": "local", "ruleset_version": "v1", "params": {"cleaning_template": "bank_statement_v1"}},
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error_code"], "advanced_quality_blocked")
+        self.assertEqual(payload["reason_codes"], ["advanced_quality_blocked"])
+        self.assertEqual(payload["blocking_reason_codes"], ["advanced_quality_blocked", "balance_gap"])
+        self.assertEqual(
+            payload["details"]["advanced_quality"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+            1,
+        )
+
     def test_run_reference_success_response_shape(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):

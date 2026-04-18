@@ -89,6 +89,7 @@ Template/profile guardrails:
 - structured guardrail errors currently include:
   - `error_code`
   - `reason_codes`
+  - `blocking_reason_codes`
   - `requested_profile`
   - `recommended_profile`
   - `profile_confidence`
@@ -96,6 +97,10 @@ Template/profile guardrails:
   - `template_id`
   - `blank_output_expected`
   - `zero_output_unexpected`
+
+For `advanced_quality_blocked`, `reason_codes` remains the generic guardrail code while
+`blocking_reason_codes` may additionally include concrete semantic blockers such as
+`signed_amount_conflict` or `balance_gap`.
 
 Authoritative precheck bridge:
 - `POST /cleaning/precheck`
