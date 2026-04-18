@@ -2395,6 +2395,69 @@ class AppRouteTests(unittest.TestCase):
             step_done.assert_not_called()
             artifact_upsert.assert_not_called()
 
+    @patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False)
+    @patch.object(glue_app, "make_base_client", return_value=None)
+    def test_run_flow_route_returns_signed_amount_conflict_blocking_reason_codes(self, _make_base_client):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            with patch("aiwf.flows.cleaning._base_step_start") as step_start, patch(
+                "aiwf.flows.cleaning._base_artifact_upsert"
+            ) as artifact_upsert, patch("aiwf.flows.cleaning._base_step_done") as step_done, patch(
+                "aiwf.flows.cleaning._base_step_fail"
+            ) as step_fail, patch(
+                "aiwf.flows.cleaning._try_accel_cleaning",
+                return_value={"attempted": True, "ok": False, "error": "accel unavailable"},
+            ), patch(
+                "aiwf.flows.cleaning._require_local_parquet_dependencies"
+            ):
+                resp = self.client.post(
+                    "/jobs/job-bank-signed-conflict/run/cleaning",
+                    json={
+                        "actor": "local",
+                        "ruleset_version": "v1",
+                        "job_context": make_job_context(local_job_root),
+                        "params": {
+                            "cleaning_template": "bank_statement_v1",
+                            "office_outputs_enabled": False,
+                            "rules": {"use_rust_v2": False},
+                            "quality_rules": {
+                                "advanced_rules": {
+                                    "bank_statement_semantics": {
+                                        "block_on_semantic_conflicts": True,
+                                    }
+                                }
+                            },
+                            "rows": [
+                                {
+                                    "account_no": "6222-0001",
+                                    "txn_date": "2026-03-01",
+                                    "debit_amount": "120.50",
+                                    "credit_amount": "",
+                                    "amount": "999.00",
+                                    "balance": "10000.00",
+                                    "ref_no": "TXN-001",
+                                }
+                            ],
+                        },
+                    },
+                )
+
+            self.assertEqual(resp.status_code, 400)
+            payload = resp.json()
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["error_code"], "advanced_quality_blocked")
+            self.assertEqual(payload["reason_codes"], ["advanced_quality_blocked"])
+            self.assertEqual(payload["blocking_reason_codes"], ["advanced_quality_blocked", "signed_amount_conflict"])
+            self.assertEqual(
+                payload["details"]["advanced_quality"]["semantic_checks"]["summary"]["counts"]["signed_amount_conflict"],
+                1,
+            )
+            step_start.assert_called_once()
+            step_fail.assert_called_once()
+            step_done.assert_not_called()
+            artifact_upsert.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

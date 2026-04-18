@@ -147,11 +147,12 @@ def evaluate_advanced_quality(
     rows: List[Dict[str, Any]],
     params_effective: Mapping[str, Any],
     semantic_rows: List[Dict[str, Any]] | None = None,
+    conflict_rows: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     advanced_rules = _normalize_advanced_rules(params_effective)
     semantic_checks = evaluate_bank_statement_semantics(
-        rows=list(rows or []),
-        conflict_rows=list(semantic_rows or rows),
+        rows=list(semantic_rows or rows),
+        conflict_rows=list(conflict_rows or semantic_rows or rows),
         params_effective=params_effective,
     )
     operator_rules = {

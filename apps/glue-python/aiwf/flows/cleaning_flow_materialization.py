@@ -156,6 +156,7 @@ def materialize_accel_outputs(
         rows=list(local_rows or []),
         params_effective=params_effective,
         semantic_rows=list(local_rows or []),
+        conflict_rows=list(input_rows or local_rows or []),
     )
     semantic_checks = dict(advanced_quality.get("semantic_checks") or {})
     quality_gate["advanced_quality"] = advanced_quality
@@ -280,6 +281,7 @@ def materialize_local_outputs(
         rows=rows,
         params_effective=params_effective,
         semantic_rows=list(rows or []),
+        conflict_rows=list(input_rows or rows or []),
     )
     semantic_checks = dict(advanced_quality.get("semantic_checks") or {})
     quality_gate["advanced_quality"] = advanced_quality
