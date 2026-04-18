@@ -880,6 +880,51 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertEqual(payload["precheck_action"], "block")
         self.assertIn("signed_amount_conflict", payload["blocking_reason_codes"])
 
+    def test_run_cleaning_precheck_blocks_on_signed_amount_conflict_with_bank_template(self):
+        payload = run_cleaning_precheck(
+            params={
+                "cleaning_template": "bank_statement_v1",
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+            extract_payload={
+                "rows": [
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "debit_amount": "120.50",
+                        "credit_amount": "",
+                        "amount": "999.00",
+                        "balance": "10000.00",
+                        "ref_no": "TXN-001",
+                    }
+                ],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "recommended": True,
+                        "score": 0.95,
+                        "required_coverage": 1.0,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+            },
+        )
+
+        self.assertEqual(payload["precheck_action"], "block")
+        self.assertIn("signed_amount_conflict", payload["blocking_reason_codes"])
+        self.assertTrue(any(item["kind"] == "signed_amount_conflict" for item in payload["review_items"]))
+
     def test_run_cleaning_precheck_warns_on_bank_balance_gap(self):
         payload = run_cleaning_precheck(
             params={"canonical_profile": "bank_statement"},

@@ -701,6 +701,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             semantic_rows = list(raw_rows)
         semantic_checks = evaluate_bank_statement_semantics(
             rows=semantic_rows,
+            conflict_rows=list(raw_rows),
             params_effective=params,
             profile_analysis=profile_analysis,
         )

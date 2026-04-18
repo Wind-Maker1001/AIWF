@@ -179,6 +179,7 @@ def _expected_signed_amount(row: Mapping[str, Any], cfg: Mapping[str, Any]) -> f
 def evaluate_bank_statement_semantics(
     *,
     rows: List[Dict[str, Any]],
+    conflict_rows: List[Dict[str, Any]] | None = None,
     params_effective: Mapping[str, Any],
     profile_analysis: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
@@ -197,14 +198,19 @@ def evaluate_bank_statement_semantics(
     rules = _as_dict(params_effective.get("rules"))
     rename_map = _as_dict(rules.get("rename_map"))
     normalized_rows = [_normalize_row_for_semantics(dict(item or {}), rename_map, cfg) for item in rows if isinstance(item, dict)]
+    normalized_conflict_rows = [
+        _normalize_row_for_semantics(dict(item or {}), rename_map, cfg)
+        for item in (conflict_rows or rows)
+        if isinstance(item, dict)
+    ]
+    use_conflict_rows = len(normalized_conflict_rows) == len(normalized_rows)
     items: List[Dict[str, Any]] = []
     counts = {"signed_amount_conflict": 0, "balance_gap": 0}
     signed_tolerance = float(cfg["signed_amount_conflict_tolerance"])
     balance_tolerance = float(cfg["balance_continuity_tolerance"])
 
-    previous_balance_by_account: Dict[str, float] = {}
-    for ordinal, row in enumerate(normalized_rows, start=1):
-        account_key = str(row.get("account_no") or "__global__")
+    signed_rows = normalized_conflict_rows if use_conflict_rows else normalized_rows
+    for ordinal, row in enumerate(signed_rows, start=1):
         row_index = _coerce_row_index(row.get("row_index"), ordinal)
         reported_amount = _to_float(row.get("amount"))
         expected_amount = _expected_signed_amount(row, cfg)
@@ -225,6 +231,13 @@ def evaluate_bank_statement_semantics(
                         "message": "reported amount conflicts with debit/credit or direction semantics",
                     }
                 )
+
+    previous_balance_by_account: Dict[str, float] = {}
+    for ordinal, row in enumerate(normalized_rows, start=1):
+        account_key = str(row.get("account_no") or "__global__")
+        row_index = _coerce_row_index(row.get("row_index"), ordinal)
+        reported_amount = _to_float(row.get("amount"))
+        expected_amount = _expected_signed_amount(row, cfg)
         current_balance = _to_float(row.get("balance"))
         effective_amount = expected_amount if expected_amount is not None else reported_amount
         previous_balance = previous_balance_by_account.get(account_key)

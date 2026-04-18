@@ -150,7 +150,8 @@ def evaluate_advanced_quality(
 ) -> Dict[str, Any]:
     advanced_rules = _normalize_advanced_rules(params_effective)
     semantic_checks = evaluate_bank_statement_semantics(
-        rows=list(semantic_rows or rows),
+        rows=list(rows or []),
+        conflict_rows=list(semantic_rows or rows),
         params_effective=params_effective,
     )
     operator_rules = {
