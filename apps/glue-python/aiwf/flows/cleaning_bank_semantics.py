@@ -210,6 +210,16 @@ def _align_conflict_rows(
     rows: List[Dict[str, Any]],
     conflict_rows: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
+    def pop_unused(bucket: List[Dict[str, Any]], used_ids: set[int]) -> Dict[str, Any] | None:
+        while bucket:
+            candidate = bucket.pop(0)
+            candidate_id = id(candidate)
+            if candidate_id in used_ids:
+                continue
+            used_ids.add(candidate_id)
+            return candidate
+        return None
+
     by_index: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     by_key: Dict[tuple[Any, ...], List[Dict[str, Any]]] = defaultdict(list)
     for row in conflict_rows:
@@ -219,12 +229,13 @@ def _align_conflict_rows(
         by_key[_semantic_match_key(row)].append(row)
 
     aligned: List[Dict[str, Any]] = []
+    used_ids: set[int] = set()
     for row in rows:
         token = _row_index_token(row.get("row_index"))
-        matched = by_index[token].pop(0) if token and by_index.get(token) else None
+        matched = pop_unused(by_index[token], used_ids) if token and by_index.get(token) else None
         if matched is None:
             key = _semantic_match_key(row)
-            matched = by_key[key].pop(0) if by_key.get(key) else None
+            matched = pop_unused(by_key[key], used_ids) if by_key.get(key) else None
         aligned.append(matched or row)
     return aligned
 

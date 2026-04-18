@@ -802,6 +802,89 @@ class CleaningFlowTests(unittest.TestCase):
             1,
         )
 
+    def test_evaluate_advanced_quality_does_not_reuse_conflict_rows_after_index_match(self):
+        out = evaluate_advanced_quality(
+            rows=[
+                {
+                    "row_index": 1,
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "debit_amount": "120.50",
+                    "credit_amount": "",
+                    "amount": -120.5,
+                    "balance": "10000.00",
+                    "ref_no": "TXN-001",
+                },
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "debit_amount": "120.50",
+                    "credit_amount": "",
+                    "amount": -120.5,
+                    "balance": "10000.00",
+                    "ref_no": "TXN-001",
+                },
+            ],
+            semantic_rows=[
+                {
+                    "row_index": 1,
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "debit_amount": "120.50",
+                    "credit_amount": "",
+                    "amount": -120.5,
+                    "balance": "10000.00",
+                    "ref_no": "TXN-001",
+                },
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "debit_amount": "120.50",
+                    "credit_amount": "",
+                    "amount": -120.5,
+                    "balance": "10000.00",
+                    "ref_no": "TXN-001",
+                },
+            ],
+            conflict_rows=[
+                {
+                    "row_index": 1,
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "debit_amount": "120.50",
+                    "credit_amount": "",
+                    "amount": "-120.50",
+                    "balance": "10000.00",
+                    "ref_no": "TXN-001",
+                },
+                {
+                    "row_index": 2,
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "debit_amount": "120.50",
+                    "credit_amount": "",
+                    "amount": "999.00",
+                    "balance": "10000.00",
+                    "ref_no": "TXN-001",
+                },
+            ],
+            params_effective={
+                "canonical_profile": "bank_statement",
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+        )
+
+        self.assertEqual(
+            out["semantic_checks"]["summary"]["counts"]["signed_amount_conflict"],
+            1,
+        )
+
     def test_run_cleaning_precheck_warns_on_bank_semantic_conflict(self):
         payload = run_cleaning_precheck(
             params={"canonical_profile": "bank_statement"},
