@@ -113,9 +113,11 @@ def build_review_analysis(
         quality=quality,
         execution_audit=execution_audit,
     )
+    semantic_checks = _as_dict(execution_audit.get("semantic_checks"))
+    semantic_items = [dict(item) for item in _as_list(semantic_checks.get("items")) if isinstance(item, dict)]
     coverage = float(profile_analysis.get("required_field_coverage") or 0.0)
     predicted_zero_output_unexpected = bool(profile_analysis.get("zero_output_unexpected", False))
-    review_items: List[Dict[str, Any]] = list(ambiguities) + list(duplicate_key_risk.get("items") or [])
+    review_items: List[Dict[str, Any]] = list(ambiguities) + list(duplicate_key_risk.get("items") or []) + semantic_items
     if coverage > 0.0 and coverage < 0.75 and not blocking_reason_codes:
         review_items.append(
             {
@@ -124,7 +126,7 @@ def build_review_analysis(
                 "message": "required field coverage is low and should be reviewed before cleaning",
             }
         )
-    review_required = bool(ambiguities) or bool(duplicate_key_risk.get("review_required")) or (
+    review_required = bool(ambiguities) or bool(duplicate_key_risk.get("review_required")) or bool(semantic_items) or (
         coverage > 0.0 and coverage < 0.75 and not blocking_reason_codes
     )
 
@@ -133,6 +135,10 @@ def build_review_analysis(
         suggested_repairs.append("review ambiguous header mappings and pin rename_map or canonical_profile")
     if duplicate_key_risk.get("review_required"):
         suggested_repairs.append("review duplicate keys and configure survivorship preferences for the conflicting rows")
+    if any(str(item.get("kind") or "") == "signed_amount_conflict" for item in semantic_items):
+        suggested_repairs.append("review conflicts between reported amount and debit/credit semantics before publishing bank rows")
+    if any(str(item.get("kind") or "") == "balance_gap" for item in semantic_items):
+        suggested_repairs.append("review balance continuity gaps and confirm carry-forward or missing transaction rows")
     if coverage > 0.0 and coverage < 1.0:
         suggested_repairs.append("improve required field coverage or relax the required_fields gate for this template")
     if int(quality.get("filtered_rows", 0) or 0) > 0:
@@ -143,6 +149,9 @@ def build_review_analysis(
     issue_summary = {
         "header_ambiguity_count": len(ambiguities),
         "duplicate_conflict_count": len(duplicate_key_risk.get("items") or []),
+        "semantic_conflict_count": len(semantic_items),
+        "signed_amount_conflict_count": sum(1 for item in semantic_items if str(item.get("kind") or "") == "signed_amount_conflict"),
+        "balance_gap_count": sum(1 for item in semantic_items if str(item.get("kind") or "") == "balance_gap"),
         "predicted_invalid_rows": int(quality.get("invalid_rows", 0) or 0),
         "predicted_filtered_rows": int(quality.get("filtered_rows", 0) or 0),
         "predicted_duplicate_rows_removed": int(quality.get("duplicate_rows_removed", 0) or 0),

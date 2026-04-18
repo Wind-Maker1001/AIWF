@@ -195,6 +195,10 @@ Generic rule keys (`params.rules`) for universal row cleaning:
   - `normalize_name`
   - `fix_ocr_digits`
   - `sign_amount_from_debit_credit`
+    - optional config:
+      - `direction_field`
+      - `debit_tokens`
+      - `credit_tokens`
 - survivorship-based dedup:
   - `survivorship.keys`
   - `survivorship.score_fields`
@@ -205,7 +209,17 @@ Generic rule keys (`params.rules`) for universal row cleaning:
 - advanced quality:
   - `quality.advanced_rules.outlier_zscore`
   - `quality.advanced_rules.anomaly_iqr`
+  - `quality.advanced_rules.bank_statement_semantics`
+    - `signed_amount_conflict_tolerance`
+    - `balance_continuity_tolerance`
+    - `block_on_semantic_conflicts`
   - `quality.advanced_rules.block_on_advanced_rules`
+
+Bank/finance amount parsing now also accepts:
+- accounting negatives such as `(1,234.50)`, `（1,234.50）`, and `1,234.50-`
+- Unicode minus variants
+- directional amount text such as `借 120.50`, `贷 300.00`, `DR 120.50`, and `CR 300.00`
+- currency + unit combinations such as `￥1.2万元` and `USD 1,234.50`
 
 Legacy rule templates:
 - `rules/templates/generic_minimal.json`

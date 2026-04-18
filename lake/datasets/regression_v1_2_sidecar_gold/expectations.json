@@ -26,6 +26,22 @@
       "dir": "xlsx_bank_statement_abbrev_headers"
     },
     {
+      "id": "xlsx_bank_parentheses_negative",
+      "dir": "xlsx_bank_parentheses_negative"
+    },
+    {
+      "id": "xlsx_bank_direction_text_amount",
+      "dir": "xlsx_bank_direction_text_amount"
+    },
+    {
+      "id": "xlsx_bank_trailing_minus_amount",
+      "dir": "xlsx_bank_trailing_minus_amount"
+    },
+    {
+      "id": "xlsx_bank_signed_amount_conflict",
+      "dir": "xlsx_bank_signed_amount_conflict"
+    },
+    {
       "id": "xlsx_customer_abbrev_headers",
       "dir": "xlsx_customer_abbrev_headers"
     },
@@ -36,10 +52,6 @@
     {
       "id": "xlsx_dirty_subtotal_note_rows",
       "dir": "xlsx_dirty_subtotal_note_rows"
-    },
-    {
-      "id": "xlsx_bank_signed_amount_conflict",
-      "dir": "xlsx_bank_signed_amount_conflict"
     },
     {
       "id": "xlsx_customer_ocr_phone_account_fix",

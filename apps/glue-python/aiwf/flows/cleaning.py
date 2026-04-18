@@ -56,6 +56,7 @@ from aiwf.flows.cleaning_outputs import (
     write_fin_xlsx_impl,
     write_profile_json_impl,
 )
+from aiwf.flows.cleaning_bank_semantics import evaluate_bank_statement_semantics
 from aiwf.flows.cleaning_profile import build_profile_impl
 from aiwf.flows.cleaning_quality import apply_quality_gates_impl
 from aiwf.flows.cleaning_review_support import build_review_analysis
@@ -691,6 +692,13 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     def attach_review_analysis(out: Dict[str, Any]) -> Dict[str, Any]:
         quality = dict(out.get("quality") or {})
         execution_audit = dict(out.get("execution_audit") or {})
+        semantic_checks = evaluate_bank_statement_semantics(
+            rows=raw_rows,
+            params_effective=params,
+            profile_analysis=profile_analysis,
+        )
+        if semantic_checks.get("enabled"):
+            execution_audit["semantic_checks"] = semantic_checks
         allow_empty_output = _to_bool(
             _rule_param(
                 params,

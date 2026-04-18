@@ -933,6 +933,82 @@ fn transform_rows_v2_parse_number_normalizes_blank_to_null() {
 }
 
 #[test]
+fn transform_rows_v2_parse_number_supports_accounting_negative_notation() {
+    let req = TransformRowsReq {
+        run_id: Some("field-op-accounting-negative".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!({"amount":"(1,234.50)"}),
+            json!({"amount":"1,234.50-"}),
+            json!({"amount":"借 120.50"}),
+            json!({"amount":"贷 300.00"}),
+        ]),
+        rules: Some(json!({
+            "execution_engine":"columnar_v1",
+            "field_ops":[
+                {"field":"amount","op":"parse_number"}
+            ]
+        })),
+        quality_gates: Some(json!({"min_output_rows":1})),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("accounting parse_number transform");
+    let values = out
+        .rows
+        .iter()
+        .filter_map(|item| item.get("amount"))
+        .filter_map(|value| value.as_f64())
+        .collect::<Vec<_>>();
+    assert_eq!(values, vec![-1234.5, -1234.5, -120.5, 300.0]);
+}
+
+#[test]
+fn transform_rows_v2_sign_amount_from_direction_field() {
+    let req = TransformRowsReq {
+        run_id: Some("field-op-direction-sign".to_string()),
+        tenant_id: None,
+        trace_id: None,
+        traceparent: None,
+        rows: Some(vec![
+            json!({"amount":"120.50","txn_type":"借"}),
+            json!({"amount":"300.00","txn_type":"贷"}),
+            json!({"amount":"999.00","debit_amount":"120.50","credit_amount":"","txn_type":"贷"}),
+        ]),
+        rules: Some(json!({
+            "execution_engine":"columnar_v1",
+            "field_ops":[
+                {"field":"amount","op":"parse_number"},
+                {"field":"debit_amount","op":"parse_number"},
+                {"field":"credit_amount","op":"parse_number"},
+                {"field":"amount","op":"sign_amount_from_debit_credit","direction_field":"txn_type"}
+            ]
+        })),
+        quality_gates: Some(json!({"min_output_rows":1})),
+        schema_hint: None,
+        rules_dsl: None,
+        input_uri: None,
+        output_uri: None,
+        request_signature: None,
+        idempotency_key: None,
+    };
+    let out = run_transform_rows_v2(req).expect("direction sign transform");
+    let values = out
+        .rows
+        .iter()
+        .filter_map(|item| item.get("amount"))
+        .filter_map(|value| value.as_f64())
+        .collect::<Vec<_>>();
+    assert_eq!(values, vec![-120.5, 300.0, -120.5]);
+}
+
+#[test]
 fn transform_rows_v2_supports_survivorship_and_duplicate_explain() {
     let req = TransformRowsReq {
         run_id: Some("survivorship-1".to_string()),

@@ -9,6 +9,7 @@ os.environ.setdefault("AIWF_ALLOW_EXTERNAL_JOB_ROOT", "1")
 
 from aiwf.flows import cleaning
 from aiwf.flows import cleaning_flow_materialization
+from aiwf.flows.cleaning_precheck import run_cleaning_precheck
 from aiwf.flows.cleaning_artifacts import (
     list_cleaning_artifact_details,
     list_cleaning_artifact_domains,
@@ -667,6 +668,209 @@ class CleaningFlowTests(unittest.TestCase):
         )
 
         self.assertEqual(out["rows"][0]["amount"], 1234.56)
+
+    def test_clean_rows_parse_number_supports_accounting_notation_in_python_path(self):
+        out = cleaning._clean_rows(
+            [{"amount": "(1,234.50)"}, {"amount": "1,234.50-"}],
+            {
+                "rules": {
+                    "use_rust_v2": False,
+                    "platform_mode": "generic",
+                    "field_ops": [
+                        {"field": "amount", "op": "parse_number"},
+                    ],
+                }
+            },
+        )
+
+        self.assertEqual(out["rows"][0]["amount"], -1234.5)
+        self.assertEqual(out["rows"][1]["amount"], -1234.5)
+
+    def test_clean_rows_sign_amount_from_direction_field_for_bank_rows(self):
+        out = cleaning._clean_rows(
+            [
+                {"amount": "120.50", "txn_type": "借"},
+                {"amount": "300.00", "txn_type": "贷"},
+                {"amount": "999.00", "debit_amount": "120.50", "credit_amount": "", "txn_type": "贷"},
+            ],
+            {
+                "rules": {
+                    "use_rust_v2": False,
+                    "platform_mode": "generic",
+                    "field_ops": [
+                        {"field": "amount", "op": "parse_number"},
+                        {"field": "debit_amount", "op": "parse_number"},
+                        {"field": "credit_amount", "op": "parse_number"},
+                        {"field": "amount", "op": "sign_amount_from_debit_credit", "direction_field": "txn_type"},
+                    ],
+                }
+            },
+        )
+
+        self.assertEqual(out["rows"][0]["amount"], -120.5)
+        self.assertEqual(out["rows"][1]["amount"], 300.0)
+        self.assertEqual(out["rows"][2]["amount"], -120.5)
+
+    def test_evaluate_advanced_quality_reports_bank_statement_semantic_conflicts(self):
+        out = evaluate_advanced_quality(
+            rows=[
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "debit_amount": "120.50",
+                    "credit_amount": "",
+                    "amount": "999.00",
+                    "balance": "10000.00",
+                }
+            ],
+            params_effective={
+                "canonical_profile": "bank_statement",
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+        )
+
+        self.assertTrue(out["enabled"])
+        self.assertTrue(out["blocked"])
+        self.assertFalse(out["passed"])
+        self.assertEqual(
+            out["semantic_checks"]["summary"]["counts"]["signed_amount_conflict"],
+            1,
+        )
+
+    def test_run_cleaning_precheck_warns_on_bank_semantic_conflict(self):
+        payload = run_cleaning_precheck(
+            params={"canonical_profile": "bank_statement"},
+            extract_payload={
+                "rows": [
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "debit_amount": "120.50",
+                        "credit_amount": "",
+                        "amount": "999.00",
+                        "balance": "10000.00",
+                    }
+                ],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "recommended": True,
+                        "score": 0.95,
+                        "required_coverage": 1.0,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+            },
+        )
+
+        self.assertEqual(payload["precheck_action"], "warn")
+        self.assertTrue(payload["review_required"])
+        self.assertTrue(any(item["kind"] == "signed_amount_conflict" for item in payload["review_items"]))
+
+    def test_run_cleaning_precheck_blocks_on_bank_semantic_conflict_when_enabled(self):
+        payload = run_cleaning_precheck(
+            params={
+                "canonical_profile": "bank_statement",
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+            extract_payload={
+                "rows": [
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "debit_amount": "120.50",
+                        "credit_amount": "",
+                        "amount": "999.00",
+                        "balance": "10000.00",
+                    }
+                ],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "recommended": True,
+                        "score": 0.95,
+                        "required_coverage": 1.0,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+            },
+        )
+
+        self.assertEqual(payload["precheck_action"], "block")
+        self.assertIn("signed_amount_conflict", payload["blocking_reason_codes"])
+
+    def test_run_cleaning_auto_enqueues_manual_review_for_bank_balance_gap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_job_root = os.path.join(tmp, "job")
+
+            def write_valid_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False), patch(
+                "aiwf.flows.cleaning._write_cleaned_parquet", side_effect=write_valid_parquet
+            ):
+                out = cleaning.run_cleaning(
+                    job_id="job-bank-balance-review",
+                    actor="test",
+                    params=with_job_context(
+                        local_job_root,
+                        local_standalone=True,
+                        office_outputs_enabled=False,
+                        cleaning_template="bank_statement_v1",
+                        rules={"use_rust_v2": False},
+                        rows=[
+                            {
+                                "account_no": "6222-0001",
+                                "txn_date": "2026-03-01",
+                                "debit_amount": "100.00",
+                                "credit_amount": "",
+                                "amount": "-100.00",
+                                "balance": "900.00",
+                                "counterparty_name": "张三",
+                                "ref_no": "TXN-001",
+                            },
+                            {
+                                "account_no": "6222-0001",
+                                "txn_date": "2026-03-02",
+                                "debit_amount": "",
+                                "credit_amount": "200.00",
+                                "amount": "200.00",
+                                "balance": "950.00",
+                                "counterparty_name": "李四",
+                                "ref_no": "TXN-002",
+                            },
+                        ],
+                    ),
+                )
+                queued = list_manual_reviews()
+
+            self.assertTrue(out["quality_summary"]["review_analysis"]["review_required"])
+            self.assertTrue(any(item["kind"] == "balance_gap" for item in out["quality_summary"]["review_analysis"]["review_items"]))
+            self.assertTrue(out["quality_summary"]["manual_review_queue"]["auto_enqueued"])
+            self.assertEqual(len(queued), 1)
 
     def test_materialize_accel_outputs_blocks_when_advanced_quality_blocks(self):
         with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:

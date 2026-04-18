@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Dict, List, Tuple
 
+from aiwf.quality_contract import normalize_value_for_field
+
 
 _SUBTOTAL_KEYWORDS = (
     "subtotal",
@@ -374,6 +376,11 @@ def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, row: Dict[str, Any]
         except IndexError:
             return current, False
     if kind == "parse_number":
+        field_name = str(op_obj.get("field") or op_obj.get("as") or "").strip() or "amount"
+        raw_header = op_obj.get("raw_header") or op_obj.get("header_text") or op_obj.get("unit")
+        normalized = normalize_value_for_field(current, field_name, raw_header=raw_header)
+        if isinstance(normalized, (int, float)) and not isinstance(normalized, bool):
+            return float(normalized), True
         parsed = to_float(cur.replace(",", "").replace("，", "").replace("$", "").strip())
         return (parsed if parsed is not None else current), (parsed is not None)
     if kind == "strip_currency_symbol":
@@ -426,11 +433,22 @@ def _apply_field_op(current: Any, op_obj: Dict[str, Any], *, row: Dict[str, Any]
     if kind == "sign_amount_from_debit_credit":
         debit_field = str(op_obj.get("debit_field") or "debit_amount").strip()
         credit_field = str(op_obj.get("credit_field") or "credit_amount").strip()
+        direction_field = str(op_obj.get("direction_field") or "txn_type").strip()
+        debit_tokens = [str(item).strip().lower() for item in (op_obj.get("debit_tokens") or ["借", "借方", "debit", "dr", "支出"]) if str(item).strip()]
+        credit_tokens = [str(item).strip().lower() for item in (op_obj.get("credit_tokens") or ["贷", "贷方", "credit", "cr", "收入"]) if str(item).strip()]
         debit = to_float(row.get(debit_field))
         credit = to_float(row.get(credit_field))
-        if debit is None and credit is None:
+        current_amount = to_float(current)
+        if debit is not None or credit is not None:
+            return float(credit or 0.0) - float(debit or 0.0), True
+        if current_amount is None:
             return current, False
-        return float(credit or 0.0) - float(debit or 0.0), True
+        direction = str(row.get(direction_field) or "").strip().lower()
+        if any(token in direction for token in debit_tokens):
+            return -abs(float(current_amount)), True
+        if any(token in direction for token in credit_tokens):
+            return abs(float(current_amount)), True
+        return float(current_amount), True
     if kind == "parse_date":
         parsed = _parse_ymd_simple(cur)
         if parsed is None:

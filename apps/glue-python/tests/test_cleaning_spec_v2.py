@@ -63,6 +63,11 @@ class CleaningSpecV2Tests(unittest.TestCase):
                     "advanced_rules": {
                         "outlier_zscore": [{"field": "amount", "threshold": 3.0}],
                         "anomaly_iqr": [{"field": "amount", "multiplier": 1.5}],
+                        "bank_statement_semantics": {
+                            "signed_amount_conflict_tolerance": 0.01,
+                            "balance_continuity_tolerance": 0.05,
+                            "block_on_semantic_conflicts": True,
+                        },
                         "block_on_advanced_rules": True,
                     }
                 },
@@ -72,6 +77,13 @@ class CleaningSpecV2Tests(unittest.TestCase):
         self.assertEqual(rules["survivorship"]["keys"], ["phone", "biz_date", "amount"])
         self.assertEqual(rules["survivorship"]["prefer_latest_fields"], ["biz_date"])
         self.assertEqual(spec["quality"]["advanced_rules"]["outlier_zscore"][0]["field"], "amount")
+        self.assertEqual(
+            spec["quality"]["advanced_rules"]["bank_statement_semantics"]["signed_amount_conflict_tolerance"],
+            0.01,
+        )
+        self.assertTrue(
+            spec["quality"]["advanced_rules"]["bank_statement_semantics"]["block_on_semantic_conflicts"]
+        )
         self.assertTrue(spec["quality"]["advanced_rules"]["block_on_advanced_rules"])
 
     def test_transform_components_expand_auto_header_mapping(self):

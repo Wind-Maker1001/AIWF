@@ -20,6 +20,9 @@ This document tracks the regression datasets and commands used by the repository
     - `xlsx_full_width_comma_numeric`
     - `xlsx_bank_statement_cn_multiheader`
     - `xlsx_bank_statement_abbrev_headers`
+    - `xlsx_bank_parentheses_negative`
+    - `xlsx_bank_direction_text_amount`
+    - `xlsx_bank_trailing_minus_amount`
     - `xlsx_customer_abbrev_headers`
     - `xlsx_dirty_header_repeat`
     - `xlsx_dirty_subtotal_note_rows`

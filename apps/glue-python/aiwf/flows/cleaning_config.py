@@ -4,6 +4,8 @@ import os
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Callable, Dict, List, Optional
 
+from aiwf.quality_contract import normalize_value_for_field
+
 
 def normalize_key(value: str) -> str:
     return (value or "").strip().lower()
@@ -12,13 +14,11 @@ def normalize_key(value: str) -> str:
 def to_int(value: Any) -> Optional[int]:
     if value is None:
         return None
-    text = str(value).strip()
-    if not text:
+    parsed = to_float(value)
+    if parsed is None:
         return None
     try:
-        if "." in text:
-            return int(float(text))
-        return int(text)
+        return int(parsed)
     except Exception:
         return None
 
@@ -26,12 +26,13 @@ def to_int(value: Any) -> Optional[int]:
 def to_float(value: Any) -> Optional[float]:
     if value is None:
         return None
+    normalized = normalize_value_for_field(value, "amount")
+    if isinstance(normalized, (int, float)) and not isinstance(normalized, bool):
+        return float(normalized)
     text = str(value).strip()
     if not text:
         return None
-    text = text.replace(",", "")
-    if text.startswith("$"):
-        text = text[1:]
+    text = text.replace(",", "").replace("，", "")
     try:
         return float(text)
     except Exception:
@@ -39,16 +40,11 @@ def to_float(value: Any) -> Optional[float]:
 
 
 def to_decimal(value: Any) -> Optional[Decimal]:
-    if value is None:
+    parsed = to_float(value)
+    if parsed is None:
         return None
-    text = str(value).strip()
-    if not text:
-        return None
-    text = text.replace(",", "")
-    if text.startswith("$"):
-        text = text[1:]
     try:
-        return Decimal(text)
+        return Decimal(str(parsed))
     except (InvalidOperation, ValueError):
         return None
 

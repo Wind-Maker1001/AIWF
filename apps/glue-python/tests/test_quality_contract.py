@@ -93,6 +93,22 @@ class QualityContractTests(unittest.TestCase):
         self.assertEqual(normalize_value_for_field("1,200", "amount"), 1200.0)
         self.assertEqual(normalize_value_for_field("2026\u5e743\u67081\u65e5", "biz_date"), "2026-03-01")
 
+    def test_normalize_value_for_field_handles_accounting_negative_notation(self):
+        self.assertEqual(normalize_value_for_field("(1,234.50)", "amount"), -1234.5)
+        self.assertEqual(normalize_value_for_field("\uff081,234.50\uff09", "amount"), -1234.5)
+        self.assertEqual(normalize_value_for_field("1,234.50-", "amount"), -1234.5)
+        self.assertEqual(normalize_value_for_field("\u22121,234.50", "amount"), -1234.5)
+
+    def test_normalize_value_for_field_handles_directional_amount_text(self):
+        self.assertEqual(normalize_value_for_field("\u501f 120.50", "amount"), -120.5)
+        self.assertEqual(normalize_value_for_field("\u8d37 300.00", "amount"), 300.0)
+        self.assertEqual(normalize_value_for_field("DR 120.50", "amount"), -120.5)
+        self.assertEqual(normalize_value_for_field("CR 300.00", "amount"), 300.0)
+
+    def test_normalize_value_for_field_handles_currency_and_unit_mixed_amount_text(self):
+        self.assertEqual(normalize_value_for_field("\uffe51.2\u4e07\u5143", "amount"), 12000.0)
+        self.assertEqual(normalize_value_for_field("USD 1,234.50", "amount"), 1234.5)
+
 
 if __name__ == "__main__":
     unittest.main()

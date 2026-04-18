@@ -1,5 +1,5 @@
 {
-  "id": "xlsx_bank_signed_amount_conflict",
+  "id": "xlsx_bank_direction_text_amount",
   "input_files": [
     "input.xlsx"
   ],
@@ -9,6 +9,7 @@
     "BankFlow"
   ],
   "include_hidden_sheets": false,
+  "quick_gate": true,
   "consistency_compare": true,
   "consistency_transform_compare": true,
   "consistency_rows_file": "consistency_rows.jsonl",
@@ -24,7 +25,7 @@
       "ref_no",
       "amount"
     ],
-    "max_required_missing_ratio": 0.2,
+    "max_required_missing_ratio": 0.0,
     "duplicate_key_ratio_max": 0.0,
     "numeric_parse_rate_min": 1.0,
     "date_parse_rate_min": 0.0
@@ -33,28 +34,26 @@
     "required_columns": [
       "account_no",
       "txn_date",
-      "debit_amount",
-      "credit_amount",
       "amount",
       "balance",
       "counterparty_name",
-      "ref_no"
+      "ref_no",
+      "txn_type"
     ],
     "header_confidence_min": 0.8,
     "sheet_row_count_min": 1,
-    "cross_sheet_required_coverage_min": 0.8,
+    "cross_sheet_required_coverage_min": 1.0,
     "numeric_parse_rate_min": 1.0,
     "date_parse_rate_min": 0.0
   },
   "expected_row_fields": [
     "account_no",
     "txn_date",
-    "debit_amount",
-    "credit_amount",
     "amount",
     "balance",
     "counterparty_name",
-    "ref_no"
+    "ref_no",
+    "txn_type"
   ],
   "expected_recommended_profile": "bank_statement",
   "expected_recommended_template_id": "bank_statement_v1",
@@ -64,12 +63,11 @@
   "expected_header_mapping_fields": [
     "account_no",
     "txn_date",
-    "debit_amount",
-    "credit_amount",
     "amount",
     "balance",
     "counterparty_name",
-    "ref_no"
+    "ref_no",
+    "txn_type"
   ],
   "rust_rules": {
     "platform_mode": "generic",
@@ -100,7 +98,8 @@
       },
       {
         "field": "amount",
-        "op": "sign_amount_from_debit_credit"
+        "op": "sign_amount_from_debit_credit",
+        "direction_field": "txn_type"
       }
     ],
     "required_fields": [
@@ -117,6 +116,5 @@
       "amount"
     ],
     "deduplicate_keep": "last"
-  },
-  "quick_gate": true
+  }
 }

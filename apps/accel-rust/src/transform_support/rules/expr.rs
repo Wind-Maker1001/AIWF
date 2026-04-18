@@ -260,21 +260,10 @@ fn apply_field_op(current: &Value, obj: &Map<String, Value>, row: &Map<String, V
                 .map(|matched| Value::String(matched.as_str().to_string()))
         }
         "parse_number" => {
-            let normalized = cur
-                .replace(',', "")
-                .replace('，', "")
-                .replace('$', "")
-                .replace('¥', "")
-                .replace('￥', "")
-                .replace('€', "")
-                .replace('£', "");
-            if normalized.trim().is_empty() {
+            if is_missing(Some(current)) {
                 return Some(Value::Null);
             }
-            normalized
-                .trim()
-                .parse::<f64>()
-                .ok()
+            value_to_f64(current)
                 .and_then(serde_json::Number::from_f64)
                 .map(Value::Number)
         }
@@ -332,12 +321,47 @@ fn apply_field_op(current: &Value, obj: &Map<String, Value>, row: &Map<String, V
                 .get("credit_field")
                 .and_then(|v| v.as_str())
                 .unwrap_or("credit_amount");
-            if is_missing(row.get(debit_field)) && is_missing(row.get(credit_field)) {
-                None
-            } else {
+            let direction_field = obj
+                .get("direction_field")
+                .and_then(|v| v.as_str())
+                .unwrap_or("txn_type");
+            let debit_tokens = obj
+                .get("debit_tokens")
+                .map(|value| as_array_str(Some(value)))
+                .unwrap_or_else(|| vec!["借".to_string(), "借方".to_string(), "debit".to_string(), "dr".to_string(), "支出".to_string()]);
+            let credit_tokens = obj
+                .get("credit_tokens")
+                .map(|value| as_array_str(Some(value)))
+                .unwrap_or_else(|| vec!["贷".to_string(), "贷方".to_string(), "credit".to_string(), "cr".to_string(), "收入".to_string()]);
+            if !is_missing(row.get(debit_field)) || !is_missing(row.get(credit_field)) {
                 let debit = row.get(debit_field).and_then(value_to_f64).unwrap_or(0.0);
                 let credit = row.get(credit_field).and_then(value_to_f64).unwrap_or(0.0);
                 serde_json::Number::from_f64(credit - debit).map(Value::Number)
+            } else if let Some(current_amount) = value_to_f64(current) {
+                let direction = row
+                    .get(direction_field)
+                    .map(value_to_string)
+                    .unwrap_or_default()
+                    .to_lowercase();
+                let is_debit = debit_tokens.iter().any(|token| {
+                    let normalized = token.trim().to_lowercase();
+                    !normalized.is_empty() && direction.contains(&normalized)
+                });
+                if is_debit {
+                    serde_json::Number::from_f64(-current_amount.abs()).map(Value::Number)
+                } else {
+                    let is_credit = credit_tokens.iter().any(|token| {
+                        let normalized = token.trim().to_lowercase();
+                        !normalized.is_empty() && direction.contains(&normalized)
+                    });
+                    if is_credit {
+                        serde_json::Number::from_f64(current_amount.abs()).map(Value::Number)
+                    } else {
+                        serde_json::Number::from_f64(current_amount).map(Value::Number)
+                    }
+                }
+            } else {
+                None
             }
         }
         "parse_date" => parse_ymd_simple(&cur).map(|(y, m, d)| Value::String(format!("{y:04}-{m:02}-{d:02}"))),

@@ -76,6 +76,7 @@ def build_quality_summary(
     row_samples = _as_dict(execution.get("row_samples"))
     review_analysis = _as_dict(execution.get("review_analysis") or execution_audit.get("review_analysis"))
     manual_review_queue = _as_dict(execution.get("manual_review_queue"))
+    semantic_checks = _as_dict(execution.get("semantic_checks") or execution_audit.get("semantic_checks"))
     row_transform_engine = str(
         execution.get("row_transform_engine")
         or execution_audit.get("operator")
@@ -138,6 +139,7 @@ def build_quality_summary(
         "transform_quality": _as_dict(transform_quality),
         "gate_result": gate_result,
         "advanced_quality": advanced_quality,
+        "semantic_checks": semantic_checks,
         "review_analysis": review_analysis,
         "manual_review_queue": manual_review_queue,
         "reason_counts": reason_counts,

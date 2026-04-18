@@ -68,6 +68,9 @@ def _normalize_advanced_rules(value: Any) -> dict[str, Any]:
         out["anomaly_iqr"] = [dict(item) for item in anomaly if isinstance(item, dict)]
     if "block_on_advanced_rules" in source:
         out["block_on_advanced_rules"] = bool(source.get("block_on_advanced_rules"))
+    semantic = source.get("bank_statement_semantics")
+    if isinstance(semantic, dict):
+        out["bank_statement_semantics"] = dict(semantic)
     return out
 
 

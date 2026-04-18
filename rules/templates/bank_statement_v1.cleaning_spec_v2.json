@@ -60,6 +60,9 @@
       "交易类型": "txn_type",
       "业务类型": "txn_type",
       "方向": "txn_type",
+      "借贷方向": "txn_type",
+      "借贷标志": "txn_type",
+      "收支方向": "txn_type",
       "Currency": "currency",
       "币种": "currency",
       "货币": "currency",
@@ -106,7 +109,7 @@
     "null_values": [],
     "trim_strings": true,
     "computed_fields": {
-      "amount": "sub($credit_amount,$debit_amount)"
+      "amount": "coalesce($amount,$credit_amount,$debit_amount)"
     },
     "string_ops": [
       { "field": "currency", "op": "upper" }
@@ -117,12 +120,25 @@
     "field_ops": [
       { "field": "account_no", "op": "normalize_account_no" },
       { "field": "counterparty_name", "op": "normalize_name" },
+      { "field": "amount", "op": "strip_currency_symbol" },
+      { "field": "amount", "op": "strip_thousands_sep" },
+      { "field": "amount", "op": "parse_number" },
       { "field": "debit_amount", "op": "strip_currency_symbol" },
       { "field": "debit_amount", "op": "strip_thousands_sep" },
+      { "field": "debit_amount", "op": "parse_number" },
       { "field": "credit_amount", "op": "strip_currency_symbol" },
       { "field": "credit_amount", "op": "strip_thousands_sep" },
+      { "field": "credit_amount", "op": "parse_number" },
       { "field": "balance", "op": "strip_currency_symbol" },
-      { "field": "balance", "op": "strip_thousands_sep" }
+      { "field": "balance", "op": "strip_thousands_sep" },
+      { "field": "balance", "op": "parse_number" },
+      {
+        "field": "amount",
+        "op": "sign_amount_from_debit_credit",
+        "direction_field": "txn_type",
+        "debit_tokens": ["借", "借方", "debit", "dr", "支出"],
+        "credit_tokens": ["贷", "贷方", "credit", "cr", "收入"]
+      }
     ]
   },
   "quality": {
@@ -139,6 +155,11 @@
         { "field": "amount", "max_ratio": 0.1 },
         { "field": "balance", "max_ratio": 0.1 }
       ],
+      "bank_statement_semantics": {
+        "signed_amount_conflict_tolerance": 0.01,
+        "balance_continuity_tolerance": 0.05,
+        "block_on_semantic_conflicts": false
+      },
       "block_on_advanced_rules": false
     },
     "image_rules": {},

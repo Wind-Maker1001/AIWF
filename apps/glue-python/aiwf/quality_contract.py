@@ -235,14 +235,76 @@ def _load_pandera():
         return None, None
 
 
+_NEGATIVE_AMOUNT_TOKENS = [
+    "\u501f",
+    "\u501f\u65b9",
+    "\u652f\u51fa",
+    "\u4ed8\u6b3e",
+    "debit",
+    "dr",
+]
+_POSITIVE_AMOUNT_TOKENS = [
+    "\u8d37",
+    "\u8d37\u65b9",
+    "\u6536\u5165",
+    "\u6536\u6b3e",
+    "credit",
+    "cr",
+]
+_AMOUNT_UNIT_TOKENS = [
+    (100000000.0, ["\u4ebf\u5143", "\u4ebf", "billion"]),
+    (10000.0, ["\u4e07\u5143", "\u4e07"]),
+    (1000.0, ["\u5343\u5143", "\u5343", "thousand"]),
+    (1000000.0, ["million"]),
+]
+_AMOUNT_CURRENCY_TOKENS = [
+    "\u4eba\u6c11\u5e01",
+    "\u5143",
+    "\u5706",
+    "$",
+    "\xa5",
+    "\uffe5",
+    "\u20ac",
+    "\xa3",
+    "usd",
+    "cny",
+    "rmb",
+    "eur",
+    "jpy",
+    "gbp",
+    "hkd",
+]
+
+
+def _remove_amount_token(text: str, token: str) -> str:
+    if re.fullmatch(r"[A-Za-z]+", token):
+        return re.sub(re.escape(token), "", text, flags=re.IGNORECASE)
+    return text.replace(token, "")
+
+
+def _detect_amount_sign(text: str) -> float:
+    normalized = _normalize_display_text(text)
+    lowered = normalized.lower()
+    if (
+        (normalized.startswith("(") and normalized.endswith(")"))
+        or (normalized.startswith("（") and normalized.endswith("）"))
+        or normalized.endswith("-")
+        or normalized.startswith("-")
+    ):
+        return -1.0
+    if any(token.lower() in lowered for token in _NEGATIVE_AMOUNT_TOKENS):
+        return -1.0
+    if any(token.lower() in lowered for token in _POSITIVE_AMOUNT_TOKENS):
+        return 1.0
+    return 1.0
+
+
 def _detect_amount_multiplier(raw_header: Any) -> float:
     text = _normalize_display_text(raw_header)
-    if "亿元" in text:
-        return 100000000.0
-    if "万元" in text:
-        return 10000.0
-    if "千元" in text:
-        return 1000.0
+    lowered = text.lower()
+    for multiplier, tokens in _AMOUNT_UNIT_TOKENS:
+        if any(token.lower() in lowered for token in tokens):
+            return multiplier
     return 1.0
 
 
@@ -251,20 +313,23 @@ def _parse_amount_value(value: Any, *, raw_header: Any = None) -> Optional[float
     if not text:
         return None
     multiplier = _detect_amount_multiplier(raw_header)
-    if "亿元" in text:
-        multiplier = max(multiplier, 100000000.0)
-    elif "万元" in text:
-        multiplier = max(multiplier, 10000.0)
-    elif "千元" in text:
-        multiplier = max(multiplier, 1000.0)
+    lowered = text.lower()
+    for unit_multiplier, tokens in _AMOUNT_UNIT_TOKENS:
+        if any(token.lower() in lowered for token in tokens):
+            multiplier = max(multiplier, unit_multiplier)
+    sign = _detect_amount_sign(text)
     compact = text
-    for token in ("亿元", "万元", "千元", "元", "万", "亿"):
-        compact = compact.replace(token, "")
-    compact = compact.replace(",", "")
+    for _unit_multiplier, tokens in _AMOUNT_UNIT_TOKENS:
+        for token in tokens:
+            compact = _remove_amount_token(compact, token)
+    for token in _AMOUNT_CURRENCY_TOKENS + _NEGATIVE_AMOUNT_TOKENS + _POSITIVE_AMOUNT_TOKENS:
+        compact = _remove_amount_token(compact, token)
+    compact = compact.replace(",", "").replace("，", "")
+    compact = compact.strip().strip("()（）").rstrip("-").lstrip("+-")
     if not compact:
         return None
     try:
-        return float(compact) * multiplier
+        return float(compact) * multiplier * sign
     except Exception:
         return None
 

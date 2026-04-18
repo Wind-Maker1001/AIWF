@@ -50,9 +50,10 @@ def _precheck_action(
     quality_blocked: bool,
     profile_blocked: bool,
     predicted_zero_output_unexpected: bool,
+    semantic_blocked: bool,
     review_required: bool,
 ) -> str:
-    if quality_blocked or profile_blocked or predicted_zero_output_unexpected:
+    if quality_blocked or profile_blocked or predicted_zero_output_unexpected or semantic_blocked:
         return "block"
     if review_required or not recommendation_available:
         return "warn"
@@ -137,6 +138,7 @@ def run_cleaning_precheck(*, params: Dict[str, Any], extract_payload: Dict[str, 
     )
 
     predicted_zero_output_unexpected = False
+    predicted_semantic_blocked = False
     predicted_quality: Dict[str, Any] = {}
     predicted_execution_audit: Dict[str, Any] = {}
     if rows:
@@ -156,6 +158,7 @@ def run_cleaning_precheck(*, params: Dict[str, Any], extract_payload: Dict[str, 
         predicted_zero_output_unexpected = bool(
             int(predicted_quality.get("output_rows", 0) or 0) <= 0 and not allow_empty_output
         )
+        predicted_semantic_blocked = bool(_as_dict(predicted_execution_audit.get("semantic_checks")).get("blocked", False))
 
     blocking_reason_codes = set(_as_reason_codes(extract_payload.get("blocked_reason_codes")))
     if profile_blocked:
@@ -163,6 +166,9 @@ def run_cleaning_precheck(*, params: Dict[str, Any], extract_payload: Dict[str, 
         blocking_reason_codes.add("profile_mismatch_blocked")
     if predicted_zero_output_unexpected:
         blocking_reason_codes.add("zero_output_unexpected")
+    if predicted_semantic_blocked:
+        for code in _as_reason_codes(_as_dict(predicted_execution_audit.get("semantic_checks")).get("blocking_reason_codes")):
+            blocking_reason_codes.add(code)
     blocking_reason_codes_list = sorted(blocking_reason_codes)
 
     review_analysis = build_review_analysis(
@@ -178,12 +184,13 @@ def run_cleaning_precheck(*, params: Dict[str, Any], extract_payload: Dict[str, 
         blocking_reason_codes=blocking_reason_codes_list,
     )
 
-    quality_blocked = bool(extract_payload.get("quality_blocked")) and bool(blocking_reason_codes_list)
+    quality_blocked = (bool(extract_payload.get("quality_blocked")) and bool(blocking_reason_codes_list)) or predicted_semantic_blocked
     precheck_action = _precheck_action(
         recommendation_available=recommendation_available,
         quality_blocked=quality_blocked,
         profile_blocked=profile_blocked,
         predicted_zero_output_unexpected=predicted_zero_output_unexpected,
+        semantic_blocked=predicted_semantic_blocked,
         review_required=bool(review_analysis.get("review_required")),
     )
     issues, suggestions = _build_issues_and_suggestions(

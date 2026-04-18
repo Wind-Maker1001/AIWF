@@ -4,6 +4,7 @@ import math
 from typing import Any, Dict, List, Mapping
 
 from aiwf.accel_client import quality_check_v4_operator
+from aiwf.flows.cleaning_bank_semantics import evaluate_bank_statement_semantics
 
 
 def _as_dict(value: Any) -> Dict[str, Any]:
@@ -69,6 +70,9 @@ def _normalize_advanced_rules(params_effective: Mapping[str, Any]) -> Dict[str, 
         out["anomaly_iqr"] = [dict(anomaly)]
     elif isinstance(anomaly, list):
         out["anomaly_iqr"] = [dict(item) for item in anomaly if isinstance(item, dict)]
+    semantic = source.get("bank_statement_semantics")
+    if isinstance(semantic, dict):
+        out["bank_statement_semantics"] = dict(semantic)
     out["block_on_advanced_rules"] = bool(source.get("block_on_advanced_rules", False))
     return out
 
@@ -142,14 +146,19 @@ def evaluate_advanced_quality(
     *,
     rows: List[Dict[str, Any]],
     params_effective: Mapping[str, Any],
+    semantic_rows: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     advanced_rules = _normalize_advanced_rules(params_effective)
+    semantic_checks = evaluate_bank_statement_semantics(
+        rows=list(semantic_rows or rows),
+        params_effective=params_effective,
+    )
     operator_rules = {
         key: value
         for key, value in advanced_rules.items()
         if key in {"outlier_zscore", "anomaly_iqr"} and value
     }
-    if not operator_rules:
+    if not operator_rules and not semantic_checks.get("enabled"):
         return {
             "enabled": False,
             "operator": "none",
@@ -160,32 +169,63 @@ def evaluate_advanced_quality(
             "rules": {},
         }
 
-    result = quality_check_v4_operator(
-        rows=rows,
-        params=dict(params_effective),
-        rules=operator_rules,
-        metrics={},
-    )
-    if result.get("ok"):
-        report = dict(result.get("report") or {})
-        passed = bool(result.get("passed", True))
-        operator = "quality_check_v4"
-        fallback_used = False
+    if operator_rules:
+        result = quality_check_v4_operator(
+            rows=rows,
+            params=dict(params_effective),
+            rules=operator_rules,
+            metrics={},
+        )
+        if result.get("ok"):
+            report = dict(result.get("report") or {})
+            passed = bool(result.get("passed", True))
+            operator = "quality_check_v4"
+            fallback_used = False
+        else:
+            report = _build_fallback_report(rows, operator_rules)
+            passed = not bool(report.get("violations"))
+            operator = "python_fallback"
+            fallback_used = True
     else:
-        report = _build_fallback_report(rows, operator_rules)
-        passed = not bool(report.get("violations"))
-        operator = "python_fallback"
-        fallback_used = True
+        result = {"ok": True}
+        report = {"rows": len(rows), "violations": [], "rule_count": 0}
+        passed = True
+        operator = "none"
+        fallback_used = False
 
     block_on_advanced_rules = bool(advanced_rules.get("block_on_advanced_rules", False))
+    semantic_summary = dict(semantic_checks.get("summary") or {})
+    semantic_items = [dict(item) for item in semantic_checks.get("items") or [] if isinstance(item, dict)]
+    if semantic_checks.get("enabled"):
+        report = dict(report)
+        violations = list(report.get("violations") or [])
+        if semantic_items:
+            violations.append(
+                {
+                    "rule": "bank_statement_semantics",
+                    "details": semantic_items,
+                    "summary": semantic_summary,
+                }
+            )
+        report["violations"] = violations
+        report["bank_statement_semantics"] = {
+            "summary": semantic_summary,
+            "items": semantic_items,
+            "block_on_semantic_conflicts": bool(semantic_checks.get("rules", {}).get("block_on_semantic_conflicts", False)),
+        }
+        report["rule_count"] = int(report.get("rule_count", 0) or 0) + 1
+        passed = passed and bool(semantic_checks.get("passed", True))
+    blocked = (block_on_advanced_rules and not passed) or bool(semantic_checks.get("blocked", False))
+    report_only = not block_on_advanced_rules and not bool(semantic_checks.get("rules", {}).get("block_on_semantic_conflicts", False))
     return {
         "enabled": True,
         "operator": operator,
-        "report_only": not block_on_advanced_rules,
-        "blocked": block_on_advanced_rules and not passed,
+        "report_only": report_only,
+        "blocked": blocked,
         "passed": passed,
         "report": report,
-        "rules": operator_rules,
+        "rules": {**operator_rules, **({"bank_statement_semantics": dict(advanced_rules.get("bank_statement_semantics") or {})} if advanced_rules.get("bank_statement_semantics") else {})},
+        "semantic_checks": semantic_checks,
         "fallback_used": fallback_used,
         "error": "" if result.get("ok") else str(result.get("error") or ""),
     }
