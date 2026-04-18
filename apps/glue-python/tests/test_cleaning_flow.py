@@ -1197,6 +1197,190 @@ class CleaningFlowTests(unittest.TestCase):
             1,
         )
 
+    def test_materialize_accel_outputs_uses_cleaned_rows_for_bank_semantics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            accel_stage = os.path.join(tmp, "accel")
+            os.makedirs(accel_stage, exist_ok=True)
+            cleaned_parquet = os.path.join(accel_stage, "cleaned.parquet")
+            with open(cleaned_parquet, "wb") as f:
+                f.write(b"PAR1dataPAR1")
+            job_root = os.path.join(tmp, "job")
+            raw_rows = [
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "amount": "-100.00",
+                    "balance": "900.00",
+                    "ref_no": "TXN-001",
+                },
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "amount": "50.00",
+                    "balance": "950.00",
+                    "remark": "subtotal row",
+                    "ref_no": "TXN-SUBTOTAL",
+                },
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-02",
+                    "amount": "200.00",
+                    "balance": "1100.00",
+                    "ref_no": "TXN-002",
+                },
+            ]
+            cleaned_rows = [
+                {
+                    "account_no": "62220001",
+                    "txn_date": "2026-03-01",
+                    "amount": -100.0,
+                    "balance": 900.0,
+                    "ref_no": "TXN-001",
+                },
+                {
+                    "account_no": "62220001",
+                    "txn_date": "2026-03-02",
+                    "amount": 200.0,
+                    "balance": 1100.0,
+                    "ref_no": "TXN-002",
+                },
+            ]
+            out = cleaning_flow_materialization.materialize_accel_outputs(
+                params_effective={
+                    "canonical_profile": "bank_statement",
+                    "office_outputs_enabled": False,
+                    "job_context": make_job_context(job_root),
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "bank_statement_semantics": {
+                                "block_on_semantic_conflicts": True,
+                            }
+                        }
+                    },
+                },
+                accel_outputs={"cleaned_parquet": {"path": cleaned_parquet, "sha256": "parquet-sha"}},
+                accel_profile={"quality": {"output_rows": 2}, "quality_gate": {}},
+                sha256_file=lambda _path: "sha",
+                local_rows=list(cleaned_rows),
+                local_profile={"quality": {"output_rows": 2}, "quality_gate": {}},
+                local_execution={},
+                preprocess_result={},
+                input_rows=list(raw_rows),
+            )
+
+            self.assertEqual(
+                out["quality_summary"]["advanced_quality"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+                0,
+            )
+            self.assertFalse(out["quality_summary"]["advanced_quality"]["blocked"])
+
+    def test_materialize_local_outputs_uses_cleaned_rows_for_bank_semantics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stage_dir = os.path.join(tmp, "stage")
+            artifacts_dir = os.path.join(tmp, "artifacts")
+            evidence_dir = os.path.join(tmp, "evidence")
+            os.makedirs(stage_dir, exist_ok=True)
+            os.makedirs(artifacts_dir, exist_ok=True)
+            os.makedirs(evidence_dir, exist_ok=True)
+
+            raw_rows = [
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "amount": "-100.00",
+                    "balance": "900.00",
+                    "ref_no": "TXN-001",
+                },
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-01",
+                    "amount": "50.00",
+                    "balance": "950.00",
+                    "remark": "subtotal row",
+                    "ref_no": "TXN-SUBTOTAL",
+                },
+                {
+                    "account_no": "6222-0001",
+                    "txn_date": "2026-03-02",
+                    "amount": "200.00",
+                    "balance": "1100.00",
+                    "ref_no": "TXN-002",
+                },
+            ]
+            cleaned_rows = [
+                {
+                    "account_no": "62220001",
+                    "txn_date": "2026-03-01",
+                    "amount": -100.0,
+                    "balance": 900.0,
+                    "ref_no": "TXN-001",
+                },
+                {
+                    "account_no": "62220001",
+                    "txn_date": "2026-03-02",
+                    "amount": 200.0,
+                    "balance": 1100.0,
+                    "ref_no": "TXN-002",
+                },
+            ]
+
+            def write_csv(path, rows):
+                with open(path, "w", encoding="utf-8", newline="\n") as f:
+                    f.write("account_no,txn_date,amount,balance,ref_no\n")
+                    for row in rows:
+                        f.write(
+                            f"{row.get('account_no','')},{row.get('txn_date','')},{row.get('amount','')},{row.get('balance','')},{row.get('ref_no','')}\n"
+                        )
+
+            def write_parquet(path, rows):
+                with open(path, "wb") as f:
+                    f.write(b"PAR1dataPAR1")
+
+            def write_profile_json(path, profile, params_effective):
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(profile, f, ensure_ascii=False)
+
+            out = cleaning_flow_materialization.materialize_local_outputs(
+                job_id="job-local-semantic-cleaned-rows",
+                stage_dir=stage_dir,
+                artifacts_dir=artifacts_dir,
+                evidence_dir=evidence_dir,
+                params_effective={
+                    "canonical_profile": "bank_statement",
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "bank_statement_semantics": {
+                                "block_on_semantic_conflicts": True,
+                            }
+                        }
+                    },
+                },
+                input_rows=list(raw_rows),
+                rows=list(cleaned_rows),
+                quality={"input_rows": 3, "output_rows": 2, "filtered_rows": 1},
+                execution_report={},
+                source="python",
+                preprocess_result={},
+                apply_quality_gates=lambda quality, _params: {"passed": True, "quality": dict(quality)},
+                to_bool=lambda value, default=False: bool(default if value is None else value),
+                rule_param=lambda _params, _key, default=None: default,
+                require_local_parquet_dependencies=lambda _params: None,
+                write_cleaned_csv=write_csv,
+                write_cleaned_parquet=write_parquet,
+                is_valid_parquet_file=lambda _path: True,
+                local_parquet_strict_enabled=lambda _params: True,
+                build_profile=lambda rows, quality, source: {"rows": len(rows), "source": source, "quality": dict(quality)},
+                write_profile_json=write_profile_json,
+                sha256_file=lambda _path: "sha",
+                materialize_office_outputs_fn=lambda **_kwargs: {},
+            )
+
+            self.assertEqual(
+                out["quality_summary"]["advanced_quality"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+                0,
+            )
+            self.assertFalse(out["quality_summary"]["advanced_quality"]["blocked"])
+
     def test_materialize_accel_outputs_blocks_when_advanced_quality_blocks(self):
         with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:
             cleaning_flow_materialization.materialize_accel_outputs(

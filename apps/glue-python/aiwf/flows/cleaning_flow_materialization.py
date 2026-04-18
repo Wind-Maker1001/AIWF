@@ -141,7 +141,7 @@ def materialize_accel_outputs(
     advanced_quality = evaluate_advanced_quality(
         rows=list(local_rows or []),
         params_effective=params_effective,
-        semantic_rows=list(input_rows or local_rows or []),
+        semantic_rows=list(local_rows or []),
     )
     quality_gate["advanced_quality"] = advanced_quality
     if advanced_quality.get("blocked"):
@@ -260,7 +260,7 @@ def materialize_local_outputs(
     advanced_quality = evaluate_advanced_quality(
         rows=rows,
         params_effective=params_effective,
-        semantic_rows=list(input_rows or rows or []),
+        semantic_rows=list(rows or []),
     )
     quality_gate["advanced_quality"] = advanced_quality
     allow_empty_output_default = params_effective.get("blank_output_expected", True)
