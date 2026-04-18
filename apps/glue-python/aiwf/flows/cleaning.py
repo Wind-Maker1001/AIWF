@@ -692,8 +692,15 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     def attach_review_analysis(out: Dict[str, Any]) -> Dict[str, Any]:
         quality = dict(out.get("quality") or {})
         execution_audit = dict(out.get("execution_audit") or {})
+        semantic_rows = [
+            dict(item)
+            for item in (out.get("rows") if isinstance(out.get("rows"), list) else [])
+            if isinstance(item, dict)
+        ]
+        if not semantic_rows:
+            semantic_rows = list(raw_rows)
         semantic_checks = evaluate_bank_statement_semantics(
-            rows=raw_rows,
+            rows=semantic_rows,
             params_effective=params,
             profile_analysis=profile_analysis,
         )

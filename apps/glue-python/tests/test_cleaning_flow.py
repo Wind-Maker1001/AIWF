@@ -970,6 +970,138 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertEqual(payload["precheck_action"], "block")
         self.assertIn("balance_gap", payload["blocking_reason_codes"])
 
+    def test_clean_rows_bank_semantics_uses_cleaned_rows_after_filtering(self):
+        out = cleaning._clean_rows(
+            [
+                {
+                    "row_index": 1,
+                    "account_no": "6222-0001",
+                    "txn_date": "2026/03/01",
+                    "amount": "-100.00",
+                    "balance": "900.00",
+                    "ref_no": "TXN-001",
+                },
+                {
+                    "row_index": 2,
+                    "account_no": "6222-0001",
+                    "txn_date": "2026/03/01",
+                    "amount": "50.00",
+                    "balance": "950.00",
+                    "remark": "subtotal row",
+                    "ref_no": "TXN-SUBTOTAL",
+                },
+                {
+                    "row_index": 3,
+                    "account_no": "6222-0001",
+                    "txn_date": "2026/03/02",
+                    "amount": "200.00",
+                    "balance": "1100.00",
+                    "ref_no": "TXN-002",
+                },
+            ],
+            {
+                "canonical_profile": "bank_statement",
+                "rules": {
+                    "use_rust_v2": False,
+                    "platform_mode": "generic",
+                    "filters": [{"op": "subtotal_row"}],
+                    "field_ops": [
+                        {"field": "account_no", "op": "normalize_account_no"},
+                        {"field": "txn_date", "op": "parse_date"},
+                        {"field": "amount", "op": "parse_number"},
+                        {"field": "balance", "op": "parse_number"},
+                    ],
+                },
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+        )
+
+        self.assertEqual(out["quality"]["filtered_rows"], 1)
+        self.assertEqual(
+            out["execution_audit"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+            0,
+        )
+        self.assertFalse(
+            any(item["kind"] == "balance_gap" for item in out["review_analysis"]["review_items"])
+        )
+
+    def test_run_cleaning_precheck_uses_cleaned_rows_for_bank_semantics_after_filtering(self):
+        payload = run_cleaning_precheck(
+            params={
+                "canonical_profile": "bank_statement",
+                "rules": {
+                    "use_rust_v2": False,
+                    "platform_mode": "generic",
+                    "filters": [{"op": "subtotal_row"}],
+                    "field_ops": [
+                        {"field": "account_no", "op": "normalize_account_no"},
+                        {"field": "txn_date", "op": "parse_date"},
+                        {"field": "amount", "op": "parse_number"},
+                        {"field": "balance", "op": "parse_number"},
+                    ],
+                },
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+            extract_payload={
+                "rows": [
+                    {
+                        "row_index": 1,
+                        "account_no": "6222-0001",
+                        "txn_date": "2026/03/01",
+                        "amount": "-100.00",
+                        "balance": "900.00",
+                        "ref_no": "TXN-001",
+                    },
+                    {
+                        "row_index": 2,
+                        "account_no": "6222-0001",
+                        "txn_date": "2026/03/01",
+                        "amount": "50.00",
+                        "balance": "950.00",
+                        "remark": "subtotal row",
+                        "ref_no": "TXN-SUBTOTAL",
+                    },
+                    {
+                        "row_index": 3,
+                        "account_no": "6222-0001",
+                        "txn_date": "2026/03/02",
+                        "amount": "200.00",
+                        "balance": "1100.00",
+                        "ref_no": "TXN-002",
+                    },
+                ],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "recommended": True,
+                        "score": 0.95,
+                        "required_coverage": 1.0,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+            },
+        )
+
+        self.assertEqual(payload["precheck_action"], "allow")
+        self.assertFalse(any(item["kind"] == "balance_gap" for item in payload["review_items"]))
+
     def test_run_cleaning_auto_enqueues_manual_review_for_bank_balance_gap(self):
         with tempfile.TemporaryDirectory() as tmp:
             local_job_root = os.path.join(tmp, "job")
