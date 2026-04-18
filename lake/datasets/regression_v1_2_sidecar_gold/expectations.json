@@ -1,19 +1,93 @@
 {
   "schema_version": "sidecar_gold.v1",
   "scenarios": [
-    { "id": "xlsx_customer_multi_sheet", "dir": "xlsx_customer_multi_sheet" },
-    { "id": "xlsx_finance_units", "dir": "xlsx_finance_units" },
-    { "id": "xlsx_bank_statement_cn_multiheader", "dir": "xlsx_bank_statement_cn_multiheader" },
-    { "id": "xlsx_bank_statement_abbrev_headers", "dir": "xlsx_bank_statement_abbrev_headers" },
-    { "id": "xlsx_customer_abbrev_headers", "dir": "xlsx_customer_abbrev_headers" },
-    { "id": "image_bank_statement_tabular_auto", "dir": "image_bank_statement_tabular_auto" },
-    { "id": "pdf_bank_statement_tabular_auto", "dir": "pdf_bank_statement_tabular_auto" },
-    { "id": "image_customer_contact_auto", "dir": "image_customer_contact_auto" },
-    { "id": "pdf_customer_contact_auto", "dir": "pdf_customer_contact_auto" },
-    { "id": "image_customer_ledger_auto", "dir": "image_customer_ledger_auto" },
-    { "id": "pdf_customer_ledger_auto", "dir": "pdf_customer_ledger_auto" },
-    { "id": "image_debate_text_auto", "dir": "image_debate_text_auto" },
-    { "id": "pdf_debate_text_auto", "dir": "pdf_debate_text_auto" },
-    { "id": "image_blank_blocked", "dir": "image_blank_blocked" }
+    {
+      "id": "xlsx_customer_multi_sheet",
+      "dir": "xlsx_customer_multi_sheet"
+    },
+    {
+      "id": "xlsx_finance_units",
+      "dir": "xlsx_finance_units"
+    },
+    {
+      "id": "xlsx_finance_english_units",
+      "dir": "xlsx_finance_english_units"
+    },
+    {
+      "id": "xlsx_full_width_comma_numeric",
+      "dir": "xlsx_full_width_comma_numeric"
+    },
+    {
+      "id": "xlsx_bank_statement_cn_multiheader",
+      "dir": "xlsx_bank_statement_cn_multiheader"
+    },
+    {
+      "id": "xlsx_bank_statement_abbrev_headers",
+      "dir": "xlsx_bank_statement_abbrev_headers"
+    },
+    {
+      "id": "xlsx_customer_abbrev_headers",
+      "dir": "xlsx_customer_abbrev_headers"
+    },
+    {
+      "id": "xlsx_dirty_header_repeat",
+      "dir": "xlsx_dirty_header_repeat"
+    },
+    {
+      "id": "xlsx_dirty_subtotal_note_rows",
+      "dir": "xlsx_dirty_subtotal_note_rows"
+    },
+    {
+      "id": "xlsx_bank_signed_amount_conflict",
+      "dir": "xlsx_bank_signed_amount_conflict"
+    },
+    {
+      "id": "xlsx_customer_ocr_phone_account_fix",
+      "dir": "xlsx_customer_ocr_phone_account_fix"
+    },
+    {
+      "id": "xlsx_hidden_sheet_formula_gap",
+      "dir": "xlsx_hidden_sheet_formula_gap"
+    },
+    {
+      "id": "xlsx_utf8_gbk_mixed_text",
+      "dir": "xlsx_utf8_gbk_mixed_text"
+    },
+    {
+      "id": "image_bank_statement_tabular_auto",
+      "dir": "image_bank_statement_tabular_auto"
+    },
+    {
+      "id": "pdf_bank_statement_tabular_auto",
+      "dir": "pdf_bank_statement_tabular_auto"
+    },
+    {
+      "id": "image_customer_contact_auto",
+      "dir": "image_customer_contact_auto"
+    },
+    {
+      "id": "pdf_customer_contact_auto",
+      "dir": "pdf_customer_contact_auto"
+    },
+    {
+      "id": "image_customer_ledger_auto",
+      "dir": "image_customer_ledger_auto"
+    },
+    {
+      "id": "pdf_customer_ledger_auto",
+      "dir": "pdf_customer_ledger_auto"
+    },
+    {
+      "id": "image_debate_text_auto",
+      "dir": "image_debate_text_auto"
+    },
+    {
+      "id": "pdf_debate_text_auto",
+      "dir": "pdf_debate_text_auto"
+    },
+    {
+      "id": "image_blank_blocked",
+      "dir": "image_blank_blocked"
+    }
   ]
 }

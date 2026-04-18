@@ -2,6 +2,7 @@ param(
   [string]$DatasetDir = "",
   [string]$OutDir = "",
   [string]$AccelUrl = "",
+  [switch]$Quick,
   [switch]$RequireAccel
 )
 
@@ -34,7 +35,8 @@ repo = Path(sys.argv[1])
 dataset = Path(sys.argv[2])
 out_dir = Path(sys.argv[3])
 accel_url = str(sys.argv[4])
-require_accel = str(sys.argv[5]).strip().lower() in {"1", "true", "yes", "on"}
+quick_mode = str(sys.argv[5]).strip().lower() in {"1", "true", "yes", "on"}
+require_accel = str(sys.argv[6]).strip().lower() in {"1", "true", "yes", "on"}
 out_dir.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(repo / "apps" / "glue-python"))
 
@@ -47,6 +49,8 @@ from aiwf.sidecar_regression import (
 items = []
 for entry in load_sidecar_dataset(dataset):
     scenario = entry["scenario"]
+    if quick_mode and not bool(scenario.get("quick_gate", False)):
+        continue
     if not bool(scenario.get("consistency_compare", False)):
         continue
     items.append({
@@ -59,6 +63,7 @@ report = {
     "ok": bool(summary["ok"]),
     "generated_at": datetime.now(timezone.utc).isoformat(),
     "accel_url": accel_url,
+    "quick_mode": quick_mode,
     "require_accel": require_accel,
     "items": items,
     "failed": summary["failed"],
@@ -71,6 +76,7 @@ md = [
     "",
     f"- Time: {report['generated_at']}",
     f"- AccelUrl: {accel_url}",
+    f"- QuickMode: {quick_mode}",
     f"- Overall: {'PASS' if report['ok'] else 'FAIL'}",
     f"- RequireAccel: {require_accel}",
     "",
@@ -89,7 +95,7 @@ print(json.dumps({"ok": report["ok"], "json": str(json_path), "md": str(md_path)
 Set-Content -Path $tmp -Value $py -Encoding UTF8
 try {
   Info "running sidecar python/rust consistency checks"
-  $raw = & python $tmp $root $DatasetDir $OutDir $AccelUrl $RequireAccel
+  $raw = & python $tmp $root $DatasetDir $OutDir $AccelUrl $Quick $RequireAccel
   if ($LASTEXITCODE -ne 0) { throw "python sidecar consistency script failed" }
   $res = $raw | ConvertFrom-Json
   if (-not $res.ok) { throw "sidecar python/rust consistency checks failed. report: $($res.json)" }

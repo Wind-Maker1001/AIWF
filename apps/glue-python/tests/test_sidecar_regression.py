@@ -157,6 +157,48 @@ class SidecarRegressionTests(unittest.TestCase):
         )
         self.assertEqual(errors, [])
 
+    def test_compare_expected_quality_can_require_block_reason_codes_and_decision_codes(self):
+        payload = {
+            "quality_blocked": True,
+            "blocked_reason_codes": ["numeric_parse_low", "quality_blocked"],
+            "quality_decisions": [
+                {
+                    "scope": "input_quality",
+                    "blocked": True,
+                    "reason_codes": ["quality_blocked", "numeric_parse_low"],
+                }
+            ],
+            "engine_trace": [{"engine": "docling", "ok": True}],
+            "file_results": [{"quality_metrics": {"header_confidence": 1.0}}],
+        }
+        errors = compare_expected_quality(
+            payload,
+            {"quality_blocked": True},
+            {
+                "expected_blocked_reason_codes": ["numeric_parse_low", "quality_blocked"],
+                "expected_quality_decision_reason_codes": ["numeric_parse_low", "quality_blocked"],
+            },
+        )
+        self.assertEqual(errors, [])
+
+    def test_compare_expected_quality_can_require_recommended_candidate_profile_set(self):
+        payload = {
+            "quality_blocked": False,
+            "candidate_profiles": [
+                {"profile": "customer_contact", "recommended": True},
+                {"profile": "customer_ledger", "recommended": False},
+                {"profile": "finance_statement", "recommended": True},
+            ],
+            "engine_trace": [{"engine": "docling", "ok": True}],
+            "file_results": [{"quality_metrics": {"header_confidence": 1.0}}],
+        }
+        errors = compare_expected_quality(
+            payload,
+            {"quality_blocked": False},
+            {"expected_candidate_profiles": ["customer_contact", "finance_statement"]},
+        )
+        self.assertEqual(errors, [])
+
     def test_compare_expected_rows_uses_subset_fields(self):
         actual = [
             {"customer_name": "Alice", "phone": "+8613800138000", "sheet_name": "S1", "ignored": 1},

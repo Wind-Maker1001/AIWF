@@ -89,8 +89,6 @@ function ApplyCiProfile([string]$ProfileName, [hashtable]$BoundParams) {
   if ($normalized -eq "quick") {
   $quickSkipParams = @(
     "SkipRegressionQuality",
-    "SkipSidecarRegressionQuality",
-    "SkipSidecarPythonRustConsistency",
     "SkipDesktopRealSampleAcceptance",
     "SkipDesktopFinanceTemplateAcceptance",
     "SkipDesktopStress",
@@ -2560,7 +2558,11 @@ if (-not $SkipSidecarRegressionQuality) {
     throw "sidecar regression quality script not found: $sidecarRegressionQualityScript"
   }
   Info "running sidecar regression quality checks"
-  powershell -ExecutionPolicy Bypass -File $sidecarRegressionQualityScript
+  if ($normalizedCiProfile -eq "quick") {
+    powershell -ExecutionPolicy Bypass -File $sidecarRegressionQualityScript -Quick
+  } else {
+    powershell -ExecutionPolicy Bypass -File $sidecarRegressionQualityScript
+  }
   if ($LASTEXITCODE -ne 0) {
     throw "sidecar regression quality checks failed"
   }
@@ -2577,7 +2579,11 @@ if (-not $SkipSidecarPythonRustConsistency) {
   $sidecarConsistencyServiceState = $null
   try {
     $sidecarConsistencyServiceState = Ensure-AccelRustService -RustDir $rustDir -AccelUrl "http://127.0.0.1:18082"
-    powershell -ExecutionPolicy Bypass -File $sidecarPythonRustConsistencyScript -RequireAccel -AccelUrl "http://127.0.0.1:18082"
+    if ($normalizedCiProfile -eq "quick") {
+      powershell -ExecutionPolicy Bypass -File $sidecarPythonRustConsistencyScript -Quick -RequireAccel -AccelUrl "http://127.0.0.1:18082"
+    } else {
+      powershell -ExecutionPolicy Bypass -File $sidecarPythonRustConsistencyScript -RequireAccel -AccelUrl "http://127.0.0.1:18082"
+    }
     if ($LASTEXITCODE -ne 0) {
       throw "sidecar python/rust consistency checks failed"
     }

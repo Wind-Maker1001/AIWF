@@ -1,0 +1,11 @@
+{
+  "quality_blocked": false,
+  "required_fields": [
+    "account_no",
+    "txn_date"
+  ],
+  "header_confidence_min": 0.8,
+  "numeric_parse_rate_min": 1.0,
+  "duplicate_key_ratio_max": 0.0,
+  "sheet_frames_min": 1
+}
