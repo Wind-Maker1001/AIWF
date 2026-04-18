@@ -1193,6 +1193,10 @@ class CleaningFlowTests(unittest.TestCase):
             )
         self.assertEqual(ctx.exception.error_code, "advanced_quality_blocked")
         self.assertEqual(
+            ctx.exception.blocking_reason_codes,
+            ["advanced_quality_blocked", "balance_gap"],
+        )
+        self.assertEqual(
             ctx.exception.details["advanced_quality"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
             1,
         )
@@ -1397,6 +1401,77 @@ class CleaningFlowTests(unittest.TestCase):
             )
             self.assertFalse(out["quality_summary"]["advanced_quality"]["blocked"])
 
+    def test_materialize_local_outputs_exposes_semantic_blocking_reason_codes(self):
+        raw_rows = [
+            {
+                "account_no": "6222-0001",
+                "txn_date": "2026-03-01",
+                "amount": "-100.00",
+                "balance": "900.00",
+                "ref_no": "TXN-001",
+            },
+            {
+                "account_no": "6222-0001",
+                "txn_date": "2026-03-02",
+                "amount": "200.00",
+                "balance": "950.00",
+                "ref_no": "TXN-002",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            stage_dir = os.path.join(tmp, "stage")
+            artifacts_dir = os.path.join(tmp, "artifacts")
+            evidence_dir = os.path.join(tmp, "evidence")
+            os.makedirs(stage_dir, exist_ok=True)
+            os.makedirs(artifacts_dir, exist_ok=True)
+            os.makedirs(evidence_dir, exist_ok=True)
+
+            with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:
+                cleaning_flow_materialization.materialize_local_outputs(
+                    job_id="job-local-semantic-block",
+                    stage_dir=stage_dir,
+                    artifacts_dir=artifacts_dir,
+                    evidence_dir=evidence_dir,
+                    params_effective={
+                        "canonical_profile": "bank_statement",
+                        "quality_rules": {
+                            "advanced_rules": {
+                                "bank_statement_semantics": {
+                                    "block_on_semantic_conflicts": True,
+                                }
+                            }
+                        },
+                    },
+                    input_rows=list(raw_rows),
+                    rows=list(raw_rows),
+                    quality={"input_rows": 2, "output_rows": 2},
+                    execution_report={},
+                    source="python",
+                    preprocess_result={},
+                    apply_quality_gates=lambda quality, _params: {"passed": True, "quality": dict(quality)},
+                    to_bool=lambda value, default=False: bool(default if value is None else value),
+                    rule_param=lambda _params, _key, default=None: default,
+                    require_local_parquet_dependencies=lambda _params: None,
+                    write_cleaned_csv=lambda *_args, **_kwargs: None,
+                    write_cleaned_parquet=lambda *_args, **_kwargs: None,
+                    is_valid_parquet_file=lambda _path: True,
+                    local_parquet_strict_enabled=lambda _params: True,
+                    build_profile=lambda rows, quality, source: {"rows": len(rows), "source": source, "quality": dict(quality)},
+                    write_profile_json=lambda *_args, **_kwargs: None,
+                    sha256_file=lambda _path: "sha",
+                    materialize_office_outputs_fn=lambda **_kwargs: {},
+                )
+
+        self.assertEqual(ctx.exception.error_code, "advanced_quality_blocked")
+        self.assertEqual(
+            ctx.exception.blocking_reason_codes,
+            ["advanced_quality_blocked", "balance_gap"],
+        )
+        self.assertEqual(
+            ctx.exception.details["advanced_quality"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+            1,
+        )
+
     def test_materialize_accel_outputs_blocks_when_advanced_quality_blocks(self):
         with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:
             cleaning_flow_materialization.materialize_accel_outputs(
@@ -1424,6 +1499,7 @@ class CleaningFlowTests(unittest.TestCase):
                 input_rows=[],
             )
         self.assertEqual(ctx.exception.error_code, "advanced_quality_blocked")
+        self.assertEqual(ctx.exception.blocking_reason_codes, ["advanced_quality_blocked"])
 
     def test_run_cleaning_quality_rule_set_keeps_explicit_quality_rule_overrides(self):
         with tempfile.TemporaryDirectory() as tmp:

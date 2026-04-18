@@ -18,6 +18,20 @@ from aiwf.flows.cleaning_advanced_quality import evaluate_advanced_quality
 from aiwf.flows.cleaning_reporting import build_quality_summary, flatten_rejection_records
 
 
+def _advanced_quality_blocking_codes(advanced_quality: Dict[str, Any]) -> list[str]:
+    semantic_checks = advanced_quality.get("semantic_checks") if isinstance(advanced_quality.get("semantic_checks"), dict) else {}
+    semantic_codes = [
+        str(item).strip()
+        for item in (semantic_checks.get("blocking_reason_codes") or [])
+        if str(item).strip()
+    ]
+    codes = ["advanced_quality_blocked"]
+    for code in semantic_codes:
+        if code not in codes:
+            codes.append(code)
+    return codes
+
+
 def materialize_office_outputs(
     *,
     job_id: str,
@@ -149,6 +163,7 @@ def materialize_accel_outputs(
         report = dict(advanced_quality.get("report") or {})
         violations = report.get("violations") if isinstance(report.get("violations"), list) else []
         message = "; ".join(str(item) for item in violations if str(item).strip()) or "advanced quality blocked"
+        blocking_reason_codes = _advanced_quality_blocking_codes(advanced_quality)
         raise CleaningGuardrailError(
             error_code="advanced_quality_blocked",
             message=message,
@@ -157,7 +172,7 @@ def materialize_accel_outputs(
             template_expected_profile=guardrail_template_expected_profile(params_effective),
             blank_output_expected=bool(params_effective.get("blank_output_expected", False)),
             zero_output_unexpected=False,
-            blocking_reason_codes=["advanced_quality_blocked"],
+            blocking_reason_codes=blocking_reason_codes,
             details={"advanced_quality": advanced_quality},
         )
     summary_execution = {
@@ -315,6 +330,7 @@ def materialize_local_outputs(
         report = dict(advanced_quality.get("report") or {})
         violations = report.get("violations") if isinstance(report.get("violations"), list) else []
         message = "; ".join(str(item) for item in violations if str(item).strip()) or "advanced quality blocked"
+        blocking_reason_codes = _advanced_quality_blocking_codes(advanced_quality)
         raise CleaningGuardrailError(
             error_code="advanced_quality_blocked",
             message=message,
@@ -323,7 +339,7 @@ def materialize_local_outputs(
             template_expected_profile=guardrail_template_expected_profile(params_effective),
             blank_output_expected=bool(params_effective.get("blank_output_expected", False)),
             zero_output_unexpected=False,
-            blocking_reason_codes=["advanced_quality_blocked"],
+            blocking_reason_codes=blocking_reason_codes,
             details={"advanced_quality": advanced_quality},
         )
 
