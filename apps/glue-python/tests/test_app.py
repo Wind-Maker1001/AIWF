@@ -502,6 +502,116 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(len(payload["header_ambiguities"]), 1)
         self.assertGreaterEqual(payload["issue_summary"]["header_ambiguity_count"], 1)
 
+    def test_cleaning_precheck_warns_on_bank_balance_gap(self):
+        with patch.object(glue_app, "ingest_extract") as ingest_extract:
+            ingest_extract.return_value = {
+                "ok": True,
+                "rows": [
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "amount": "-100.00",
+                        "balance": "900.00",
+                        "ref_no": "TXN-001",
+                    },
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-02",
+                        "amount": "200.00",
+                        "balance": "950.00",
+                        "ref_no": "TXN-002",
+                    },
+                ],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "score": 0.96,
+                        "required_coverage": 1.0,
+                        "recommended": True,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+            }
+            resp = self.client.post(
+                "/cleaning/precheck",
+                json={
+                    "input_path": r"D:\data\bank-gap.xlsx",
+                    "cleaning_template": "bank_statement_v1",
+                    "header_mapping_mode": "auto",
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["precheck_action"], "warn")
+        self.assertTrue(payload["review_required"])
+        self.assertTrue(any(item["kind"] == "balance_gap" for item in payload["review_items"]))
+        self.assertEqual(payload["blocking_reason_codes"], [])
+
+    def test_cleaning_precheck_blocks_on_bank_balance_gap_when_enabled(self):
+        with patch.object(glue_app, "ingest_extract") as ingest_extract:
+            ingest_extract.return_value = {
+                "ok": True,
+                "rows": [
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "amount": "-100.00",
+                        "balance": "900.00",
+                        "ref_no": "TXN-001",
+                    },
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-02",
+                        "amount": "200.00",
+                        "balance": "950.00",
+                        "ref_no": "TXN-002",
+                    },
+                ],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "score": 0.96,
+                        "required_coverage": 1.0,
+                        "recommended": True,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+            }
+            resp = self.client.post(
+                "/cleaning/precheck",
+                json={
+                    "input_path": r"D:\data\bank-gap.xlsx",
+                    "cleaning_template": "bank_statement_v1",
+                    "header_mapping_mode": "auto",
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "bank_statement_semantics": {
+                                "block_on_semantic_conflicts": True,
+                            }
+                        }
+                    },
+                },
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["precheck_action"], "block")
+        self.assertIn("balance_gap", payload["blocking_reason_codes"])
+        self.assertTrue(any(item["kind"] == "balance_gap" for item in payload["review_items"]))
+
     def test_ingest_extract_auto_mode_reports_fallback_to_strict_when_rapidfuzz_missing(self):
         with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows, patch.object(
             glue_app,

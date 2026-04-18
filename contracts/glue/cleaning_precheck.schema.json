@@ -76,7 +76,11 @@
         "profile_mismatch": { "type": "boolean" },
         "predicted_zero_output_unexpected": { "type": "boolean" },
         "blank_output_expected": { "type": "boolean" },
-        "blocking_reason_codes": { "type": "array", "items": { "type": "string" } },
+        "blocking_reason_codes": {
+          "type": "array",
+          "description": "Concrete blocking reason codes. May include semantic bank-statement blockers such as signed_amount_conflict or balance_gap when precheck predicts review/block-worthy semantic issues.",
+          "items": { "type": "string" }
+        },
         "issues": { "type": "array", "items": { "type": "string" } },
         "suggestions": { "type": "array", "items": { "type": "string" } },
         "header_mapping": { "type": "array", "items": { "type": "object" } },
