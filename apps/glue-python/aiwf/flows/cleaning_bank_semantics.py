@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 import math
 import re
 from typing import Any, Dict, List, Mapping
@@ -58,6 +59,22 @@ def _coerce_row_index(value: Any, fallback: int) -> int:
             return int(parsed) if math.isfinite(parsed) else fallback
         except Exception:
             return fallback
+
+
+def _row_index_token(value: Any) -> str:
+    if value is None or isinstance(value, bool):
+        return ""
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(int(value)) if math.isfinite(value) else ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    try:
+        return str(int(text))
+    except Exception:
+        return text
 
 
 def _semantic_profile_is_bank(
@@ -176,6 +193,42 @@ def _expected_signed_amount(row: Mapping[str, Any], cfg: Mapping[str, Any]) -> f
     return abs(reported) * sign
 
 
+def _semantic_match_key(row: Mapping[str, Any]) -> tuple[Any, ...]:
+    return (
+        _normalize_account_no(row.get("account_no")),
+        str(row.get("txn_date") or "").strip(),
+        str(row.get("ref_no") or "").strip(),
+        str(row.get("sheet_name") or "").strip(),
+        _to_float(row.get("debit_amount")),
+        _to_float(row.get("credit_amount")),
+        _to_float(row.get("balance")),
+        str(row.get("counterparty_name") or "").strip(),
+    )
+
+
+def _align_conflict_rows(
+    rows: List[Dict[str, Any]],
+    conflict_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    by_index: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    by_key: Dict[tuple[Any, ...], List[Dict[str, Any]]] = defaultdict(list)
+    for row in conflict_rows:
+        token = _row_index_token(row.get("row_index"))
+        if token:
+            by_index[token].append(row)
+        by_key[_semantic_match_key(row)].append(row)
+
+    aligned: List[Dict[str, Any]] = []
+    for row in rows:
+        token = _row_index_token(row.get("row_index"))
+        matched = by_index[token].pop(0) if token and by_index.get(token) else None
+        if matched is None:
+            key = _semantic_match_key(row)
+            matched = by_key[key].pop(0) if by_key.get(key) else None
+        aligned.append(matched or row)
+    return aligned
+
+
 def evaluate_bank_statement_semantics(
     *,
     rows: List[Dict[str, Any]],
@@ -203,13 +256,12 @@ def evaluate_bank_statement_semantics(
         for item in (conflict_rows or rows)
         if isinstance(item, dict)
     ]
-    use_conflict_rows = len(normalized_conflict_rows) == len(normalized_rows)
     items: List[Dict[str, Any]] = []
     counts = {"signed_amount_conflict": 0, "balance_gap": 0}
     signed_tolerance = float(cfg["signed_amount_conflict_tolerance"])
     balance_tolerance = float(cfg["balance_continuity_tolerance"])
 
-    signed_rows = normalized_conflict_rows if use_conflict_rows else normalized_rows
+    signed_rows = _align_conflict_rows(normalized_rows, normalized_conflict_rows)
     for ordinal, row in enumerate(signed_rows, start=1):
         row_index = _coerce_row_index(row.get("row_index"), ordinal)
         reported_amount = _to_float(row.get("amount"))
