@@ -1,0 +1,2 @@
+{"account_no": "6222-0001", "txn_date": "2026-03-01", "amount": "-100.00", "balance": "900.00", "counterparty_name": "Alice Co", "ref_no": "TXN-001"}
+{"account_no": "6222-0001", "txn_date": "2026-03-02", "amount": "200.00", "balance": "950.00", "counterparty_name": "Bob Ltd", "ref_no": "TXN-002"}

@@ -27,6 +27,7 @@ This document tracks the regression datasets and commands used by the repository
     - `xlsx_dirty_header_repeat`
     - `xlsx_dirty_subtotal_note_rows`
     - `xlsx_bank_signed_amount_conflict`
+    - `xlsx_bank_balance_gap`
     - `xlsx_customer_ocr_phone_account_fix`
     - `xlsx_hidden_sheet_formula_gap`
     - `xlsx_utf8_gbk_mixed_text`

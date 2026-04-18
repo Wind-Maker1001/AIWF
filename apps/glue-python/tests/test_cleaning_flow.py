@@ -880,6 +880,96 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertEqual(payload["precheck_action"], "block")
         self.assertIn("signed_amount_conflict", payload["blocking_reason_codes"])
 
+    def test_run_cleaning_precheck_warns_on_bank_balance_gap(self):
+        payload = run_cleaning_precheck(
+            params={"canonical_profile": "bank_statement"},
+            extract_payload={
+                "rows": [
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "amount": "-100.00",
+                        "balance": "900.00",
+                        "ref_no": "TXN-001",
+                    },
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-02",
+                        "amount": "200.00",
+                        "balance": "950.00",
+                        "ref_no": "TXN-002",
+                    },
+                ],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "recommended": True,
+                        "score": 0.95,
+                        "required_coverage": 1.0,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+            },
+        )
+
+        self.assertEqual(payload["precheck_action"], "warn")
+        self.assertTrue(payload["review_required"])
+        self.assertTrue(any(item["kind"] == "balance_gap" for item in payload["review_items"]))
+
+    def test_run_cleaning_precheck_blocks_on_bank_balance_gap_when_enabled(self):
+        payload = run_cleaning_precheck(
+            params={
+                "canonical_profile": "bank_statement",
+                "quality_rules": {
+                    "advanced_rules": {
+                        "bank_statement_semantics": {
+                            "block_on_semantic_conflicts": True,
+                        }
+                    }
+                },
+            },
+            extract_payload={
+                "rows": [
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-01",
+                        "amount": "-100.00",
+                        "balance": "900.00",
+                        "ref_no": "TXN-001",
+                    },
+                    {
+                        "account_no": "6222-0001",
+                        "txn_date": "2026-03-02",
+                        "amount": "200.00",
+                        "balance": "950.00",
+                        "ref_no": "TXN-002",
+                    },
+                ],
+                "header_mapping": [],
+                "candidate_profiles": [
+                    {
+                        "profile": "bank_statement",
+                        "recommended": True,
+                        "score": 0.95,
+                        "required_coverage": 1.0,
+                        "recommended_template_id": "bank_statement_v1",
+                    }
+                ],
+                "quality_decisions": [],
+                "sample_rows": [],
+                "quality_blocked": False,
+                "blocked_reason_codes": [],
+            },
+        )
+
+        self.assertEqual(payload["precheck_action"], "block")
+        self.assertIn("balance_gap", payload["blocking_reason_codes"])
+
     def test_run_cleaning_auto_enqueues_manual_review_for_bank_balance_gap(self):
         with tempfile.TemporaryDirectory() as tmp:
             local_job_root = os.path.join(tmp, "job")
@@ -930,6 +1020,50 @@ class CleaningFlowTests(unittest.TestCase):
             self.assertTrue(any(item["kind"] == "balance_gap" for item in out["quality_summary"]["review_analysis"]["review_items"]))
             self.assertTrue(out["quality_summary"]["manual_review_queue"]["auto_enqueued"])
             self.assertEqual(len(queued), 1)
+
+    def test_materialize_accel_outputs_blocks_when_bank_balance_gap_blocks(self):
+        raw_rows = [
+            {
+                "account_no": "6222-0001",
+                "txn_date": "2026-03-01",
+                "amount": "-100.00",
+                "balance": "900.00",
+                "ref_no": "TXN-001",
+            },
+            {
+                "account_no": "6222-0001",
+                "txn_date": "2026-03-02",
+                "amount": "200.00",
+                "balance": "950.00",
+                "ref_no": "TXN-002",
+            },
+        ]
+        with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:
+            cleaning_flow_materialization.materialize_accel_outputs(
+                params_effective={
+                    "canonical_profile": "bank_statement",
+                    "quality_rules": {
+                        "advanced_rules": {
+                            "bank_statement_semantics": {
+                                "block_on_semantic_conflicts": True,
+                            }
+                        }
+                    },
+                },
+                accel_outputs={"cleaned_parquet": {"path": "D:/tmp/fake.parquet"}},
+                accel_profile={"quality": {"output_rows": 2}, "quality_gate": {}},
+                sha256_file=lambda _path: "sha",
+                local_rows=list(raw_rows),
+                local_profile={"quality": {"output_rows": 2}, "quality_gate": {}},
+                local_execution={},
+                preprocess_result={},
+                input_rows=list(raw_rows),
+            )
+        self.assertEqual(ctx.exception.error_code, "advanced_quality_blocked")
+        self.assertEqual(
+            ctx.exception.details["advanced_quality"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+            1,
+        )
 
     def test_materialize_accel_outputs_blocks_when_advanced_quality_blocks(self):
         with self.assertRaises(cleaning.CleaningGuardrailError) as ctx:

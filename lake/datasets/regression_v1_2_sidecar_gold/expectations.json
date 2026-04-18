@@ -42,6 +42,10 @@
       "dir": "xlsx_bank_signed_amount_conflict"
     },
     {
+      "id": "xlsx_bank_balance_gap",
+      "dir": "xlsx_bank_balance_gap"
+    },
+    {
       "id": "xlsx_customer_abbrev_headers",
       "dir": "xlsx_customer_abbrev_headers"
     },
