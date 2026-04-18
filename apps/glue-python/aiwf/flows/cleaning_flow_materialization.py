@@ -143,6 +143,7 @@ def materialize_accel_outputs(
         params_effective=params_effective,
         semantic_rows=list(local_rows or []),
     )
+    semantic_checks = dict(advanced_quality.get("semantic_checks") or {})
     quality_gate["advanced_quality"] = advanced_quality
     if advanced_quality.get("blocked"):
         report = dict(advanced_quality.get("report") or {})
@@ -166,11 +167,14 @@ def materialize_accel_outputs(
         "shadow_compare": dict(transform_execution.get("shadow_compare") or execution.get("shadow_compare") or {}),
         "stage_provenance": list(transform_execution.get("stage_provenance") or execution.get("stage_provenance") or []),
         "advanced_quality": advanced_quality,
+        "semantic_checks": semantic_checks,
         "row_samples": {
             "before": list(input_rows or [])[:5],
             "after": list(local_rows or [])[:5],
         },
     }
+    if semantic_checks and not isinstance(summary_execution["execution_audit"].get("semantic_checks"), dict):
+        summary_execution["execution_audit"]["semantic_checks"] = semantic_checks
     quality_summary = build_quality_summary(
         params_effective=params_effective,
         transform_quality=transform_quality,
@@ -192,7 +196,7 @@ def materialize_accel_outputs(
         profile["execution"] = summary_execution
     out = {
         "profile": profile,
-        "execution": execution,
+        "execution": summary_execution,
         "quality_summary": quality_summary,
         "rejections": rejections,
     }
@@ -262,6 +266,7 @@ def materialize_local_outputs(
         params_effective=params_effective,
         semantic_rows=list(rows or []),
     )
+    semantic_checks = dict(advanced_quality.get("semantic_checks") or {})
     quality_gate["advanced_quality"] = advanced_quality
     allow_empty_output_default = params_effective.get("blank_output_expected", True)
     if not rows and not to_bool(rule_param(params_effective, "allow_empty_output", allow_empty_output_default), default=True):
@@ -296,10 +301,15 @@ def materialize_local_outputs(
     execution_effective["materialization_engine"] = "python"
     execution_effective["legacy_cleaning_operator_used"] = False
     execution_effective["advanced_quality"] = advanced_quality
+    execution_effective["semantic_checks"] = semantic_checks
     execution_effective["row_samples"] = {
         "before": list(input_rows or [])[:5],
         "after": list(rows or [])[:5],
     }
+    execution_audit = dict(execution_effective.get("execution_audit") or {})
+    if semantic_checks and not isinstance(execution_audit.get("semantic_checks"), dict):
+        execution_audit["semantic_checks"] = semantic_checks
+    execution_effective["execution_audit"] = execution_audit
 
     if advanced_quality.get("blocked"):
         report = dict(advanced_quality.get("report") or {})

@@ -1269,7 +1269,15 @@ class CleaningFlowTests(unittest.TestCase):
             )
 
             self.assertEqual(
+                out["quality_summary"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+                0,
+            )
+            self.assertEqual(
                 out["quality_summary"]["advanced_quality"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+                0,
+            )
+            self.assertEqual(
+                out["execution"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
                 0,
             )
             self.assertFalse(out["quality_summary"]["advanced_quality"]["blocked"])
@@ -1376,7 +1384,15 @@ class CleaningFlowTests(unittest.TestCase):
             )
 
             self.assertEqual(
+                out["quality_summary"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+                0,
+            )
+            self.assertEqual(
                 out["quality_summary"]["advanced_quality"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
+                0,
+            )
+            self.assertEqual(
+                out["execution"]["semantic_checks"]["summary"]["counts"]["balance_gap"],
                 0,
             )
             self.assertFalse(out["quality_summary"]["advanced_quality"]["blocked"])
