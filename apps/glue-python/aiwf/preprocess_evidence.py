@@ -313,7 +313,7 @@ _TOPIC_STOPWORDS = {
     "argument",
     "analysis",
 }
-_OCR_NOISE_TOKENS = ("锛", "鈥", "銆", "�")
+_OCR_NOISE_TOKENS = ("锛", "鈥", "銆", "\uFFFD")
 
 
 def _normalize_text(value: Any) -> str:

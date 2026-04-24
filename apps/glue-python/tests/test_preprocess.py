@@ -748,10 +748,10 @@ class PreprocessTests(unittest.TestCase):
             src = os.path.join(tmp, "raw.jsonl")
             dst = os.path.join(tmp, "out.jsonl")
             with open(src, "w", encoding="utf-8") as f:
-                f.write(json.dumps({"text": "FranÃ§ais source note"}) + "\n")
+                f.write(json.dumps({"text": "Fran\u00C3\u00A7ais source note"}) + "\n")
 
             def _fake_fix_text(value, **_kwargs):
-                return str(value).replace("FranÃ§ais", "Français")
+                return str(value).replace("Fran\u00C3\u00A7ais", "Fran\u00E7ais")
 
             with patch("aiwf.preprocess_enrichment._ftfy_fix_text", return_value=_fake_fix_text):
                 res = preprocess.preprocess_file(

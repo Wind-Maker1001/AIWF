@@ -218,7 +218,7 @@ def _looks_ocr_noise(value: Any) -> bool:
     text = str(value or "").strip()
     if not text:
         return False
-    if any(token in text for token in ("锛", "鈥", "銆", "�")):
+    if any(token in text for token in ("锛", "鈥", "銆", "\uFFFD")):
         return True
     symbol_count = len(re.findall(r"[^0-9A-Za-z\u4e00-\u9fff\s]", text))
     return _safe_ratio(symbol_count, len(text)) > 0.35
