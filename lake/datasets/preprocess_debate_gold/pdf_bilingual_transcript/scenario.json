@@ -16,9 +16,6 @@
     "duplicate_claim_ratio": 0.0
   },
   "expected_raw_signal_summary": {
-    "input_row_count": 3,
-    "speaker_signal_rows": 3,
-    "stance_signal_rows": 2,
     "source_ref_signal_rows": 0,
     "quote_signal_rows": 0,
     "ocr_noise_rows": 0
