@@ -8,6 +8,20 @@ from typing import Any, Dict, List, Optional, Tuple
 from aiwf import ingest
 
 
+def _attach_source_lineage(rows: List[Dict[str, Any]], *, path: str, input_format: str) -> List[Dict[str, Any]]:
+    source_path = os.path.abspath(path)
+    source_file = os.path.basename(source_path)
+    enriched: List[Dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        payload = dict(row)
+        payload.setdefault("source_path", source_path)
+        payload.setdefault("source_file", source_file)
+        payload.setdefault("source_type", input_format)
+        payload.setdefault("row_index", index)
+        enriched.append(payload)
+    return enriched
+
+
 def _detect_input_format(path: str, spec: Dict[str, Any]) -> str:
     fmt = str(spec.get("input_format") or "").strip().lower()
     if fmt in {"csv", "json", "jsonl"}:
@@ -99,12 +113,15 @@ def _read_rows(path: str, spec: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], D
     fmt = _detect_input_format(path, spec)
     if fmt == "csv":
         rows, delimiter = _read_csv(path, delimiter=spec.get("delimiter"))
-        return rows, {"input_format": "csv", "delimiter": delimiter}
+        enriched = _attach_source_lineage(rows, path=path, input_format="csv")
+        return enriched, {"input_format": "csv", "delimiter": delimiter}
     if fmt == "json":
         rows = _read_json(path)
-        return rows, {"input_format": "json"}
+        enriched = _attach_source_lineage(rows, path=path, input_format="json")
+        return enriched, {"input_format": "json"}
     rows = _read_jsonl(path)
-    return rows, {"input_format": "jsonl"}
+    enriched = _attach_source_lineage(rows, path=path, input_format="jsonl")
+    return enriched, {"input_format": "jsonl"}
 
 
 def _ensure_parent_dir(path: str) -> None:

@@ -24,6 +24,7 @@ from aiwf.cleaning_spec_v2 import (
     recommended_template_id_for_profile,
     reason_codes_from_quality_errors,
 )
+from aiwf.preprocess_evidence import analyze_debate_row_signals, analyze_debate_text_signals
 from aiwf.quality_contract import header_mapping_runtime_info, normalize_value_for_field
 from aiwf.runtime_catalog import get_runtime_catalog
 from aiwf.dependency_status import dependency_status
@@ -807,6 +808,12 @@ def capabilities():
     caps["cleaning_spec_v2"] = {
         "contract": CLEANING_SPEC_V2_CONTRACT,
         "profiles": sorted(get_canonical_profile_registry().keys()),
+        "preprocess_options": {
+            "external_enrichment_mode": ["off", "private", "public", "auto"],
+            "document_parse_backend": ["auto", "local", "azure_docintelligence"],
+            "citation_parse_backend": ["auto", "regex", "grobid"],
+            "url_metadata_enrichment": "boolean",
+        },
     }
     caps["cleaning_runtime"] = {
         "quality_rule_set_id_supported": True,
@@ -827,6 +834,10 @@ def capabilities():
             "custom_row_filter",
             "flag_disabled",
         ],
+        "external_enrichment_modes": ["off", "private", "public", "auto"],
+        "document_parse_backends": ["auto", "local", "azure_docintelligence"],
+        "citation_parse_backends": ["auto", "regex", "grobid"],
+        "url_metadata_enrichment_profile_defaults": {"debate_evidence": True},
     }
     caps["cleaning_precheck"] = {
         "route": "/cleaning/precheck",
@@ -1096,31 +1107,42 @@ def _recover_tabular_context_from_table_cells(table_cells: list[dict[str, Any]])
 
 
 def _extract_text_fragments(rows: list[dict[str, Any]], meta: Dict[str, Any]) -> list[str]:
+    seen: set[str] = set()
     texts: list[str] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
         text = str(row.get("text") or "").strip()
-        if text:
+        if text and text not in seen:
+            seen.add(text)
             texts.append(text)
-    if texts:
-        return texts
     blocks = meta.get("image_blocks") if isinstance(meta.get("image_blocks"), list) else []
     for block in blocks:
         if not isinstance(block, dict):
             continue
         text = str(block.get("text") or "").strip()
-        if text:
+        if text and text not in seen:
+            seen.add(text)
             texts.append(text)
     return texts
 
 
 def _stable_text_signal(texts: list[str]) -> bool:
     non_empty = [text for text in texts if str(text).strip()]
-    if len(non_empty) < 3:
+    if len(non_empty) < 2:
         return False
     avg_length = sum(len(text) for text in non_empty) / max(1, len(non_empty))
-    return avg_length >= 20.0
+    if len(non_empty) >= 3:
+        return avg_length >= 20.0
+    total_length = sum(len(text) for text in non_empty)
+    debate_like = any(
+        bool(signal.get("speaker_signal"))
+        or bool(signal.get("stance_signal"))
+        or bool(signal.get("source_ref_signal"))
+        or bool(signal.get("quote_signal"))
+        for signal in (analyze_debate_text_signals(text) for text in non_empty)
+    )
+    return debate_like and total_length >= 80
 
 
 def _detect_structure(rows: list[dict[str, Any]], meta: Dict[str, Any]) -> str:
@@ -1129,13 +1151,53 @@ def _detect_structure(rows: list[dict[str, Any]], meta: Dict[str, Any]) -> str:
     has_tabular = bool(sheet_frames) or _recover_tabular_context_from_table_cells(table_cells) is not None
     texts = _extract_text_fragments(rows, meta)
     has_stable_text = _stable_text_signal(texts)
+    if has_tabular and has_stable_text:
+        return "mixed"
     if has_tabular:
         return "tabular"
     if has_stable_text:
         return "text"
-    if has_tabular and has_stable_text:
-        return "mixed"
     return "unknown"
+
+
+def _merge_candidate_profiles(
+    primary: list[dict[str, Any]],
+    secondary: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for item in primary + secondary:
+        if not isinstance(item, dict):
+            continue
+        profile = str(item.get("profile") or "").strip()
+        if not profile:
+            continue
+        existing = merged.get(profile)
+        if existing is None:
+            merged[profile] = dict(item)
+            continue
+        matched_fields = {
+            str(field)
+            for field in existing.get("matched_fields", [])
+            if str(field).strip()
+        }
+        matched_fields.update(str(field) for field in item.get("matched_fields", []) if str(field).strip())
+        best = dict(existing)
+        if float(item.get("score") or 0.0) > float(existing.get("score") or 0.0):
+            best.update(item)
+        best["matched_fields"] = sorted(matched_fields)
+        best["recommended"] = bool(existing.get("recommended")) or bool(item.get("recommended"))
+        if not str(best.get("recommended_template_id") or "").strip():
+            best["recommended_template_id"] = str(item.get("recommended_template_id") or "")
+        signal_sources = {
+            str(existing.get("signal_source") or "").strip(),
+            str(item.get("signal_source") or "").strip(),
+        }
+        signal_sources.discard("")
+        best["signal_source"] = "+".join(sorted(signal_sources)) if signal_sources else ""
+        merged[profile] = best
+    values = list(merged.values())
+    values.sort(key=lambda item: (-float(item.get("score", 0.0)), -int(item.get("required_hits", 0)), str(item.get("profile") or "")))
+    return values
 
 
 def _content_candidate_profiles(rows: list[dict[str, Any]], meta: Dict[str, Any], req: IngestExtractReq) -> list[dict[str, Any]]:
@@ -1148,8 +1210,27 @@ def _content_candidate_profiles(rows: list[dict[str, Any]], meta: Dict[str, Any]
     claim_text_signal = _stable_text_signal(texts)
     url_signal = any(re.search(r"https?://|www\.", text, flags=re.I) for text in texts)
     speaker_signal = any(re.match(r"^[A-Za-z\u4e00-\u9fff0-9_]{1,24}[:：]", text) for text in texts[:10])
+    signal_rows = [analyze_debate_text_signals(text) for text in texts[:12]]
+    url_signal = any(bool(item.get("source_ref_signal")) for item in signal_rows)
+    speaker_signal = any(bool(item.get("speaker_signal")) for item in signal_rows)
+    stance_signal = any(bool(item.get("stance_signal")) for item in signal_rows)
+    quote_signal = any(bool(item.get("quote_signal")) for item in signal_rows)
+    signal_counts = {
+        "speaker_prefix": sum(1 for item in signal_rows if bool(item.get("speaker_signal"))),
+        "stance_marker": sum(1 for item in signal_rows if bool(item.get("stance_signal"))),
+        "source_reference": sum(1 for item in signal_rows if bool(item.get("source_ref_signal"))),
+        "quote_block": sum(1 for item in signal_rows if bool(item.get("quote_signal"))),
+    }
+    signal_hit_labels = [label for label, count in signal_counts.items() if int(count) > 0]
+    if signal_hit_labels:
+        signal_reason = "debate evidence signals found: " + "; ".join(
+            f"{label} {signal_counts[label]}/{len(signal_rows)}" for label in signal_hit_labels
+        )
+    else:
+        signal_reason = "no explicit debate evidence signals found in source text"
+    supporting_signal = speaker_signal or stance_signal or url_signal or quote_signal
     explicit_debate = canonical_profile == "debate_evidence"
-    if not explicit_debate and not claim_text_signal:
+    if not explicit_debate and not supporting_signal:
         return []
     matched_fields: list[str] = []
     if claim_text_signal or explicit_debate:
@@ -1158,21 +1239,38 @@ def _content_candidate_profiles(rows: list[dict[str, Any]], meta: Dict[str, Any]
         matched_fields.append("source_url")
     if speaker_signal:
         matched_fields.append("speaker")
+    if stance_signal:
+        matched_fields.append("stance")
+    if quote_signal:
+        matched_fields.append("quote_text")
     if not matched_fields:
         return []
-    confidence = round(min(0.97, 0.82 + max(0, len(matched_fields) - 1) * 0.05), 6)
+    required_total = 2 if (claim_text_signal or explicit_debate) else 1
+    required_hits = 0
+    if claim_text_signal or explicit_debate:
+        required_hits += 1
+    if supporting_signal:
+        required_hits += 1
+    required_coverage = round(required_hits / max(1, required_total), 6)
+    confidence = round(min(0.98, 0.8 + max(0, len(matched_fields) - 1) * 0.045), 6)
     return [
         {
             "profile": "debate_evidence",
             "score": confidence,
-            "required_hits": 1,
-            "required_total": 1,
+            "required_hits": required_hits,
+            "required_total": required_total,
             "avg_confidence": confidence,
-            "required_coverage": 1.0,
+            "required_coverage": 1.0 if explicit_debate else required_coverage,
             "recommended": True,
             "recommended_template_id": recommended_template_id_for_profile("debate_evidence"),
             "signal_source": "content",
             "matched_fields": matched_fields,
+            "signal_counts": signal_counts,
+            "signal_hit_summary": {
+                "input_text_count": len(signal_rows),
+                "hit_labels": signal_hit_labels,
+                "recommendation_reason": signal_reason,
+            },
         }
     ]
 
@@ -1341,9 +1439,25 @@ def _ingest_extract_metadata(rows: list[dict[str, Any]], meta: Dict[str, Any], r
             signal_source = "table_cells"
     elif input_format not in {"image", "pdf"} and rows:
         sample = rows[0] if isinstance(rows[0], dict) else {}
-        header_labels.extend([str(item) for item in sample.keys() if str(item).strip()])
-        sample_values_by_header = _build_header_sample_values(header_labels, rows, sheet_frames)
-        signal_source = "headers"
+        fallback_labels = [str(item) for item in sample.keys() if str(item).strip()]
+        generic_text_headers = {
+            "text",
+            "content",
+            "body",
+            "paragraph",
+            "source_type",
+            "source_file",
+            "source_path",
+            "page",
+            "row_index",
+            "sheet_name",
+            "chunk_index",
+            "chunk_seq",
+        }
+        if not fallback_labels or not all(label.strip().lower() in generic_text_headers for label in fallback_labels):
+            header_labels.extend(fallback_labels)
+            sample_values_by_header = _build_header_sample_values(header_labels, rows, sheet_frames)
+            signal_source = "headers"
     canonical_profile = str(req.canonical_profile or "").strip().lower()
     if header_labels:
         header_mapping = build_header_mapping(
@@ -1360,6 +1474,11 @@ def _ingest_extract_metadata(rows: list[dict[str, Any]], meta: Dict[str, Any], r
             sample_values_by_header=sample_values_by_header,
             signal_source=signal_source,
         )
+        if detected_structure in {"text", "mixed"}:
+            candidate_profiles = _merge_candidate_profiles(
+                candidate_profiles,
+                _content_candidate_profiles(rows, meta, req),
+            )
     else:
         header_mapping = []
         candidate_profiles = _content_candidate_profiles(rows, meta, req)

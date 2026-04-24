@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import importlib.util
 import json
 import os
@@ -36,7 +37,7 @@ _PROFILE_REQUIRED_FIELDS = {
     "bank_statement": ["account_no", "txn_date"],
     "customer_contact": ["customer_name", "phone"],
     "customer_ledger": ["customer_name", "phone", "amount", "biz_date"],
-    "debate_evidence": ["claim_text"],
+    "debate_evidence": ["claim_text", "source_path"],
 }
 
 
@@ -131,6 +132,8 @@ def load_sidecar_dataset(dataset_dir: str | Path) -> List[Dict[str, Any]]:
         scenario = load_json(scenario_dir / "scenario.json")
         expected_quality = load_json(scenario_dir / "expected_quality.json")
         expected_rows = load_jsonl(scenario_dir / "expected_rows.jsonl")
+        if bool(scenario.get("require_expected_rows", False)) and not expected_rows:
+            raise ValueError(f"scenario requires non-empty expected_rows.jsonl: {scenario_dir}")
         out.append(
             {
                 "id": str(item.get("id") or scenario.get("id") or rel_dir),
@@ -261,6 +264,17 @@ def compare_expected_rows(actual_rows: List[Dict[str, Any]], expected_rows: List
         compare_fields = sorted({key for row in expected_rows for key in row.keys()})
     actual = normalize_rows_for_compare(actual_rows, compare_fields)
     expected = normalize_rows_for_compare(expected_rows, compare_fields)
+    compare_mode = str(scenario.get("row_compare_mode") or "exact").strip().lower()
+    if compare_mode == "subset":
+        actual_counter = Counter(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in actual)
+        expected_counter = Counter(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in expected)
+        missing = []
+        for key, expected_count in expected_counter.items():
+            if actual_counter.get(key, 0) < expected_count:
+                missing.append(json.loads(key))
+        if missing:
+            return [f"rows subset mismatch for fields: {', '.join(compare_fields)}"]
+        return []
     if actual != expected:
         return [f"rows mismatch for fields: {', '.join(compare_fields)}"]
     return []

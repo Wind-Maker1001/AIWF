@@ -239,6 +239,99 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(len(meta["table_cells"]), 4)
         self.assertEqual(meta["engine_trace"][0]["engine"], "docling")
 
+    def test_load_pdf_input_uses_pypdf_fast_path_for_debate_text_pdfs(self):
+        pypdf_rows = [
+            {
+                "text": "Alice: We support tax incentives because they reduce transition costs.",
+                "source_file": "debate.pdf",
+                "source_path": "debate.pdf",
+                "source_type": "pdf",
+                "page": 1,
+            }
+        ]
+        with patch("aiwf.ingest_file_readers.read_pdf", return_value=pypdf_rows) as read_pdf:
+            with patch("aiwf.ingest_file_readers.extract_with_docling") as extract_docling:
+                rows, meta = load_pdf_input(
+                    "debate.pdf",
+                    {
+                        "text_by_line": True,
+                        "canonical_profile": "debate_evidence",
+                    },
+                )
+
+        self.assertEqual(rows, pypdf_rows)
+        read_pdf.assert_called_once()
+        extract_docling.assert_not_called()
+        self.assertEqual(meta["input_format"], "pdf")
+        self.assertEqual(meta["engine_trace"][0]["engine"], "pypdf")
+        self.assertTrue(meta["engine_trace"][0]["fast_path"])
+        self.assertFalse(meta["quality_blocked"])
+
+    def test_load_pdf_input_falls_back_to_docling_when_debate_text_is_too_sparse(self):
+        pypdf_rows = [
+            {
+                "text": "x",
+                "source_file": "scan.pdf",
+                "source_path": "scan.pdf",
+                "source_type": "pdf",
+                "page": 1,
+            }
+        ]
+        with patch("aiwf.ingest_file_readers.read_pdf", return_value=pypdf_rows) as read_pdf:
+            with patch("aiwf.ingest_file_readers.extract_with_docling") as extract_docling:
+                extract_docling.return_value = {
+                    "image_blocks": [
+                        {
+                            "block_id": "doc_blk_0001",
+                            "block_type": "text",
+                            "text": "Alice: OCR extracted enough debate text from the scanned page.",
+                            "page_no": 1,
+                            "line_no": 1,
+                        }
+                    ],
+                    "table_cells": [],
+                    "sheet_frames": [],
+                    "engine_trace": [{"engine": "docling", "ok": True}],
+                }
+                rows, meta = load_pdf_input(
+                    "scan.pdf",
+                    {
+                        "text_by_line": True,
+                        "canonical_profile": "debate_evidence",
+                        "pdf_text_fast_path_min_chars": 40,
+                    },
+                )
+
+        read_pdf.assert_called_once()
+        extract_docling.assert_called_once()
+        self.assertEqual(rows[0]["text"], "Alice: OCR extracted enough debate text from the scanned page.")
+        self.assertEqual(meta["engine_trace"][0]["engine"], "docling")
+
+    def test_load_pdf_input_keeps_docling_first_for_non_debate_pdfs(self):
+        with patch("aiwf.ingest_file_readers.read_pdf") as read_pdf:
+            with patch("aiwf.ingest_file_readers.extract_with_docling") as extract_docling:
+                extract_docling.return_value = {
+                    "image_blocks": [
+                        {
+                            "block_id": "doc_blk_0001",
+                            "block_type": "text",
+                            "text": "Acct No Posting Dt Amount",
+                            "page_no": 1,
+                            "line_no": 1,
+                        }
+                    ],
+                    "table_cells": [{"cell_id": "doc_cell_1", "row": 1, "col": 1, "text": "Acct No"}],
+                    "sheet_frames": [],
+                    "engine_trace": [{"engine": "docling", "ok": True}],
+                }
+                rows, meta = load_pdf_input("statement.pdf", {"text_by_line": True})
+
+        read_pdf.assert_not_called()
+        extract_docling.assert_called_once()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(meta["engine_trace"][0]["engine"], "docling")
+        self.assertEqual(len(meta["table_cells"]), 1)
+
     def test_extract_xlsx_rows_handles_chinese_multirow_headers_and_units(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = os.path.join(tmp, "cn_finance.xlsx")

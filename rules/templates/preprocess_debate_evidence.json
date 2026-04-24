@@ -2,6 +2,7 @@
   "preprocess": {
     "input_format": "jsonl",
     "output_format": "jsonl",
+    "canonical_profile": "debate_evidence",
     "header_map": {
       "Speaker": "speaker",
       "ClaimText": "claim_text",
@@ -15,9 +16,14 @@
     "field_transforms": [
       { "field": "speaker", "op": "trim" },
       { "field": "speaker", "op": "lower" },
-      { "field": "claim_text", "op": "remove_urls" },
+      { "field": "claim_text", "op": "strip_ocr_noise" },
+      { "field": "claim_text", "op": "collapse_duplicate_lines" },
+      { "field": "claim_text", "op": "clean_citation" },
       { "field": "claim_text", "op": "remove_emails" },
       { "field": "claim_text", "op": "collapse_whitespace" },
+      { "field": "speaker", "source_field": "claim_text", "op": "extract_speaker_prefix" },
+      { "field": "stance", "source_field": "claim_text", "op": "normalize_stance" },
+      { "field": "argument_role", "source_field": "claim_text", "op": "detect_quote_only" },
       { "field": "score", "op": "parse_number" },
       { "field": "score", "op": "round_number", "digits": 2 },
       {
@@ -30,17 +36,22 @@
     "row_filters": [
       { "field": "claim_text", "op": "exists" }
     ],
-    "deduplicate_by": ["source_path", "chunk_index", "claim_text"],
+    "deduplicate_by": ["source_path", "speaker", "source_domain", "claim_text"],
     "deduplicate_keep": "first",
     "drop_empty_rows": true,
     "xlsx_all_sheets": true,
     "ocr_lang": "chi_sim+eng",
     "ocr_config": "--oem 1 --psm 6",
     "ocr_preprocess": "adaptive",
+    "external_enrichment_mode": "off",
+    "document_parse_backend": "auto",
+    "citation_parse_backend": "auto",
+    "url_metadata_enrichment": true,
     "chunk_mode": "sentence",
     "chunk_field": "claim_text",
     "chunk_max_chars": 500,
     "standardize_evidence": true,
+    "quality_required_fields": ["claim_text", "source_path"],
     "detect_conflicts": true,
     "conflict_text_field": "claim_text",
     "conflict_positive_words": ["support", "agree", "approve", "true", "yes", "支持", "赞成", "正确"],

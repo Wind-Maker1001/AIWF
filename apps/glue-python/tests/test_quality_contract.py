@@ -83,12 +83,23 @@ class QualityContractTests(unittest.TestCase):
         self.assertEqual(registry["finance_statement"]["required_fields"], ["id", "amount"])
         self.assertEqual(registry["bank_statement"]["required_fields"], ["account_no", "txn_date"])
         self.assertEqual(registry["customer_ledger"]["required_fields"], ["customer_name", "phone", "amount", "biz_date"])
+        self.assertIn("speaker_role", registry["debate_evidence"]["string_fields"])
+        self.assertIn("argument_role", registry["debate_evidence"]["string_fields"])
+        self.assertIn("source_path", registry["debate_evidence"]["required_fields"])
         field, confidence, _matched = canonicalize_header(
             "\u672c\u671f\u91d1\u989d",
             {"canonical_profile": "finance_statement"},
         )
         self.assertEqual(field, "amount")
         self.assertGreaterEqual(confidence, 0.88)
+
+    def test_canonicalize_header_supports_debate_extended_aliases(self):
+        field, confidence, _matched = canonicalize_header(
+            "发言角色",
+            {"canonical_profile": "debate_evidence"},
+        )
+        self.assertEqual(field, "speaker_role")
+        self.assertGreaterEqual(confidence, 0.82)
 
     def test_normalize_value_for_field_handles_customer_ledger_amount_and_date(self):
         self.assertEqual(normalize_value_for_field("1,200", "amount"), 1200.0)

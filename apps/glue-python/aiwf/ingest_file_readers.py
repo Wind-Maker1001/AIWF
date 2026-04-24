@@ -98,6 +98,42 @@ def _docling_blocks_to_pdf_rows(blocks: List[Dict[str, Any]], path: str) -> List
     return rows
 
 
+def _debate_pdf_text_fast_path_enabled(options: Dict[str, Any]) -> bool:
+    if options.get("pdf_text_fast_path") is False:
+        return False
+    return str(options.get("canonical_profile") or "").strip().lower() == "debate_evidence"
+
+
+def _pdf_text_rows_are_sufficient(rows: List[Dict[str, Any]], options: Dict[str, Any]) -> bool:
+    min_rows = int(options.get("pdf_text_fast_path_min_rows", 1) or 1)
+    min_chars = int(options.get("pdf_text_fast_path_min_chars", 40) or 40)
+    text_chars = sum(len(str(row.get("text") or "").strip()) for row in rows)
+    return len(rows) >= min_rows and text_chars >= min_chars
+
+
+def _pypdf_meta(rows: List[Dict[str, Any]], *, fast_path: bool, reason: str = "") -> Dict[str, Any]:
+    text_chars = sum(len(str(row.get("text") or "").strip()) for row in rows)
+    trace = {
+        "engine": "pypdf",
+        "ok": True,
+        "fast_path": bool(fast_path),
+        "row_count": len(rows),
+        "text_chars": text_chars,
+    }
+    if reason:
+        trace["reason"] = reason
+    return {
+        "input_format": "pdf",
+        "engine_trace": [trace],
+        "image_blocks": [],
+        "table_cells": [],
+        "sheet_frames": [],
+        "quality_blocked": False,
+        "quality_metrics": {},
+        "quality_error": "",
+    }
+
+
 def read_image(
     path: str,
     *,
@@ -136,6 +172,15 @@ def load_docx_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, 
 
 
 def load_pdf_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    pypdf_rows: Optional[List[Dict[str, Any]]] = None
+    if _debate_pdf_text_fast_path_enabled(options):
+        try:
+            pypdf_rows = read_pdf(path, by_line=bool(options.get("text_by_line", False)))
+            if _pdf_text_rows_are_sufficient(pypdf_rows, options):
+                return pypdf_rows, _pypdf_meta(pypdf_rows, fast_path=True)
+        except Exception:
+            pypdf_rows = None
+
     docling = coerce_extraction_result(extract_with_docling(path))
     if docling is not None:
         rows = _docling_blocks_to_pdf_rows(list(docling.image_blocks or []), path)
@@ -153,6 +198,8 @@ def load_pdf_input(path: str, options: Dict[str, Any]) -> Tuple[List[Dict[str, A
             "quality_metrics": quality_report.get("metrics") if isinstance(quality_report.get("metrics"), dict) else {},
             "quality_error": "; ".join(quality_report.get("errors") or []),
         }
+    if pypdf_rows is not None:
+        return pypdf_rows, _pypdf_meta(pypdf_rows, fast_path=False, reason="insufficient_text_for_fast_path")
     return read_pdf(path, by_line=bool(options.get("text_by_line", False))), {"input_format": "pdf"}
 
 

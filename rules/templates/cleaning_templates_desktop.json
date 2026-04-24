@@ -11,7 +11,7 @@
     },
     {
       "id": "debate_evidence_v1",
-      "file": "generic_debate_evidence.json",
+      "file": "debate_evidence_v1.cleaning_spec_v2.json",
       "label": "Debate Evidence Template v1",
       "description": "Evidence-oriented cleaning template for debate text extraction and source tracking.",
       "template_expected_profile": "debate_evidence",
