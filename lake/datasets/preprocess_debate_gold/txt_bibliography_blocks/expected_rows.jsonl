@@ -1,0 +1,7 @@
+{"speaker":"","claim_text":"【Evidence Pack】","argument_role":"section","stance":"unknown","citation_text":"","source_url":"","source_domain":""}
+{"speaker":"Alice","claim_text":"We support youth tax games because they increase voluntary filing.","argument_role":"claim","stance":"pro","citation_text":"","source_url":"","source_domain":""}
+{"speaker":"","claim_text":"References:","argument_role":"section","stance":"unknown","citation_text":"","source_url":"","source_domain":""}
+{"speaker":"","claim_text":"Youth Tax Education Study 2024","argument_role":"citation","stance":"unknown","citation_text":"1. Youth Tax Education Study 2024","source_url":"https://tax.example/youth","source_domain":"tax.example"}
+{"speaker":"","claim_text":"Public Service Game Review 2025","argument_role":"citation","stance":"unknown","citation_text":"2. Public Service Game Review 2025","source_url":"https://games.example/review","source_domain":"games.example"}
+{"speaker":"Bob","claim_text":"We oppose gamified tax messaging because it may reduce perceived seriousness.","argument_role":"claim","stance":"con","citation_text":"Civic Trust Memo 2026","source_url":"https://civic.example/trust","source_domain":"civic.example"}
+{"speaker":"","claim_text":"Civic Trust Memo 2026","argument_role":"citation","stance":"unknown","citation_text":"Civic Trust Memo 2026","source_url":"https://civic.example/trust","source_domain":"civic.example"}

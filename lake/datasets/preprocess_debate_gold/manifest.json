@@ -1,0 +1,22 @@
+{
+  "schema_version": "preprocess_debate_gold.v1",
+  "scenarios": [
+    { "id": "pdf_bilingual_transcript", "dir": "pdf_bilingual_transcript" },
+    { "id": "xlsx_evidence_table", "dir": "xlsx_evidence_table" },
+    { "id": "txt_docx_inline_citation", "dir": "txt_docx_inline_citation" },
+    { "id": "mixed_duplicate_claims", "dir": "mixed_duplicate_claims" },
+    { "id": "txt_docx_conflict_bundle", "dir": "txt_docx_conflict_bundle" },
+    { "id": "txt_ocr_cleanup_bundle", "dir": "txt_ocr_cleanup_bundle" },
+    { "id": "mixed_modal_bundle", "dir": "mixed_modal_bundle" },
+    { "id": "txt_source_pack_template", "dir": "txt_source_pack_template" },
+    { "id": "txt_front_matter_metadata", "dir": "txt_front_matter_metadata" },
+    { "id": "txt_section_outline_bundle", "dir": "txt_section_outline_bundle" },
+    { "id": "txt_url_source_cards", "dir": "txt_url_source_cards" },
+    { "id": "txt_footnote_citations", "dir": "txt_footnote_citations" },
+    { "id": "txt_numbered_source_cards", "dir": "txt_numbered_source_cards" },
+    { "id": "txt_structural_source_attribution", "dir": "txt_structural_source_attribution" },
+    { "id": "txt_leading_source_and_token_backfill", "dir": "txt_leading_source_and_token_backfill" },
+    { "id": "txt_bibliography_blocks", "dir": "txt_bibliography_blocks" },
+    { "id": "txt_backend_fallback_compare", "dir": "txt_backend_fallback_compare" }
+  ]
+}

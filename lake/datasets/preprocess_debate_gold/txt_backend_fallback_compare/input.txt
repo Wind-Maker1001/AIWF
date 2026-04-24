@@ -1,0 +1,4 @@
+Moderator: Topic is whether public agencies should use memes.
+Alice: We support memes because they make tax education accessible.
+Source: Local fallback source card
+https://fallback.example/source

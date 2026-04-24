@@ -1,0 +1,6 @@
+Source: Civic Game Lab 2026 https://example.com/game-lab
+Alice: We support civic games because they improve recall.
+The pilot also increased voluntary filing intent.
+References:
+［7］ Mobility Brief 2026 https://city.example/brief
+Bob: We oppose bus lanes because delivery delays rise. ［7］

@@ -1,0 +1,8 @@
+{"speaker":"Alice","speaker_role":"speaker","argument_role":"claim","stance":"pro","source_domain":"climate.example","published_at":"","source_type":"txt"}
+{"speaker":"Reporter","speaker_role":"reporter","argument_role":"quote","stance":"pro","source_domain":"","published_at":"","source_type":"docx"}
+{"speaker":"Moderator","speaker_role":"moderator","argument_role":"moderation","stance":"unknown","source_domain":"","published_at":"","source_type":"pdf"}
+{"speaker":"A","speaker_role":"speaker","argument_role":"claim","stance":"pro","source_domain":"","published_at":"","source_type":"pdf"}
+{"speaker":"B","speaker_role":"speaker","argument_role":"claim","stance":"con","source_domain":"","published_at":"","source_type":"pdf"}
+{"speaker":"Alice","speaker_role":"","argument_role":"claim","stance":"pro","source_domain":"example.com","published_at":"2026-03-01","source_type":"xlsx"}
+{"speaker":"Bob","speaker_role":"","argument_role":"evidence","stance":"con","source_domain":"example.com","published_at":"2026-03-02","source_type":"xlsx"}
+{"speaker":"Moderator","speaker_role":"","argument_role":"quote","stance":"neutral","source_domain":"","published_at":"","source_type":"xlsx"}

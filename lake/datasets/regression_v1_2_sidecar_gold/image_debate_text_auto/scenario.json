@@ -12,7 +12,10 @@
   "expected_recommended_profile": "debate_evidence",
   "expected_recommended_template_id": "debate_evidence_v1",
   "expected_signal_source": "content",
+  "expected_row_fields": ["text"],
+  "row_compare_mode": "subset",
+  "require_expected_rows": true,
   "forbidden_recommended_profiles": ["finance_statement", "bank_statement", "customer_contact"],
-  "skip_row_compare": true,
+  "skip_row_compare": false,
   "consistency_compare": false
 }

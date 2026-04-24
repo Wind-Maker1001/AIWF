@@ -1,0 +1,4 @@
+{"claim_text":"【现状】","speaker":"","speaker_role":"structure","argument_role":"section","stance":"unknown","source_type":"txt"}
+{"claim_text":"2.1 头部企业:","speaker":"","speaker_role":"structure","argument_role":"section","stance":"unknown","source_type":"txt"}
+{"claim_text":"We support public transit because it reduces congestion.","speaker":"A","speaker_role":"speaker","argument_role":"claim","stance":"pro","source_type":"txt"}
+{"claim_text":"We oppose the policy because it raises taxes.","speaker":"B","speaker_role":"speaker","argument_role":"claim","stance":"con","source_type":"txt"}

@@ -1,0 +1,2 @@
+{"speaker":"Alice","speaker_role":"speaker","argument_role":"claim","stance":"pro","source_domain":"climate.example","citation_text":"[A1]","quote_text":"","source_type":"txt"}
+{"speaker":"Reporter","speaker_role":"reporter","argument_role":"quote","stance":"pro","source_domain":"","citation_text":"","quote_text":"Cleaner air","source_type":"docx"}

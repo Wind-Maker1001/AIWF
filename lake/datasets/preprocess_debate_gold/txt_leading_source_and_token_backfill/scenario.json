@@ -1,0 +1,44 @@
+{
+  "id": "txt_leading_source_and_token_backfill",
+  "input_files": ["input.txt"],
+  "preprocess_spec": {
+    "output_format": "jsonl",
+    "standardize_evidence": true,
+    "canonical_profile": "debate_evidence",
+    "generate_quality_report": true,
+    "text_split_by_line": true
+  },
+  "expected_row_fields": [
+    "speaker",
+    "claim_text",
+    "argument_role",
+    "stance",
+    "citation_text",
+    "source_title",
+    "source_url",
+    "source_domain"
+  ],
+  "expected_metrics": {
+    "row_count": 6,
+    "speaker_coverage": 0.666667,
+    "speaker_role_coverage": 0.666667,
+    "speaker_attribution_coverage": 0.666667,
+    "stance_coverage": 0.666667,
+    "debate_topic_coverage": 1.0,
+    "language_coverage": 1.0,
+    "source_ref_coverage": 1.0,
+    "quote_only_ratio": 0.0,
+    "duplicate_claim_ratio": 0.0,
+    "source_title_resolution_rate": 1.0,
+    "citation_parse_success_rate": 1.0
+  },
+  "expected_raw_signal_summary": {
+    "input_row_count": 6,
+    "speaker_signal_rows": 2,
+    "stance_signal_rows": 2,
+    "source_ref_signal_rows": 3,
+    "quote_signal_rows": 0,
+    "ocr_noise_rows": 0
+  },
+  "expected_warnings": []
+}

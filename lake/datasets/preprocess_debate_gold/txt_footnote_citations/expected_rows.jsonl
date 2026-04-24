@@ -1,0 +1,4 @@
+{"speaker":"Alice","claim_text":"We support bus lanes because they reduce commute time.","argument_role":"claim","stance":"pro","citation_text":"[1]","source_url":"https://city.example/bus-lanes","source_domain":"city.example","conflict_flag":true}
+{"speaker":"","claim_text":"City Mobility Lab 2024","argument_role":"citation","stance":"unknown","citation_text":"[1]","source_url":"https://city.example/bus-lanes","source_domain":"city.example","conflict_flag":false}
+{"speaker":"Bob","claim_text":"We oppose bus lanes because delivery delays rise.","argument_role":"claim","stance":"con","citation_text":"[2]","source_url":"https://freight.example/brief","source_domain":"freight.example","conflict_flag":true}
+{"speaker":"","claim_text":"Freight Association Brief 2025","argument_role":"citation","stance":"unknown","citation_text":"[2]","source_url":"https://freight.example/brief","source_domain":"freight.example","conflict_flag":false}

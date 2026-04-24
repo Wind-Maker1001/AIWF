@@ -1,0 +1,3 @@
+{"speaker":"Alice","argument_role":"claim","stance":"pro","debate_topic":"bus lanes","conflict_topic":"bus lanes","conflict_polarity":"pro","conflict_flag":true,"source_type":"txt"}
+{"speaker":"Bob","argument_role":"claim","stance":"con","debate_topic":"bus lanes","conflict_topic":"bus lanes","conflict_polarity":"con","conflict_flag":true,"source_type":"txt"}
+{"speaker":"Reporter","argument_role":"quote","stance":"unknown","debate_topic":"bus lanes was phrase both teams","conflict_topic":"bus lanes was phrase both teams","conflict_polarity":"unknown","conflict_flag":false,"source_type":"docx"}
