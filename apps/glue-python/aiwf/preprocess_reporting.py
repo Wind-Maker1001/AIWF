@@ -226,14 +226,14 @@ def _looks_ocr_noise(value: Any) -> bool:
 
 def _collect_input_signal_rows(spec: Dict[str, Any], input_meta: Dict[str, Any]) -> List[Dict[str, Any]]:
     if isinstance(spec.get("_input_rows"), list):
-        return [dict(item) for item in spec.get("_input_rows") if isinstance(item, dict)]
+        return [item for item in spec.get("_input_rows") if isinstance(item, dict)]
     file_results = input_meta.get("file_results") if isinstance(input_meta.get("file_results"), list) else []
     rows: List[Dict[str, Any]] = []
     for item in file_results:
         if not isinstance(item, dict):
             continue
         sample_rows = item.get("sample_rows") if isinstance(item.get("sample_rows"), list) else []
-        rows.extend(dict(sample) for sample in sample_rows if isinstance(sample, dict))
+        rows.extend(sample for sample in sample_rows if isinstance(sample, dict))
     return rows
 
 

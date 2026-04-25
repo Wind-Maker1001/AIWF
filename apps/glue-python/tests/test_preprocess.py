@@ -1151,6 +1151,45 @@ class PreprocessTests(unittest.TestCase):
                 ["document backend azure_docintelligence failed and local fallback produced no source/citation structure"],
             )
 
+    def test_preprocess_explicit_azure_warns_without_quality_report_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "raw.jsonl")
+            dst = os.path.join(tmp, "out.jsonl")
+            pdf_path = os.path.join(tmp, "pack.pdf")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "text": "Alice: We support civic games because they improve recall.",
+                            "source_path": pdf_path,
+                            "page": 2,
+                        }
+                    )
+                    + "\n"
+                )
+
+            with patch(
+                "aiwf.preprocess_enrichment._fetch_azure_layout",
+                return_value={"ok": False, "error": "azure timeout"},
+            ):
+                res = preprocess.preprocess_file(
+                    src,
+                    dst,
+                    {
+                        "input_format": "jsonl",
+                        "output_format": "jsonl",
+                        "standardize_evidence": True,
+                        "generate_quality_report": False,
+                        "external_enrichment_mode": "public",
+                        "document_parse_backend": "azure_docintelligence",
+                    },
+                )
+
+            rows = preprocess._read_jsonl(dst)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["speaker"], "Alice")
+            self.assertIsNone(res["quality_report_path"])
+
     def test_preprocess_azure_layout_roles_promote_structure_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = os.path.join(tmp, "raw.jsonl")
@@ -2473,6 +2512,7 @@ class PreprocessTests(unittest.TestCase):
                         "input_format": "jsonl",
                         "output_format": "jsonl",
                         "standardize_evidence": True,
+                        "generate_quality_report": True,
                         "header_map": {
                             "Speaker": "speaker",
                             "ClaimText": "claim_text",
@@ -2509,6 +2549,7 @@ class PreprocessTests(unittest.TestCase):
                         "input_format": "jsonl",
                         "output_format": "jsonl",
                         "standardize_evidence": True,
+                        "generate_quality_report": True,
                         "header_map": {
                             "ClaimText": "claim_text",
                             "SourceTitle": "source_title",

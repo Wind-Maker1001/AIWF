@@ -34,7 +34,7 @@ def preprocess_file_impl(
             str(spec.get("quality_report_path") or f"{os.path.basename(output_path)}.quality.json"),
         )
         write_json(quality_report_path, report)
-    if bool(report.get("blocked")):
+    if bool(spec.get("generate_quality_report", False)) and bool(report.get("blocked")):
         errors = [str(item) for item in (report.get("errors") or []) if str(item).strip()]
         raise RuntimeError("; ".join(errors) or "preprocess quality blocked")
     out_fmt = write_rows(output_path, out_rows, spec)
