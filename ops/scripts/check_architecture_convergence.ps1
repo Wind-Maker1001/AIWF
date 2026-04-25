@@ -122,6 +122,7 @@ $candidateFiles = Get-ChildItem -Path $RepoRoot -Recurse -File -ErrorAction Sile
     -and $_.FullName -notmatch "\\target\\" `
     -and $_.FullName -notmatch "\\bin\\" `
     -and $_.FullName -notmatch "\\obj\\" `
+    -and $_.FullName -notmatch "\\ops\\logs\\" `
     -and $_.FullName -notmatch "\\docs\\archive\\" `
     -and $_.FullName -notmatch "check_architecture_convergence\.ps1$" `
     -and $_.FullName -notmatch "ci_check\.ps1$"

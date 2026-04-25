@@ -140,39 +140,6 @@ public sealed record GovernanceControlPlaneBoundary(
 {
     public GovernanceSurfaceItem? FindSurface(string capability) =>
         GovernanceSurfaces.FirstOrDefault(item => string.Equals(item.Capability, capability, StringComparison.Ordinal));
-
-    public string ResolveRoutePrefix(string capability, string fallbackPrefix, string? preferredOwnedPrefix = null)
-    {
-        var surface = FindSurface(capability);
-        if (surface is null)
-        {
-            return fallbackPrefix;
-        }
-
-        if (!string.IsNullOrWhiteSpace(preferredOwnedPrefix))
-        {
-            var owned = surface.OwnedRoutePrefixes.FirstOrDefault(prefix =>
-                string.Equals(prefix, preferredOwnedPrefix, StringComparison.Ordinal));
-            if (string.IsNullOrWhiteSpace(owned))
-            {
-                var preferredLeaf = preferredOwnedPrefix.Trim().Trim('/').Split('/').LastOrDefault() ?? string.Empty;
-                if (!string.IsNullOrWhiteSpace(preferredLeaf))
-                {
-                    owned = surface.OwnedRoutePrefixes.FirstOrDefault(prefix =>
-                    {
-                        var candidateLeaf = prefix.Trim().Trim('/').Split('/').LastOrDefault() ?? string.Empty;
-                        return candidateLeaf.StartsWith(preferredLeaf, StringComparison.Ordinal);
-                    });
-                }
-            }
-            if (!string.IsNullOrWhiteSpace(owned))
-            {
-                return owned;
-            }
-        }
-
-        return string.IsNullOrWhiteSpace(surface.RoutePrefix) ? fallbackPrefix : surface.RoutePrefix;
-    }
 }
 
 public sealed class GovernanceBridgeClient
@@ -754,15 +721,38 @@ public sealed class GovernanceBridgeClient
         CancellationToken cancellationToken = default)
     {
         var boundary = await GetGovernanceControlPlaneBoundaryAsync(baseUrl, apiKey, cancellationToken);
+        var expectedRoutePrefix = GovernanceCapabilitiesGenerated.ResolveRoutePrefix(capability, preferredOwnedPrefix);
+        if (string.IsNullOrWhiteSpace(expectedRoutePrefix))
+        {
+            throw new InvalidOperationException($"governance generated route prefix missing for capability: {capability}");
+        }
         var surface = boundary.FindSurface(capability);
         if (surface is null)
         {
             throw new InvalidOperationException($"governance boundary missing capability: {capability}");
         }
-        if (string.IsNullOrWhiteSpace(surface.RoutePrefix))
+        if (!GovernanceCapabilitiesGenerated.CapabilityOwnsRoutePrefix(capability, expectedRoutePrefix))
         {
-            throw new InvalidOperationException($"governance boundary route prefix missing for capability: {capability}");
+            throw new InvalidOperationException($"governance generated route prefix unsupported for capability: {capability}");
         }
-        return boundary.ResolveRoutePrefix(capability, surface.RoutePrefix, preferredOwnedPrefix);
+        if (!SurfaceOwnsRoutePrefix(surface, expectedRoutePrefix))
+        {
+            throw new InvalidOperationException($"governance boundary route prefix drift for capability: {capability}; expected {expectedRoutePrefix}");
+        }
+        return expectedRoutePrefix;
+    }
+
+    private static bool SurfaceOwnsRoutePrefix(GovernanceSurfaceItem surface, string routePrefix)
+    {
+        var normalizedRoutePrefix = (routePrefix ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalizedRoutePrefix))
+        {
+            return false;
+        }
+        if (string.Equals(surface.RoutePrefix, normalizedRoutePrefix, StringComparison.Ordinal))
+        {
+            return true;
+        }
+        return surface.OwnedRoutePrefixes.Any(prefix => string.Equals(prefix, normalizedRoutePrefix, StringComparison.Ordinal));
     }
 }
