@@ -65,10 +65,10 @@ $activeFallbackIds = @()
 $activeFallbackCount = 0
 $localLegacyActiveMatches = @()
 $canonicalApiTests = @(
-  "apps/glue-python/tests/test_app.py::AppRouteTests::test_workflow_app_routes_store_backend_owned_registry_entries",
-  "apps/glue-python/tests/test_app.py::AppRouteTests::test_workflow_version_routes_store_and_compare_backend_owned_snapshots",
-  "apps/glue-python/tests/test_app.py::AppRouteTests::test_workflow_version_routes_accept_node_config_semantics_owned_by_desktop",
-  "apps/glue-python/tests/test_app.py::AppRouteTests::test_run_reference_rejects_legacy_payload_fields"
+  "tests.test_app.AppRouteTests.test_workflow_app_routes_store_backend_owned_registry_entries",
+  "tests.test_app.AppRouteTests.test_workflow_version_routes_store_and_compare_backend_owned_snapshots",
+  "tests.test_app.AppRouteTests.test_workflow_version_routes_accept_node_config_semantics_owned_by_desktop",
+  "tests.test_app.AppRouteTests.test_run_reference_rejects_legacy_payload_fields"
 )
 
 if (Test-Path $inventoryPath) {
@@ -141,9 +141,34 @@ Push-Location $RepoRoot
 try {
   $oldPythonPath = $env:PYTHONPATH
   $env:PYTHONPATH = Join-Path $RepoRoot "apps\glue-python"
-  & python -m pytest @canonicalApiTests -q
+  Push-Location (Join-Path $RepoRoot "apps\glue-python")
+  try {
+    $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) ("architecture_convergence_unittest_stdout_{0}.log" -f ([guid]::NewGuid().ToString("N")))
+    $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) ("architecture_convergence_unittest_stderr_{0}.log" -f ([guid]::NewGuid().ToString("N")))
+    try {
+      $pythonArgs = @("-m", "unittest")
+      $pythonArgs += $canonicalApiTests
+      $process = Start-Process -FilePath "python" -ArgumentList $pythonArgs -Wait -NoNewWindow -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+      $canonicalApiTestOutput = @()
+      if (Test-Path $stdoutPath) {
+        $canonicalApiTestOutput += Get-Content -Encoding UTF8 $stdoutPath
+      }
+      if (Test-Path $stderrPath) {
+        $canonicalApiTestOutput += Get-Content -Encoding UTF8 $stderrPath
+      }
+      $LASTEXITCODE = if ($process) { $process.ExitCode } else { 1 }
+    } finally {
+      Remove-Item $stdoutPath -ErrorAction SilentlyContinue
+      Remove-Item $stderrPath -ErrorAction SilentlyContinue
+    }
+  } finally {
+    Pop-Location
+  }
   if ($LASTEXITCODE -ne 0) {
     $issues += "canonical workflow API contract tests failed"
+    if ($null -ne $canonicalApiTestOutput) {
+      $issues += @($canonicalApiTestOutput | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
   }
 } finally {
   if ($null -eq $oldPythonPath) {
