@@ -3,6 +3,25 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List
 
 
+_STANDARDIZED_EVIDENCE_DEDUP_WARN_FIELDS = {
+    "text": "claim_text",
+    "content": "claim_text",
+    "body": "claim_text",
+    "paragraph": "claim_text",
+    "claim": "claim_text",
+    "author": "speaker",
+    "name": "speaker",
+    "speaker_name": "speaker",
+    "url": "source_url",
+    "link": "source_url",
+    "source_link": "source_url",
+    "title": "source_title",
+    "source_name": "source_title",
+    "topic": "debate_topic",
+    "lang": "language",
+}
+
+
 def validate_preprocess_spec_impl(
     spec: Dict[str, Any],
     *,
@@ -55,6 +74,35 @@ def validate_preprocess_spec_impl(
         val = str(spec.get("header_mapping_mode") or "").strip().lower()
         if val and val not in {"strict", "auto"}:
             errors.append("header_mapping_mode must be strict|auto")
+    if "external_enrichment_mode" in spec and not isinstance(spec.get("external_enrichment_mode"), str):
+        errors.append("external_enrichment_mode must be string")
+    if "external_enrichment_mode" in spec:
+        val = str(spec.get("external_enrichment_mode") or "").strip().lower()
+        if val and val not in {"off", "private", "public", "auto"}:
+            errors.append("external_enrichment_mode must be off|private|public|auto")
+    if "document_parse_backend" in spec and not isinstance(spec.get("document_parse_backend"), str):
+        errors.append("document_parse_backend must be string")
+    if "document_parse_backend" in spec:
+        val = str(spec.get("document_parse_backend") or "").strip().lower()
+        if val and val not in {"auto", "local", "azure_docintelligence"}:
+            errors.append("document_parse_backend must be auto|local|azure_docintelligence")
+    if "citation_parse_backend" in spec and not isinstance(spec.get("citation_parse_backend"), str):
+        errors.append("citation_parse_backend must be string")
+    if "citation_parse_backend" in spec:
+        val = str(spec.get("citation_parse_backend") or "").strip().lower()
+        if val and val not in {"auto", "regex", "grobid"}:
+            errors.append("citation_parse_backend must be auto|regex|grobid")
+    if "url_metadata_enrichment" in spec and not isinstance(spec.get("url_metadata_enrichment"), bool):
+        errors.append("url_metadata_enrichment must be boolean")
+    if "pdf_text_fast_path" in spec and not isinstance(spec.get("pdf_text_fast_path"), bool):
+        errors.append("pdf_text_fast_path must be boolean")
+    for key in ("pdf_text_fast_path_min_rows", "pdf_text_fast_path_min_chars"):
+        if key in spec:
+            try:
+                if int(spec.get(key)) <= 0:
+                    errors.append(f"{key} must be > 0")
+            except Exception:
+                errors.append(f"{key} must be integer")
     if "standardize_evidence" in spec and not isinstance(spec.get("standardize_evidence"), bool):
         errors.append("standardize_evidence must be boolean")
     if "generate_quality_report" in spec and not isinstance(spec.get("generate_quality_report"), bool):
@@ -103,6 +151,18 @@ def validate_preprocess_spec_impl(
         errors.append("deduplicate_keep must be 'first' or 'last'")
     if "deduplicate_by" in spec and not isinstance(spec.get("deduplicate_by"), list):
         errors.append("deduplicate_by must be an array")
+    elif bool(spec.get("standardize_evidence", False)):
+        dedup_fields = [str(item).strip() for item in (spec.get("deduplicate_by") or []) if str(item).strip()]
+        remapped = [
+            f"{field}->{_STANDARDIZED_EVIDENCE_DEDUP_WARN_FIELDS[field.lower()]}"
+            for field in dedup_fields
+            if field.lower() in _STANDARDIZED_EVIDENCE_DEDUP_WARN_FIELDS
+        ]
+        if remapped:
+            warnings.append(
+                "deduplicate_by uses pre-standardization fields and will be remapped: "
+                + ", ".join(remapped)
+            )
 
     allowed_input = {"", "csv", "json", "jsonl"}
     if str(spec.get("input_format") or "").strip().lower() not in allowed_input:
@@ -152,6 +212,13 @@ def validate_preprocess_spec_impl(
         "xlsx_all_sheets",
         "include_hidden_sheets",
         "header_mapping_mode",
+        "external_enrichment_mode",
+        "document_parse_backend",
+        "citation_parse_backend",
+        "url_metadata_enrichment",
+        "pdf_text_fast_path",
+        "pdf_text_fast_path_min_rows",
+        "pdf_text_fast_path_min_chars",
         "max_retries",
         "on_file_error",
         "standardize_evidence",

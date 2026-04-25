@@ -1,0 +1,36 @@
+{
+  "id": "txt_ocr_cleanup_bundle",
+  "input_files": ["input.txt"],
+  "preprocess_spec": {
+    "output_format": "jsonl",
+    "standardize_evidence": true,
+    "generate_quality_report": true,
+    "text_split_by_line": true,
+    "field_transforms": [
+      { "field": "text", "op": "strip_ocr_noise" }
+    ],
+    "row_filters": [
+      { "field": "text", "op": "exists" }
+    ],
+    "deduplicate_by": ["source_path", "text"]
+  },
+  "expected_row_fields": ["speaker", "speaker_role", "argument_role", "stance", "source_url", "source_domain", "source_type", "claim_text"],
+  "expected_metrics": {
+    "row_count": 2,
+    "speaker_coverage": 1.0,
+    "stance_coverage": 1.0,
+    "source_ref_coverage": 1.0,
+    "quote_only_ratio": 0.0,
+    "ocr_noise_ratio": 0.0,
+    "duplicate_claim_ratio": 0.0
+  },
+  "expected_raw_signal_summary": {
+    "input_row_count": 4,
+    "speaker_signal_rows": 2,
+    "stance_signal_rows": 2,
+    "source_ref_signal_rows": 1,
+    "quote_signal_rows": 0,
+    "ocr_noise_rows": 0
+  },
+  "expected_warnings": []
+}

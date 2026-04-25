@@ -48,6 +48,12 @@ _SUPPORTED_PREPROCESS_FIELD_OPS = {
     "round_number",
     "parse_date",
     "extract_regex",
+    "extract_speaker_prefix",
+    "normalize_stance",
+    "clean_citation",
+    "strip_ocr_noise",
+    "collapse_duplicate_lines",
+    "detect_quote_only",
     "scale_number",
     "map_value",
 }
@@ -187,6 +193,14 @@ def compile_cleaning_params_to_spec(params: Mapping[str, Any]) -> dict[str, Any]
         "include_hidden_sheets": bool(params.get("include_hidden_sheets", False)),
         "sheet_allowlist": _as_str_list(params.get("sheet_allowlist")),
         "sheet_profiles": sheet_profiles,
+        "external_enrichment_mode": str(params.get("external_enrichment_mode") or "off").strip().lower() or "off",
+        "document_parse_backend": str(params.get("document_parse_backend") or "auto").strip().lower() or "auto",
+        "citation_parse_backend": str(params.get("citation_parse_backend") or "auto").strip().lower() or "auto",
+        "url_metadata_enrichment": (
+            bool(params.get("url_metadata_enrichment"))
+            if "url_metadata_enrichment" in params
+            else profile_name == "debate_evidence"
+        ),
         "on_file_error": str(params.get("on_file_error") or "").strip().lower(),
     }
 
@@ -309,6 +323,8 @@ def _compile_preprocess_field_transform(item: Mapping[str, Any]) -> tuple[Option
     if op not in _SUPPORTED_PREPROCESS_FIELD_OPS:
         return None, f"unsupported field transform: {op}"
     payload: dict[str, Any] = {"field": field, "op": op}
+    if "source_field" in item:
+        payload["source_field"] = str(item.get("source_field") or "")
     if "digits" in item:
         payload["digits"] = int(item.get("digits") or 0)
     if "pattern" in item:
@@ -383,6 +399,14 @@ def compile_preprocess_spec_to_spec(spec_obj: Mapping[str, Any]) -> dict[str, An
         "include_hidden_sheets": bool(spec_obj.get("include_hidden_sheets", False)),
         "sheet_allowlist": _as_str_list(spec_obj.get("sheet_allowlist")),
         "sheet_profiles": _as_dict(spec_obj.get("sheet_profiles")),
+        "external_enrichment_mode": str(spec_obj.get("external_enrichment_mode") or "off").strip().lower() or "off",
+        "document_parse_backend": str(spec_obj.get("document_parse_backend") or "auto").strip().lower() or "auto",
+        "citation_parse_backend": str(spec_obj.get("citation_parse_backend") or "auto").strip().lower() or "auto",
+        "url_metadata_enrichment": (
+            bool(spec_obj.get("url_metadata_enrichment"))
+            if "url_metadata_enrichment" in spec_obj
+            else profile_name == "debate_evidence"
+        ),
         "on_file_error": str(spec_obj.get("on_file_error") or "skip").strip().lower(),
     }
     spec["schema"] = {
@@ -429,6 +453,14 @@ def compile_preprocess_spec_to_spec(spec_obj: Mapping[str, Any]) -> dict[str, An
             "conflict_text_field": str(spec_obj.get("conflict_text_field") or "").strip(),
             "conflict_positive_words": _as_str_list(spec_obj.get("conflict_positive_words")),
             "conflict_negative_words": _as_str_list(spec_obj.get("conflict_negative_words")),
+            "external_enrichment_mode": str(spec_obj.get("external_enrichment_mode") or "off").strip().lower() or "off",
+            "document_parse_backend": str(spec_obj.get("document_parse_backend") or "auto").strip().lower() or "auto",
+            "citation_parse_backend": str(spec_obj.get("citation_parse_backend") or "auto").strip().lower() or "auto",
+            "url_metadata_enrichment": (
+                bool(spec_obj.get("url_metadata_enrichment"))
+                if "url_metadata_enrichment" in spec_obj
+                else profile_name == "debate_evidence"
+            ),
         },
     }
     spec["quality"] = {
@@ -579,7 +611,11 @@ def candidate_profiles_from_headers(
             previous = matched_fields.get(field)
             if previous is None or confidence > previous:
                 matched_fields[field] = confidence
-        required_fields = [str(item) for item in profile.get("required_fields", [])]
+        required_fields = [
+            str(item)
+            for item in profile.get("required_fields", [])
+            if str(item).strip() and str(item).strip() not in {"source_path", "source_file", "source_type", "page", "row_index", "chunk_index"}
+        ]
         required_hits = sum(1 for field in required_fields if field in matched_fields)
         if not matched_fields:
             continue

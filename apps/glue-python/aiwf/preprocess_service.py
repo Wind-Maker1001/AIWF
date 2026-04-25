@@ -22,19 +22,22 @@ def preprocess_file_impl(
     if bool(meta.get("quality_blocked")):
         raise RuntimeError(str(meta.get("quality_error") or "input quality blocked"))
     out_rows, summary = preprocess_rows(rows, spec)
-    out_fmt = write_rows(output_path, out_rows, spec)
     output_dir = resolve_path_within_root(
         os.path.dirname(output_path) or ".",
         ".",
     )
+    report = build_quality_report(out_rows, summary, {**spec, "_input_meta": meta, "_input_rows": rows})
     quality_report_path = None
     if bool(spec.get("generate_quality_report", False)):
         quality_report_path = resolve_path_within_root(
             output_dir,
             str(spec.get("quality_report_path") or f"{os.path.basename(output_path)}.quality.json"),
         )
-        report = build_quality_report(out_rows, summary, {**spec, "_input_meta": meta})
         write_json(quality_report_path, report)
+    if bool(spec.get("generate_quality_report", False)) and bool(report.get("blocked")):
+        errors = [str(item) for item in (report.get("errors") or []) if str(item).strip()]
+        raise RuntimeError("; ".join(errors) or "preprocess quality blocked")
+    out_fmt = write_rows(output_path, out_rows, spec)
     canonical_bundle = None
     if bool(spec.get("export_canonical_bundle", False)):
         canonical_bundle = export_canonical_bundle(

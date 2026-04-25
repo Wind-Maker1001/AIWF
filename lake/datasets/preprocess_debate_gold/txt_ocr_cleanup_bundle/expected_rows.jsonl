@@ -1,0 +1,2 @@
+{"speaker":"A","speaker_role":"speaker","argument_role":"claim","stance":"pro","source_url":"https://example.com/report","source_domain":"example.com","source_type":"txt","claim_text":"We support public transit because it reduces congestion."}
+{"speaker":"","speaker_role":"source","argument_role":"citation","stance":"unknown","source_url":"https://example.com/report","source_domain":"example.com","source_type":"txt","claim_text":"https://example.com/report"}

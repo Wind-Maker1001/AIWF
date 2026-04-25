@@ -1,0 +1,29 @@
+{
+  "id": "mixed_duplicate_claims",
+  "input_files": ["input.txt", "input.docx"],
+  "preprocess_spec": {
+    "output_format": "jsonl",
+    "standardize_evidence": true,
+    "generate_quality_report": true,
+    "text_split_by_line": true
+  },
+  "expected_row_fields": ["speaker", "stance", "source_domain", "source_type", "evidence_id"],
+  "expected_metrics": {
+    "row_count": 2,
+    "speaker_coverage": 1.0,
+    "source_ref_coverage": 1.0,
+    "quote_only_ratio": 0.0,
+    "duplicate_claim_ratio": 0.5
+  },
+  "expected_raw_signal_summary": {
+    "input_row_count": 2,
+    "speaker_signal_rows": 2,
+    "stance_signal_rows": 2,
+    "source_ref_signal_rows": 2,
+    "quote_signal_rows": 0,
+    "ocr_noise_rows": 0
+  },
+  "expected_warnings": [
+    "duplicate claim ratio is high"
+  ]
+}

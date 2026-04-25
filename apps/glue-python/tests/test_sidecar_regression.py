@@ -1,4 +1,7 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from aiwf.sidecar_regression import (
     _expected_reason_counts,
@@ -7,6 +10,7 @@ from aiwf.sidecar_regression import (
     compare_expected_rows,
     compute_common_python_metrics,
     evaluate_consistency_report,
+    load_sidecar_dataset,
     validate_ingest_extract_contract,
 )
 
@@ -210,6 +214,50 @@ class SidecarRegressionTests(unittest.TestCase):
         ]
         errors = compare_expected_rows(actual, expected, {"expected_row_fields": ["customer_name", "phone", "sheet_name"]})
         self.assertEqual(errors, [])
+
+    def test_compare_expected_rows_supports_subset_mode(self):
+        actual = [
+            {"text": "Claim: Tax policy should be expanded because it improves compliance, lowers", "row_index": 2},
+            {"text": "Speaker: Analyst Zhang argues that a broader policy baseline reduces", "row_index": 4},
+            {"text": "Source: https://example.org/policy-debate", "row_index": 8},
+        ]
+        expected = [
+            {"text": "Speaker: Analyst Zhang argues that a broader policy baseline reduces"},
+            {"text": "Source: https://example.org/policy-debate"},
+        ]
+        errors = compare_expected_rows(
+            actual,
+            expected,
+            {"expected_row_fields": ["text"], "row_compare_mode": "subset"},
+        )
+        self.assertEqual(errors, [])
+
+    def test_load_sidecar_dataset_requires_non_empty_expected_rows_when_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scenario_dir = root / "image_debate_text_auto"
+            scenario_dir.mkdir()
+            (root / "expectations.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "sidecar_gold.v1",
+                        "scenarios": [{"id": "image_debate_text_auto", "dir": "image_debate_text_auto"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (scenario_dir / "scenario.json").write_text(
+                json.dumps({"id": "image_debate_text_auto", "require_expected_rows": True}),
+                encoding="utf-8",
+            )
+            (scenario_dir / "expected_quality.json").write_text(
+                json.dumps({"quality_blocked": False}),
+                encoding="utf-8",
+            )
+            (scenario_dir / "expected_rows.jsonl").write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "requires non-empty expected_rows.jsonl"):
+                load_sidecar_dataset(root)
 
     def test_compute_common_python_metrics_for_finance_profile(self):
         metrics = compute_common_python_metrics(

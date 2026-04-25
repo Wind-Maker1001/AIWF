@@ -22,3 +22,7 @@ phonenumbers>=8.13
 python-calamine>=0.3
 paddleocr>=2.8
 docling>=2.0
+ftfy>=6.2
+trafilatura>=1.12
+grobid-client-python>=0.1.4
+azure-ai-documentintelligence>=1.0.0

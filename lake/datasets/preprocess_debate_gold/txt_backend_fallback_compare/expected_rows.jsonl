@@ -1,0 +1,3 @@
+{"speaker":"Moderator","claim_text":"Topic is whether public agencies should use memes.","speaker_role":"moderator","argument_role":"moderation","stance":"unknown","source_title":"","source_url":"","source_domain":""}
+{"speaker":"Alice","claim_text":"We support memes because they make tax education accessible.","speaker_role":"speaker","argument_role":"claim","stance":"pro","source_title":"Local fallback source card","source_url":"https://fallback.example/source","source_domain":"fallback.example"}
+{"speaker":"","claim_text":"Local fallback source card","speaker_role":"source","argument_role":"citation","stance":"unknown","source_title":"Local fallback source card","source_url":"https://fallback.example/source","source_domain":"fallback.example"}

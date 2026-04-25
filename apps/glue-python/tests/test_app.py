@@ -139,12 +139,25 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("txt", caps["input_formats"])
         self.assertIn("dependencies", caps)
         self.assertIn("docling", caps["dependencies"])
+        self.assertIn("ftfy", caps["dependencies"])
+        self.assertIn("trafilatura", caps["dependencies"])
+        self.assertIn("grobid_client", caps["dependencies"])
+        self.assertIn("azure_docintelligence", caps["dependencies"])
         self.assertEqual(caps["input_domains"][0]["name"], "ingest")
         self.assertIn("trim", caps["preprocess"]["field_transforms"])
         self.assertEqual(caps["preprocess"]["field_transform_domains"][0]["name"], "preprocess")
         self.assertEqual(caps["preprocess"]["row_filter_domains"][0]["name"], "preprocess")
         self.assertIn("extract", caps["preprocess"]["pipeline_stages"])
         self.assertEqual(caps["preprocess"]["pipeline_stage_domains"][0]["name"], "preprocess")
+        self.assertEqual(
+            caps["cleaning_spec_v2"]["preprocess_options"]["external_enrichment_mode"],
+            ["off", "private", "public", "auto"],
+        )
+        self.assertEqual(
+            caps["cleaning_runtime"]["document_parse_backends"],
+            ["auto", "local", "azure_docintelligence"],
+        )
+        self.assertEqual(caps["cleaning_runtime"]["url_metadata_enrichment_profile_defaults"]["debate_evidence"], True)
         self.assertIn("parquet_cleaned", caps["artifacts"]["core"])
         self.assertEqual(caps["artifacts"]["core_domains"][0]["name"], "cleaning-core")
         self.assertIn("xlsx_fin", caps["artifacts"]["office"])
@@ -866,6 +879,125 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(payload["candidate_profiles"][0]["profile"], "debate_evidence")
         self.assertEqual(payload["candidate_profiles"][0]["signal_source"], "content")
         self.assertTrue(payload["candidate_profiles"][0]["recommended"])
+        self.assertIn("speaker_prefix", payload["candidate_profiles"][0]["signal_hit_summary"]["hit_labels"])
+        self.assertIn("source_reference", payload["candidate_profiles"][0]["signal_hit_summary"]["hit_labels"])
+        self.assertIn("debate evidence signals found", payload["candidate_profiles"][0]["signal_hit_summary"]["recommendation_reason"])
+
+    def test_ingest_extract_auto_mode_detects_mixed_structure_and_keeps_debate_candidate(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {"text": "Speaker B: Public transit reduces congestion and should be supported.", "source_type": "image"},
+                    {"text": "Source: https://example.com/report", "source_type": "image"},
+                ],
+                {
+                    "input_format": "image",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {"ocr_confidence_avg": 0.93},
+                    "engine_trace": [{"engine": "docling", "ok": True}],
+                    "image_blocks": [
+                        {"block_id": "img_blk_0001", "text": "Speaker B: Public transit reduces congestion and should be supported."},
+                        {"block_id": "img_blk_0002", "text": "Source: https://example.com/report"},
+                    ],
+                    "table_cells": [
+                        {"row": 1, "col": 1, "text": "Topic"},
+                        {"row": 1, "col": 2, "text": "Evidence"},
+                        {"row": 2, "col": 1, "text": "Transit"},
+                        {"row": 2, "col": 2, "text": "supports urban mobility"},
+                    ],
+                    "sheet_frames": [],
+                },
+            )
+            resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\debate-mixed.png", "header_mapping_mode": "auto"},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertEqual(payload["detected_structure"], "mixed")
+        self.assertTrue(any(item["profile"] == "debate_evidence" for item in payload["candidate_profiles"]))
+        debate = next(item for item in payload["candidate_profiles"] if item["profile"] == "debate_evidence")
+        self.assertTrue(debate["recommended"])
+        self.assertIn("content", debate["signal_source"])
+        self.assertEqual(debate["signal_counts"]["speaker_prefix"], 1)
+        self.assertEqual(debate["signal_counts"]["source_reference"], 1)
+
+    def test_ingest_extract_auto_mode_does_not_recommend_debate_for_plain_text_without_debate_cues(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {
+                        "text": "The quarterly operations update summarizes warehouse maintenance work and routine staffing changes across the regional network.",
+                        "source_type": "txt",
+                    },
+                    {
+                        "text": "The document outlines inventory handling procedures, delivery timing expectations, and vendor coordination notes for the next month.",
+                        "source_type": "txt",
+                    },
+                    {
+                        "text": "It also records ordinary scheduling decisions and procurement checkpoints without citing any argument roles or speaker attributions.",
+                        "source_type": "txt",
+                    },
+                ],
+                {
+                    "input_format": "txt",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {},
+                    "engine_trace": [{"engine": "text", "ok": True}],
+                    "table_cells": [],
+                    "sheet_frames": [],
+                },
+            )
+            resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\notes.txt", "header_mapping_mode": "auto"},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertEqual(payload["detected_structure"], "text")
+        self.assertEqual(payload["candidate_profiles"], [])
+
+    def test_ingest_extract_auto_mode_does_not_misclassify_mixed_bank_ocr_as_debate(self):
+        with patch.object(glue_app.ingest, "load_rows_from_file") as load_rows:
+            load_rows.return_value = (
+                [
+                    {"text": "Account No: 62220001", "source_type": "image"},
+                    {"text": "Posting Dt: 2026/03/01", "source_type": "image"},
+                    {"text": "Balance: 12500.00", "source_type": "image"},
+                    {"text": "Memo: Monthly rent payment for Shanghai office", "source_type": "image"},
+                ],
+                {
+                    "input_format": "image",
+                    "quality_blocked": False,
+                    "quality_report": {"ok": True},
+                    "quality_metrics": {"ocr_confidence_avg": 0.94},
+                    "engine_trace": [{"engine": "ocr", "ok": True}],
+                    "table_cells": [
+                        {"row": 1, "col": 1, "text": "Acct No"},
+                        {"row": 1, "col": 2, "text": "Posting Dt"},
+                        {"row": 1, "col": 3, "text": "Bal"},
+                        {"row": 2, "col": 1, "text": "62220001"},
+                        {"row": 2, "col": 2, "text": "2026/03/01"},
+                        {"row": 2, "col": 3, "text": "12500.00"},
+                    ],
+                    "sheet_frames": [],
+                },
+            )
+            resp = self.client.post(
+                "/ingest/extract",
+                json={"input_path": r"D:\data\bank-mixed.png", "header_mapping_mode": "auto"},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertEqual(payload["detected_structure"], "mixed")
+        self.assertEqual(payload["candidate_profiles"][0]["profile"], "bank_statement")
+        self.assertTrue(payload["candidate_profiles"][0]["recommended"])
+        self.assertFalse(any(item["profile"] == "debate_evidence" for item in payload["candidate_profiles"]))
 
     def test_governance_control_plane_route_reports_split_explicitly(self):
         resp = self.client.get("/governance/meta/control-plane")

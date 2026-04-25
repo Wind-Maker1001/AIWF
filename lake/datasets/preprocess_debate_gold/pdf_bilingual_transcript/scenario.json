@@ -1,0 +1,26 @@
+{
+  "id": "pdf_bilingual_transcript",
+  "input_files": ["input.pdf"],
+  "preprocess_spec": {
+    "output_format": "jsonl",
+    "standardize_evidence": true,
+    "generate_quality_report": true,
+    "text_split_by_line": true
+  },
+  "expected_row_fields": ["speaker", "speaker_role", "argument_role", "stance", "source_type"],
+  "expected_metrics": {
+    "row_count": 3,
+    "speaker_coverage": 1.0,
+    "stance_coverage": 0.666667,
+    "source_ref_coverage": 0.0,
+    "duplicate_claim_ratio": 0.0
+  },
+  "expected_raw_signal_summary": {
+    "source_ref_signal_rows": 0,
+    "quote_signal_rows": 0,
+    "ocr_noise_rows": 0
+  },
+  "expected_warnings": [
+    "source reference coverage is low for debate evidence rows"
+  ]
+}

@@ -32,8 +32,13 @@ class CleaningSpecV2Tests(unittest.TestCase):
             {
                 "header_mapping_mode": "auto",
                 "header_map": {"Speaker": "speaker"},
+                "external_enrichment_mode": "private",
+                "document_parse_backend": "azure_docintelligence",
+                "citation_parse_backend": "grobid",
+                "url_metadata_enrichment": False,
                 "field_transforms": [
                     {"field": "speaker", "op": "trim"},
+                    {"field": "speaker_role", "source_field": "claim_text", "op": "detect_quote_only"},
                     {"field": "biz_date", "op": "parse_date"},
                 ],
                 "row_filters": [{"field": "speaker", "op": "exists"}],
@@ -42,8 +47,23 @@ class CleaningSpecV2Tests(unittest.TestCase):
         self.assertEqual(spec["schema"]["header_normalizer"], "preprocess")
         self.assertEqual(spec["ingest"]["header_mapping_mode"], "auto")
         self.assertEqual(spec["transform"]["rename_map"]["Speaker"], "speaker")
+        self.assertEqual(spec["ingest"]["external_enrichment_mode"], "private")
+        self.assertEqual(spec["ingest"]["document_parse_backend"], "azure_docintelligence")
+        self.assertEqual(spec["ingest"]["citation_parse_backend"], "grobid")
+        self.assertFalse(spec["ingest"]["url_metadata_enrichment"])
+        self.assertEqual(spec["transform"]["postprocess"]["citation_parse_backend"], "grobid")
         self.assertTrue(any(item["op"] == "trim" for item in spec["transform"]["field_ops"]))
+        self.assertTrue(
+            any(item["op"] == "detect_quote_only" and item.get("source_field") == "claim_text" for item in spec["transform"]["field_ops"])
+        )
         self.assertEqual(spec["transform"]["filters"][0]["op"], "exists")
+
+    def test_compile_preprocess_spec_defaults_url_metadata_for_debate_profile(self):
+        spec = compile_preprocess_spec_to_spec({"canonical_profile": "debate_evidence"})
+        self.assertTrue(spec["ingest"]["url_metadata_enrichment"])
+        self.assertEqual(spec["ingest"]["external_enrichment_mode"], "off")
+        self.assertEqual(spec["ingest"]["document_parse_backend"], "auto")
+        self.assertEqual(spec["ingest"]["citation_parse_backend"], "auto")
 
     def test_compile_cleaning_spec_preserves_survivorship_and_advanced_rules(self):
         spec = compile_cleaning_params_to_spec(

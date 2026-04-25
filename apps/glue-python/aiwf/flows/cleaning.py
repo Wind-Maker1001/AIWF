@@ -448,7 +448,7 @@ def _profile_analysis(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) ->
     should_block = (
         mismatch_action == "block"
         and profile_mismatch
-        and profile_confidence >= 0.85
+        and profile_confidence >= 0.8
         and recommended_coverage >= 0.75
         and requested_coverage <= 0.25
     )

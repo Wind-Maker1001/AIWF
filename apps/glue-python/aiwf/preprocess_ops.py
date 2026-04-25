@@ -4,10 +4,12 @@ import re
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from aiwf.preprocess_evidence import _normalize_stance_value, analyze_debate_text_signals
+
 
 def _normalize_header(name: str) -> str:
     text = (name or "").strip().lower()
-    text = re.sub(r"[\s\-\/]+", "_", text)
+    text = re.sub(r"[\s\-/]+", "_", text)
     text = re.sub(r"[^a-z0-9_]", "", text)
     text = re.sub(r"_+", "_", text).strip("_")
     return text or "col"
@@ -60,37 +62,37 @@ def _filter_value(row: Dict[str, Any], cfg: Dict[str, Any]) -> Any:
     return row.get(field)
 
 
-def _transform_trim(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+def _transform_trim(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
     if isinstance(value, str):
         return value.strip(), True
     return value, False
 
 
-def _transform_lower(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+def _transform_lower(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
     if isinstance(value, str):
         return value.lower(), True
     return value, False
 
 
-def _transform_upper(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+def _transform_upper(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
     if isinstance(value, str):
         return value.upper(), True
     return value, False
 
 
-def _transform_collapse_whitespace(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+def _transform_collapse_whitespace(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
     if isinstance(value, str):
         return re.sub(r"\s+", " ", value).strip(), True
     return value, False
 
 
-def _transform_remove_urls(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+def _transform_remove_urls(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
     if isinstance(value, str):
         return re.sub(r"https?://\S+|www\.\S+", "", value).strip(), True
     return value, False
 
 
-def _transform_remove_emails(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+def _transform_remove_emails(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
     if isinstance(value, str):
         return re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "", value).strip(), True
     return value, False
@@ -107,7 +109,7 @@ def _transform_regex_replace(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool
         return value, False
 
 
-def _transform_parse_number(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+def _transform_parse_number(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
     parsed = _to_float(value)
     return (parsed if parsed is not None else value), (parsed is not None)
 
@@ -150,6 +152,78 @@ def _transform_extract_regex(value: Any, cfg: Dict[str, Any]) -> Tuple[Any, bool
         return match.group(group), True
     except IndexError:
         return value, False
+
+
+def _transform_extract_speaker_prefix(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    signal = analyze_debate_text_signals(value)
+    label = str(signal.get("speaker_label") or "").strip()
+    if not label or not bool(signal.get("speaker_signal")):
+        return "", False
+    if re.match(r"^speaker\s+", label, flags=re.I):
+        return label.split(" ", 1)[1].strip(), True
+    return label, True
+
+
+def _transform_normalize_stance(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    signal = analyze_debate_text_signals(value)
+    stance = _normalize_stance_value(
+        value,
+        label=str(signal.get("speaker_label") or ""),
+    ) or "unknown"
+    return stance, True
+
+
+def _transform_clean_citation(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    out = re.sub(r"\[[^\]]{1,40}\]", " ", value)
+    out = re.sub(
+        r"[\(\uff08](?:source|citation|according to|ref|reference|来源|引自|出处)[:：]?\s*[^)\uff09]+[\)\uff09]",
+        " ",
+        out,
+        flags=re.I,
+    )
+    out = re.sub(r"\s+", " ", out).strip()
+    return out, out != value
+
+
+def _transform_strip_ocr_noise(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    out = value
+    out = re.sub(r"[\x00-\x1f\x7f]+", " ", out)
+    out = re.sub(r"^\s*(page|p\.)\s*\d+\s*$", " ", out, flags=re.I)
+    out = re.sub(r"^\s*第?\s*\d+\s*页\s*$", " ", out)
+    out = re.sub(r"([A-Za-z\u4e00-\u9fff])\1{4,}", r"\1", out)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out, out != value
+
+
+def _transform_collapse_duplicate_lines(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    lines = [line.strip() for line in re.split(r"[\r\n]+", value) if line.strip()]
+    seen: set[str] = set()
+    deduped: List[str] = []
+    for line in lines:
+        normalized = re.sub(r"\s+", " ", line).strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(line)
+    out = "\n".join(deduped) if deduped else value
+    return out, out != value
+
+
+def _transform_detect_quote_only(value: Any, _cfg: Dict[str, Any]) -> Tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    signal = analyze_debate_text_signals(value)
+    return ("quote" if signal.get("argument_role") == "quote" else "claim"), True
 
 
 def _filter_exists(row: Dict[str, Any], cfg: Dict[str, Any]) -> bool:
@@ -272,6 +346,12 @@ def register_builtin_preprocess_ops(
     register_field_transform("round_number", _transform_round_number, domain="preprocess", domain_metadata=domain)
     register_field_transform("parse_date", _transform_parse_date, domain="preprocess", domain_metadata=domain)
     register_field_transform("extract_regex", _transform_extract_regex, domain="preprocess", domain_metadata=domain)
+    register_field_transform("extract_speaker_prefix", _transform_extract_speaker_prefix, domain="preprocess", domain_metadata=domain)
+    register_field_transform("normalize_stance", _transform_normalize_stance, domain="preprocess", domain_metadata=domain)
+    register_field_transform("clean_citation", _transform_clean_citation, domain="preprocess", domain_metadata=domain)
+    register_field_transform("strip_ocr_noise", _transform_strip_ocr_noise, domain="preprocess", domain_metadata=domain)
+    register_field_transform("collapse_duplicate_lines", _transform_collapse_duplicate_lines, domain="preprocess", domain_metadata=domain)
+    register_field_transform("detect_quote_only", _transform_detect_quote_only, domain="preprocess", domain_metadata=domain)
 
     register_row_filter("exists", _filter_exists, requires_field=False, domain="preprocess", domain_metadata=domain)
     register_row_filter("not_exists", _filter_not_exists, requires_field=False, domain="preprocess", domain_metadata=domain)

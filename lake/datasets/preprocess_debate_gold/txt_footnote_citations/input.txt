@@ -1,0 +1,4 @@
+Alice: We support bus lanes because they reduce commute time.
+[1] City Mobility Lab 2024 https://city.example/bus-lanes
+Bob: We oppose bus lanes because delivery delays rise.
+[2] Freight Association Brief 2025 https://freight.example/brief

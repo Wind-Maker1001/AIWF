@@ -132,7 +132,7 @@ def run_cleaning_precheck(*, params: Dict[str, Any], extract_payload: Dict[str, 
         recommendation_available
         and mismatch_action == "block"
         and profile_mismatch
-        and profile_confidence >= 0.85
+        and profile_confidence >= 0.8
         and recommended_coverage >= 0.75
         and requested_coverage <= 0.25
     )
