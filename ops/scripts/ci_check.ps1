@@ -23,6 +23,7 @@ param(
   [switch]$SkipRustNewOpsBenchGate,
   [switch]$SkipRegressionBaselineGate,
   [switch]$SkipOpenApiSdkSync,
+  [switch]$SkipArchitectureConvergence,
   [switch]$SkipFrontendConvergence,
   [switch]$SkipWorkflowContractSync,
   [switch]$SkipGovernanceControlPlaneBoundary,
@@ -1013,6 +1014,65 @@ function Get-OfflineTemplateCatalogReleaseReadyIssues($Item) {
   }
   return @($issues | Sort-Object -Unique)
 }
+function New-ArchitectureConvergenceDetails($Summary) {
+  if ($null -eq $Summary) { return $null }
+  return [ordered]@{
+    charter_path = Get-OptionalPropertyValue $Summary "charterPath"
+    docs_readme_path = Get-OptionalPropertyValue $Summary "docsReadmePath"
+    repo_readme_path = Get-OptionalPropertyValue $Summary "repoReadmePath"
+    inventory_path = Get-OptionalPropertyValue $Summary "inventoryPath"
+    active_fallback_count = [int](Get-OptionalPropertyValue $Summary "activeFallbackCount")
+    active_fallback_ids = @(Get-StringArrayProperty $Summary "activeFallbackIds")
+    local_legacy_active_matches = @(Get-StringArrayProperty $Summary "localLegacyActiveMatches")
+    canonical_api_tests = @(Get-StringArrayProperty $Summary "canonicalApiTests")
+    issues = @(Get-StringArrayProperty $Summary "issues")
+  }
+}
+function Get-ArchitectureConvergenceReason($Summary, [string]$Status) {
+  if ($null -eq $Summary) {
+    if ($Status -eq "failed") { return "architecture convergence checks failed" }
+    return "architecture convergence checks passed"
+  }
+
+  $details = New-ArchitectureConvergenceDetails $Summary
+  $base = "architecture convergence checks {0} (active_fallbacks={1}; local_legacy_active_matches={2}; canonical_api_tests={3})" -f `
+    $(if ($Status -eq "failed") { "failed" } else { "passed" }),
+    [int]$details.active_fallback_count,
+    @($details.local_legacy_active_matches).Count,
+    @($details.canonical_api_tests).Count
+
+  if ($Status -ne "failed") {
+    return $base
+  }
+
+  $fragments = @()
+  if (@($details.local_legacy_active_matches).Count -gt 0) {
+    $fragments += "active local_legacy references remain"
+  }
+  if (@($details.issues).Count -gt 0) {
+    $fragments += [string]$details.issues[0]
+  }
+  if ($fragments.Count -eq 0) {
+    return $base
+  }
+  return "$base; $($fragments -join '; ')"
+}
+function Get-ArchitectureConvergenceReleaseReadyIssues($Item) {
+  $details = Get-OptionalObjectProperty $Item "details"
+  if ($null -eq $details) { return @() }
+
+  $issues = @()
+  if (@(Get-StringArrayProperty $details "local_legacy_active_matches").Count -gt 0) {
+    $issues += "architecture_convergence active local_legacy references remain"
+  }
+  if ([int](Get-OptionalPropertyValue $details "active_fallback_count") -lt 1) {
+    $issues += "architecture_convergence fallback inventory is empty"
+  }
+  if ($issues.Count -eq 0) {
+    $issues += @(Get-StringArrayProperty $details "issues")
+  }
+  return @($issues | Sort-Object -Unique)
+}
 function New-NodeConfigSchemaCoverageDetails($Summary) {
   if ($null -eq $Summary) { return $null }
   $qualityCounts = Get-OptionalObjectProperty $Summary "qualityCounts"
@@ -1485,6 +1545,9 @@ function Get-ReleaseReadyBoundaryIssues([string]$Name, $Item) {
   if ($Name -eq "template_pack_contract_sync") {
     return @(Get-TemplatePackContractReleaseReadyIssues $Item)
   }
+  if ($Name -eq "architecture_convergence") {
+    return @(Get-ArchitectureConvergenceReleaseReadyIssues $Item)
+  }
   if ($Name -eq "local_template_storage_contract_sync") {
     return @(Get-LocalTemplateStorageContractReleaseReadyIssues $Item)
   }
@@ -1589,6 +1652,7 @@ function Write-ArchitectureReleaseReadyScorecard([string]$Directory, [string]$St
   }
 
   $boundaries = [ordered]@{
+    architecture_convergence = Select-MergedBoundarySummary -Name "architecture_convergence" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "architecture_convergence" } -StaleAfterHours $staleAfterHours
     workflow_contract_sync = Select-MergedBoundarySummary -Name "workflow_contract_sync" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "workflow_contract_sync" } -StaleAfterHours $staleAfterHours
     governance_control_plane_boundary = Select-MergedBoundarySummary -Name "governance_control_plane_boundary" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "governance_control_plane_boundary" } -StaleAfterHours $staleAfterHours
     governance_store_schema_versions = Select-MergedBoundarySummary -Name "governance_store_schema_versions" -ProfileCards $profileCards -Selector { param($payload) Get-ScorecardBoundary $payload "governance_store_schema_versions" } -StaleAfterHours $staleAfterHours
@@ -1815,6 +1879,7 @@ $asyncBenchTrendScript = Join-Path $PSScriptRoot "check_async_bench_trend.ps1"
 $rustTransformBenchGateScript = Join-Path $PSScriptRoot "check_rust_transform_bench_gate.ps1"
 $rustNewOpsBenchGateScript = Join-Path $PSScriptRoot "check_rust_new_ops_bench_gate.ps1"
 $openApiSdkSyncScript = Join-Path $PSScriptRoot "check_openapi_sdk_sync.ps1"
+$architectureConvergenceScript = Join-Path $PSScriptRoot "check_architecture_convergence.ps1"
 $frontendConvergenceScript = Join-Path $PSScriptRoot "check_frontend_convergence.ps1"
 $workflowContractSyncScript = Join-Path $PSScriptRoot "check_workflow_contract_sync.ps1"
 $governanceControlPlaneBoundaryScript = Join-Path $PSScriptRoot "check_governance_control_plane_boundary.ps1"
@@ -1845,6 +1910,7 @@ $architectureScorecardReleaseReadyLatestJsonPath = Join-Path $architectureScorec
 $architectureScorecardReleaseReadyLatestMdPath = Join-Path $architectureScorecardDir "architecture_scorecard_release_ready_latest.md"
 $frontendVerificationStamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $normalizedCiProfile = if ([string]::IsNullOrWhiteSpace($CiProfile)) { "default" } else { $CiProfile.Trim().ToLowerInvariant() }
+$architectureConvergenceCheckState = New-FrontendCheckState $(if ($SkipArchitectureConvergence) { "skipped" } else { "pending" }) $(if ($SkipArchitectureConvergence) { "skipped by SkipArchitectureConvergence" } else { "awaiting architecture convergence gate" })
 $workflowContractSyncCheckState = New-FrontendCheckState $(if ($SkipWorkflowContractSync) { "skipped" } else { "pending" }) $(if ($SkipWorkflowContractSync) { "skipped by SkipWorkflowContractSync" } else { "awaiting workflow contract sync gate" })
 $governanceControlPlaneBoundaryCheckState = New-FrontendCheckState $(if ($SkipGovernanceControlPlaneBoundary) { "skipped" } else { "pending" }) $(if ($SkipGovernanceControlPlaneBoundary) { "skipped by SkipGovernanceControlPlaneBoundary" } else { "awaiting governance control plane boundary gate" })
 $governanceStoreSchemaVersionCheckState = New-FrontendCheckState $(if ($SkipGovernanceStoreSchemaVersions) { "skipped" } else { "pending" }) $(if ($SkipGovernanceStoreSchemaVersions) { "skipped by SkipGovernanceStoreSchemaVersions" } else { "awaiting governance store schema version gate" })
@@ -1925,6 +1991,7 @@ function Publish-ArchitectureScorecard() {
     profile = $normalizedCiProfile
     source_script = "ops/scripts/ci_check.ps1"
     overall_status = Resolve-ArchitectureScorecardOverall @(
+      $architectureConvergenceCheckState,
       $workflowContractSyncCheckState,
       $governanceControlPlaneBoundaryCheckState,
       $governanceStoreSchemaVersionCheckState,
@@ -1941,6 +2008,7 @@ function Publish-ArchitectureScorecard() {
       [ordered]@{ status = $compatibilitySummary.status }
     )
     boundaries = [ordered]@{
+      architecture_convergence = $architectureConvergenceCheckState
       workflow_contract_sync = $workflowContractSyncCheckState
       governance_control_plane_boundary = $governanceControlPlaneBoundaryCheckState
       governance_store_schema_versions = $governanceStoreSchemaVersionCheckState
@@ -2019,6 +2087,37 @@ if (-not $SkipOpenApiSdkSync) {
   Ok "openapi/sdk sync checks passed"
 } else {
   Warn "skip openapi/sdk sync checks"
+}
+
+if (-not $SkipArchitectureConvergence) {
+  if (-not (Test-Path $architectureConvergenceScript)) {
+    Set-FrontendCheckState $architectureConvergenceCheckState "failed" "architecture convergence script missing"
+    Publish-ArchitectureScorecard
+    throw "architecture convergence script not found: $architectureConvergenceScript"
+  }
+  Info "running architecture convergence checks"
+  $architectureConvergenceOutput = powershell -ExecutionPolicy Bypass -File $architectureConvergenceScript 2>&1
+  $architectureConvergenceSummary = Parse-JsonLineFromOutput $architectureConvergenceOutput
+  $architectureConvergenceDetails = New-ArchitectureConvergenceDetails $architectureConvergenceSummary
+  if ($architectureConvergenceDetails) {
+    $architectureConvergenceCheckState.details = $architectureConvergenceDetails
+  }
+  if ($LASTEXITCODE -ne 0) {
+    Set-FrontendCheckState $architectureConvergenceCheckState "failed" (Get-ArchitectureConvergenceReason -Summary $architectureConvergenceSummary -Status "failed")
+    Publish-ArchitectureScorecard
+    throw "architecture convergence checks failed"
+  }
+  if ($architectureConvergenceSummary) {
+    Set-FrontendCheckState $architectureConvergenceCheckState "passed" (Get-ArchitectureConvergenceReason -Summary $architectureConvergenceSummary -Status "passed")
+  } else {
+    Set-FrontendCheckState $architectureConvergenceCheckState "passed" "architecture convergence checks passed"
+  }
+  Publish-ArchitectureScorecard
+  Ok "architecture convergence checks passed"
+} else {
+  Set-FrontendCheckState $architectureConvergenceCheckState "skipped" "skipped by SkipArchitectureConvergence"
+  Publish-ArchitectureScorecard
+  Warn "skip architecture convergence checks"
 }
 
 if (-not $SkipFrontendConvergence) {

@@ -1,0 +1,66 @@
+{
+  "schema_version": "fallback_inventory.v1",
+  "authority_doc": "docs/architecture_authority_charter_20260425.md",
+  "entries": [
+    {
+      "id": "cleaning.default_rust_v2_python_legacy",
+      "status": "active",
+      "class": "runtime_compatibility",
+      "owner": "cleaning/runtime convergence",
+      "scope": "apps/glue-python default cleaning execution path",
+      "reason": "Default cleaning mode still keeps a Python legacy fallback when Rust v2 execution is unavailable or returns an execution error.",
+      "added_at": "2026-03-31",
+      "remove_by": "2026-06-30",
+      "success_metric": "shadow compare mismatch rate and rust error rate stay below release thresholds across consecutive release audits",
+      "kill_condition": "default cleaning mode no longer depends on Python legacy fallback for normal release traffic",
+      "evidence": [
+        "docs/archive/fallback_governance_20260320.md",
+        "apps/glue-python/aiwf/flows/cleaning.py"
+      ],
+      "match_patterns": [
+        "python_legacy",
+        "used_fallback"
+      ]
+    },
+    {
+      "id": "workflow.version_import_normalization",
+      "status": "active",
+      "class": "migration",
+      "owner": "desktop workflow architecture",
+      "scope": "workflow import and normalization compatibility path",
+      "reason": "Historical workflow payloads still include unversioned graph samples that must be migrated into versioned workflow_definition inputs.",
+      "added_at": "2026-03-20",
+      "remove_by": "2026-05-19",
+      "success_metric": "new saves, versions, templates, and runs only persist workflow_definition with explicit version",
+      "kill_condition": "unversioned workflow imports are rejected on the main path after migration backlog reaches zero",
+      "evidence": [
+        "docs/archive/fallback_governance_20260320.md",
+        "docs/archive/fallback_retirement_backlog_20260322.md"
+      ],
+      "match_patterns": [
+        "workflow.version migration",
+        "legacy graph"
+      ]
+    },
+    {
+      "id": "desktop.base_api_offline_fallback",
+      "status": "active",
+      "class": "adapter_compatibility",
+      "owner": "desktop/runtime convergence",
+      "scope": "desktop base_api execution fallback to offline_local/offline_fallback mode",
+      "reason": "Desktop still supports an automatic local recovery path when base_api execution fails and offline cleaning remains available.",
+      "added_at": "2026-04-11",
+      "remove_by": "2026-07-31",
+      "success_metric": "base_api execution has an explicit retry or fail-closed path without automatic mode mutation",
+      "kill_condition": "automatic offline_fallback mode is removed or replaced by explicit operator choice",
+      "evidence": [
+        "docs/release_notes_v1.1.6.md",
+        "ops/scripts/dify_run_with_offline_fallback.ps1"
+      ],
+      "match_patterns": [
+        "offline_fallback",
+        "dify_run_with_offline_fallback"
+      ]
+    }
+  ]
+}

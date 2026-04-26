@@ -113,12 +113,54 @@ function renderManifestJson(data) {
 }
 
 function renderDesktopModule(data) {
+  const capabilityByName = {};
+  for (const item of data.items) {
+    capabilityByName[item.capability] = {
+      constant: item.constant,
+      capability: item.capability,
+      route_prefix: item.route_prefix,
+      owned_route_prefixes: item.owned_route_prefixes,
+      route_constant_map: item.route_constant_map,
+    };
+  }
   return [
     `const GOVERNANCE_CAPABILITY_SCHEMA_VERSION = ${JSON.stringify(data.schemaVersion)};`,
     `const GOVERNANCE_CAPABILITY_SOURCE_AUTHORITY = ${JSON.stringify(data.sourceAuthority)};`,
     `const GOVERNANCE_CAPABILITY_ITEMS = Object.freeze(${JSON.stringify(data.items, null, 2)});`,
     `const GOVERNANCE_CAPABILITIES = Object.freeze(${JSON.stringify(data.constantMap, null, 2)});`,
     `const GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS = Object.freeze(${JSON.stringify(data.routeConstantsByConstant, null, 2)});`,
+    `const GOVERNANCE_CAPABILITY_BY_NAME = Object.freeze(${JSON.stringify(capabilityByName, null, 2)});`,
+    "",
+    "function normalizeGovernanceCapability(capability) {",
+    "  return String(capability || \"\").trim();",
+    "}",
+    "",
+    "function getGovernanceCapabilityItem(capability) {",
+    "  const normalizedCapability = normalizeGovernanceCapability(capability);",
+    "  return normalizedCapability ? (GOVERNANCE_CAPABILITY_BY_NAME[normalizedCapability] || null) : null;",
+    "}",
+    "",
+    "function resolveGovernanceCapabilityRoutePrefix(capability, preferredOwnedPrefix = \"\") {",
+    "  const item = getGovernanceCapabilityItem(capability);",
+    "  if (!item) return \"\";",
+    "  const preferred = String(preferredOwnedPrefix || \"\").trim();",
+    "  const primary = String(item.route_prefix || \"\").trim();",
+    "  if (preferred) {",
+    "    if (primary === preferred) return primary;",
+    "    const owned = Array.isArray(item.owned_route_prefixes) ? item.owned_route_prefixes : [];",
+    "    return owned.find((entry) => String(entry || \"\").trim() === preferred) || \"\";",
+    "  }",
+    "  return primary;",
+    "}",
+    "",
+    "function governanceCapabilityOwnsRoutePrefix(capability, routePrefix) {",
+    "  const item = getGovernanceCapabilityItem(capability);",
+    "  const normalizedRoutePrefix = String(routePrefix || \"\").trim();",
+    "  if (!item || !normalizedRoutePrefix) return false;",
+    "  if (String(item.route_prefix || \"\").trim() === normalizedRoutePrefix) return true;",
+    "  const owned = Array.isArray(item.owned_route_prefixes) ? item.owned_route_prefixes : [];",
+    "  return owned.some((entry) => String(entry || \"\").trim() === normalizedRoutePrefix);",
+    "}",
     "",
     "module.exports = {",
     "  GOVERNANCE_CAPABILITY_SCHEMA_VERSION,",
@@ -126,6 +168,10 @@ function renderDesktopModule(data) {
     "  GOVERNANCE_CAPABILITY_ITEMS,",
     "  GOVERNANCE_CAPABILITIES,",
     "  GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS,",
+    "  GOVERNANCE_CAPABILITY_BY_NAME,",
+    "  getGovernanceCapabilityItem,",
+    "  resolveGovernanceCapabilityRoutePrefix,",
+    "  governanceCapabilityOwnsRoutePrefix,",
     "};",
     "",
   ].join("\n");
@@ -133,6 +179,8 @@ function renderDesktopModule(data) {
 
 function renderWinUiModule(data) {
   const lines = [];
+  lines.push("using System;");
+  lines.push("");
   lines.push("namespace AIWF.Native.Runtime;");
   lines.push("");
   lines.push("public static class GovernanceCapabilitiesGenerated");
@@ -150,6 +198,88 @@ function renderWinUiModule(data) {
       lines.push(`    public const string ${item.constant}_${routeKey}_ROUTE_PREFIX = ${JSON.stringify(routeValue)};`);
     }
   }
+  lines.push("");
+  lines.push("    public static string ResolveRoutePrefix(string capability, string? preferredOwnedPrefix = null)");
+  lines.push("    {");
+  lines.push("        var normalizedCapability = (capability ?? string.Empty).Trim();");
+  lines.push("        return normalizedCapability switch");
+  lines.push("        {");
+  for (const item of data.items) {
+    const ownedLiterals = item.owned_route_prefixes
+      .filter((routePrefix) => String(routePrefix || "").trim() && String(routePrefix || "").trim() !== item.route_prefix)
+      .map((routePrefix) => JSON.stringify(routePrefix))
+      .join(", ");
+    const ownedArgument = ownedLiterals ? `, ${ownedLiterals}` : "";
+    lines.push(`            ${item.constant} => ResolvePreferredOrPrimary(${item.constant}_ROUTE_PREFIX, preferredOwnedPrefix${ownedArgument}),`);
+  }
+  lines.push("            _ => string.Empty,");
+  lines.push("        };");
+  lines.push("    }");
+  lines.push("");
+  lines.push("    public static bool CapabilityOwnsRoutePrefix(string capability, string routePrefix)");
+  lines.push("    {");
+  lines.push("        var normalizedCapability = (capability ?? string.Empty).Trim();");
+  lines.push("        return normalizedCapability switch");
+  lines.push("        {");
+  for (const item of data.items) {
+    const ownedLiterals = item.owned_route_prefixes
+      .filter((routePrefix) => String(routePrefix || "").trim() && String(routePrefix || "").trim() !== item.route_prefix)
+      .map((routePrefix) => JSON.stringify(routePrefix))
+      .join(", ");
+    const ownedArgument = ownedLiterals ? `, ${ownedLiterals}` : "";
+    lines.push(`            ${item.constant} => RouteBelongsToCapability(routePrefix, ${item.constant}_ROUTE_PREFIX${ownedArgument}),`);
+  }
+  lines.push("            _ => false,");
+  lines.push("        };");
+  lines.push("    }");
+  lines.push("");
+  lines.push("    private static string ResolvePreferredOrPrimary(string primaryRoutePrefix, string? preferredOwnedPrefix, params string[] ownedRoutePrefixes)");
+  lines.push("    {");
+  lines.push("        var preferred = (preferredOwnedPrefix ?? string.Empty).Trim();");
+  lines.push("        if (string.IsNullOrWhiteSpace(preferred))");
+  lines.push("        {");
+  lines.push("            return primaryRoutePrefix;");
+  lines.push("        }");
+  lines.push("");
+  lines.push("        if (string.Equals(primaryRoutePrefix, preferred, StringComparison.Ordinal))");
+  lines.push("        {");
+  lines.push("            return primaryRoutePrefix;");
+  lines.push("        }");
+  lines.push("");
+  lines.push("        foreach (var routePrefix in ownedRoutePrefixes)");
+  lines.push("        {");
+  lines.push("            if (string.Equals(routePrefix, preferred, StringComparison.Ordinal))");
+  lines.push("            {");
+  lines.push("                return routePrefix;");
+  lines.push("            }");
+  lines.push("        }");
+  lines.push("");
+  lines.push("        return string.Empty;");
+  lines.push("    }");
+  lines.push("");
+  lines.push("    private static bool RouteBelongsToCapability(string routePrefix, string primaryRoutePrefix, params string[] ownedRoutePrefixes)");
+  lines.push("    {");
+  lines.push("        var normalizedRoutePrefix = (routePrefix ?? string.Empty).Trim();");
+  lines.push("        if (string.IsNullOrWhiteSpace(normalizedRoutePrefix))");
+  lines.push("        {");
+  lines.push("            return false;");
+  lines.push("        }");
+  lines.push("");
+  lines.push("        if (string.Equals(primaryRoutePrefix, normalizedRoutePrefix, StringComparison.Ordinal))");
+  lines.push("        {");
+  lines.push("            return true;");
+  lines.push("        }");
+  lines.push("");
+  lines.push("        foreach (var ownedRoutePrefix in ownedRoutePrefixes)");
+  lines.push("        {");
+  lines.push("            if (string.Equals(ownedRoutePrefix, normalizedRoutePrefix, StringComparison.Ordinal))");
+  lines.push("            {");
+  lines.push("                return true;");
+  lines.push("            }");
+  lines.push("        }");
+  lines.push("");
+  lines.push("        return false;");
+  lines.push("    }");
   lines.push("}");
   lines.push("");
   return lines.join("\n");

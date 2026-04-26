@@ -33,16 +33,23 @@ test("governance capability manifest and generated assets stay aligned", () => {
   assert.match(supportScript, /renderWinUiModule/);
 
   assert.match(desktopGenerated, /GOVERNANCE_CAPABILITIES/);
+  assert.match(desktopGenerated, /GOVERNANCE_CAPABILITY_BY_NAME/);
   assert.match(desktopGenerated, /GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS/);
+  assert.match(desktopGenerated, /resolveGovernanceCapabilityRoutePrefix/);
+  assert.match(desktopGenerated, /governanceCapabilityOwnsRoutePrefix/);
   assert.match(desktopGenerated, /RUN_BASELINES/);
   assert.doesNotMatch(desktopGenerated, /WORKFLOW_RUN_AUDIT/);
 
   assert.match(winUiGenerated, /public static class GovernanceCapabilitiesGenerated/);
   assert.match(winUiGenerated, /public const string QUALITY_RULE_SETS/);
+  assert.match(winUiGenerated, /public static string ResolveRoutePrefix/);
+  assert.match(winUiGenerated, /public static bool CapabilityOwnsRoutePrefix/);
   assert.match(winUiGenerated, /WORKFLOW_SANDBOX_RULES_RULE_VERSIONS_ROUTE_PREFIX/);
   assert.doesNotMatch(winUiGenerated, /WORKFLOW_RUN_AUDIT/);
 
   assert.match(workflowGovernance, /workflow_governance_capabilities\.generated\.js/);
   assert.match(workflowGovernance, /GOVERNANCE_CAPABILITIES/);
+  assert.match(workflowGovernance, /resolveGovernanceCapabilityRoutePrefix/);
+  assert.match(workflowGovernance, /governanceCapabilityOwnsRoutePrefix/);
   assert.match(workflowGovernance, /GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS/);
 });

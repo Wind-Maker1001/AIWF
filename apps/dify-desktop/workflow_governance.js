@@ -5,7 +5,11 @@ const {
   GOVERNANCE_CAPABILITY_SOURCE_AUTHORITY,
   GOVERNANCE_CAPABILITY_ITEMS,
   GOVERNANCE_CAPABILITIES,
+  GOVERNANCE_CAPABILITY_BY_NAME,
   GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS,
+  getGovernanceCapabilityItem,
+  governanceCapabilityOwnsRoutePrefix,
+  resolveGovernanceCapabilityRoutePrefix,
 } = require("./workflow_governance_capabilities.generated.js");
 const GOVERNANCE_CONTROL_PLANE_META_ROUTE = "/governance/meta/control-plane";
 const GOVERNANCE_DEFAULT_GLUE_URL = "http://127.0.0.1:18081";
@@ -16,24 +20,6 @@ function deepClone(v) {
 
 function normalizeBaseUrl(url) {
   return String(url || "").trim().replace(/\/$/, "");
-}
-
-function resolveGovernanceOwnedRoutePrefix(surface = {}, preferredOwnedPrefix = "") {
-  const preferred = String(preferredOwnedPrefix || "").trim();
-  const owned = Array.isArray(surface?.owned_route_prefixes) ? surface.owned_route_prefixes : [];
-  if (preferred) {
-    const direct = owned.find((item) => String(item || "").trim() === preferred);
-    if (direct) return String(direct).trim();
-    const preferredLeaf = preferred.replace(/^\/+|\/+$/g, "").split("/").pop() || "";
-    if (preferredLeaf) {
-      const fuzzy = owned.find((item) => {
-        const candidateLeaf = String(item || "").trim().replace(/^\/+|\/+$/g, "").split("/").pop() || "";
-        return candidateLeaf.startsWith(preferredLeaf);
-      });
-      if (fuzzy) return String(fuzzy).trim();
-    }
-  }
-  return String(surface?.route_prefix || "").trim();
 }
 
 function createGovernanceControlPlaneSupport(deps = {}) {
@@ -94,17 +80,27 @@ function createGovernanceControlPlaneSupport(deps = {}) {
   async function resolveRoutePrefix(capability, options = {}) {
     const normalizedCapability = String(capability || "").trim();
     if (!normalizedCapability) throw new Error("governance capability is required");
+    const expectedRoutePrefix = resolveGovernanceCapabilityRoutePrefix(normalizedCapability, options?.preferredOwnedPrefix || "");
+    if (!expectedRoutePrefix) {
+      throw new Error(`governance generated route prefix missing for capability: ${normalizedCapability}`);
+    }
     const boundary = await fetchBoundary(options?.cfg || null);
     const surfaces = Array.isArray(boundary?.governance_surfaces) ? boundary.governance_surfaces : [];
     const surface = surfaces.find((item) => String(item?.capability || "").trim() === normalizedCapability);
     if (!surface) {
       throw new Error(`governance boundary missing capability: ${normalizedCapability}`);
     }
-    const routePrefix = resolveGovernanceOwnedRoutePrefix(surface, options?.preferredOwnedPrefix || "");
-    if (!routePrefix) {
-      throw new Error(`governance boundary route prefix missing for capability: ${normalizedCapability}`);
+    const boundaryClaims = [
+      String(surface?.route_prefix || "").trim(),
+      ...(Array.isArray(surface?.owned_route_prefixes) ? surface.owned_route_prefixes.map((item) => String(item || "").trim()) : []),
+    ].filter(Boolean);
+    if (!governanceCapabilityOwnsRoutePrefix(normalizedCapability, expectedRoutePrefix)) {
+      throw new Error(`governance generated route prefix unsupported for capability: ${normalizedCapability}`);
     }
-    return routePrefix;
+    if (!boundaryClaims.includes(expectedRoutePrefix)) {
+      throw new Error(`governance boundary route prefix drift for capability: ${normalizedCapability}; expected ${expectedRoutePrefix}`);
+    }
+    return expectedRoutePrefix;
   }
 
   function clearBoundaryCache() {
@@ -370,6 +366,7 @@ module.exports = {
   GOVERNANCE_CAPABILITY_SOURCE_AUTHORITY,
   GOVERNANCE_CAPABILITY_ITEMS,
   GOVERNANCE_CAPABILITIES,
+  GOVERNANCE_CAPABILITY_BY_NAME,
   GOVERNANCE_CAPABILITY_ROUTE_CONSTANTS,
   GOVERNANCE_CONTROL_PLANE_META_ROUTE,
   GOVERNANCE_DEFAULT_GLUE_URL,
@@ -382,6 +379,8 @@ module.exports = {
   initAiBudgetState,
   createGovernanceControlPlaneSupport,
   createGovernanceGlueStoreSupport,
-  resolveGovernanceOwnedRoutePrefix,
+  getGovernanceCapabilityItem,
+  governanceCapabilityOwnsRoutePrefix,
+  resolveGovernanceCapabilityRoutePrefix,
   deepClone,
 };

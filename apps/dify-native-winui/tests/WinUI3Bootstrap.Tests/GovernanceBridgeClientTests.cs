@@ -52,7 +52,7 @@ public sealed class GovernanceBridgeClientTests
     }
 
     [Fact]
-    public async Task ListManualReviewsAsync_PrimesBoundaryAndUsesBoundaryRoutePrefix()
+    public async Task ListManualReviewsAsync_PrimesBoundaryAndUsesGeneratedAuthorityRoutePrefix()
     {
         var callIndex = 0;
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
@@ -61,6 +61,66 @@ public sealed class GovernanceBridgeClientTests
             if (callIndex == 1)
             {
                 Assert.Equal("http://127.0.0.1:18081/governance/meta/control-plane", request.RequestUri!.AbsoluteUri);
+                return Json(HttpStatusCode.OK, """
+                    {
+                      "ok": true,
+                      "boundary": {
+                        "schema_version": "governance_surface.v1",
+                        "status": "effective_second_control_plane",
+                        "control_plane_role": "governance_state",
+                        "governance_state_control_plane_owner": "glue-python",
+                        "job_lifecycle_control_plane_owner": "base-java",
+                        "operator_semantics_authority_owner": "accel-rust",
+                        "workflow_authoring_surface_owner": "dify-desktop",
+                        "meta_route": "/governance/meta/control-plane",
+                        "governance_surfaces": [
+                          {
+                            "capability": "manual_reviews",
+                            "route_prefix": "/governance/manual-reviews",
+                            "owned_route_prefixes": ["/governance/manual-reviews"],
+                            "state_owner": "glue-python",
+                            "control_plane_role": "governance_state",
+                            "lifecycle_mutation_allowed": false
+                          }
+                        ]
+                      }
+                    }
+                    """);
+            }
+
+            Assert.Equal("http://127.0.0.1:18081/governance/manual-reviews?limit=120", request.RequestUri!.AbsoluteUri);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "ok": true,
+                  "items": [
+                    {
+                      "run_id": "run_1",
+                      "review_key": "gate_a",
+                      "workflow_id": "wf_finance",
+                      "node_id": "n7",
+                      "status": "pending"
+                    }
+                  ]
+                }
+                """);
+        }, autoBoundary: false));
+
+        var client = new GovernanceBridgeClient(http);
+        var items = await client.ListManualReviewsAsync("http://127.0.0.1:18081", "");
+
+        Assert.Single(items);
+        Assert.Equal(2, callIndex);
+    }
+
+    [Fact]
+    public async Task ListManualReviewsAsync_RejectsBoundaryRoutePrefixDrift()
+    {
+        var callIndex = 0;
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            callIndex += 1;
+            if (callIndex == 1)
+            {
                 return Json(HttpStatusCode.OK, """
                     {
                       "ok": true,
@@ -88,28 +148,14 @@ public sealed class GovernanceBridgeClientTests
                     """);
             }
 
-            Assert.Equal("http://127.0.0.1:18081/governance/manual-reviews-v2?limit=120", request.RequestUri!.AbsoluteUri);
-            return Json(HttpStatusCode.OK, """
-                {
-                  "ok": true,
-                  "items": [
-                    {
-                      "run_id": "run_1",
-                      "review_key": "gate_a",
-                      "workflow_id": "wf_finance",
-                      "node_id": "n7",
-                      "status": "pending"
-                    }
-                  ]
-                }
-                """);
+            throw new InvalidOperationException("unexpected manual review request after boundary drift");
         }, autoBoundary: false));
 
         var client = new GovernanceBridgeClient(http);
-        var items = await client.ListManualReviewsAsync("http://127.0.0.1:18081", "");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.ListManualReviewsAsync("http://127.0.0.1:18081", ""));
 
-        Assert.Single(items);
-        Assert.Equal(2, callIndex);
+        Assert.Contains("route prefix drift", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

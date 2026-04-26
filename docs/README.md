@@ -17,10 +17,12 @@ Use this page as the canonical documentation entrypoint for the current reposito
 - Native WinUI quickstart: [quickstart_native_winui.md](quickstart_native_winui.md)
 - Backend quickstart: [quickstart_backend.md](quickstart_backend.md)
 - Verification guide: [verification.md](verification.md)
+- Architecture authority charter: [architecture_authority_charter_20260425.md](architecture_authority_charter_20260425.md)
 - Authority and execution convergence: [authority_execution_convergence_20260406.md](authority_execution_convergence_20260406.md)
 
 ## Current Architecture and Boundary Docs
 
+- Architecture authority charter: [architecture_authority_charter_20260425.md](architecture_authority_charter_20260425.md)
 - Governance control-plane boundary: [governance_control_plane_boundary_20260324.md](governance_control_plane_boundary_20260324.md)
 - Governance control-plane enforcement: [governance_control_plane_enforcement_20260325.md](governance_control_plane_enforcement_20260325.md)
 - Authority and execution convergence: [authority_execution_convergence_20260406.md](authority_execution_convergence_20260406.md)
@@ -30,6 +32,7 @@ Use this page as the canonical documentation entrypoint for the current reposito
 
 ## Current Inventories, Plans, and Backlogs
 
+- Active fallback inventory: [../contracts/governance/fallback_inventory.v1.json](../contracts/governance/fallback_inventory.v1.json)
 - Electron capability inventory: [electron_capability_inventory_20260321.md](electron_capability_inventory_20260321.md)
 - Desktop workflow app refactor plan: [desktop_workflow_app_refactor_plan.md](desktop_workflow_app_refactor_plan.md)
 - Workflow frontend layering guide: [workflow_frontend_layering_guide_20260320.md](workflow_frontend_layering_guide_20260320.md)
