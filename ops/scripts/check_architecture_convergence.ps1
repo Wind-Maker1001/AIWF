@@ -15,6 +15,8 @@ $charterPath = Join-Path $RepoRoot "docs\architecture_authority_charter_20260425
 $docsReadmePath = Join-Path $RepoRoot "docs\README.md"
 $repoReadmePath = Join-Path $RepoRoot "README.md"
 $inventoryPath = Join-Path $RepoRoot "contracts\governance\fallback_inventory.v1.json"
+$localTemplateStorageSchemaPath = Join-Path $RepoRoot "contracts\desktop\local_template_storage.schema.json"
+$templatePackArtifactSchemaPath = Join-Path $RepoRoot "contracts\desktop\template_pack_artifact.schema.json"
 
 $issues = @()
 
@@ -23,6 +25,12 @@ if (-not (Test-Path $charterPath)) {
 }
 if (-not (Test-Path $inventoryPath)) {
   $issues += "fallback inventory manifest missing"
+}
+if (-not (Test-Path $localTemplateStorageSchemaPath)) {
+  $issues += "local template storage schema missing"
+}
+if (-not (Test-Path $templatePackArtifactSchemaPath)) {
+  $issues += "template pack artifact schema missing"
 }
 
 $requiredLinkTargets = @(
@@ -113,6 +121,20 @@ if (Test-Path $inventoryPath) {
   $activeFallbackCount = @($activeFallbackIds).Count
 }
 
+foreach ($schemaPath in @($localTemplateStorageSchemaPath, $templatePackArtifactSchemaPath)) {
+  if (-not (Test-Path $schemaPath)) { continue }
+  $schema = Get-Content -Raw -Encoding UTF8 $schemaPath | ConvertFrom-Json
+  $definitions = $schema.definitions
+  if ($null -eq $definitions) { continue }
+  foreach ($definitionName in $definitions.PSObject.Properties.Name) {
+    $definition = $definitions.$definitionName
+    $properties = $definition.properties
+    if ($null -ne $properties -and $properties.PSObject.Properties.Name -contains "graph") {
+      $issues += "$schemaPath still declares legacy graph property in definition $definitionName"
+    }
+  }
+}
+
 $includeExtensions = @(".js", ".cjs", ".mjs", ".ts", ".tsx", ".py", ".java", ".rs", ".md", ".json", ".ps1", ".cs")
 $candidateFiles = Get-ChildItem -Path $RepoRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
   $includeExtensions -contains $_.Extension.ToLowerInvariant() `
@@ -186,6 +208,8 @@ $payload = [ordered]@{
   docsReadmePath = $docsReadmePath
   repoReadmePath = $repoReadmePath
   inventoryPath = $inventoryPath
+  localTemplateStorageSchemaPath = $localTemplateStorageSchemaPath
+  templatePackArtifactSchemaPath = $templatePackArtifactSchemaPath
   activeFallbackCount = $activeFallbackCount
   activeFallbackIds = @($activeFallbackIds | Sort-Object -Unique)
   localLegacyActiveMatches = @($localLegacyActiveMatches | Sort-Object -Unique)

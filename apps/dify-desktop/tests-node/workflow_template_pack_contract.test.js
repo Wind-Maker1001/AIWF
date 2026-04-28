@@ -29,6 +29,7 @@ test("workflow template pack contract migrates legacy artifact and normalizes te
   }, {
     allowVersionMigration: true,
     source: "legacy_file",
+    allowLegacyGraphAlias: true,
   });
 
   assert.equal(out.schema_version, TEMPLATE_PACK_ARTIFACT_SCHEMA_VERSION);
@@ -76,7 +77,7 @@ test("workflow template pack contract exports artifact schema instead of marketp
     templates: [{
       id: "tpl_1",
       name: "Finance Template",
-      graph: templateGraph(),
+      workflow_definition: templateGraph(),
       template_spec_version: 1,
     }],
     created_at: "2026-03-24T00:00:00Z",
@@ -90,4 +91,23 @@ test("workflow template pack contract exports artifact schema instead of marketp
   assert.equal(artifact.templates[0].id, "tpl_1");
   assert.deepEqual(artifact.templates[0].workflow_definition, templateGraph());
   assert.equal(Object.prototype.hasOwnProperty.call(artifact.templates[0], "graph"), false);
+});
+
+test("workflow template pack contract rejects legacy graph alias without explicit opt-in", () => {
+  assert.throws(
+    () => normalizeTemplatePackArtifact({
+      id: "pack_1",
+      name: "Finance Pack",
+      templates: [{
+        id: "tpl_1",
+        name: "Finance Template",
+        graph: templateGraph(),
+      }],
+    }, {
+      allowVersionMigration: true,
+      source: "legacy_file",
+      allowLegacyGraphAlias: false,
+    }),
+    /workflow_definition is required/i
+  );
 });

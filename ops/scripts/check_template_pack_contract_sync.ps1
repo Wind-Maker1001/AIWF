@@ -37,11 +37,19 @@ function fail(payload) {
 
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
   const schemaVersionConst = String(schema?.properties?.schema_version?.const || "");
+  const schemaDeclaresLegacyGraph = Object.prototype.hasOwnProperty.call(schema?.definitions?.templateEntry?.properties || {}, "graph");
   if (schemaVersionConst !== TEMPLATE_PACK_ARTIFACT_SCHEMA_VERSION) {
     fail({
       status: "failed",
       schemaPath,
       issues: [`template pack schema_version const drift: ${schemaVersionConst || "(missing)"}`],
+    });
+  }
+  if (schemaDeclaresLegacyGraph) {
+    fail({
+      status: "failed",
+      schemaPath,
+      issues: ["template pack artifact schema still declares legacy graph field"],
     });
   }
 
@@ -69,6 +77,7 @@ function fail(payload) {
   const normalized = normalizeTemplatePackArtifact(legacyPack, {
     allowVersionMigration: true,
     source: "legacy_inline",
+    allowLegacyGraphAlias: true,
   });
   if (!normalized.migrated) {
     fail({
@@ -98,7 +107,7 @@ function fail(payload) {
     templates: [{
       id: "tpl_entry",
       name: "Entry Template",
-      graph: templateGraph(),
+      workflow_definition: templateGraph(),
       template_spec_version: 1,
     }],
     created_at: "2026-03-24T00:00:00Z",

@@ -184,7 +184,7 @@ test("workflow ipc store exports template pack as artifact schema", async () => 
     templates: [{
       id: "tpl_1",
       name: "Finance Template",
-      graph: templateGraph(),
+      workflow_definition: templateGraph(),
       template_spec_version: 1,
     }],
   });

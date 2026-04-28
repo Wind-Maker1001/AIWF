@@ -39,6 +39,7 @@ function fail(payload) {
   const schema = JSON.parse(require("fs").readFileSync(schemaPath, "utf8"));
   const storageSchemaConst = String(schema?.properties?.schema_version?.const || "");
   const entrySchemaConst = String(schema?.definitions?.localTemplateEntry?.properties?.schema_version?.const || "");
+  const schemaDeclaresLegacyGraph = Object.prototype.hasOwnProperty.call(schema?.definitions?.localTemplateEntry?.properties || {}, "graph");
   if (storageSchemaConst !== LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION) {
     fail({
       status: "failed",
@@ -51,6 +52,13 @@ function fail(payload) {
       status: "failed",
       schemaPath,
       issues: [`local template entry schema_version const drift: ${entrySchemaConst || "(missing)"}`],
+    });
+  }
+  if (schemaDeclaresLegacyGraph) {
+    fail({
+      status: "failed",
+      schemaPath,
+      issues: ["local template storage schema still declares legacy graph field"],
     });
   }
 
@@ -71,6 +79,7 @@ function fail(payload) {
   }], {
     allowStorageSchemaMigration: true,
     allowEntrySchemaMigration: true,
+    allowLegacyGraphAlias: true,
   });
   if (!normalized.migrated || normalized.schema_version !== LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION) {
     fail({

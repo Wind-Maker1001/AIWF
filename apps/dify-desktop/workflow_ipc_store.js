@@ -121,6 +121,7 @@ function registerWorkflowStoreIpc(ctx, deps) {
       const normalizedPack = normalizeTemplatePackArtifact(pack, {
         allowVersionMigration: true,
         source: fromPath || "inline",
+        allowLegacyGraphAlias: true,
       });
       const templates = [];
       for (const template of (Array.isArray(normalizedPack.templates) ? normalizedPack.templates : [])) {

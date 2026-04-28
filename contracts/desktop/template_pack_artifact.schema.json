@@ -67,9 +67,6 @@
         "workflow_definition": {
           "type": "object"
         },
-        "graph": {
-          "type": "object"
-        },
         "params_schema": {
           "type": "object"
         },
