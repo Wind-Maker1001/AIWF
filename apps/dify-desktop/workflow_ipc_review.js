@@ -13,6 +13,10 @@ function registerWorkflowReviewIpc(ctx, deps) {
     workflowStoreRemoteErrorResult,
   } = require("./workflow_store_remote_error");
   const {
+    normalizeWorkflowPayloadShape,
+    resolveWorkflowDefinitionPayload,
+  } = require("./workflow_graph");
+  const {
     isMockIoAllowed,
     resolveMockFilePath,
     getRun,
@@ -64,7 +68,7 @@ function registerWorkflowReviewIpc(ctx, deps) {
   }
 
   function normalizePendingReviews(items, out, payload = null) {
-    const workflow = payload?.workflow && typeof payload.workflow === "object" ? payload.workflow : {};
+    const workflow = resolveWorkflowDefinitionPayload(payload) || {};
     const fallbackRunId = String(out?.run_id || "").trim();
     const fallbackWorkflowId = String(out?.workflow_id || workflow.workflow_id || "").trim();
     return (Array.isArray(items) ? items : []).map((item) => {
@@ -146,7 +150,7 @@ function registerWorkflowReviewIpc(ctx, deps) {
         outputs: found?.result?.node_outputs || {},
       },
     };
-    if (versionId && (runRequestKind === "reference" || !basePayload.workflow || typeof basePayload.workflow !== "object")) {
+    if (versionId && (runRequestKind === "reference" || !resolveWorkflowDefinitionPayload(basePayload))) {
       const versionItem = await workflowVersionStore.getVersion(versionId, cfg);
       if (!versionItem?.workflow_definition || typeof versionItem.workflow_definition !== "object") {
         return {
@@ -162,13 +166,14 @@ function registerWorkflowReviewIpc(ctx, deps) {
       replayPayload.workflow_definition_source = "version_reference";
       replayPayload.version_id = versionId;
       if (publishedVersionId) replayPayload.published_version_id = publishedVersionId;
-      replayPayload.workflow = versionItem.workflow_definition;
+      replayPayload.workflow_definition = versionItem.workflow_definition;
+      delete replayPayload.workflow;
       return { ok: true, payload: replayPayload };
     }
-    if (replayPayload.workflow && typeof replayPayload.workflow === "object") {
+    if (resolveWorkflowDefinitionPayload(replayPayload)) {
       replayPayload.run_request_kind = "draft";
       replayPayload.workflow_definition_source = String(replayPayload.workflow_definition_source || "draft_inline");
-      return { ok: true, payload: replayPayload };
+      return { ok: true, payload: normalizeWorkflowPayloadShape(replayPayload) };
     }
     return {
       ok: false,
@@ -256,10 +261,11 @@ function registerWorkflowReviewIpc(ctx, deps) {
           const replayPayload = replayPayloadOut.payload;
           const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
           if (!rulesOut?.ok) return rulesOut;
-          const effectivePayload = await applyQualityRuleSetToPayload(
+          let effectivePayload = await applyQualityRuleSetToPayload(
             await sandboxAutoFixStore.applyPayload(replayPayload, merged),
             merged
           );
+          effectivePayload = normalizeWorkflowPayloadShape(effectivePayload);
           effectivePayload.run_request_kind = String(replayPayload.run_request_kind || effectivePayload.run_request_kind || "draft");
           effectivePayload.workflow_definition_source = String(
             replayPayload.workflow_definition_source
@@ -268,13 +274,13 @@ function registerWorkflowReviewIpc(ctx, deps) {
           );
           if (replayPayload.version_id) effectivePayload.version_id = String(replayPayload.version_id);
           if (replayPayload.published_version_id) effectivePayload.published_version_id = String(replayPayload.published_version_id);
-          if (effectivePayload?.workflow && typeof effectivePayload.workflow === "object") {
-            const validated = await validateWorkflowDefinition(effectivePayload.workflow, {
+          if (effectivePayload.workflow_definition && typeof effectivePayload.workflow_definition === "object") {
+            const validated = await validateWorkflowDefinition(effectivePayload.workflow_definition, {
               cfg: merged,
               requireNonEmptyNodes: true,
               validationScope: "run",
             });
-            effectivePayload.workflow = validated.normalized_workflow_definition;
+            effectivePayload = normalizeWorkflowPayloadShape(effectivePayload, validated.normalized_workflow_definition);
           }
           let out = attachQualityGate(
             await executeWorkflowPayloadAuthoritatively(effectivePayload, merged),

@@ -48,7 +48,7 @@ test("workflow execution service preserves pending_review as a structured run re
 
   const out = await support.executeDraftWorkflowAuthoritatively({
     payload: {
-      workflow: {
+      workflow_definition: {
         workflow_id: "wf_review",
         version: "1.0.0",
         nodes: [{ id: "n1", type: "manual_review" }],
@@ -76,7 +76,7 @@ test("workflow execution service still fails closed on non-structured invalid re
   await assert.rejects(
     () => support.executeReferenceWorkflowAuthoritatively({
       payload: {
-        workflow: {
+        workflow_definition: {
           workflow_id: "wf_ref",
           version: "1.0.0",
           nodes: [{ id: "n1", type: "ingest_files" }],

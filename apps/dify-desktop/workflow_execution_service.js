@@ -1,4 +1,5 @@
 const { createWorkflowStoreRemoteError } = require("./workflow_store_remote_error");
+const { resolveWorkflowDefinitionPayload } = require("./workflow_graph");
 
 const DEFAULT_ACCEL_URL = "http://127.0.0.1:18082";
 
@@ -97,6 +98,7 @@ function mapRustDraftExecutionToDesktop(payload = {}, workflowDefinition = {}) {
     node_outputs: execution?.context && typeof execution.context === "object" ? execution.context : {},
     artifacts: mapArtifacts(finalOutput),
     pending_reviews: pendingReviews,
+    workflow_definition: workflowDefinition,
     workflow: workflowDefinition,
     workflow_contract: {
       ok: true,
@@ -122,7 +124,7 @@ function createWorkflowExecutionSupport(deps = {}) {
 
   async function executeDraftWorkflowAuthoritatively(options = {}) {
     const payload = options?.payload && typeof options.payload === "object" ? options.payload : {};
-    const workflowDefinition = payload?.workflow && typeof payload.workflow === "object" ? payload.workflow : {};
+    const workflowDefinition = resolveWorkflowDefinitionPayload(payload) || {};
     const cfg = options?.cfg && typeof options.cfg === "object" ? options.cfg : null;
     const baseUrl = resolveAccelUrl(loadConfig, env, cfg);
 
@@ -178,7 +180,7 @@ function createWorkflowExecutionSupport(deps = {}) {
 
   async function executeReferenceWorkflowAuthoritatively(options = {}) {
     const payload = options?.payload && typeof options.payload === "object" ? options.payload : {};
-    const workflowDefinition = payload?.workflow && typeof payload.workflow === "object" ? payload.workflow : {};
+    const workflowDefinition = resolveWorkflowDefinitionPayload(payload) || {};
     const cfg = options?.cfg && typeof options.cfg === "object" ? options.cfg : null;
     const baseUrl = resolveAccelUrl(loadConfig, env, cfg);
 

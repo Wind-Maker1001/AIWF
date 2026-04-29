@@ -25,11 +25,39 @@ function defaultWorkflowGraph() {
   };
 }
 
+function resolveWorkflowDefinitionPayload(payload = {}, options = {}) {
+  const { fallbackToDefault = false } = options;
+  const source = payload && typeof payload === "object" ? payload : {};
+  const candidate =
+    source.workflow_definition && typeof source.workflow_definition === "object"
+      ? source.workflow_definition
+      : (source.workflow && typeof source.workflow === "object" ? source.workflow : null);
+  if (candidate && typeof candidate === "object") {
+    return candidate;
+  }
+  return fallbackToDefault ? defaultWorkflowGraph() : null;
+}
+
+function normalizeWorkflowPayloadShape(payload = {}, workflowDefinition = null, options = {}) {
+  const { keepLegacyWorkflowAlias = false } = options;
+  const source = payload && typeof payload === "object" ? { ...payload } : {};
+  const normalizedWorkflowDefinition =
+    workflowDefinition && typeof workflowDefinition === "object"
+      ? workflowDefinition
+      : resolveWorkflowDefinitionPayload(source, { fallbackToDefault: false });
+  if (normalizedWorkflowDefinition && typeof normalizedWorkflowDefinition === "object") {
+    source.workflow_definition = normalizedWorkflowDefinition;
+    if (keepLegacyWorkflowAlias) {
+      source.workflow = normalizedWorkflowDefinition;
+    } else {
+      delete source.workflow;
+    }
+  }
+  return source;
+}
+
 function normalizeWorkflow(payload = {}) {
-  const rawWorkflow =
-    payload.workflow && typeof payload.workflow === "object"
-      ? payload.workflow
-      : defaultWorkflowGraph();
+  const rawWorkflow = resolveWorkflowDefinitionPayload(payload, { fallbackToDefault: true });
   const notes = [];
   const base = {
     ...rawWorkflow,
@@ -103,5 +131,7 @@ function topoSort(nodes, edges) {
 module.exports = {
   defaultWorkflowGraph,
   normalizeWorkflow,
+  normalizeWorkflowPayloadShape,
+  resolveWorkflowDefinitionPayload,
   topoSort,
 };
