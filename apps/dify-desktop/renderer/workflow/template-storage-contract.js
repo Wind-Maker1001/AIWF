@@ -13,16 +13,18 @@ function createLocalTemplateStorageError(message, code = "local_template_storage
   return error;
 }
 
-function resolveTemplateWorkflowDefinition(source) {
+function resolveTemplateWorkflowDefinition(source, options = {}) {
+  const { allowLegacyGraphAlias = false } = options;
   const candidate = source?.workflow_definition !== undefined
     ? source.workflow_definition
-    : source?.graph;
+    : (allowLegacyGraphAlias ? source?.graph : undefined);
   return candidate && typeof candidate === "object" ? clone(candidate) : null;
 }
 
 function normalizeLocalTemplateEntry(entry, index = 0, options = {}) {
   const {
     allowSchemaMigration = true,
+    allowLegacyGraphAlias = false,
   } = options;
   const source = entry && typeof entry === "object" ? entry : null;
   if (!source || Array.isArray(source)) {
@@ -42,7 +44,7 @@ function normalizeLocalTemplateEntry(entry, index = 0, options = {}) {
 
   const id = String(source.id || `custom_${index + 1}`).trim();
   const name = String(source.name || id).trim();
-  const workflowDefinition = resolveTemplateWorkflowDefinition(source);
+  const workflowDefinition = resolveTemplateWorkflowDefinition(source, { allowLegacyGraphAlias });
   if (!id) throw createLocalTemplateStorageError(`local template entry[${index}] id is required`, "local_template_entry_invalid", notes);
   if (!name) throw createLocalTemplateStorageError(`local template entry[${index}] name is required`, "local_template_entry_invalid", notes);
   if (!workflowDefinition) throw createLocalTemplateStorageError(`local template entry[${index}] workflow_definition is required`, "local_template_entry_invalid", notes);
@@ -74,6 +76,7 @@ function normalizeLocalTemplateStorage(raw, options = {}) {
   const {
     allowStorageSchemaMigration = true,
     allowEntrySchemaMigration = true,
+    allowLegacyGraphAlias = false,
   } = options;
 
   const notes = [];
@@ -100,6 +103,7 @@ function normalizeLocalTemplateStorage(raw, options = {}) {
 
   const normalizedItems = itemsSource.map((item, index) => normalizeLocalTemplateEntry(item, index, {
     allowSchemaMigration: allowEntrySchemaMigration,
+    allowLegacyGraphAlias,
   }));
   normalizedItems.forEach((item) => {
     const itemNotes = Array.isArray(item.notes) ? item.notes : [];

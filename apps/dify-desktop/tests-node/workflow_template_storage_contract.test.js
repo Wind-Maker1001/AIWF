@@ -32,6 +32,7 @@ test("workflow template storage contract migrates legacy array storage", async (
   }], {
     allowStorageSchemaMigration: true,
     allowEntrySchemaMigration: true,
+    allowLegacyGraphAlias: true,
   });
 
   assert.equal(out.schema_version, LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION);
@@ -83,6 +84,7 @@ test("workflow template storage contract stringifies versioned envelope", async 
   }], {
     allowStorageSchemaMigration: true,
     allowEntrySchemaMigration: true,
+    allowLegacyGraphAlias: true,
   });
 
   const payload = JSON.parse(text);
@@ -91,4 +93,21 @@ test("workflow template storage contract stringifies versioned envelope", async 
   assert.equal(payload.items[0].id, "custom_1");
   assert.deepEqual(payload.items[0].workflow_definition, templateGraph());
   assert.equal(Object.prototype.hasOwnProperty.call(payload.items[0], "graph"), false);
+});
+
+test("workflow template storage contract rejects legacy graph alias without explicit opt-in", async () => {
+  const { normalizeLocalTemplateStorage } = await loadTemplateStorageContractModule();
+
+  assert.throws(
+    () => normalizeLocalTemplateStorage([{
+      id: "custom_1",
+      name: "Local Template 1",
+      graph: templateGraph(),
+    }], {
+      allowStorageSchemaMigration: true,
+      allowEntrySchemaMigration: true,
+      allowLegacyGraphAlias: false,
+    }),
+    /workflow_definition is required/i
+  );
 });

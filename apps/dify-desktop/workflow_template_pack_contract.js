@@ -14,19 +14,23 @@ function createTemplatePackContractError(message, code = "template_pack_contract
   return error;
 }
 
-function resolveTemplateWorkflowDefinition(source) {
+function resolveTemplateWorkflowDefinition(source, options = {}) {
+  const { allowLegacyGraphAlias = false } = options;
   const candidate = source?.workflow_definition !== undefined
     ? source.workflow_definition
-    : source?.graph;
+    : (allowLegacyGraphAlias ? source?.graph : undefined);
   return candidate && typeof candidate === "object" ? clone(candidate) : null;
 }
 
-function normalizeTemplatePackTemplate(template, index = 0) {
+function normalizeTemplatePackTemplate(template, index = 0, options = {}) {
+  const {
+    allowLegacyGraphAlias = false,
+  } = options;
   const source = template && typeof template === "object" ? template : {};
   const { graph: _legacyGraph, workflow_definition: _legacyWorkflowDefinition, ...rest } = source;
   const id = String(source.id || `tpl_${index + 1}`).trim();
   const name = String(source.name || id || `template_${index + 1}`).trim();
-  const workflowDefinition = resolveTemplateWorkflowDefinition(source);
+  const workflowDefinition = resolveTemplateWorkflowDefinition(source, { allowLegacyGraphAlias });
   if (!id) throw createTemplatePackContractError(`template[${index}] id is required`);
   if (!name) throw createTemplatePackContractError(`template[${index}] name is required`);
   if (!workflowDefinition) throw createTemplatePackContractError(`template[${index}] workflow_definition is required`);
@@ -53,6 +57,7 @@ function normalizeTemplatePackArtifact(pack, options = {}) {
   const {
     allowVersionMigration = true,
     source = "",
+    allowLegacyGraphAlias = false,
   } = options;
   const raw = pack && typeof pack === "object" ? pack : null;
   if (!raw) {
@@ -70,7 +75,9 @@ function normalizeTemplatePackArtifact(pack, options = {}) {
     throw createTemplatePackContractError(`unsupported template pack schema_version: ${rawSchemaVersion}`);
   }
 
-  const templates = Array.isArray(raw.templates) ? raw.templates.map(normalizeTemplatePackTemplate) : [];
+  const templates = Array.isArray(raw.templates)
+    ? raw.templates.map((template, index) => normalizeTemplatePackTemplate(template, index, { allowLegacyGraphAlias }))
+    : [];
   if (!templates.length) {
     throw createTemplatePackContractError("template pack templates are required");
   }
@@ -104,7 +111,7 @@ function exportTemplatePackArtifact(entry, options = {}) {
     });
   } else if (rawSchemaVersion === TEMPLATE_PACK_ENTRY_SCHEMA_VERSION) {
       const templates = Array.isArray(source.templates)
-      ? source.templates.map(normalizeTemplatePackTemplate)
+      ? source.templates.map((template, index) => normalizeTemplatePackTemplate(template, index, { allowLegacyGraphAlias: false }))
       : [];
     if (!templates.length) {
       throw createTemplatePackContractError("template pack templates are required");

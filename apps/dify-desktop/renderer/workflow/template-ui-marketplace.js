@@ -26,6 +26,7 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
       const normalized = parseLocalTemplateStorageText(raw, {
         allowStorageSchemaMigration: true,
         allowEntrySchemaMigration: true,
+        allowLegacyGraphAlias: true,
       });
       if (normalized.migrated) {
         window.localStorage.setItem(templateStorageKey, JSON.stringify(normalized));
