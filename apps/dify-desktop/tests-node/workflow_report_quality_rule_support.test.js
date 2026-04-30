@@ -22,7 +22,7 @@ test("workflow report support injects backend-owned quality rule sets into paylo
 
   const payload = {
     quality_rule_set_id: "finance_default",
-    workflow: {
+    workflow_definition: {
       nodes: [
         { id: "n1", type: "quality_check_v3", config: { existing: true } },
         { id: "n2", type: "ingest_files", config: {} },
@@ -31,15 +31,47 @@ test("workflow report support injects backend-owned quality rule sets into paylo
   };
 
   const out = await support.applyQualityRuleSetToPayload(payload, { mode: "base_api" });
-  assert.deepEqual(out.workflow.nodes[0].config.rules, { required_columns: ["amount"] });
-  assert.deepEqual(out.workflow.nodes[0].config.rule_set_meta, {
+  assert.deepEqual(out.workflow_definition.nodes[0].config.rules, { required_columns: ["amount"] });
+  assert.deepEqual(out.workflow_definition.nodes[0].config.rule_set_meta, {
     id: "finance_default",
     name: "Finance Default",
     version: "v3",
     provider: "glue_http",
     owner: "glue-python",
   });
-  assert.equal(out.workflow.nodes[1].config.rules, undefined);
+  assert.equal(out.workflow_definition.nodes[1].config.rules, undefined);
+  assert.equal(Object.prototype.hasOwnProperty.call(out, "workflow"), false);
+});
+
+test("workflow report support still accepts legacy workflow alias input", async () => {
+  const support = createWorkflowReportSupport({
+    deepClone: (value) => JSON.parse(JSON.stringify(value)),
+    listRunBaselines: () => [],
+    qualityRuleSetSupport: {
+      getQualityRuleSet: async () => ({
+        id: "finance_default",
+        name: "Finance Default",
+        version: "v3",
+        provider: "glue_http",
+        owner: "glue-python",
+        rules: { required_columns: ["amount"] },
+      }),
+    },
+  });
+
+  const out = await support.applyQualityRuleSetToPayload({
+    quality_rule_set_id: "finance_default",
+    workflow: {
+      workflow_id: "wf_legacy",
+      version: "workflow.v1",
+      nodes: [{ id: "n1", type: "quality_check_v3", config: {} }],
+      edges: [],
+    },
+  }, { mode: "base_api" });
+
+  assert.equal(out.workflow_definition.workflow_id, "wf_legacy");
+  assert.deepEqual(out.workflow_definition.nodes[0].config.rules, { required_columns: ["amount"] });
+  assert.equal(Object.prototype.hasOwnProperty.call(out, "workflow"), false);
 });
 
 test("workflow report support rejects missing quality rule sets instead of silently skipping", async () => {
@@ -54,7 +86,7 @@ test("workflow report support rejects missing quality rule sets instead of silen
   await assert.rejects(
     () => support.applyQualityRuleSetToPayload({
       quality_rule_set_id: "missing_set",
-      workflow: { nodes: [{ id: "n1", type: "quality_check_v3", config: {} }] },
+      workflow_definition: { nodes: [{ id: "n1", type: "quality_check_v3", config: {} }] },
     }, { mode: "base_api" }),
     /quality rule set not found: missing_set/
   );
