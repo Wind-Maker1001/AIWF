@@ -62,6 +62,8 @@ test("workflow execution service preserves pending_review as a structured run re
   assert.equal(out.run_id, "run_review_1");
   assert.equal(out.pending_reviews.length, 1);
   assert.equal(out.compatibility_fallback, false);
+  assert.equal(out.workflow_definition.workflow_id, "wf_review");
+  assert.equal(Object.prototype.hasOwnProperty.call(out, "workflow"), false);
 });
 
 test("workflow execution service still fails closed on non-structured invalid responses", async () => {

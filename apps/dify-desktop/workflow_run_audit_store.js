@@ -4,6 +4,9 @@ const {
   createWorkflowStoreRemoteError,
   workflowStoreRemoteErrorResult,
 } = require("./workflow_store_remote_error");
+const {
+  normalizeWorkflowPayloadShape,
+} = require("./workflow_graph");
 const WORKFLOW_RUN_ENTRY_SCHEMA_VERSION = "workflow_run_entry.v1";
 const WORKFLOW_AUDIT_EVENT_SCHEMA_VERSION = "workflow_audit_event.v1";
 const WORKFLOW_RUN_TIMELINE_SCHEMA_VERSION = "workflow_run_timeline.v1";
@@ -32,6 +35,9 @@ function createWorkflowRunAuditStore(deps = {}) {
     const runId = String(source.run_id || "").trim();
     if (!runId) throw new Error("run_id is required");
     const local = provider === LOCAL_PROVIDER;
+    const payload = normalizeWorkflowPayloadShape(clone(source.payload && typeof source.payload === "object" ? source.payload : {}));
+    const resultSource = source.result && typeof source.result === "object" ? source.result : source;
+    const result = normalizeWorkflowPayloadShape(clone(resultSource && typeof resultSource === "object" ? resultSource : {}));
     return {
       schema_version: String(source.schema_version || WORKFLOW_RUN_ENTRY_SCHEMA_VERSION),
       provider,
@@ -46,9 +52,9 @@ function createWorkflowRunAuditStore(deps = {}) {
       version_id: String(source.version_id || "").trim(),
       published_version_id: String(source.published_version_id || "").trim(),
       workflow_definition_source: String(source.workflow_definition_source || "").trim(),
-      payload: clone(source.payload && typeof source.payload === "object" ? source.payload : {}),
+      payload,
       config: clone(source.config && typeof source.config === "object" ? source.config : {}),
-      result: clone(source.result && typeof source.result === "object" ? source.result : source),
+      result,
     };
   }
 
