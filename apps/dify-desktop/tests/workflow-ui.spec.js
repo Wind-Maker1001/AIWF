@@ -519,7 +519,11 @@ test('save/load workflow via mock dialog path', async () => {
         nodes: [{ id: 'n1', type: 'ingest_files', x: 1, y: 2 }],
         edges: [],
       };
-      return await window.aiwfDesktop.saveWorkflow(g, 't1', { mock: true, path: filePath });
+      return await window.aiwfDesktop.saveWorkflow({
+        workflow_definition: g,
+        name: 't1',
+        options: { mock: true, path: filePath },
+      });
     }, fp);
     expect(saved && saved.ok).toBeTruthy();
     expect(fs.existsSync(fp)).toBeTruthy();

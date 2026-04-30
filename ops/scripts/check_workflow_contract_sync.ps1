@@ -40,6 +40,7 @@ function fail(message) {
   const preflightControllerUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "preflight-controller-ui.js");
   const flowIoUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "flow-io-ui.js");
   const runPayloadUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "run-payload-ui.js");
+  const preloadPath = path.join(repoRoot, "apps", "dify-desktop", "preload.js");
 
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
   const required = Array.isArray(schema.required) ? schema.required : [];
@@ -210,6 +211,9 @@ function fail(message) {
   const preflightControllerUiText = fs.readFileSync(preflightControllerUiPath, "utf8");
   const flowIoUiText = fs.readFileSync(flowIoUiPath, "utf8");
   const runPayloadUiText = fs.readFileSync(runPayloadUiPath, "utf8");
+  const preloadText = fs.readFileSync(preloadPath, "utf8");
+  const flowIoUiCompact = flowIoUiText.replace(/\\s+/g, " ");
+  const preloadCompact = preloadText.replace(/\\s+/g, " ");
 
   const importRejectedUnknownType =
     /validateWorkflowDefinitionAuthoritatively/.test(workflowIpcStoreText)
@@ -243,6 +247,21 @@ function fail(message) {
     fail("flow-io-ui still performs local authoritative workflow contract assert");
   }
 
+  const flowIoUsesCanonicalWorkflowField =
+    flowIoUiCompact.includes("workflow_definition: graph")
+    && flowIoUiText.includes("out.workflow_definition")
+    && !flowIoUiText.includes("out.graph");
+  if (!flowIoUsesCanonicalWorkflowField) {
+    fail("flow-io-ui no longer uses canonical workflow_definition save/load surface");
+  }
+
+  const preloadSaveSurfaceCanonical =
+    preloadCompact.includes("saveWorkflow: (workflowDefinitionOrRequest, name, opts)")
+    && preloadCompact.includes('ipcRenderer.invoke(\"aiwf:saveWorkflow\", request)');
+  if (!preloadSaveSurfaceCanonical) {
+    fail("preload saveWorkflow surface no longer canonicalizes workflow_definition requests");
+  }
+
   const runPayloadAvoidsLocalAssert = !/assertWorkflowContract/.test(runPayloadUiText);
   if (!runPayloadAvoidsLocalAssert) {
     fail("run-payload-ui still performs local authoritative workflow contract assert");
@@ -261,6 +280,8 @@ function fail(message) {
     engineUsesRustValidation,
     preflightUsesRustWorkflowValidation,
     flowIoAvoidsLocalAssert,
+    flowIoUsesCanonicalWorkflowField,
+    preloadSaveSurfaceCanonical,
     runPayloadAvoidsLocalAssert,
     rustUnavailableFailsClosed,
   }));

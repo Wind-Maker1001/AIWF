@@ -18,14 +18,16 @@ test("workflow flow io ui exports json and saves flow", async () => {
   };
   global.window = {
     aiwfDesktop: {
-      saveWorkflow: async (graph, name) => {
-        assert.deepEqual(graph, {
-          workflow_id: "wf_1",
-          version: "1.0.0",
-          nodes: [{ id: "n1", type: "ingest_files" }],
-          edges: [],
+      saveWorkflow: async (request) => {
+        assert.deepEqual(request, {
+          workflow_definition: {
+            workflow_id: "wf_1",
+            version: "1.0.0",
+            nodes: [{ id: "n1", type: "ingest_files" }],
+            edges: [],
+          },
+          name: "Flow Alpha",
         });
-        assert.equal(name, "Flow Alpha");
         return { ok: true, path: "D:/flows/flow-alpha.json" };
       },
     },

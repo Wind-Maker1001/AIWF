@@ -64,7 +64,24 @@ contextBridge.exposeInMainWorld("aiwfDesktop", {
   validateWorkflowDefinition: (req) => ipcRenderer.invoke("aiwf:validateWorkflowDefinition", req),
   getWorkflowDiagnostics: (opts) => ipcRenderer.invoke("aiwf:getWorkflowDiagnostics", opts),
   getWorkflowPerfDashboard: (opts) => ipcRenderer.invoke("aiwf:getWorkflowPerfDashboard", opts),
-  saveWorkflow: (graph, name, opts) => ipcRenderer.invoke("aiwf:saveWorkflow", graph, name, opts),
+  saveWorkflow: (workflowDefinitionOrRequest, name, opts) => {
+    const source = workflowDefinitionOrRequest && typeof workflowDefinitionOrRequest === "object"
+      ? workflowDefinitionOrRequest
+      : {};
+    const request =
+      source.workflow_definition && typeof source.workflow_definition === "object"
+        ? {
+          ...source,
+          name: typeof source.name === "string" ? source.name : name,
+          options: source.options && typeof source.options === "object" ? source.options : opts,
+        }
+        : {
+          workflow_definition: source,
+          name,
+          options: opts,
+        };
+    return ipcRenderer.invoke("aiwf:saveWorkflow", request);
+  },
   loadWorkflow: (opts) => ipcRenderer.invoke("aiwf:loadWorkflow", opts),
   openWorkflowStudio: () => ipcRenderer.invoke("aiwf:openWorkflowStudio"),
   openPath: (p) => ipcRenderer.invoke("aiwf:openPath", p),
