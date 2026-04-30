@@ -142,3 +142,42 @@ test("workflow ipc state node cache tracks hits misses and sets", () => {
   assert.equal(Object.prototype.hasOwnProperty.call(clearedCacheJson, "schema_version"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(clearedMetricsJson, "schema_version"), false);
 });
+
+test("workflow ipc state appends canonical run history snapshots without legacy workflow alias", () => {
+  const { support } = makeSupport();
+
+  support.appendRunHistory(
+    {
+      run_id: "run_history_1",
+      workflow_id: "wf_history",
+      status: "done",
+      ok: true,
+      workflow: {
+        workflow_id: "wf_history",
+        version: "1.0.0",
+        nodes: [{ id: "n1", type: "ingest_files" }],
+        edges: [],
+      },
+    },
+    {
+      run_request_kind: "draft",
+      workflow_definition_source: "draft_inline",
+      workflow: {
+        workflow_id: "wf_history",
+        version: "1.0.0",
+        nodes: [{ id: "n1", type: "ingest_files" }],
+        edges: [],
+      },
+    },
+    { mode: "offline_local" },
+  );
+
+  const lines = fs.readFileSync(support.runHistoryPath(), "utf8").trim().split(/\r?\n/).filter(Boolean);
+  assert.equal(lines.length, 1);
+  const item = JSON.parse(lines[0]);
+  assert.equal(item.payload.workflow_definition.workflow_id, "wf_history");
+  assert.equal(Object.prototype.hasOwnProperty.call(item.payload, "workflow"), false);
+  assert.equal(item.result.workflow_definition.workflow_id, "wf_history");
+  assert.equal(Object.prototype.hasOwnProperty.call(item.result, "workflow"), false);
+  assert.equal(item.workflow_definition_source, "draft_inline");
+});

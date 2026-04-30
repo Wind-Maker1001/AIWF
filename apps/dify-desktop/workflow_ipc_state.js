@@ -1,3 +1,7 @@
+const {
+  normalizeWorkflowPayloadShape,
+} = require("./workflow_graph");
+
 const TEMPLATE_PACK_ENTRY_SCHEMA_VERSION = "template_pack_entry.v1";
 
 function createWorkflowIpcStateSupport(ctx) {
@@ -179,12 +183,8 @@ function createWorkflowIpcStateSupport(ctx) {
         || run?.workflow_definition_source
         || (runRequestKind === "reference" ? "version_reference" : "draft_inline")
       ).trim() || (runRequestKind === "reference" ? "version_reference" : "draft_inline");
-      const payloadSnapshot = JSON.parse(JSON.stringify(sourcePayload || {}));
-      const resultSnapshot = JSON.parse(JSON.stringify(run || {}));
-      if (runRequestKind === "reference") {
-        delete payloadSnapshot.workflow;
-        delete resultSnapshot.workflow;
-      }
+      const payloadSnapshot = normalizeWorkflowPayloadShape(JSON.parse(JSON.stringify(sourcePayload || {})));
+      const resultSnapshot = normalizeWorkflowPayloadShape(JSON.parse(JSON.stringify(run || {})));
       const item = {
         ts: new Date().toISOString(),
         run_id: String(run?.run_id || ""),

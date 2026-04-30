@@ -148,7 +148,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       error_items: Array.isArray(remotePayload?.error_items) ? remotePayload.error_items : [],
       notes: Array.isArray(remotePayload?.notes) ? remotePayload.notes : [],
       node_runs: normalizedFallback.graph.nodes.map(makeNodeRun),
-      workflow: normalizedFallback.graph,
+      workflow_definition: normalizedFallback.graph,
       workflow_contract: {
         ok: false,
         migrated: Array.isArray(remotePayload?.notes) && remotePayload.notes.length > 0,
@@ -193,7 +193,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
         authorization: authz,
       },
       node_runs: graph.nodes.map(makeNodeRun),
-      workflow: graph,
+      workflow_definition: graph,
       workflow_contract: workflowContract,
     };
   }
@@ -277,7 +277,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       node_outputs: nodeOutputs,
       template_validation: templateValidation,
       pending_reviews: ctx.manualReviewRequests || [],
-      workflow: graph,
+      workflow_definition: graph,
       workflow_contract: workflowContract,
       diagnostics: buildWorkflowDiagnostics(orderedNodeRuns),
       governance: {
@@ -310,7 +310,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       clean_job_id: ctx.cleanResult?.job_id || null,
       node_outputs: ctx.nodeOutputs || {},
       pending_reviews: ctx.manualReviewRequests || [],
-      workflow: graph,
+      workflow_definition: graph,
       workflow_contract: workflowContract,
       governance: {
         actor_role: actorRole,

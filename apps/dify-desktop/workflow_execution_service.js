@@ -99,7 +99,6 @@ function mapRustDraftExecutionToDesktop(payload = {}, workflowDefinition = {}) {
     artifacts: mapArtifacts(finalOutput),
     pending_reviews: pendingReviews,
     workflow_definition: workflowDefinition,
-    workflow: workflowDefinition,
     workflow_contract: {
       ok: true,
       migrated: false,

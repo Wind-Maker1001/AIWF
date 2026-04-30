@@ -45,6 +45,8 @@ test("runMinimalWorkflow blocks forbidden nodes by role policy", async () => {
   assert.equal(out.ok, false);
   assert.equal(out.status, "forbidden_graph");
   assert.match(String(out.error || ""), /governance_forbidden_nodes/i);
+  assert.equal(out.workflow_definition.workflow_id, "w_forbidden");
+  assert.equal(Object.prototype.hasOwnProperty.call(out, "workflow"), false);
 });
 
 test("runMinimalWorkflow emits governance input classification", async () => {
@@ -66,6 +68,8 @@ test("runMinimalWorkflow emits governance input classification", async () => {
   assert.equal(out.ok, true);
   assert.equal(Number(out?.governance?.input_classes?.data_files || 0), 1);
   assert.equal(Number(out?.governance?.input_classes?.doc_files || 0), 1);
+  assert.equal(out.workflow_definition.workflow_id, "w_classify");
+  assert.equal(Object.prototype.hasOwnProperty.call(out, "workflow"), false);
 });
 
 test("runMinimalWorkflow enforces ai budget max calls per run", async () => {
@@ -135,4 +139,6 @@ test("runMinimalWorkflow fails closed when Rust-authoritative validation is unav
   assert.equal(out.status, "workflow_validation_unavailable");
   assert.equal(out.error_code, "workflow_validation_unavailable");
   assert.match(String(out.error || ""), /workflow validation unavailable/i);
+  assert.equal(out.workflow_definition.workflow_id, "wf_unavailable");
+  assert.equal(Object.prototype.hasOwnProperty.call(out, "workflow"), false);
 });

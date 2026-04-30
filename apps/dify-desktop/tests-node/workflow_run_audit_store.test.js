@@ -72,11 +72,26 @@ test("workflow run audit store reads local runtime history in offline_local mode
     version_id: "ver_local_1",
     published_version_id: "ver_local_1",
     workflow_definition_source: "version_reference",
-    payload: { version_id: "ver_local_1", published_version_id: "ver_local_1" },
+    payload: {
+      version_id: "ver_local_1",
+      published_version_id: "ver_local_1",
+      workflow: {
+        workflow_id: "wf_local",
+        version: "1.0.0",
+        nodes: [{ id: "n1", type: "quality_check_v3" }],
+        edges: [],
+      },
+    },
     config: { mode: "offline_local" },
     result: {
       ok: false,
       status: "failed",
+      workflow: {
+        workflow_id: "wf_local",
+        version: "1.0.0",
+        nodes: [{ id: "n1", type: "quality_check_v3" }],
+        edges: [],
+      },
       node_runs: [{ id: "n1", type: "quality_check_v3", status: "failed", error: "boom", started_at: "2026-03-28T00:00:00Z", ended_at: "2026-03-28T00:00:01Z", seconds: 1 }],
     },
   })}\n`, "utf8");
@@ -100,11 +115,19 @@ test("workflow run audit store reads local runtime history in offline_local mode
   assert.equal(runs.items[0].run_request_kind, "reference");
   assert.equal(runs.items[0].version_id, "ver_local_1");
   assert.equal(runs.items[0].published_version_id, "ver_local_1");
+  assert.equal(runs.items[0].payload.workflow_definition.workflow_id, "wf_local");
+  assert.equal(Object.prototype.hasOwnProperty.call(runs.items[0].payload, "workflow"), false);
+  assert.equal(runs.items[0].result.workflow_definition.workflow_id, "wf_local");
+  assert.equal(Object.prototype.hasOwnProperty.call(runs.items[0].result, "workflow"), false);
 
   const hit = await store.getRun("run_local_1", { mode: "offline_local" });
   assert.equal(hit.provider, LOCAL_PROVIDER);
   assert.equal(hit.run_id, "run_local_1");
   assert.equal(hit.workflow_definition_source, "version_reference");
+  assert.equal(hit.payload.workflow_definition.workflow_id, "wf_local");
+  assert.equal(Object.prototype.hasOwnProperty.call(hit.payload, "workflow"), false);
+  assert.equal(hit.result.workflow_definition.workflow_id, "wf_local");
+  assert.equal(Object.prototype.hasOwnProperty.call(hit.result, "workflow"), false);
 
   const timeline = await store.getRunTimeline("run_local_1", { mode: "offline_local" });
   assert.equal(timeline.provider, LOCAL_PROVIDER);
