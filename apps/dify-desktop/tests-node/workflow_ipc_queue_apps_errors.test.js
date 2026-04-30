@@ -211,6 +211,68 @@ test("workflow queue apps ipc publishes app via version snapshot reference", asy
   assert.equal(calls[1].item.graph, undefined);
 });
 
+test("workflow queue apps ipc runs published app through canonical workflow_definition payload", async () => {
+  const runPayloads = [];
+  const handlers = createQueueAppsHarness({
+    workflowAppRegistryStore: {
+      getApp: async () => ({
+        app_id: "finance_app",
+        name: "Finance App",
+        provider: "glue_http",
+        workflow_id: "wf_finance",
+        published_version_id: "ver_finance_001",
+      }),
+      publishApp: async () => ({ ok: true }),
+      listApps: async () => ({ ok: true, items: [] }),
+    },
+    workflowVersionStore: {
+      recordVersion: async () => ({ ok: true, item: { version_id: "ver_1" } }),
+      listVersions: async () => ({ ok: true, items: [] }),
+      getVersion: async () => ({
+        workflow_definition: {
+          workflow_id: "wf_finance",
+          version: "workflow.v1",
+          nodes: [{ id: "n1", type: "ingest_files", config: { region: "{{region}}" } }],
+          edges: [],
+        },
+      }),
+      compareVersions: async () => ({ ok: true }),
+    },
+    workflowExecutionSupport: {
+      executeReferenceWorkflowAuthoritatively: async ({ payload }) => {
+        runPayloads.push(payload);
+        return {
+          ok: true,
+          run_id: "run_finance_1",
+          status: "done",
+          workflow_id: payload?.workflow_definition?.workflow_id || "",
+        };
+      },
+    },
+  });
+
+  const runWorkflowApp = handlers["aiwf:runWorkflowApp"];
+  const out = await runWorkflowApp({}, {
+    app_id: "finance_app",
+    params: { region: "cn" },
+    payload: {
+      workflow: {
+        workflow_id: "wf_legacy",
+        version: "workflow.v0",
+        nodes: [{ id: "legacy", type: "unknown_future_node" }],
+        edges: [],
+      },
+    },
+  }, {});
+
+  assert.equal(out.ok, true);
+  assert.equal(runPayloads.length, 1);
+  assert.equal(runPayloads[0].workflow_definition_source, "version_reference");
+  assert.equal(runPayloads[0].workflow_definition.workflow_id, "wf_finance");
+  assert.equal(runPayloads[0].workflow_definition.nodes[0].config.region, "cn");
+  assert.equal(Object.prototype.hasOwnProperty.call(runPayloads[0], "workflow"), false);
+});
+
 test("workflow queue apps ipc publish fails closed when authoritative validation is unavailable", async () => {
   const handlers = createQueueAppsHarness({
     workflowValidationSupport: {

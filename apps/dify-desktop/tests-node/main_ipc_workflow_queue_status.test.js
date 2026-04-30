@@ -280,6 +280,8 @@ test("workflow queue preserves pending_review terminal status", async () => {
       priority: 100,
     });
     assert.equal(enqueued.ok, true);
+    assert.equal(enqueued.task.payload.workflow_definition.workflow_id, "wf_1");
+    assert.equal(Object.prototype.hasOwnProperty.call(enqueued.task.payload, "workflow"), false);
 
     const item = await waitForQueueStatus(listQueue, "task_review_1", "pending_review");
     assert.equal(String(item.run_id || ""), "run_review_1");

@@ -1,3 +1,8 @@
+const {
+  normalizeWorkflowPayloadShape,
+  resolveWorkflowDefinitionPayload,
+} = require("./workflow_graph");
+
 function createWorkflowReportSupport(deps) {
   const {
     deepClone,
@@ -150,9 +155,10 @@ function createWorkflowReportSupport(deps) {
 
   async function applyQualityRuleSetToPayload(payload, cfg = null) {
     const nextPayload = payload && typeof payload === "object" ? { ...payload } : {};
-    const workflow = nextPayload.workflow && typeof nextPayload.workflow === "object" ? deepClone(nextPayload.workflow) : null;
+    const workflowDefinition = resolveWorkflowDefinitionPayload(nextPayload, { fallbackToDefault: false });
+    const workflow = workflowDefinition && typeof workflowDefinition === "object" ? deepClone(workflowDefinition) : null;
     const qualityRuleSetId = String(nextPayload?.quality_rule_set_id || "").trim();
-    if (!workflow || !qualityRuleSetId) return nextPayload;
+    if (!workflow || !qualityRuleSetId) return normalizeWorkflowPayloadShape(nextPayload);
     const hit = await qualityRuleSetSupport.getQualityRuleSet(qualityRuleSetId, cfg);
     if (!hit) throw new Error(`quality rule set not found: ${qualityRuleSetId}`);
     if (!hit.rules || typeof hit.rules !== "object") {
@@ -176,8 +182,7 @@ function createWorkflowReportSupport(deps) {
         },
       };
     });
-    nextPayload.workflow = workflow;
-    return nextPayload;
+    return normalizeWorkflowPayloadShape(nextPayload, workflow);
   }
 
   async function buildRunRegressionAgainstBaseline(runId, baselineId, cfg = null) {

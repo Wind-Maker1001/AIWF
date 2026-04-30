@@ -6,6 +6,10 @@ const {
   createWorkflowStoreRemoteError,
   workflowStoreRemoteErrorResult,
 } = require("./workflow_store_remote_error");
+const {
+  normalizeWorkflowPayloadShape,
+  resolveWorkflowDefinitionPayload,
+} = require("./workflow_graph");
 
 function registerWorkflowQueueAppsIpc(ctx, deps) {
   const {
@@ -116,10 +120,20 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
   }
 
   function resolveWorkflowDefinitionRequest(source = {}) {
-    if (source?.workflow_definition && typeof source.workflow_definition === "object") {
-      return source.workflow_definition;
-    }
-    return null;
+    return resolveWorkflowDefinitionPayload(source, { fallbackToDefault: false });
+  }
+
+  async function canonicalizeWorkflowPayload(payload, cfg, options = {}) {
+    const normalizedPayload = normalizeWorkflowPayloadShape(payload);
+    const workflowDefinition = resolveWorkflowDefinitionPayload(normalizedPayload, { fallbackToDefault: false });
+    if (!workflowDefinition) return normalizedPayload;
+    const validated = await validateWorkflowDefinition(workflowDefinition, {
+      cfg,
+      allowVersionMigration: options?.allowVersionMigration === true,
+      requireNonEmptyNodes: options?.requireNonEmptyNodes === true,
+      validationScope: options?.validationScope,
+    });
+    return normalizeWorkflowPayloadShape(normalizedPayload, validated.normalized_workflow_definition);
   }
 
   function buildPublishedVersionId(graph, req) {
@@ -189,7 +203,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
   }
 
   function normalizePendingReviews(items, out, payload = null) {
-    const workflow = payload?.workflow && typeof payload.workflow === "object" ? payload.workflow : {};
+    const workflow = resolveWorkflowDefinitionPayload(payload, { fallbackToDefault: false }) || {};
     const fallbackRunId = String(out?.run_id || "").trim();
     const fallbackWorkflowId = String(out?.workflow_id || workflow.workflow_id || "").trim();
     return (Array.isArray(items) ? items : []).map((item) => {
@@ -260,20 +274,16 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
           const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(next.cfg || {}) });
           const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
           if (!rulesOut?.ok) throw rulesOut;
-          const effectivePayload = await reportSupport.applyQualityRuleSetToPayload(
+          let effectivePayload = await reportSupport.applyQualityRuleSetToPayload(
             await sandboxAutoFixStore.applyPayload(next.payload || {}, merged),
             merged
           );
           effectivePayload.run_request_kind = String(effectivePayload.run_request_kind || "draft");
           effectivePayload.workflow_definition_source = String(effectivePayload.workflow_definition_source || "draft_inline");
-          if (effectivePayload?.workflow && typeof effectivePayload.workflow === "object") {
-            const validated = await validateWorkflowDefinition(effectivePayload.workflow, {
-              cfg: merged,
-              requireNonEmptyNodes: true,
-              validationScope: "run",
-            });
-            effectivePayload.workflow = validated.normalized_workflow_definition;
-          }
+          effectivePayload = await canonicalizeWorkflowPayload(effectivePayload, merged, {
+            requireNonEmptyNodes: true,
+            validationScope: "run",
+          });
           let out = sandboxSupport.attachQualityGate(
             await executeWorkflowPayloadAuthoritatively(effectivePayload, merged),
             effectivePayload || {}
@@ -343,27 +353,23 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
 
   function ensureDraftRunPayload(payload) {
     const source = payload && typeof payload === "object" ? payload : {};
-    return {
+    return normalizeWorkflowPayloadShape({
       ...source,
       run_request_kind: "draft",
       workflow_definition_source: String(source.workflow_definition_source || "draft_inline"),
-    };
+    });
   }
 
   ipcMain.handle("aiwf:enqueueWorkflowTask", async (_evt, req) => {
     try {
       const mergedCfg = normalizeWorkflowConfig({ ...loadConfig(), ...((req && req.cfg) || {}) });
-      const payload = await reportSupport.applyQualityRuleSetToPayload(ensureDraftRunPayload((req && req.payload) || {}), mergedCfg);
+      let payload = await reportSupport.applyQualityRuleSetToPayload(ensureDraftRunPayload((req && req.payload) || {}), mergedCfg);
       payload.run_request_kind = "draft";
       payload.workflow_definition_source = String(payload.workflow_definition_source || "draft_inline");
-      if (payload?.workflow && typeof payload.workflow === "object") {
-        const validated = await validateWorkflowDefinition(payload.workflow, {
-          cfg: mergedCfg,
-          requireNonEmptyNodes: true,
-          validationScope: "run",
-        });
-        payload.workflow = validated.normalized_workflow_definition;
-      }
+      payload = await canonicalizeWorkflowPayload(payload, mergedCfg, {
+        requireNonEmptyNodes: true,
+        validationScope: "run",
+      });
       const item = {
         task_id: String((req && req.task_id) || `${Date.now()}_${Math.random().toString(16).slice(2, 10)}`),
         label: String((req && req.label) || "workflow_task"),
@@ -598,7 +604,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         }
       }
       const params = req?.params && typeof req.params === "object" ? req.params : {};
-      const mergedPayload = req?.payload && typeof req.payload === "object" ? { ...req.payload } : {};
+      let mergedPayload = normalizeWorkflowPayloadShape(req?.payload && typeof req.payload === "object" ? { ...req.payload } : {});
       mergedPayload.run_request_kind = "reference";
       mergedPayload.workflow_definition_source = "version_reference";
       mergedPayload.version_id = publishedVersionId;
@@ -612,17 +618,18 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         requireNonEmptyNodes: true,
         validationScope: "run",
       });
-      mergedPayload.workflow = applyTemplateParams(validated.normalized_workflow_definition, params);
-      const runtimeValidated = await validateWorkflowDefinition(mergedPayload.workflow, {
+      const templatedWorkflowDefinition = applyTemplateParams(validated.normalized_workflow_definition, params);
+      const runtimeValidated = await validateWorkflowDefinition(templatedWorkflowDefinition, {
         cfg: merged,
         requireNonEmptyNodes: true,
         validationScope: "run",
       });
-      mergedPayload.workflow = runtimeValidated.normalized_workflow_definition;
-      if (!mergedPayload.workflow.workflow_id) mergedPayload.workflow.workflow_id = item.workflow_id || "custom";
+      const normalizedRuntimeWorkflowDefinition = runtimeValidated.normalized_workflow_definition;
+      if (!normalizedRuntimeWorkflowDefinition.workflow_id) normalizedRuntimeWorkflowDefinition.workflow_id = item.workflow_id || "custom";
+      mergedPayload = normalizeWorkflowPayloadShape(mergedPayload, normalizedRuntimeWorkflowDefinition);
       const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
       if (!rulesOut?.ok) return rulesOut;
-      const effectivePayload = await reportSupport.applyQualityRuleSetToPayload(
+      let effectivePayload = await reportSupport.applyQualityRuleSetToPayload(
         await sandboxAutoFixStore.applyPayload(mergedPayload, merged),
         merged
       );
@@ -630,6 +637,10 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       effectivePayload.workflow_definition_source = "version_reference";
       effectivePayload.version_id = publishedVersionId;
       effectivePayload.published_version_id = publishedVersionId;
+      effectivePayload = await canonicalizeWorkflowPayload(effectivePayload, merged, {
+        requireNonEmptyNodes: true,
+        validationScope: "run",
+      });
       let out = sandboxSupport.attachQualityGate(
         await executeWorkflowPayloadAuthoritatively(effectivePayload, merged),
         effectivePayload || {}
