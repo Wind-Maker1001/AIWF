@@ -214,12 +214,16 @@ test("workflow ipc store saveWorkflow returns structured workflow contract failu
   assert.equal(typeof saveWorkflow, "function");
 
   const out = await saveWorkflow(null, {
-    workflow_id: "wf_invalid",
-    nodes: [{ id: "n1", type: "ingest_files" }],
-    edges: [],
-  }, "Invalid Workflow", {
-    mock: true,
-    path: path.join(root, "invalid_workflow.json"),
+    workflow_definition: {
+      workflow_id: "wf_invalid",
+      nodes: [{ id: "n1", type: "ingest_files" }],
+      edges: [],
+    },
+    name: "Invalid Workflow",
+    options: {
+      mock: true,
+      path: path.join(root, "invalid_workflow.json"),
+    },
   });
 
   assert.equal(out.ok, false);
@@ -237,13 +241,17 @@ test("workflow ipc store saveWorkflow rejects unregistered node types", async ()
   assert.equal(typeof saveWorkflow, "function");
 
   const out = await saveWorkflow(null, {
-    workflow_id: "wf_unknown_type",
-    version: "1.0.0",
-    nodes: [{ id: "n1", type: "unknown_future_node" }],
-    edges: [],
-  }, "Unknown Node Workflow", {
-    mock: true,
-    path: path.join(root, "unknown_type_workflow.json"),
+    workflow_definition: {
+      workflow_id: "wf_unknown_type",
+      version: "1.0.0",
+      nodes: [{ id: "n1", type: "unknown_future_node" }],
+      edges: [],
+    },
+    name: "Unknown Node Workflow",
+    options: {
+      mock: true,
+      path: path.join(root, "unknown_type_workflow.json"),
+    },
   });
 
   assert.equal(out.ok, false);
@@ -268,18 +276,46 @@ test("workflow ipc store saveWorkflow fails closed when Rust-authoritative valid
   const saveWorkflow = handlers["aiwf:saveWorkflow"];
 
   const out = await saveWorkflow(null, {
-    workflow_id: "wf_unavailable",
-    version: "1.0.0",
-    nodes: [{ id: "n1", type: "ingest_files" }],
-    edges: [],
-  }, "Unavailable Workflow", {
-    mock: true,
-    path: path.join(root, "unavailable_workflow.json"),
+    workflow_definition: {
+      workflow_id: "wf_unavailable",
+      version: "1.0.0",
+      nodes: [{ id: "n1", type: "ingest_files" }],
+      edges: [],
+    },
+    name: "Unavailable Workflow",
+    options: {
+      mock: true,
+      path: path.join(root, "unavailable_workflow.json"),
+    },
   });
 
   assert.equal(out.ok, false);
   assert.equal(out.error_code, "workflow_validation_unavailable");
   assert.match(String(out.error || ""), /workflow validation unavailable/i);
+});
+
+test("workflow ipc store saveWorkflow still accepts legacy positional workflow payload", async () => {
+  const { handlers, root, audits } = createIpcHarness({
+    workflowVersionStore: {
+      recordVersion: async (item) => ({ ok: true, item }),
+    },
+  });
+  const saveWorkflow = handlers["aiwf:saveWorkflow"];
+
+  const out = await saveWorkflow(null, {
+    workflow_id: "wf_legacy_positional",
+    version: "1.0.0",
+    nodes: [{ id: "n1", type: "ingest_files" }],
+    edges: [],
+  }, "Legacy Positional", {
+    mock: true,
+    path: path.join(root, "legacy_positional_workflow.json"),
+  });
+
+  assert.equal(out.ok, true);
+  const payload = JSON.parse(fs.readFileSync(path.join(root, "legacy_positional_workflow.json"), "utf8"));
+  assert.equal(payload.workflow_id, "wf_legacy_positional");
+  assert.equal(audits.at(-1).action, "workflow_save");
 });
 
 test("workflow ipc store loadWorkflow returns structured invalid json failure", async () => {

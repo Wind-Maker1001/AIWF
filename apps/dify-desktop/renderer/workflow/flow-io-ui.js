@@ -29,7 +29,10 @@ function createWorkflowFlowIoUi(els, deps = {}) {
     try {
       const graph = graphPayload();
       const name = saveWorkflowName(els.workflowName?.value || "");
-      const out = await window.aiwfDesktop.saveWorkflow(graph, name);
+      const out = await window.aiwfDesktop.saveWorkflow({
+        workflow_definition: graph,
+        name,
+      });
       if (out?.ok) {
         setStatus(`流程已保存: ${out.path}`, true);
         await refreshVersions();
@@ -56,7 +59,7 @@ function createWorkflowFlowIoUi(els, deps = {}) {
       }
       const loadedWorkflowDefinition = out.workflow_definition && typeof out.workflow_definition === "object"
         ? out.workflow_definition
-        : (out.graph || {});
+        : {};
       const migrated = migrateLoadedWorkflowGraph(loadedWorkflowDefinition);
       const applied = applyLoadedWorkflowGraph(migrated.graph || {});
       const migrationReport = combineWorkflowMigrationReports(migrated, applied?.contract);

@@ -77,6 +77,31 @@ function registerWorkflowStoreIpc(ctx, deps) {
     });
   }
 
+  function normalizeSaveWorkflowRequest(requestOrWorkflow, legacyName, legacyOptions) {
+    const source = requestOrWorkflow && typeof requestOrWorkflow === "object" ? requestOrWorkflow : {};
+    const looksCanonicalRequest =
+      Object.prototype.hasOwnProperty.call(source, "workflow_definition")
+      || Object.prototype.hasOwnProperty.call(source, "name")
+      || Object.prototype.hasOwnProperty.call(source, "options");
+    if (looksCanonicalRequest) {
+      return {
+        workflow_definition:
+          source.workflow_definition && typeof source.workflow_definition === "object"
+            ? source.workflow_definition
+            : {},
+        name: String(source.name || legacyName || ""),
+        options: source.options && typeof source.options === "object"
+          ? source.options
+          : (legacyOptions && typeof legacyOptions === "object" ? legacyOptions : {}),
+      };
+    }
+    return {
+      workflow_definition: source,
+      name: String(legacyName || ""),
+      options: legacyOptions && typeof legacyOptions === "object" ? legacyOptions : {},
+    };
+  }
+
   ipcMain.handle("aiwf:listTemplateMarketplace", async (_evt, req) => {
     const limit = Number(req?.limit || 500);
     return { ok: true, items: listTemplateMarketplace(limit) };
@@ -242,11 +267,12 @@ function registerWorkflowStoreIpc(ctx, deps) {
     return out;
   });
 
-  ipcMain.handle("aiwf:saveWorkflow", async (_evt, graph, name, opts) => {
+  ipcMain.handle("aiwf:saveWorkflow", async (_evt, req, legacyName, legacyOptions) => {
     try {
-      const options = opts && typeof opts === "object" ? opts : {};
+      const request = normalizeSaveWorkflowRequest(req, legacyName, legacyOptions);
+      const options = request.options;
       const allowMockIo = isMockIoAllowed();
-      const safeName = safeWorkflowName(name);
+      const safeName = safeWorkflowName(request.name);
       let canceled = false;
       let filePath = "";
       if (options.mock && options.path && allowMockIo) {
@@ -264,7 +290,9 @@ function registerWorkflowStoreIpc(ctx, deps) {
         filePath = out.filePath || "";
       }
       if (canceled || !filePath) return { ok: false, canceled: true };
-      const payload = graph && typeof graph === "object" ? graph : {};
+      const payload = request.workflow_definition && typeof request.workflow_definition === "object"
+        ? request.workflow_definition
+        : {};
       const validated = await validateWorkflowDefinition(payload, {
         requireNonEmptyNodes: true,
         validationScope: "authoring",
