@@ -103,9 +103,11 @@ function createWorkflowChipletRegistry(config = {}) {
 
 async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeCache = null }) {
   const rawWorkflow =
-    payload.workflow && typeof payload.workflow === "object"
-      ? payload.workflow
-      : defaultWorkflowGraph();
+    payload.workflow_definition && typeof payload.workflow_definition === "object"
+      ? payload.workflow_definition
+      : (payload.workflow && typeof payload.workflow === "object"
+        ? payload.workflow
+        : defaultWorkflowGraph());
   const workflowDefinition = {
     ...rawWorkflow,
     workflow_id: String(payload.workflow_id || rawWorkflow.workflow_id || "").trim() || "custom_v1",
@@ -131,7 +133,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
       error && typeof error === "object" && error.remote_payload && typeof error.remote_payload === "object"
         ? error.remote_payload
         : null;
-    const normalizedFallback = normalizeWorkflow({ workflow: workflowDefinition });
+    const normalizedFallback = normalizeWorkflow({ workflow_definition: workflowDefinition });
     return {
       ok: false,
       workflow_id: normalizedFallback.graph.workflow_id,
@@ -158,7 +160,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
     };
   }
   const normalizedWorkflow = normalizeWorkflow({
-    workflow: authoritativeValidation?.normalized_workflow_definition && typeof authoritativeValidation.normalized_workflow_definition === "object"
+    workflow_definition: authoritativeValidation?.normalized_workflow_definition && typeof authoritativeValidation.normalized_workflow_definition === "object"
       ? authoritativeValidation.normalized_workflow_definition
       : workflowDefinition,
   });

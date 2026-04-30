@@ -64,7 +64,7 @@ test("workflow run payload support builds base payload and merges params", async
   assert.equal(merged.workflow_definition_source, "draft_inline");
   assert.equal(merged.workflow_id, "wf_1");
   assert.equal(merged.workflow_version, "1.0.0");
-  assert.equal(merged.workflow.version, "1.0.0");
+  assert.equal(merged.workflow_definition.version, "1.0.0");
   assert.equal(merged.quality_rule_set_id, "set_1");
   assert.deepEqual(merged.chiplet_isolated_types, ["x", "y"]);
   assert.equal(merged.sandbox_alert_dedup_window_sec, 42);
@@ -90,6 +90,6 @@ test("workflow run payload support keeps unknown node types in payload and defer
     edges: [],
   });
 
-  assert.equal(out.workflow.workflow_id, "wf_bad_type");
-  assert.equal(out.workflow.nodes[0].type, "unknown_future_node");
+  assert.equal(out.workflow_definition.workflow_id, "wf_bad_type");
+  assert.equal(out.workflow_definition.nodes[0].type, "unknown_future_node");
 });

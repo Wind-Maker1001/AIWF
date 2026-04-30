@@ -42,7 +42,7 @@ test("workflow run ipc fails closed when Rust-authoritative validation is unavai
   );
 
   const out = await handlers["aiwf:runWorkflow"]({}, {
-    workflow: {
+    workflow_definition: {
       workflow_id: "wf_fail_closed",
       version: "1.0.0",
       nodes: [{ id: "n1", type: "ingest_files" }],
@@ -65,7 +65,7 @@ test("workflow run ipc replays reference-backed runs via version lookup instead 
       loadConfig: () => ({ accelUrl: "http://127.0.0.1:18082" }),
       runMinimalWorkflow: async ({ payload }) => {
         runPayloads.push(payload);
-        return { ok: true, run_id: "run_replayed", status: "done", workflow_id: payload?.workflow?.workflow_id || "" };
+        return { ok: true, run_id: "run_replayed", status: "done", workflow_id: payload?.workflow_definition?.workflow_id || "" };
       },
     },
     {
@@ -120,7 +120,7 @@ test("workflow run ipc replays reference-backed runs via version lookup instead 
             ok: true,
             run_id: "run_replayed",
             status: "done",
-            workflow_id: payload?.workflow?.workflow_id || "",
+            workflow_id: payload?.workflow_definition?.workflow_id || "",
             node_runs: [{ id: "n1", type: "ingest_files", status: "done" }],
             node_outputs: {},
             artifacts: [],
@@ -138,7 +138,7 @@ test("workflow run ipc replays reference-backed runs via version lookup instead 
   assert.equal(runPayloads[0].run_request_kind, "reference");
   assert.equal(runPayloads[0].version_id, "ver_finance_001");
   assert.equal(runPayloads[0].published_version_id, "ver_finance_001");
-  assert.equal(runPayloads[0].workflow.workflow_id, "wf_finance");
+  assert.equal(runPayloads[0].workflow_definition.workflow_id, "wf_finance");
 });
 
 test("workflow review ipc auto-resumes reference-backed runs via version lookup", async () => {
@@ -154,7 +154,7 @@ test("workflow review ipc auto-resumes reference-backed runs via version lookup"
       loadConfig: () => ({}),
       runMinimalWorkflow: async ({ payload }) => {
         runPayloads.push(payload);
-        return { ok: true, run_id: "run_resumed", status: "done", workflow_id: payload?.workflow?.workflow_id || "" };
+        return { ok: true, run_id: "run_resumed", status: "done", workflow_id: payload?.workflow_definition?.workflow_id || "" };
       },
     },
     {
@@ -218,7 +218,7 @@ test("workflow review ipc auto-resumes reference-backed runs via version lookup"
             ok: true,
             run_id: "run_resumed",
             status: "done",
-            workflow_id: payload?.workflow?.workflow_id || "",
+            workflow_id: payload?.workflow_definition?.workflow_id || "",
             node_runs: [{ id: "n1", type: "ingest_files", status: "done" }],
             node_outputs: {},
             artifacts: [],
@@ -236,7 +236,7 @@ test("workflow review ipc auto-resumes reference-backed runs via version lookup"
   assert.equal(runPayloads[0].run_request_kind, "reference");
   assert.equal(runPayloads[0].version_id, "ver_finance_001");
   assert.equal(runPayloads[0].published_version_id, "ver_finance_001");
-  assert.equal(runPayloads[0].workflow.workflow_id, "wf_finance");
+  assert.equal(runPayloads[0].workflow_definition.workflow_id, "wf_finance");
 });
 
 test("workflow run ipc prefers Rust draft execution surface over JS local engine", async () => {
@@ -269,7 +269,7 @@ test("workflow run ipc prefers Rust draft execution surface over JS local engine
           ok: true,
           run_id: "run_rust_draft_1",
           status: "passed",
-          workflow_id: payload?.workflow?.workflow_id || "",
+          workflow_id: payload?.workflow_definition?.workflow_id || "",
           node_runs: [{ id: "n1", type: "ingest_files", status: "done" }],
           node_outputs: {},
           artifacts: [],
@@ -287,7 +287,7 @@ test("workflow run ipc prefers Rust draft execution surface over JS local engine
   );
 
   const out = await handlers["aiwf:runWorkflow"]({}, {
-    workflow: {
+    workflow_definition: {
       workflow_id: "wf_rust_draft",
       version: "1.0.0",
       nodes: [{ id: "n1", type: "ingest_files" }],
@@ -325,7 +325,7 @@ test("workflow run ipc replays draft runs through Rust draft execution surface",
         payload: {
           run_request_kind: "draft",
           workflow_definition_source: "draft_inline",
-          workflow: {
+          workflow_definition: {
             workflow_id: "wf_draft_replay",
             version: "1.0.0",
             nodes: [{ id: "n1", type: "ingest_files" }],
@@ -345,7 +345,7 @@ test("workflow run ipc replays draft runs through Rust draft execution surface",
           ok: true,
           run_id: "run_draft_replayed",
           status: "passed",
-          workflow_id: payload?.workflow?.workflow_id || "",
+          workflow_id: payload?.workflow_definition?.workflow_id || "",
           node_runs: [{ id: "n1", type: "ingest_files", status: "done" }],
           node_outputs: {},
           artifacts: [],

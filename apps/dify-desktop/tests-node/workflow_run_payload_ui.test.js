@@ -79,7 +79,7 @@ test("workflow run payload ui builds run payload and merges extra params", async
   assert.equal(payload.workflow_version, "1.0.0");
   assert.equal(payload.run_request_kind, "draft");
   assert.equal(payload.workflow_definition_source, "draft_inline");
-  assert.deepEqual(payload.workflow, {
+  assert.deepEqual(payload.workflow_definition, {
     workflow_id: "wf_2",
     version: "1.0.0",
     nodes: [{ id: "n1", type: "ingest_files" }],

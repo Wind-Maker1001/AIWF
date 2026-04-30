@@ -20,7 +20,7 @@ function buildDraftRunPayload(els, graph, sandboxDedupWindowSec = 600) {
     workflow_definition_source: "draft_inline",
     workflow_id: normalizedGraph.workflow_id || "custom_v1",
     workflow_version: workflowVersion,
-    workflow: {
+    workflow_definition: {
       ...normalizedGraph,
       workflow_id: normalizedGraph.workflow_id || "custom_v1",
       version: workflowVersion,

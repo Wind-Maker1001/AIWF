@@ -84,9 +84,13 @@ function fail(message) {
     nodes: [{ id: "n1", type: "unknown_future_node" }],
     edges: [],
   }, 42);
-  const runPayloadDefersUnknownType = payload?.workflow?.nodes?.[0]?.type === "unknown_future_node";
+  const runPayloadWorkflowDefinition =
+    payload?.workflow_definition && typeof payload.workflow_definition === "object"
+      ? payload.workflow_definition
+      : payload?.workflow;
+  const runPayloadDefersUnknownType = runPayloadWorkflowDefinition?.nodes?.[0]?.type === "unknown_future_node";
   if (!runPayloadDefersUnknownType) {
-    fail("buildBaseRunPayload no longer preserves unknown node types for authoritative runtime validation");
+    fail("buildBaseRunPayload no longer preserves unknown node types in canonical workflow_definition payload");
   }
 
   const nodeType = {
