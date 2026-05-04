@@ -1700,7 +1700,11 @@ class AppRouteTests(unittest.TestCase):
                     glue_app,
                     "validate_workflow_definition_authoritatively",
                     return_value={"ok": True, "normalized_workflow_definition": workflow_definition},
-                ), patch.object(glue_app, "_run_workflow_definition_reference", return_value={"ok": True, "custom": "value"}) as run_ref:
+                ), patch.object(
+                    glue_app,
+                    "_run_workflow_definition_reference",
+                    return_value={"ok": True, "custom": "value", "workflow": workflow_definition},
+                ) as run_ref:
                     save_resp = self.client.put(
                         "/governance/workflow-versions/ver_cleaning_compat_001",
                         json={"version": {"workflow_name": "Cleaning Compat", "workflow_definition": workflow_definition}},
@@ -1720,6 +1724,8 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(payload["published_version_id"], "ver_cleaning_compat_001")
                 self.assertIn("seconds", payload)
                 self.assertEqual(payload["custom"], "value")
+                self.assertEqual(payload["workflow_definition"]["workflow_id"], "cleaning")
+                self.assertNotIn("workflow", payload)
                 self.assertEqual(run_ref.call_count, 1)
 
     def test_legacy_run_flow_route_rejects_workflow_reference_bridge(self):
@@ -1871,10 +1877,61 @@ class AppRouteTests(unittest.TestCase):
         self.assertTrue(out["ok"])
         self.assertEqual(out["workflow_definition_source"], "version_reference")
         self.assertEqual(out["version_id"], "ver_cleaning_compat_001")
+        self.assertEqual(out["workflow_definition"]["workflow_id"], "cleaning")
+        self.assertNotIn("workflow", out)
         self.assertEqual(out["execution"]["operator"], "workflow_run")
         self.assertEqual(out["final_output"]["operator"], "cleaning")
         self.assertTrue(str(out["final_output"]["outputs"]["cleaned_parquet"]["path"]).endswith("cleaned.parquet"))
         self.assertEqual(rust_exec.call_count, 1)
+
+    def test_run_workflow_definition_reference_canonicalizes_failure_result_shape(self):
+        workflow_definition = {
+            "workflow_id": "cleaning",
+            "version": "workflow.v1",
+            "nodes": [],
+            "edges": [],
+        }
+        version_item = {
+            "version_id": "ver_cleaning_compat_001",
+            "workflow_definition": workflow_definition,
+        }
+        with patch.dict("os.environ", {"AIWF_ALLOW_EXTERNAL_JOB_ROOT": "true"}, clear=False), patch.object(
+            glue_app,
+            "workflow_reference_run_v1",
+            return_value={
+                "ok": False,
+                "error": "workflow reference execution failed",
+                "error_code": "workflow_reference_execution_failed",
+                "workflow": workflow_definition,
+            },
+        ), patch.object(
+            glue_app, "base_step_start_impl", return_value=None
+        ), patch.object(
+            glue_app, "base_step_done_impl", return_value=None
+        ), patch.object(
+            glue_app, "base_step_fail_impl", return_value=None
+        ) as fail_impl, patch.object(
+            glue_app, "base_artifact_upsert_impl", return_value=None
+        ):
+            out = glue_app._run_workflow_definition_reference(
+                "job123",
+                glue_app.RunReferenceReq(
+                    actor="local",
+                    ruleset_version="v1",
+                    version_id="ver_cleaning_compat_001",
+                    params={"rows": [{"id": 1, "amount": 10.0}]},
+                    job_context=make_job_context(r"D:\tmp\job"),
+                ),
+                version_item,
+            )
+
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["workflow_definition_source"], "version_reference")
+        self.assertEqual(out["version_id"], "ver_cleaning_compat_001")
+        self.assertEqual(out["published_version_id"], "ver_cleaning_compat_001")
+        self.assertEqual(out["workflow_definition"]["workflow_id"], "cleaning")
+        self.assertNotIn("workflow", out)
+        self.assertEqual(fail_impl.call_count, 1)
 
     def test_run_reference_rejects_invalid_stored_workflow_definition(self):
         with tempfile.TemporaryDirectory() as tmp:
