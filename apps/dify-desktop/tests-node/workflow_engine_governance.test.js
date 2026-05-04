@@ -32,7 +32,7 @@ test("runMinimalWorkflow blocks forbidden nodes by role policy", async () => {
     payload: {
       actor_role: "reviewer",
       chiplet_isolation_enabled: false,
-      workflow: {
+      workflow_definition: {
         workflow_id: "w_forbidden",
         nodes: [{ id: "n1", type: "ai_refine", config: { reuse_existing: false } }],
         edges: [],
@@ -55,7 +55,7 @@ test("runMinimalWorkflow emits governance input classification", async () => {
       actor_role: "owner",
       chiplet_isolation_enabled: false,
       params: { input_files: ["D:/data/finance.xlsx", "D:/paper/report.pdf"] },
-      workflow: {
+      workflow_definition: {
         workflow_id: "w_classify",
         nodes: [{ id: "n1", type: "ingest_files", config: {} }],
         edges: [],
@@ -88,7 +88,7 @@ test("runMinimalWorkflow enforces ai budget max calls per run", async () => {
           max_estimated_cost_usd_per_run: 99,
         },
       },
-      workflow: {
+      workflow_definition: {
         workflow_id: "w_ai_budget",
         nodes: [
           { id: "n1", type: "ai_refine", config: { reuse_existing: false } },
@@ -111,7 +111,7 @@ test("runMinimalWorkflow fails closed when Rust-authoritative validation is unav
     payload: {
       actor_role: "owner",
       chiplet_isolation_enabled: false,
-      workflow: {
+      workflow_definition: {
         workflow_id: "wf_unavailable",
         nodes: [{ id: "n1", type: "ingest_files", config: {} }],
         edges: [],
