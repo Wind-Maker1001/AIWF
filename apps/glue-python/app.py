@@ -650,6 +650,38 @@ def _resolve_reference_version_item(req: RunReferenceReq) -> tuple[str, Dict[str
     return version_id, normalized_item
 
 
+def _canonicalize_workflow_reference_response(
+    payload: Dict[str, Any],
+    *,
+    workflow_definition: Optional[Dict[str, Any]] = None,
+    version_id: str = "",
+    published_version_id: str = "",
+) -> Dict[str, Any]:
+    source = dict(payload or {})
+    candidate_definition = (
+        source.get("workflow_definition")
+        if isinstance(source.get("workflow_definition"), dict)
+        else (
+            source.get("workflow")
+            if isinstance(source.get("workflow"), dict)
+            else (
+                workflow_definition
+                if isinstance(workflow_definition, dict)
+                else None
+            )
+        )
+    )
+    if isinstance(candidate_definition, dict):
+        source["workflow_definition"] = json.loads(json.dumps(candidate_definition, ensure_ascii=False))
+    source.pop("workflow", None)
+    if version_id:
+        source.setdefault("version_id", version_id)
+    if published_version_id or version_id:
+        source.setdefault("published_version_id", published_version_id or version_id)
+    source.setdefault("workflow_definition_source", "version_reference")
+    return source
+
+
 def _run_workflow_definition_reference(job_id: str, req: RunReferenceReq, version_item: Dict[str, Any]):
     workflow_definition = version_item.get("workflow_definition") if isinstance(version_item.get("workflow_definition"), dict) else {}
     workflow_id = str(workflow_definition.get("workflow_id") or "").strip().lower()
@@ -715,7 +747,12 @@ def _run_workflow_definition_reference(job_id: str, req: RunReferenceReq, versio
             headers=headers,
             post_json=post_json_impl,
         )
-        return rust_out
+        return _canonicalize_workflow_reference_response(
+            rust_out,
+            workflow_definition=workflow_definition,
+            version_id=version_id,
+            published_version_id=published_version_id,
+        )
 
     execution = rust_out.get("execution") if isinstance(rust_out.get("execution"), dict) else {}
     final_output = rust_out.get("final_output") if isinstance(rust_out.get("final_output"), dict) else {}
@@ -769,7 +806,12 @@ def _run_workflow_definition_reference(job_id: str, req: RunReferenceReq, versio
     result["execution"] = execution
     result["final_output"] = effective_output
     result["operator"] = str(rust_out.get("operator") or "workflow_reference_run_v1")
-    return result
+    return _canonicalize_workflow_reference_response(
+        result,
+        workflow_definition=workflow_definition,
+        version_id=version_id,
+        published_version_id=published_version_id,
+    )
 
 
 def _run_workflow_reference(job_id: str, req: RunReferenceReq):
@@ -2150,6 +2192,12 @@ def run_reference(job_id: str, req: RunReferenceReq):
         out = result
     else:
         out = {"result": result}
+
+    out = _canonicalize_workflow_reference_response(
+        out,
+        version_id=version_id,
+        published_version_id=version_id,
+    )
 
     if out.get("ok") is False:
         status_code = 503 if str(out.get("error_code") or "") == WORKFLOW_VALIDATION_UNAVAILABLE_CODE else 400
