@@ -105,9 +105,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
   const rawWorkflow =
     payload.workflow_definition && typeof payload.workflow_definition === "object"
       ? payload.workflow_definition
-      : (payload.workflow && typeof payload.workflow === "object"
-        ? payload.workflow
-        : defaultWorkflowGraph());
+      : defaultWorkflowGraph();
   const workflowDefinition = {
     ...rawWorkflow,
     workflow_id: String(payload.workflow_id || rawWorkflow.workflow_id || "").trim() || "custom_v1",

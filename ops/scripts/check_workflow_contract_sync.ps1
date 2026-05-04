@@ -236,6 +236,13 @@ function fail(message) {
     fail("workflow_engine.js no longer routes local engine validation through Rust");
   }
 
+  const engineUsesCanonicalWorkflowField =
+    /payload\.workflow_definition\s*&&\s*typeof payload\.workflow_definition === "object"/.test(workflowEngineText)
+    && !/payload\.workflow\s*&&\s*typeof payload\.workflow === "object"/.test(workflowEngineText);
+  if (!engineUsesCanonicalWorkflowField) {
+    fail("workflow_engine.js no longer uses workflow_definition as its direct input boundary");
+  }
+
   const preflightUsesRustWorkflowValidation =
     /\/operators\/workflow_contract_v1\/validate/.test(preflightControllerUiText);
   if (!preflightUsesRustWorkflowValidation) {
@@ -278,6 +285,7 @@ function fail(message) {
     normalizedVersion: imported.graph.version,
     runPayloadDefersUnknownType,
     engineUsesRustValidation,
+    engineUsesCanonicalWorkflowField,
     preflightUsesRustWorkflowValidation,
     flowIoAvoidsLocalAssert,
     flowIoUsesCanonicalWorkflowField,
