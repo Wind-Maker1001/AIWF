@@ -92,9 +92,10 @@ test("workflow preflight support auto-fixes duplicated broken self-loop and isol
   assert.equal(out.summary.removed_self_loops, 1);
   assert.equal(out.summary.removed_broken_edges, 1);
   assert.equal(out.summary.removed_isolated_nodes, 1);
-  assert.deepEqual(out.graph.nodes, [
+  assert.deepEqual(out.workflow_definition.nodes, [
     { id: "a", type: "t" },
     { id: "b", type: "t" },
   ]);
-  assert.deepEqual(out.graph.edges, [{ from: "a", to: "b" }]);
+  assert.deepEqual(out.workflow_definition.edges, [{ from: "a", to: "b" }]);
+  assert.equal(Object.prototype.hasOwnProperty.call(out, "graph"), false);
 });

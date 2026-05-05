@@ -22,7 +22,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
 
   function autoFixGraphStructure() {
     const out = autoFixWorkflowGraph(exportGraph());
-    applyGraph(out.graph);
+    applyGraph(out.workflow_definition || {});
     return out.summary;
   }
 
