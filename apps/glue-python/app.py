@@ -376,6 +376,7 @@ class WorkflowSandboxAutoFixStateReq(BaseModel):
 
 
 class WorkflowAppReq(BaseModel):
+    model_config = ConfigDict(extra="allow")
     app_id: Optional[str] = None
     name: Optional[str] = None
     workflow_id: Optional[str] = None
@@ -1919,6 +1920,29 @@ def get_governance_workflow_app(app_id: str):
 
 @app.put("/governance/workflow-apps/{app_id}")
 def put_governance_workflow_app(app_id: str, req: WorkflowAppUpsertReq):
+    extras = req.app.model_extra if isinstance(getattr(req.app, "model_extra", None), dict) else {}
+    forbidden = [key for key in ("graph", "flow", "workflow_definition") if key in extras]
+    if forbidden:
+        message = "workflow app legacy field not accepted: " + ", ".join(forbidden) + "; use published_version_id"
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "provider": WORKFLOW_APP_OWNER,
+                "error": message,
+                "error_code": GOVERNANCE_VALIDATION_ERROR_CODE,
+                "error_scope": "workflow_app",
+                "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                "error_items": [
+                    {
+                        "path": f"app.{key}",
+                        "code": "legacy_alias_forbidden",
+                        "message": message,
+                    }
+                    for key in forbidden
+                ],
+            },
+        )
     payload = req.app.model_dump()
     payload["app_id"] = str(app_id or payload.get("app_id") or "")
     try:

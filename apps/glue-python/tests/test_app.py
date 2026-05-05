@@ -1258,6 +1258,35 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(payload["error_scope"], "workflow_app")
                 self.assertTrue("published_version_id" in payload["error"])
 
+    def test_workflow_app_routes_reject_legacy_workflow_payload_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                with patch.object(glue_app, "save_workflow_app") as save_app:
+                    resp = self.client.put(
+                        "/governance/workflow-apps/legacy_app",
+                        json={
+                            "app": {
+                                "name": "Legacy App",
+                                "published_version_id": "ver_finance_a",
+                                "workflow_definition": {
+                                    "workflow_id": "wf_finance",
+                                    "version": "workflow.v1",
+                                    "nodes": [],
+                                    "edges": [],
+                                },
+                            }
+                        },
+                    )
+                self.assertEqual(resp.status_code, 400)
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "governance_validation_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_app")
+                self.assertIn("use published_version_id", payload["error"])
+                self.assertTrue(any(item["path"] == "app.workflow_definition" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
+                self.assertEqual(save_app.call_count, 0)
+
     def test_workflow_app_routes_reject_unknown_published_version_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
