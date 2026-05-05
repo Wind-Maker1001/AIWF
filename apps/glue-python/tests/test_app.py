@@ -1370,6 +1370,36 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(payload["error_item_contract"], "contracts/desktop/node_config_validation_errors.v1.json")
                 self.assertTrue(any(item["path"] == "workflow.version" and item["code"] == "required" for item in payload["error_items"]))
 
+    def test_workflow_version_routes_reject_legacy_graph_alias_field(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                ) as validate_workflow:
+                    resp = self.client.put(
+                        "/governance/workflow-versions/ver_legacy_graph",
+                        json={
+                            "version": {
+                                "graph": {
+                                    "workflow_id": "wf_legacy_graph",
+                                    "version": "workflow.v1",
+                                    "nodes": [{"id": "n1", "type": "ingest_files"}],
+                                    "edges": [],
+                                }
+                            }
+                        },
+                    )
+                self.assertEqual(resp.status_code, 400)
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_version")
+                self.assertIn("use workflow_definition", payload["error"])
+                self.assertTrue(any(item["path"] == "workflow.graph" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
+                self.assertEqual(validate_workflow.call_count, 0)
+
     def test_workflow_version_routes_reject_unregistered_node_types(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):

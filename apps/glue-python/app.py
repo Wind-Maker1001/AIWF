@@ -389,6 +389,7 @@ class WorkflowAppUpsertReq(BaseModel):
 
 
 class WorkflowVersionReq(BaseModel):
+    model_config = ConfigDict(extra="allow")
     version_id: Optional[str] = None
     ts: Optional[str] = None
     workflow_id: Optional[str] = None
@@ -1953,6 +1954,30 @@ def get_governance_workflow_version(version_id: str):
 
 @app.put("/governance/workflow-versions/{version_id}")
 def put_governance_workflow_version(version_id: str, req: WorkflowVersionUpsertReq):
+    extras = req.version.model_extra if isinstance(getattr(req.version, "model_extra", None), dict) else {}
+    forbidden = [key for key in ("graph", "flow") if key in extras]
+    if forbidden:
+        message = "workflow version legacy field not accepted: " + ", ".join(forbidden) + "; use workflow_definition"
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "provider": WORKFLOW_VERSION_OWNER,
+                "error": message,
+                "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                "error_scope": "workflow_version",
+                "graph_contract": WORKFLOW_GRAPH_CONTRACT_AUTHORITY,
+                "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                "error_items": [
+                    {
+                        "path": f"workflow.{key}",
+                        "code": "legacy_alias_forbidden",
+                        "message": message,
+                    }
+                    for key in forbidden
+                ],
+            },
+        )
     payload = req.version.model_dump()
     payload["version_id"] = str(version_id or payload.get("version_id") or "")
     try:
