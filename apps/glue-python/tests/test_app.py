@@ -1839,7 +1839,11 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job123")
-        self.assertIn("must not include", payload["error"])
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
+        self.assertIn("use version_id / published_version_id", payload["error"])
+        self.assertTrue(any(item["path"] == "request.workflow_definition" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
 
     def test_run_workflow_reference_looks_up_governance_version_store(self):
         with tempfile.TemporaryDirectory() as tmp:

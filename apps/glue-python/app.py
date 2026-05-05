@@ -617,7 +617,7 @@ def _resolve_reference_version_id(req: RunReferenceReq) -> str:
         if key in extras:
             forbidden.append(key)
     if forbidden:
-        raise ValueError("run-reference must not include " + ", ".join(forbidden))
+        raise ValueError("run-reference legacy field not accepted: " + ", ".join(forbidden) + "; use version_id / published_version_id")
     version_id = str(req.version_id or "").strip().lower()
     if not version_id:
         raise ValueError("version_id is required")
@@ -2225,9 +2225,34 @@ def run_reference(job_id: str, req: RunReferenceReq):
     except WorkflowValidationUnavailable as exc:
         return _workflow_validation_unavailable_response("glue-python", "workflow_reference_run", exc)
     except ValueError as exc:
+        message = str(exc)
+        if message.startswith("run-reference legacy field not accepted:"):
+            extras = req.model_extra if isinstance(getattr(req, "model_extra", None), dict) else {}
+            forbidden = [key for key in ("flow", "graph", "workflow_definition") if key in extras]
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": f"request.{key}",
+                            "code": "legacy_alias_forbidden",
+                            "message": message,
+                        }
+                        for key in forbidden
+                    ],
+                    "job_id": job_id,
+                    "version_id": str(req.version_id or ""),
+                },
+            )
         return JSONResponse(
             status_code=400,
-            content={"ok": False, "error": str(exc), "job_id": job_id, "version_id": str(req.version_id or "")},
+            content={"ok": False, "error": message, "job_id": job_id, "version_id": str(req.version_id or "")},
         )
     except LegacyFlowPathParamsError as exc:
         return JSONResponse(
