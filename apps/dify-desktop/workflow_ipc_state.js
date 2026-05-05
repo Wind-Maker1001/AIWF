@@ -183,8 +183,16 @@ function createWorkflowIpcStateSupport(ctx) {
         || run?.workflow_definition_source
         || (runRequestKind === "reference" ? "version_reference" : "draft_inline")
       ).trim() || (runRequestKind === "reference" ? "version_reference" : "draft_inline");
-      const payloadSnapshot = normalizeWorkflowPayloadShape(JSON.parse(JSON.stringify(sourcePayload || {})));
-      const resultSnapshot = normalizeWorkflowPayloadShape(JSON.parse(JSON.stringify(run || {})));
+      const payloadSnapshot = normalizeWorkflowPayloadShape(
+        JSON.parse(JSON.stringify(sourcePayload || {})),
+        null,
+        { allowLegacyWorkflowAlias: true },
+      );
+      const resultSnapshot = normalizeWorkflowPayloadShape(
+        JSON.parse(JSON.stringify(run || {})),
+        null,
+        { allowLegacyWorkflowAlias: true },
+      );
       const item = {
         ts: new Date().toISOString(),
         run_id: String(run?.run_id || ""),

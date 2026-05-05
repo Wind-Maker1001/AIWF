@@ -36,7 +36,12 @@ function fail(message) {
   const workflowIpcStorePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_store.js");
   const workflowIpcRunPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_run.js");
   const workflowIpcQueueAppsPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_queue_apps.js");
+  const workflowIpcReviewPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_review.js");
+  const workflowIpcReportsPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_reports.js");
+  const workflowIpcStatePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_ipc_state.js");
+  const workflowRunAuditStorePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_run_audit_store.js");
   const workflowEnginePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_engine.js");
+  const workflowGraphPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_graph.js");
   const preflightControllerUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "preflight-controller-ui.js");
   const flowIoUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "flow-io-ui.js");
   const runPayloadUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "run-payload-ui.js");
@@ -207,7 +212,12 @@ function fail(message) {
   const workflowIpcStoreText = fs.readFileSync(workflowIpcStorePath, "utf8");
   const workflowIpcRunText = fs.readFileSync(workflowIpcRunPath, "utf8");
   const workflowIpcQueueAppsText = fs.readFileSync(workflowIpcQueueAppsPath, "utf8");
+  const workflowIpcReviewText = fs.readFileSync(workflowIpcReviewPath, "utf8");
+  const workflowIpcReportsText = fs.readFileSync(workflowIpcReportsPath, "utf8");
+  const workflowIpcStateText = fs.readFileSync(workflowIpcStatePath, "utf8");
+  const workflowRunAuditStoreText = fs.readFileSync(workflowRunAuditStorePath, "utf8");
   const workflowEngineText = fs.readFileSync(workflowEnginePath, "utf8");
+  const workflowGraphText = fs.readFileSync(workflowGraphPath, "utf8");
   const preflightControllerUiText = fs.readFileSync(preflightControllerUiPath, "utf8");
   const flowIoUiText = fs.readFileSync(flowIoUiPath, "utf8");
   const runPayloadUiText = fs.readFileSync(runPayloadUiPath, "utf8");
@@ -241,6 +251,19 @@ function fail(message) {
     && !/payload\.workflow\s*&&\s*typeof payload\.workflow === "object"/.test(workflowEngineText);
   if (!engineUsesCanonicalWorkflowField) {
     fail("workflow_engine.js no longer uses workflow_definition as its direct input boundary");
+  }
+
+  const workflowAliasOptInExplicit =
+    /allowLegacyWorkflowAlias = false/.test(workflowGraphText)
+    && /allowLegacyWorkflowAlias && source\.workflow/.test(workflowGraphText)
+    && /allowLegacyWorkflowAlias: true/.test(workflowIpcRunText)
+    && /allowLegacyWorkflowAlias: true/.test(workflowIpcQueueAppsText)
+    && /allowLegacyWorkflowAlias: true/.test(workflowIpcReviewText)
+    && /allowLegacyWorkflowAlias: true/.test(workflowIpcReportsText)
+    && /allowLegacyWorkflowAlias: true/.test(workflowIpcStateText)
+    && /allowLegacyWorkflowAlias: true/.test(workflowRunAuditStoreText);
+  if (!workflowAliasOptInExplicit) {
+    fail("legacy workflow alias is no longer constrained to explicit opt-in compatibility layers");
   }
 
   const preflightUsesRustWorkflowValidation =
@@ -286,6 +309,7 @@ function fail(message) {
     runPayloadDefersUnknownType,
     engineUsesRustValidation,
     engineUsesCanonicalWorkflowField,
+    workflowAliasOptInExplicit,
     preflightUsesRustWorkflowValidation,
     flowIoAvoidsLocalAssert,
     flowIoUsesCanonicalWorkflowField,

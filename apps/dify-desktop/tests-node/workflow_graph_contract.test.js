@@ -9,6 +9,8 @@ test("main workflow graph normalization carries version and reports migration", 
       nodes: [{ id: "n1", type: "ingest_files" }],
       edges: [],
     },
+  }, {
+    allowLegacyWorkflowAlias: true,
   });
 
   assert.equal(normalized.graph.version, "1.0.0");
@@ -25,4 +27,26 @@ test("main workflow graph normalization carries version and reports migration", 
     ],
   );
   assert.deepEqual(ordered.map((node) => node.id), ["n1", "n2", "n3"]);
+});
+
+test("workflow graph helper only accepts legacy workflow alias when explicitly allowed", () => {
+  const payload = {
+    workflow: {
+      workflow_id: "wf_legacy_alias",
+      version: "1.0.0",
+      nodes: [{ id: "n1", type: "ingest_files" }],
+      edges: [],
+    },
+  };
+
+  assert.equal(workflowGraph.resolveWorkflowDefinitionPayload(payload), null);
+  assert.equal(
+    workflowGraph.resolveWorkflowDefinitionPayload(payload, { allowLegacyWorkflowAlias: true }).workflow_id,
+    "wf_legacy_alias",
+  );
+
+  assert.deepEqual(workflowGraph.normalizeWorkflowPayloadShape(payload), payload);
+  const normalized = workflowGraph.normalizeWorkflowPayloadShape(payload, null, { allowLegacyWorkflowAlias: true });
+  assert.equal(normalized.workflow_definition.workflow_id, "wf_legacy_alias");
+  assert.equal(Object.prototype.hasOwnProperty.call(normalized, "workflow"), false);
 });

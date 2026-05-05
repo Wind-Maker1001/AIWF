@@ -124,8 +124,8 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
   }
 
   async function canonicalizeWorkflowPayload(payload, cfg, options = {}) {
-    const normalizedPayload = normalizeWorkflowPayloadShape(payload);
-    const workflowDefinition = resolveWorkflowDefinitionPayload(normalizedPayload, { fallbackToDefault: false });
+    const normalizedPayload = normalizeWorkflowPayloadShape(payload, null, { allowLegacyWorkflowAlias: true });
+    const workflowDefinition = resolveWorkflowDefinitionPayload(normalizedPayload, { fallbackToDefault: false, allowLegacyWorkflowAlias: true });
     if (!workflowDefinition) return normalizedPayload;
     const validated = await validateWorkflowDefinition(workflowDefinition, {
       cfg,
@@ -203,7 +203,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
   }
 
   function normalizePendingReviews(items, out, payload = null) {
-    const workflow = resolveWorkflowDefinitionPayload(payload, { fallbackToDefault: false }) || {};
+    const workflow = resolveWorkflowDefinitionPayload(payload, { fallbackToDefault: false, allowLegacyWorkflowAlias: true }) || {};
     const fallbackRunId = String(out?.run_id || "").trim();
     const fallbackWorkflowId = String(out?.workflow_id || workflow.workflow_id || "").trim();
     return (Array.isArray(items) ? items : []).map((item) => {
@@ -357,7 +357,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       ...source,
       run_request_kind: "draft",
       workflow_definition_source: String(source.workflow_definition_source || "draft_inline"),
-    });
+    }, null, { allowLegacyWorkflowAlias: true });
   }
 
   ipcMain.handle("aiwf:enqueueWorkflowTask", async (_evt, req) => {
@@ -604,7 +604,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
         }
       }
       const params = req?.params && typeof req.params === "object" ? req.params : {};
-      let mergedPayload = normalizeWorkflowPayloadShape(req?.payload && typeof req.payload === "object" ? { ...req.payload } : {});
+      let mergedPayload = normalizeWorkflowPayloadShape(req?.payload && typeof req.payload === "object" ? { ...req.payload } : {}, null, { allowLegacyWorkflowAlias: true });
       mergedPayload.run_request_kind = "reference";
       mergedPayload.workflow_definition_source = "version_reference";
       mergedPayload.version_id = publishedVersionId;
@@ -626,7 +626,7 @@ function registerWorkflowQueueAppsIpc(ctx, deps) {
       });
       const normalizedRuntimeWorkflowDefinition = runtimeValidated.normalized_workflow_definition;
       if (!normalizedRuntimeWorkflowDefinition.workflow_id) normalizedRuntimeWorkflowDefinition.workflow_id = item.workflow_id || "custom";
-      mergedPayload = normalizeWorkflowPayloadShape(mergedPayload, normalizedRuntimeWorkflowDefinition);
+      mergedPayload = normalizeWorkflowPayloadShape(mergedPayload, normalizedRuntimeWorkflowDefinition, { allowLegacyWorkflowAlias: true });
       const rulesOut = await sandboxRuleStore.getRuntimeRules(merged);
       if (!rulesOut?.ok) return rulesOut;
       let effectivePayload = await reportSupport.applyQualityRuleSetToPayload(
