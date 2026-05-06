@@ -2250,6 +2250,27 @@ def run_reference(job_id: str, req: RunReferenceReq):
                     "version_id": str(req.version_id or ""),
                 },
             )
+        if "published_version_id must match version_id" in message:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": "request.published_version_id",
+                            "code": "legacy_alias_forbidden",
+                            "message": message,
+                        }
+                    ],
+                    "job_id": job_id,
+                    "version_id": str(req.version_id or ""),
+                },
+            )
         return JSONResponse(
             status_code=400,
             content={"ok": False, "error": message, "job_id": job_id, "version_id": str(req.version_id or "")},

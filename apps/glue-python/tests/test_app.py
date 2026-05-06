@@ -1810,7 +1810,11 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
         self.assertIn("must match version_id", payload["error"])
+        self.assertTrue(any(item["path"] == "request.published_version_id" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
 
     def test_run_reference_rejects_unknown_version_reference(self):
         resp = self.client.post(
