@@ -340,7 +340,7 @@ class RunReq(BaseModel):
 
 class RunReferenceReq(BaseModel):
     model_config = ConfigDict(extra="allow")
-    version_id: str
+    version_id: Optional[str] = None
     published_version_id: Optional[str] = None
     actor: str = "glue"
     ruleset_version: str = "v1"

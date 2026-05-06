@@ -1853,6 +1853,22 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("use version_id / published_version_id", payload["error"])
         self.assertTrue(any(item["path"] == "request.workflow_definition" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
 
+    def test_run_reference_rejects_missing_version_id_with_structured_error(self):
+        resp = self.client.post(
+            "/jobs/job123/run-reference",
+            json={"actor": "local", "ruleset_version": "v1"},
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
+        self.assertEqual(payload["version_id"], "")
+        self.assertTrue(any(item["path"] == "request.version_id" and item["code"] == "required" for item in payload["error_items"]))
+
     def test_run_workflow_reference_looks_up_governance_version_store(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
