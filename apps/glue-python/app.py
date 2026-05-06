@@ -340,7 +340,7 @@ class RunReq(BaseModel):
 
 class RunReferenceReq(BaseModel):
     model_config = ConfigDict(extra="allow")
-    version_id: str
+    version_id: Optional[str] = None
     published_version_id: Optional[str] = None
     actor: str = "glue"
     ruleset_version: str = "v1"
@@ -376,6 +376,7 @@ class WorkflowSandboxAutoFixStateReq(BaseModel):
 
 
 class WorkflowAppReq(BaseModel):
+    model_config = ConfigDict(extra="allow")
     app_id: Optional[str] = None
     name: Optional[str] = None
     workflow_id: Optional[str] = None
@@ -389,6 +390,7 @@ class WorkflowAppUpsertReq(BaseModel):
 
 
 class WorkflowVersionReq(BaseModel):
+    model_config = ConfigDict(extra="allow")
     version_id: Optional[str] = None
     ts: Optional[str] = None
     workflow_id: Optional[str] = None
@@ -615,7 +617,7 @@ def _resolve_reference_version_id(req: RunReferenceReq) -> str:
         if key in extras:
             forbidden.append(key)
     if forbidden:
-        raise ValueError("run-reference must not include " + ", ".join(forbidden))
+        raise ValueError("run-reference legacy field not accepted: " + ", ".join(forbidden) + "; use version_id / published_version_id")
     version_id = str(req.version_id or "").strip().lower()
     if not version_id:
         raise ValueError("version_id is required")
@@ -1918,6 +1920,29 @@ def get_governance_workflow_app(app_id: str):
 
 @app.put("/governance/workflow-apps/{app_id}")
 def put_governance_workflow_app(app_id: str, req: WorkflowAppUpsertReq):
+    extras = req.app.model_extra if isinstance(getattr(req.app, "model_extra", None), dict) else {}
+    forbidden = [key for key in ("graph", "flow", "workflow_definition") if key in extras]
+    if forbidden:
+        message = "workflow app legacy field not accepted: " + ", ".join(forbidden) + "; use published_version_id"
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "provider": WORKFLOW_APP_OWNER,
+                "error": message,
+                "error_code": GOVERNANCE_VALIDATION_ERROR_CODE,
+                "error_scope": "workflow_app",
+                "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                "error_items": [
+                    {
+                        "path": f"app.{key}",
+                        "code": "legacy_alias_forbidden",
+                        "message": message,
+                    }
+                    for key in forbidden
+                ],
+            },
+        )
     payload = req.app.model_dump()
     payload["app_id"] = str(app_id or payload.get("app_id") or "")
     try:
@@ -1953,6 +1978,30 @@ def get_governance_workflow_version(version_id: str):
 
 @app.put("/governance/workflow-versions/{version_id}")
 def put_governance_workflow_version(version_id: str, req: WorkflowVersionUpsertReq):
+    extras = req.version.model_extra if isinstance(getattr(req.version, "model_extra", None), dict) else {}
+    forbidden = [key for key in ("graph", "flow") if key in extras]
+    if forbidden:
+        message = "workflow version legacy field not accepted: " + ", ".join(forbidden) + "; use workflow_definition"
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "provider": WORKFLOW_VERSION_OWNER,
+                "error": message,
+                "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                "error_scope": "workflow_version",
+                "graph_contract": WORKFLOW_GRAPH_CONTRACT_AUTHORITY,
+                "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                "error_items": [
+                    {
+                        "path": f"workflow.{key}",
+                        "code": "legacy_alias_forbidden",
+                        "message": message,
+                    }
+                    for key in forbidden
+                ],
+            },
+        )
     payload = req.version.model_dump()
     payload["version_id"] = str(version_id or payload.get("version_id") or "")
     try:
@@ -2176,9 +2225,119 @@ def run_reference(job_id: str, req: RunReferenceReq):
     except WorkflowValidationUnavailable as exc:
         return _workflow_validation_unavailable_response("glue-python", "workflow_reference_run", exc)
     except ValueError as exc:
+        message = str(exc)
+        if message.startswith("run-reference legacy field not accepted:"):
+            extras = req.model_extra if isinstance(getattr(req, "model_extra", None), dict) else {}
+            forbidden = [key for key in ("flow", "graph", "workflow_definition") if key in extras]
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": f"request.{key}",
+                            "code": "legacy_alias_forbidden",
+                            "message": message,
+                        }
+                        for key in forbidden
+                    ],
+                    "job_id": job_id,
+                    "version_id": str(req.version_id or ""),
+                },
+            )
+        if "published_version_id must match version_id" in message:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": "request.published_version_id",
+                            "code": "legacy_alias_forbidden",
+                            "message": message,
+                        }
+                    ],
+                    "job_id": job_id,
+                    "version_id": str(req.version_id or ""),
+                },
+            )
+        if message == "version_id is required":
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": "request.version_id",
+                            "code": "required",
+                            "message": message,
+                        }
+                    ],
+                    "job_id": job_id,
+                    "version_id": "",
+                },
+            )
+        if message.startswith("unknown workflow version reference:"):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": "request.version_id",
+                            "code": "not_found",
+                            "message": message,
+                        }
+                    ],
+                    "job_id": job_id,
+                    "version_id": str(req.version_id or ""),
+                },
+            )
+        if message.startswith("workflow version workflow_definition missing:") or message.startswith("workflow version workflow_definition invalid:"):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "graph_contract": WORKFLOW_GRAPH_CONTRACT_AUTHORITY,
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": "version.workflow_definition",
+                            "code": "required" if " missing:" in message else "validation_error",
+                            "message": message,
+                        }
+                    ],
+                    "job_id": job_id,
+                    "version_id": str(req.version_id or ""),
+                },
+            )
         return JSONResponse(
             status_code=400,
-            content={"ok": False, "error": str(exc), "job_id": job_id, "version_id": str(req.version_id or "")},
+            content={"ok": False, "error": message, "job_id": job_id, "version_id": str(req.version_id or "")},
         )
     except LegacyFlowPathParamsError as exc:
         return JSONResponse(

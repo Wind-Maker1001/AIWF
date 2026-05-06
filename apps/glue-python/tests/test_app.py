@@ -1258,6 +1258,35 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(payload["error_scope"], "workflow_app")
                 self.assertTrue("published_version_id" in payload["error"])
 
+    def test_workflow_app_routes_reject_legacy_workflow_payload_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                with patch.object(glue_app, "save_workflow_app") as save_app:
+                    resp = self.client.put(
+                        "/governance/workflow-apps/legacy_app",
+                        json={
+                            "app": {
+                                "name": "Legacy App",
+                                "published_version_id": "ver_finance_a",
+                                "workflow_definition": {
+                                    "workflow_id": "wf_finance",
+                                    "version": "workflow.v1",
+                                    "nodes": [],
+                                    "edges": [],
+                                },
+                            }
+                        },
+                    )
+                self.assertEqual(resp.status_code, 400)
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "governance_validation_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_app")
+                self.assertIn("use published_version_id", payload["error"])
+                self.assertTrue(any(item["path"] == "app.workflow_definition" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
+                self.assertEqual(save_app.call_count, 0)
+
     def test_workflow_app_routes_reject_unknown_published_version_reference(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
@@ -1369,6 +1398,36 @@ class AppRouteTests(unittest.TestCase):
                 self.assertEqual(payload["graph_contract"], "contracts/workflow/workflow.schema.json")
                 self.assertEqual(payload["error_item_contract"], "contracts/desktop/node_config_validation_errors.v1.json")
                 self.assertTrue(any(item["path"] == "workflow.version" and item["code"] == "required" for item in payload["error_items"]))
+
+    def test_workflow_version_routes_reject_legacy_graph_alias_field(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict("os.environ", {"AIWF_GOVERNANCE_ROOT": tmp}, clear=False):
+                with patch.object(
+                    glue_app,
+                    "validate_workflow_definition_authoritatively",
+                ) as validate_workflow:
+                    resp = self.client.put(
+                        "/governance/workflow-versions/ver_legacy_graph",
+                        json={
+                            "version": {
+                                "graph": {
+                                    "workflow_id": "wf_legacy_graph",
+                                    "version": "workflow.v1",
+                                    "nodes": [{"id": "n1", "type": "ingest_files"}],
+                                    "edges": [],
+                                }
+                            }
+                        },
+                    )
+                self.assertEqual(resp.status_code, 400)
+                payload = resp.json()
+                self.assertFalse(payload["ok"])
+                self.assertEqual(payload["provider"], "glue-python")
+                self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+                self.assertEqual(payload["error_scope"], "workflow_version")
+                self.assertIn("use workflow_definition", payload["error"])
+                self.assertTrue(any(item["path"] == "workflow.graph" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
+                self.assertEqual(validate_workflow.call_count, 0)
 
     def test_workflow_version_routes_reject_unregistered_node_types(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1751,7 +1810,11 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
         self.assertIn("must match version_id", payload["error"])
+        self.assertTrue(any(item["path"] == "request.published_version_id" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
 
     def test_run_reference_rejects_unknown_version_reference(self):
         resp = self.client.post(
@@ -1763,7 +1826,11 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
         self.assertIn("unknown workflow version reference", payload["error"])
+        self.assertTrue(any(item["path"] == "request.version_id" and item["code"] == "not_found" for item in payload["error_items"]))
 
     def test_run_reference_rejects_legacy_payload_fields(self):
         resp = self.client.post(
@@ -1780,7 +1847,27 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job123")
-        self.assertIn("must not include", payload["error"])
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
+        self.assertIn("use version_id / published_version_id", payload["error"])
+        self.assertTrue(any(item["path"] == "request.workflow_definition" and item["code"] == "legacy_alias_forbidden" for item in payload["error_items"]))
+
+    def test_run_reference_rejects_missing_version_id_with_structured_error(self):
+        resp = self.client.post(
+            "/jobs/job123/run-reference",
+            json={"actor": "local", "ruleset_version": "v1"},
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        payload = resp.json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
+        self.assertEqual(payload["version_id"], "")
+        self.assertTrue(any(item["path"] == "request.version_id" and item["code"] == "required" for item in payload["error_items"]))
 
     def test_run_workflow_reference_looks_up_governance_version_store(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1985,6 +2072,11 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
+        self.assertEqual(payload["graph_contract"], "contracts/workflow/workflow.schema.json")
+        self.assertTrue(any(item["path"] == "version.workflow_definition" and item["code"] == "required" for item in payload["error_items"]))
         self.assertIn("workflow_definition missing", payload["error"])
 
     @patch.object(glue_app, "_run_flow_with_runner")
