@@ -1826,7 +1826,11 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
         self.assertIn("unknown workflow version reference", payload["error"])
+        self.assertTrue(any(item["path"] == "request.version_id" and item["code"] == "not_found" for item in payload["error_items"]))
 
     def test_run_reference_rejects_legacy_payload_fields(self):
         resp = self.client.post(
@@ -2052,6 +2056,11 @@ class AppRouteTests(unittest.TestCase):
         payload = resp.json()
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["job_id"], "job123")
+        self.assertEqual(payload["provider"], "glue-python")
+        self.assertEqual(payload["error_code"], "workflow_graph_invalid")
+        self.assertEqual(payload["error_scope"], "workflow_reference_run")
+        self.assertEqual(payload["graph_contract"], "contracts/workflow/workflow.schema.json")
+        self.assertTrue(any(item["path"] == "version.workflow_definition" and item["code"] == "required" for item in payload["error_items"]))
         self.assertIn("workflow_definition missing", payload["error"])
 
     @patch.object(glue_app, "_run_flow_with_runner")

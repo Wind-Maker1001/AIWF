@@ -2271,6 +2271,70 @@ def run_reference(job_id: str, req: RunReferenceReq):
                     "version_id": str(req.version_id or ""),
                 },
             )
+        if message == "version_id is required":
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": "request.version_id",
+                            "code": "required",
+                            "message": message,
+                        }
+                    ],
+                    "job_id": job_id,
+                    "version_id": "",
+                },
+            )
+        if message.startswith("unknown workflow version reference:"):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": "request.version_id",
+                            "code": "not_found",
+                            "message": message,
+                        }
+                    ],
+                    "job_id": job_id,
+                    "version_id": str(req.version_id or ""),
+                },
+            )
+        if message.startswith("workflow version workflow_definition missing:") or message.startswith("workflow version workflow_definition invalid:"):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "provider": "glue-python",
+                    "error": message,
+                    "error_code": WORKFLOW_GRAPH_ERROR_CODE,
+                    "error_scope": "workflow_reference_run",
+                    "graph_contract": WORKFLOW_GRAPH_CONTRACT_AUTHORITY,
+                    "error_item_contract": NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
+                    "error_items": [
+                        {
+                            "path": "version.workflow_definition",
+                            "code": "required" if " missing:" in message else "validation_error",
+                            "message": message,
+                        }
+                    ],
+                    "job_id": job_id,
+                    "version_id": str(req.version_id or ""),
+                },
+            )
         return JSONResponse(
             status_code=400,
             content={"ok": False, "error": message, "job_id": job_id, "version_id": str(req.version_id or "")},
