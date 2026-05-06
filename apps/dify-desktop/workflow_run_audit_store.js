@@ -35,9 +35,17 @@ function createWorkflowRunAuditStore(deps = {}) {
     const runId = String(source.run_id || "").trim();
     if (!runId) throw new Error("run_id is required");
     const local = provider === LOCAL_PROVIDER;
-    const payload = normalizeWorkflowPayloadShape(clone(source.payload && typeof source.payload === "object" ? source.payload : {}));
+    const payload = normalizeWorkflowPayloadShape(
+      clone(source.payload && typeof source.payload === "object" ? source.payload : {}),
+      null,
+      { allowLegacyWorkflowAlias: true },
+    );
     const resultSource = source.result && typeof source.result === "object" ? source.result : source;
-    const result = normalizeWorkflowPayloadShape(clone(resultSource && typeof resultSource === "object" ? resultSource : {}));
+    const result = normalizeWorkflowPayloadShape(
+      clone(resultSource && typeof resultSource === "object" ? resultSource : {}),
+      null,
+      { allowLegacyWorkflowAlias: true },
+    );
     return {
       schema_version: String(source.schema_version || WORKFLOW_RUN_ENTRY_SCHEMA_VERSION),
       provider,

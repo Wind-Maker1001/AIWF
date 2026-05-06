@@ -155,10 +155,15 @@ function createWorkflowReportSupport(deps) {
 
   async function applyQualityRuleSetToPayload(payload, cfg = null) {
     const nextPayload = payload && typeof payload === "object" ? { ...payload } : {};
-    const workflowDefinition = resolveWorkflowDefinitionPayload(nextPayload, { fallbackToDefault: false });
+    const workflowDefinition = resolveWorkflowDefinitionPayload(nextPayload, {
+      fallbackToDefault: false,
+      allowLegacyWorkflowAlias: true,
+    });
     const workflow = workflowDefinition && typeof workflowDefinition === "object" ? deepClone(workflowDefinition) : null;
     const qualityRuleSetId = String(nextPayload?.quality_rule_set_id || "").trim();
-    if (!workflow || !qualityRuleSetId) return normalizeWorkflowPayloadShape(nextPayload);
+    if (!workflow || !qualityRuleSetId) {
+      return normalizeWorkflowPayloadShape(nextPayload, null, { allowLegacyWorkflowAlias: true });
+    }
     const hit = await qualityRuleSetSupport.getQualityRuleSet(qualityRuleSetId, cfg);
     if (!hit) throw new Error(`quality rule set not found: ${qualityRuleSetId}`);
     if (!hit.rules || typeof hit.rules !== "object") {
@@ -182,7 +187,7 @@ function createWorkflowReportSupport(deps) {
         },
       };
     });
-    return normalizeWorkflowPayloadShape(nextPayload, workflow);
+    return normalizeWorkflowPayloadShape(nextPayload, workflow, { allowLegacyWorkflowAlias: true });
   }
 
   async function buildRunRegressionAgainstBaseline(runId, baselineId, cfg = null) {

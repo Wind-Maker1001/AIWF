@@ -26,12 +26,12 @@ function defaultWorkflowGraph() {
 }
 
 function resolveWorkflowDefinitionPayload(payload = {}, options = {}) {
-  const { fallbackToDefault = false } = options;
+  const { fallbackToDefault = false, allowLegacyWorkflowAlias = false } = options;
   const source = payload && typeof payload === "object" ? payload : {};
   const candidate =
     source.workflow_definition && typeof source.workflow_definition === "object"
       ? source.workflow_definition
-      : (source.workflow && typeof source.workflow === "object" ? source.workflow : null);
+      : (allowLegacyWorkflowAlias && source.workflow && typeof source.workflow === "object" ? source.workflow : null);
   if (candidate && typeof candidate === "object") {
     return candidate;
   }
@@ -39,12 +39,12 @@ function resolveWorkflowDefinitionPayload(payload = {}, options = {}) {
 }
 
 function normalizeWorkflowPayloadShape(payload = {}, workflowDefinition = null, options = {}) {
-  const { keepLegacyWorkflowAlias = false } = options;
+  const { keepLegacyWorkflowAlias = false, allowLegacyWorkflowAlias = false } = options;
   const source = payload && typeof payload === "object" ? { ...payload } : {};
   const normalizedWorkflowDefinition =
     workflowDefinition && typeof workflowDefinition === "object"
       ? workflowDefinition
-      : resolveWorkflowDefinitionPayload(source, { fallbackToDefault: false });
+      : resolveWorkflowDefinitionPayload(source, { fallbackToDefault: false, allowLegacyWorkflowAlias });
   if (normalizedWorkflowDefinition && typeof normalizedWorkflowDefinition === "object") {
     source.workflow_definition = normalizedWorkflowDefinition;
     if (keepLegacyWorkflowAlias) {
@@ -56,8 +56,12 @@ function normalizeWorkflowPayloadShape(payload = {}, workflowDefinition = null, 
   return source;
 }
 
-function normalizeWorkflow(payload = {}) {
-  const rawWorkflow = resolveWorkflowDefinitionPayload(payload, { fallbackToDefault: true });
+function normalizeWorkflow(payload = {}, options = {}) {
+  const { allowLegacyWorkflowAlias = false } = options;
+  const rawWorkflow = resolveWorkflowDefinitionPayload(payload, {
+    fallbackToDefault: true,
+    allowLegacyWorkflowAlias,
+  });
   const notes = [];
   const base = {
     ...rawWorkflow,

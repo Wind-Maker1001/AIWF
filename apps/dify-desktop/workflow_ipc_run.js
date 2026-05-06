@@ -60,7 +60,7 @@ function registerWorkflowRunIpc(ctx, deps) {
   }
 
   function normalizePendingReviews(items, out, payload = null) {
-    const workflow = resolveWorkflowDefinitionPayload(payload) || {};
+    const workflow = resolveWorkflowDefinitionPayload(payload, { allowLegacyWorkflowAlias: true }) || {};
     const fallbackRunId = String(out?.run_id || "").trim();
     const fallbackWorkflowId = String(out?.workflow_id || workflow.workflow_id || "").trim();
     return (Array.isArray(items) ? items : []).map((item) => {
@@ -122,7 +122,7 @@ function registerWorkflowRunIpc(ctx, deps) {
   }
 
   function normalizeDraftRunPayload(payload) {
-    const source = normalizeWorkflowPayloadShape(payload);
+    const source = normalizeWorkflowPayloadShape(payload, null, { allowLegacyWorkflowAlias: true });
     return {
       ...source,
       run_request_kind: "draft",
@@ -146,7 +146,7 @@ function registerWorkflowRunIpc(ctx, deps) {
         outputs: found?.result?.node_outputs || {},
       },
     };
-    if (versionId && (runRequestKind === "reference" || !resolveWorkflowDefinitionPayload(basePayload))) {
+    if (versionId && (runRequestKind === "reference" || !resolveWorkflowDefinitionPayload(basePayload, { allowLegacyWorkflowAlias: true }))) {
       const versionItem = await workflowVersionStore.getVersion(versionId, cfg);
       if (!versionItem?.workflow_definition || typeof versionItem.workflow_definition !== "object") {
         return {
@@ -166,10 +166,10 @@ function registerWorkflowRunIpc(ctx, deps) {
       delete replayPayload.workflow;
       return { ok: true, payload: replayPayload };
     }
-    if (resolveWorkflowDefinitionPayload(replayPayload)) {
+    if (resolveWorkflowDefinitionPayload(replayPayload, { allowLegacyWorkflowAlias: true })) {
       replayPayload.run_request_kind = "draft";
       replayPayload.workflow_definition_source = String(replayPayload.workflow_definition_source || "draft_inline");
-      return { ok: true, payload: normalizeWorkflowPayloadShape(replayPayload) };
+      return { ok: true, payload: normalizeWorkflowPayloadShape(replayPayload, null, { allowLegacyWorkflowAlias: true }) };
     }
     return {
       ok: false,
@@ -188,7 +188,7 @@ function registerWorkflowRunIpc(ctx, deps) {
     try {
       const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });
       const sourcePayload = payload && typeof payload === "object" ? payload : {};
-      if (!resolveWorkflowDefinitionPayload(sourcePayload) && (sourcePayload.version_id || sourcePayload.published_version_id)) {
+      if (!resolveWorkflowDefinitionPayload(sourcePayload, { allowLegacyWorkflowAlias: true }) && (sourcePayload.version_id || sourcePayload.published_version_id)) {
         return {
           ok: false,
           error: "reference-backed workflow run must use publication/version-backed run path",
@@ -201,7 +201,7 @@ function registerWorkflowRunIpc(ctx, deps) {
         await sandboxAutoFixStore.applyPayload(normalizeDraftRunPayload(sourcePayload), merged),
         merged
       );
-      effectivePayload = normalizeWorkflowPayloadShape(effectivePayload);
+      effectivePayload = normalizeWorkflowPayloadShape(effectivePayload, null, { allowLegacyWorkflowAlias: true });
       effectivePayload.run_request_kind = "draft";
       effectivePayload.workflow_definition_source = String(effectivePayload.workflow_definition_source || "draft_inline");
       if (effectivePayload.workflow_definition && typeof effectivePayload.workflow_definition === "object") {
@@ -210,7 +210,7 @@ function registerWorkflowRunIpc(ctx, deps) {
           requireNonEmptyNodes: true,
           validationScope: "run",
         });
-        effectivePayload = normalizeWorkflowPayloadShape(effectivePayload, validated.normalized_workflow_definition);
+        effectivePayload = normalizeWorkflowPayloadShape(effectivePayload, validated.normalized_workflow_definition, { allowLegacyWorkflowAlias: true });
       }
       let out = sandboxSupport.attachQualityGate(
         await executeWorkflowPayloadAuthoritatively(effectivePayload, merged),
@@ -262,7 +262,7 @@ function registerWorkflowRunIpc(ctx, deps) {
         await sandboxAutoFixStore.applyPayload(replayPayload, replayMerged),
         replayMerged
       );
-      effectivePayload = normalizeWorkflowPayloadShape(effectivePayload);
+      effectivePayload = normalizeWorkflowPayloadShape(effectivePayload, null, { allowLegacyWorkflowAlias: true });
       effectivePayload.run_request_kind = String(replayPayload.run_request_kind || effectivePayload.run_request_kind || "draft");
       effectivePayload.workflow_definition_source = String(
         replayPayload.workflow_definition_source
@@ -277,7 +277,7 @@ function registerWorkflowRunIpc(ctx, deps) {
           requireNonEmptyNodes: true,
           validationScope: "run",
         });
-        effectivePayload = normalizeWorkflowPayloadShape(effectivePayload, validated.normalized_workflow_definition);
+        effectivePayload = normalizeWorkflowPayloadShape(effectivePayload, validated.normalized_workflow_definition, { allowLegacyWorkflowAlias: true });
       }
       let out = sandboxSupport.attachQualityGate(
         await executeWorkflowPayloadAuthoritatively(effectivePayload, replayMerged),
