@@ -158,6 +158,7 @@ test("workflow ipc store migrates legacy template pack artifact on install", asy
         graph: templateGraph(),
       }],
     },
+    allowLegacyGraphAlias: true,
   });
 
   assert.equal(out.ok, true);
@@ -170,6 +171,28 @@ test("workflow ipc store migrates legacy template pack artifact on install", asy
   assert.equal(Object.prototype.hasOwnProperty.call(marketplace[0].templates[0], "graph"), false);
   assert.match(audits[0].action, /template_pack_install/);
   assert.equal(audits[0].detail.migrated, true);
+});
+
+test("workflow ipc store rejects legacy template pack artifact without explicit graph alias opt-in", async () => {
+  const { handlers } = createIpcHarness();
+  const install = handlers["aiwf:installTemplatePack"];
+  assert.equal(typeof install, "function");
+
+  const out = await install(null, {
+    pack: {
+      id: "pack_legacy_denied",
+      name: "Legacy Denied",
+      templates: [{
+        id: "tpl_legacy_denied",
+        name: "Legacy Template",
+        graph: templateGraph(),
+      }],
+    },
+  });
+
+  assert.equal(out.ok, false);
+  assert.equal(out.error_code, "template_pack_legacy_graph_alias_forbidden");
+  assert.match(String(out.error || ""), /allowLegacyGraphAlias/i);
 });
 
 test("workflow ipc store exports template pack as artifact schema", async () => {

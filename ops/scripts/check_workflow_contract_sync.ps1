@@ -42,6 +42,7 @@ function fail(message) {
   const workflowRunAuditStorePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_run_audit_store.js");
   const workflowEnginePath = path.join(repoRoot, "apps", "dify-desktop", "workflow_engine.js");
   const workflowGraphPath = path.join(repoRoot, "apps", "dify-desktop", "workflow_graph.js");
+  const preflightControllerSupportPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "preflight-controller-support.js");
   const preflightControllerUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "preflight-controller-ui.js");
   const flowIoUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "flow-io-ui.js");
   const runPayloadUiPath = path.join(repoRoot, "apps", "dify-desktop", "renderer", "workflow", "run-payload-ui.js");
@@ -218,6 +219,7 @@ function fail(message) {
   const workflowRunAuditStoreText = fs.readFileSync(workflowRunAuditStorePath, "utf8");
   const workflowEngineText = fs.readFileSync(workflowEnginePath, "utf8");
   const workflowGraphText = fs.readFileSync(workflowGraphPath, "utf8");
+  const preflightControllerSupportText = fs.readFileSync(preflightControllerSupportPath, "utf8");
   const preflightControllerUiText = fs.readFileSync(preflightControllerUiPath, "utf8");
   const flowIoUiText = fs.readFileSync(flowIoUiPath, "utf8");
   const runPayloadUiText = fs.readFileSync(runPayloadUiPath, "utf8");
@@ -272,6 +274,14 @@ function fail(message) {
     fail("preflight controller no longer calls Rust workflow contract validation");
   }
 
+  const preflightAutoFixUsesCanonicalWorkflowField =
+    /workflow_definition:\s*\{\s*\.\.\.graph,\s*nodes:\s*cleanedNodes,\s*edges:\s*cleanedEdges\s*\}/s.test(preflightControllerSupportText)
+    && /applyGraph\(out\.workflow_definition \|\| \{\}\)/.test(preflightControllerUiText)
+    && !/applyGraph\(out\.graph\)/.test(preflightControllerUiText);
+  if (!preflightAutoFixUsesCanonicalWorkflowField) {
+    fail("preflight auto-fix no longer uses canonical workflow_definition surface");
+  }
+
   const flowIoAvoidsLocalAssert = !/assertWorkflowContract/.test(flowIoUiText);
   if (!flowIoAvoidsLocalAssert) {
     fail("flow-io-ui still performs local authoritative workflow contract assert");
@@ -311,6 +321,7 @@ function fail(message) {
     engineUsesCanonicalWorkflowField,
     workflowAliasOptInExplicit,
     preflightUsesRustWorkflowValidation,
+    preflightAutoFixUsesCanonicalWorkflowField,
     flowIoAvoidsLocalAssert,
     flowIoUsesCanonicalWorkflowField,
     preloadSaveSurfaceCanonical,

@@ -98,7 +98,10 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
       if (!out?.canceled) setStatus(`读取模板包失败: ${formatAiwfError(out)}`, false);
       return;
     }
-    const ret = await window.aiwfDesktop.installTemplatePack({ path: out.path });
+    const ret = await window.aiwfDesktop.installTemplatePack({
+      path: out.path,
+      allowLegacyGraphAlias: true,
+    });
     if (!ret?.ok) {
       setStatus(`安装模板包失败: ${formatAiwfError(ret)}`, false);
       return;

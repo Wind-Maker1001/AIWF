@@ -118,7 +118,7 @@ function autoFixWorkflowGraph(graph = {}) {
 
   const moved = removedDup + removedSelf + removedBroken + removedIsolated;
   return {
-    graph: { ...graph, nodes: cleanedNodes, edges: cleanedEdges },
+    workflow_definition: { ...graph, nodes: cleanedNodes, edges: cleanedEdges },
     summary: {
       changed: moved > 0,
       removed_dup_edges: removedDup,
