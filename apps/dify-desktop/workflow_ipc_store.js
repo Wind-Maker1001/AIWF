@@ -77,6 +77,21 @@ function registerWorkflowStoreIpc(ctx, deps) {
     });
   }
 
+  function listLegacyGraphTemplateIndexes(pack = {}) {
+    const templates = Array.isArray(pack?.templates) ? pack.templates : [];
+    const indexes = [];
+    templates.forEach((template, index) => {
+      if (!template || typeof template !== "object") return;
+      if (
+        Object.prototype.hasOwnProperty.call(template, "graph")
+        && !Object.prototype.hasOwnProperty.call(template, "workflow_definition")
+      ) {
+        indexes.push(index);
+      }
+    });
+    return indexes;
+  }
+
   function normalizeSaveWorkflowRequest(requestOrWorkflow, legacyName, legacyOptions) {
     const source = requestOrWorkflow && typeof requestOrWorkflow === "object" ? requestOrWorkflow : {};
     const looksCanonicalRequest =
@@ -137,16 +152,25 @@ function registerWorkflowStoreIpc(ctx, deps) {
     try {
       const inlinePack = req?.pack && typeof req.pack === "object" ? req.pack : null;
       const fromPath = String(req?.path || "").trim();
+      const allowLegacyGraphAlias = req?.allowLegacyGraphAlias === true;
       let pack = inlinePack;
       if (!pack && fromPath) {
         const parsed = JSON.parse(fs.readFileSync(fromPath, "utf8"));
         pack = parsed && typeof parsed === "object" ? parsed : null;
       }
       if (!pack) return { ok: false, error: "pack or path required" };
+      const legacyGraphIndexes = listLegacyGraphTemplateIndexes(pack);
+      if (legacyGraphIndexes.length > 0 && !allowLegacyGraphAlias) {
+        return {
+          ok: false,
+          error: `legacy template pack graph alias requires allowLegacyGraphAlias: template indexes ${legacyGraphIndexes.join(", ")}`,
+          error_code: "template_pack_legacy_graph_alias_forbidden",
+        };
+      }
       const normalizedPack = normalizeTemplatePackArtifact(pack, {
         allowVersionMigration: true,
         source: fromPath || "inline",
-        allowLegacyGraphAlias: true,
+        allowLegacyGraphAlias,
       });
       const templates = [];
       for (const template of (Array.isArray(normalizedPack.templates) ? normalizedPack.templates : [])) {

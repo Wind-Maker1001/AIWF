@@ -37,7 +37,10 @@ test("workflow template ui installs template pack and refreshes template select"
         return { ok: true, path: "D:/packs/sample-template-pack.json" };
       },
       installTemplatePack: async (payload) => {
-        assert.deepEqual(payload, { path: "D:/packs/sample-template-pack.json" });
+        assert.deepEqual(payload, {
+          path: "D:/packs/sample-template-pack.json",
+          allowLegacyGraphAlias: true,
+        });
         return { ok: true, item: { id: "pack_1", name: "Finance Pack" } };
       },
       listTemplateMarketplace: async () => ({

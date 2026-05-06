@@ -170,7 +170,18 @@ function fail(payload) {
     });
   }
 
-  const installResult = await installHandler(null, { pack: legacyPack });
+  const deniedInstallResult = await installHandler(null, { pack: legacyPack });
+  if (deniedInstallResult?.ok !== false || String(deniedInstallResult?.error_code || "") !== "template_pack_legacy_graph_alias_forbidden") {
+    fail({
+      status: "failed",
+      issues: ["template pack install no longer requires explicit allowLegacyGraphAlias for legacy graph imports"],
+    });
+  }
+
+  const installResult = await installHandler(null, {
+    pack: legacyPack,
+    allowLegacyGraphAlias: true,
+  });
   if (!installResult?.ok) {
     fail({
       status: "failed",
