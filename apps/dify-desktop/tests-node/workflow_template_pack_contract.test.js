@@ -111,3 +111,25 @@ test("workflow template pack contract rejects legacy graph alias without explici
     /workflow_definition is required/i
   );
 });
+
+test("workflow template pack contract rejects legacy graph alias when nested workflow version is missing", () => {
+  const legacyGraph = templateGraph();
+  delete legacyGraph.version;
+
+  assert.throws(
+    () => normalizeTemplatePackArtifact({
+      id: "pack_unversioned",
+      name: "Finance Pack",
+      templates: [{
+        id: "tpl_unversioned",
+        name: "Unversioned Template",
+        graph: legacyGraph,
+      }],
+    }, {
+      allowVersionMigration: true,
+      source: "legacy_file",
+      allowLegacyGraphAlias: true,
+    }),
+    /workflow_definition\.version is required/i
+  );
+});

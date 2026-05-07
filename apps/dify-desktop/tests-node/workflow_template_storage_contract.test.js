@@ -111,3 +111,22 @@ test("workflow template storage contract rejects legacy graph alias without expl
     /workflow_definition is required/i
   );
 });
+
+test("workflow template storage contract rejects legacy graph alias when nested workflow version is missing", async () => {
+  const { normalizeLocalTemplateStorage } = await loadTemplateStorageContractModule();
+  const legacyGraph = templateGraph();
+  delete legacyGraph.version;
+
+  assert.throws(
+    () => normalizeLocalTemplateStorage([{
+      id: "custom_unversioned",
+      name: "Local Template Missing Version",
+      graph: legacyGraph,
+    }], {
+      allowStorageSchemaMigration: true,
+      allowEntrySchemaMigration: true,
+      allowLegacyGraphAlias: true,
+    }),
+    /workflow_definition\.version is required/i
+  );
+});

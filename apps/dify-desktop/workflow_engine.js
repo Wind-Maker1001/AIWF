@@ -122,7 +122,7 @@ async function runMinimalWorkflow({ payload = {}, config = {}, outputRoot, nodeC
     authoritativeValidation = await workflowValidationSupport.validateWorkflowDefinitionAuthoritatively({
       workflowDefinition,
       cfg: config || {},
-      allowVersionMigration: true,
+      allowVersionMigration: false,
       requireNonEmptyNodes: true,
       validationScope: "run",
     });

@@ -100,6 +100,33 @@ function fail(payload) {
     });
   }
 
+  const legacyStorageMissingVersion = [{
+    id: "custom_missing_version",
+    name: "Legacy Local Template Missing Version",
+    graph: {
+      workflow_id: "wf_local_template_missing_version_gate",
+      name: "Local Template Missing Version Gate",
+      nodes: [{ id: "n1", type: "ingest_files", config: {} }],
+      edges: [],
+    },
+  }];
+  let legacyStorageMissingVersionRejected = false;
+  try {
+    normalizeLocalTemplateStorage(legacyStorageMissingVersion, {
+      allowStorageSchemaMigration: true,
+      allowEntrySchemaMigration: true,
+      allowLegacyGraphAlias: true,
+    });
+  } catch (error) {
+    legacyStorageMissingVersionRejected = /workflow_definition\.version is required/i.test(String(error?.message || error));
+  }
+  if (!legacyStorageMissingVersionRejected) {
+    fail({
+      status: "failed",
+      issues: ["local template storage contract no longer rejects legacy graph alias with missing workflow.version"],
+    });
+  }
+
   const localStorageState = {
     "aiwf.workflow.templates.v1": JSON.stringify([{
       id: "custom_1",
@@ -145,7 +172,54 @@ function fail(payload) {
     });
   }
 
+  const invalidLocalStorageState = {
+    "aiwf.workflow.templates.v1": JSON.stringify(legacyStorageMissingVersion),
+  };
+  global.window = {
+    localStorage: {
+      getItem(key) {
+        return invalidLocalStorageState[key] || null;
+      },
+      setItem(key, value) {
+        invalidLocalStorageState[key] = value;
+      },
+    },
+  };
+  const invalidSupport = createWorkflowTemplateMarketplaceSupport({
+    workflowName: { value: "My Flow" },
+    templateSelect: { value: "" },
+  }, {
+    graphPayload: () => templateGraph(),
+    currentTemplateGovernance: () => ({ preflight_gate_required: true }),
+    parseRunParamsLoose: () => ({ region: "cn" }),
+    renderTemplateSelect: () => {},
+    setStatus: () => {},
+  });
+  const invalidLoadedTemplates = invalidSupport.loadLocalTemplates();
+  const localStorageRejectsMissingVersionOnLoad =
+    Array.isArray(invalidLoadedTemplates)
+    && invalidLoadedTemplates.length === 0
+    && JSON.parse(invalidLocalStorageState["aiwf.workflow.templates.v1"])[0].graph
+    && !JSON.parse(invalidLocalStorageState["aiwf.workflow.templates.v1"])[0].workflow_definition;
+  delete global.window;
+  if (!localStorageRejectsMissingVersionOnLoad) {
+    fail({
+      status: "failed",
+      issues: ["template marketplace support no longer fails closed on legacy local storage entries missing workflow.version"],
+    });
+  }
+
   global.prompt = () => "My Local Template";
+  global.window = {
+    localStorage: {
+      getItem(key) {
+        return localStorageState[key] || null;
+      },
+      setItem(key, value) {
+        localStorageState[key] = value;
+      },
+    },
+  };
   support.saveCurrentAsTemplate();
   const savedStorage = JSON.parse(localStorageState["aiwf.workflow.templates.v1"]);
   const localSaveVersioned = savedStorage.schema_version === LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION
@@ -176,7 +250,9 @@ function fail(payload) {
     storageSchemaVersion: LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
     entrySchemaVersion: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
     legacyStorageMigrated: normalized.migrated,
+    legacyStorageMissingVersionRejected,
     localStorageNormalizedOnLoad,
+    localStorageRejectsMissingVersionOnLoad,
     localSaveVersioned,
     savedEntryCount: Array.isArray(savedStorage.items) ? savedStorage.items.length : 0,
     savedTemplateField: "workflow_definition",

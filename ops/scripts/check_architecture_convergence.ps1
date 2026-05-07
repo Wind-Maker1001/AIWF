@@ -17,6 +17,7 @@ $repoReadmePath = Join-Path $RepoRoot "README.md"
 $inventoryPath = Join-Path $RepoRoot "contracts\governance\fallback_inventory.v1.json"
 $localTemplateStorageSchemaPath = Join-Path $RepoRoot "contracts\desktop\local_template_storage.schema.json"
 $templatePackArtifactSchemaPath = Join-Path $RepoRoot "contracts\desktop\template_pack_artifact.schema.json"
+$workflowVersionMigrationScriptPath = Join-Path $RepoRoot "ops\scripts\migrate_workflow_version_import_fallback.js"
 
 $issues = @()
 
@@ -31,6 +32,9 @@ if (-not (Test-Path $localTemplateStorageSchemaPath)) {
 }
 if (-not (Test-Path $templatePackArtifactSchemaPath)) {
   $issues += "template pack artifact schema missing"
+}
+if (-not (Test-Path $workflowVersionMigrationScriptPath)) {
+  $issues += "workflow version import migration script missing"
 }
 
 $requiredLinkTargets = @(
@@ -115,6 +119,14 @@ if (Test-Path $inventoryPath) {
         }
       } catch {
         $issues += "active fallback remove_by must use yyyy-MM-dd: $($entry.id)"
+      }
+    }
+    if ([string]($entry.id) -eq "workflow.version_import_normalization") {
+      if ([string]($entry.status) -eq "active") {
+        $issues += "workflow.version_import_normalization fallback is still active"
+      }
+      if (@($entry.evidence) -notcontains "ops/scripts/migrate_workflow_version_import_fallback.js") {
+        $issues += "workflow.version_import_normalization missing migration script evidence"
       }
     }
   }

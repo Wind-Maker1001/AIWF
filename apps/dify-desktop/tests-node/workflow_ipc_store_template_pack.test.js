@@ -386,7 +386,7 @@ test("workflow ipc store loadWorkflow rejects unregistered node types with struc
   assert.equal(audits.some((entry) => entry.action === "workflow_load"), false);
 });
 
-test("workflow ipc store loadWorkflow still accepts legacy graphs missing version", async () => {
+test("workflow ipc store loadWorkflow rejects legacy graphs missing version", async () => {
   const { handlers, root } = createIpcHarness();
   const loadWorkflow = handlers["aiwf:loadWorkflow"];
   assert.equal(typeof loadWorkflow, "function");
@@ -403,11 +403,10 @@ test("workflow ipc store loadWorkflow still accepts legacy graphs missing versio
     path: legacyWorkflowPath,
   });
 
-  assert.equal(out.ok, true);
-  assert.equal(out.workflow_definition.workflow_id, "wf_legacy");
-  assert.equal(out.workflow_definition.version, "1.0.0");
-  assert.ok(Array.isArray(out.notes));
-  assert.match(out.notes.join(" | "), /workflow\.version migrated/i);
+  assert.equal(out.ok, false);
+  assert.equal(out.error_code, "workflow_graph_invalid");
+  assert.ok(Array.isArray(out.error_items));
+  assert.ok(out.error_items.some((item) => item.path === "workflow.version" && item.code === "required"));
 });
 
 test("workflow ipc store loadWorkflow can skip graph contract validation for non-workflow json pickers", async () => {
@@ -434,7 +433,7 @@ test("workflow ipc store loadWorkflow can skip graph contract validation for non
   assert.equal(out.workflow_definition.schema_version, "template_pack_artifact.v1");
 });
 
-test("workflow ipc store exposes authoritative workflow validation ipc", async () => {
+test("workflow ipc store exposes authoritative workflow validation ipc as fail-closed for missing version", async () => {
   const { handlers } = createIpcHarness();
   const validateWorkflowDefinition = handlers["aiwf:validateWorkflowDefinition"];
   assert.equal(typeof validateWorkflowDefinition, "function");
@@ -450,8 +449,31 @@ test("workflow ipc store exposes authoritative workflow validation ipc", async (
     validation_scope: "authoring",
   });
 
-  assert.equal(out.ok, true);
-  assert.equal(out.workflow_definition.workflow_id, "wf_validate");
-  assert.equal(out.workflow_definition.version, "1.0.0");
-  assert.ok(Array.isArray(out.notes));
+  assert.equal(out.ok, false);
+  assert.equal(out.error_code, "workflow_graph_invalid");
+  assert.ok(Array.isArray(out.error_items));
+  assert.ok(out.error_items.some((item) => item.path === "workflow.version" && item.code === "required"));
+});
+
+test("workflow ipc store installTemplatePack rejects legacy graph templates missing workflow version", async () => {
+  const { handlers } = createIpcHarness();
+  const install = handlers["aiwf:installTemplatePack"];
+  const legacyGraph = templateGraph();
+  delete legacyGraph.version;
+
+  const out = await install(null, {
+    pack: {
+      id: "pack_legacy_missing_version",
+      name: "Legacy Missing Version",
+      templates: [{
+        id: "tpl_legacy_missing_version",
+        name: "Legacy Missing Version",
+        graph: legacyGraph,
+      }],
+    },
+    allowLegacyGraphAlias: true,
+  });
+
+  assert.equal(out.ok, false);
+  assert.match(String(out.error || ""), /workflow_definition\.version is required/i);
 });

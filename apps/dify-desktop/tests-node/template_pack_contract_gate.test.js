@@ -35,6 +35,8 @@ test("template pack contract sync gate passes", () => {
   assert.equal(payload.marketplaceEntrySchemaVersion, "template_pack_entry.v1");
   assert.equal(payload.importMigrated, true);
   assert.equal(payload.installMigrated, true);
+  assert.equal(payload.legacyGraphMissingVersionRejected, true);
+  assert.equal(payload.installRejectsMissingVersion, true);
   assert.equal(payload.exportedArtifactSchemaVersion, "template_pack_artifact.v1");
   assert.equal(payload.templateCount, 1);
   assert.equal(payload.exportedTemplateField, "workflow_definition");

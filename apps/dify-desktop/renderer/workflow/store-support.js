@@ -26,21 +26,32 @@ function normalizeStoreNode(node, index = 0) {
   };
 }
 
-function normalizeImportedGraph(graph) {
-  return normalizeImportedGraphWithContract(graph).graph;
+function normalizeImportedGraph(graph, options = {}) {
+  return normalizeImportedGraphWithContract(graph, options).graph;
 }
 
-function normalizeImportedGraphWithContract(graph) {
+function normalizeImportedGraphWithContract(graph, options = {}) {
   const source = graph && typeof graph === "object" ? deepClone(graph) : {};
   const notes = [];
-  const migrated = !String(source.version || "").trim();
-  if (migrated) {
-    notes.push(`workflow.version migrated to ${WORKFLOW_SCHEMA_VERSION}`);
+  const errors = [];
+  const allowVersionMigration = options?.allowVersionMigration === true;
+  const rawVersion = String(source.version || "").trim();
+  if (!rawVersion) {
+    if (allowVersionMigration) {
+      notes.push(`workflow.version migrated to ${WORKFLOW_SCHEMA_VERSION}`);
+    } else {
+      errors.push("workflow.version is required");
+    }
+  }
+  const migrated = notes.length > 0;
+  const version = rawVersion || (allowVersionMigration ? WORKFLOW_SCHEMA_VERSION : "");
+  if (!version && !errors.includes("workflow.version is required")) {
+    errors.push("workflow.version is required");
   }
   const g = {
     ...source,
     workflow_id: String(source.workflow_id || "custom_v1"),
-    version: String(source.version || WORKFLOW_SCHEMA_VERSION),
+    version,
     name: String(source.name || "Custom Workflow"),
     nodes: Array.isArray(source.nodes) ? source.nodes : [],
     edges: Array.isArray(source.edges) ? source.edges : [],
@@ -66,7 +77,7 @@ function normalizeImportedGraphWithContract(graph) {
     contract: {
       migrated,
       notes,
-      errors: [],
+      errors,
     },
   };
 }

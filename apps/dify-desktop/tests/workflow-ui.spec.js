@@ -134,6 +134,7 @@ test('horizontal same-row nodes render visible edge path', async () => {
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'hline',
+      version: '1.0.0',
       name: 'hline',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 40, y: 120 },
@@ -176,6 +177,7 @@ test('re-linking same direction toggles edge off', async () => {
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'toggle_edge',
+      version: '1.0.0',
       name: 'toggle_edge',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 40, y: 120 },
@@ -206,6 +208,7 @@ test('edge path stays valid after zoom and horizontal layout changes', async () 
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'hline_zoomed',
+      version: '1.0.0',
       name: 'hline_zoomed',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 40, y: 120 },
@@ -240,6 +243,7 @@ test('fit view button rescales large graphs', async () => {
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'fit_view',
+      version: '1.0.0',
       name: 'fit_view',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 0, y: 120 },
@@ -264,6 +268,7 @@ test('touch drag updates node position', async () => {
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'touch_drag',
+      version: '1.0.0',
       name: 'touch_drag',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 120, y: 160 },
@@ -318,6 +323,7 @@ test('minimap bitmap tracks css size and device pixel ratio', async () => {
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'minimap_dpi',
+      version: '1.0.0',
       name: 'minimap_dpi',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 0, y: 120 },
@@ -354,6 +360,7 @@ test('align and distribute buttons affect selected nodes', async () => {
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'arrange_case',
+      version: '1.0.0',
       name: 'arrange_case',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 120, y: 240 },
@@ -398,6 +405,7 @@ test('align and distribute buttons affect selected nodes', async () => {
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'arrange_case_v',
+      version: '1.0.0',
       name: 'arrange_case_v',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 120, y: 120 },
@@ -432,6 +440,7 @@ test('distribution keeps non-overlap for dense selected nodes', async () => {
     const api = window.__aiwfDebug;
     api.setGraph({
       workflow_id: 'dense_overlap_case',
+      version: '1.0.0',
       name: 'dense_overlap_case',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 120, y: 120 },
@@ -543,6 +552,7 @@ test('marquee selection selects multiple nodes', async () => {
   await page.evaluate(() => {
     window.__aiwfDebug.setGraph({
       workflow_id: 'marquee',
+      version: '1.0.0',
       name: 'marquee',
       nodes: [
         { id: 'n1', type: 'ingest_files', x: 40, y: 120 },
@@ -636,7 +646,7 @@ test('router reports bounded fallback ratio on clustered graph', async () => {
     }
     for (let i = 0; i < 20; i += 1) edges.push({ from: `n${i}`, to: `n${i + 4}` });
     for (let i = 0; i < 12; i += 1) edges.push({ from: `n${i}`, to: `n${23 - i}` });
-    window.__aiwfDebug.setGraph({ workflow_id: 'clustered_router', name: 'clustered', nodes, edges });
+    window.__aiwfDebug.setGraph({ workflow_id: 'clustered_router', version: '1.0.0', name: 'clustered', nodes, edges });
     await new Promise((r) => setTimeout(r, 80));
     return window.__aiwfDebug.routeStats();
   });
@@ -665,6 +675,7 @@ test('router replay cases stay within per-case fallback bounds', async () => {
       ...item,
       graph: {
         ...(item.graph || {}),
+        version: String(item?.graph?.version || '1.0.0'),
         nodes: Array.isArray(item?.graph?.nodes)
           ? item.graph.nodes.map((node) => ({
               ...node,

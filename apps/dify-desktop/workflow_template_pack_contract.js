@@ -34,6 +34,9 @@ function normalizeTemplatePackTemplate(template, index = 0, options = {}) {
   if (!id) throw createTemplatePackContractError(`template[${index}] id is required`);
   if (!name) throw createTemplatePackContractError(`template[${index}] name is required`);
   if (!workflowDefinition) throw createTemplatePackContractError(`template[${index}] workflow_definition is required`);
+  if (!String(workflowDefinition.version || "").trim()) {
+    throw createTemplatePackContractError(`template[${index}] workflow_definition.version is required`);
+  }
   return {
     ...rest,
     id,

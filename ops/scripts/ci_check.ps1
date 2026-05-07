@@ -318,12 +318,14 @@ function New-WorkflowContractSyncDetails($Summary) {
   return [ordered]@{
     required = @(Get-StringArrayProperty $Summary "required")
     default_version = Get-OptionalPropertyValue $Summary "defaultVersion"
-    normalized_version = Get-OptionalPropertyValue $Summary "normalizedVersion"
-    import_migrated = (Get-OptionalBooleanProperty $Summary "importMigrated")
+    import_missing_version_rejected = (Get-OptionalBooleanProperty $Summary "importMissingVersionRejected")
+    import_preserved_empty_version = (Get-OptionalBooleanProperty $Summary "importPreservedEmptyVersion")
     import_rejected_unknown_type = (Get-OptionalBooleanProperty $Summary "importRejectedUnknownType")
     payload_rejected_unknown_type = (Get-OptionalBooleanProperty $Summary "payloadRejectedUnknownType")
     authoring_rejected_unknown_type = (Get-OptionalBooleanProperty $Summary "authoringRejectedUnknownType")
     preflight_unknown_type_guided = (Get-OptionalBooleanProperty $Summary "preflightUnknownTypeGuided")
+    explicit_migration_path_available = (Get-OptionalBooleanProperty $Summary "explicitMigrationPathAvailable")
+    explicit_migrated_version = Get-OptionalPropertyValue $Summary "explicitMigratedVersion"
     issues = @(Get-StringArrayProperty $Summary "issues")
   }
 }
@@ -335,12 +337,14 @@ function Get-WorkflowContractSyncReason($Summary, [string]$Status) {
 
   $details = New-WorkflowContractSyncDetails $Summary
   $required = @($details.required)
-  $base = "workflow contract sync checks {0} (required={1}; default_version={2}; normalized_version={3}; import_migrated={4}; import_unknown_type={5}; run_unknown_type={6}; authoring_unknown_type={7}; preflight_unknown_type_guided={8})" -f `
+  $base = "workflow contract sync checks {0} (required={1}; default_version={2}; import_missing_version_rejected={3}; import_preserved_empty_version={4}; explicit_migration_path_available={5}; explicit_migrated_version={6}; import_unknown_type={7}; run_unknown_type={8}; authoring_unknown_type={9}; preflight_unknown_type_guided={10})" -f `
     $(if ($Status -eq "failed") { "failed" } else { "passed" }),
     $(if ($required.Count -gt 0) { $required -join ", " } else { "-" }),
     [string]$details.default_version,
-    [string]$details.normalized_version,
-    [string]$details.import_migrated,
+    [string]$details.import_missing_version_rejected,
+    [string]$details.import_preserved_empty_version,
+    [string]$details.explicit_migration_path_available,
+    [string]$details.explicit_migrated_version,
     [string]$details.import_rejected_unknown_type,
     [string]$details.payload_rejected_unknown_type,
     [string]$details.authoring_rejected_unknown_type,
@@ -356,6 +360,9 @@ function Get-WorkflowContractSyncReason($Summary, [string]$Status) {
     $fragments += "required fields missing: $($requiredMissing -join ', ')"
   }
   foreach ($entry in @(
+    @{ ok = [bool]$details.import_missing_version_rejected; label = "missing-version import guard missing" },
+    @{ ok = [bool]$details.import_preserved_empty_version; label = "missing-version import path still auto-fills version" },
+    @{ ok = [bool]$details.explicit_migration_path_available; label = "explicit migration path missing" },
     @{ ok = [bool]$details.import_rejected_unknown_type; label = "import unknown node guard missing" },
     @{ ok = [bool]$details.payload_rejected_unknown_type; label = "run payload unknown node guard missing" },
     @{ ok = [bool]$details.authoring_rejected_unknown_type; label = "authoring unknown node guard missing" },
@@ -368,8 +375,8 @@ function Get-WorkflowContractSyncReason($Summary, [string]$Status) {
   if ([string]::IsNullOrWhiteSpace([string]$details.default_version)) {
     $fragments += "default workflow version missing"
   }
-  if ([string]::IsNullOrWhiteSpace([string]$details.normalized_version)) {
-    $fragments += "normalized workflow version missing"
+  if ([string]::IsNullOrWhiteSpace([string]$details.explicit_migrated_version)) {
+    $fragments += "explicit migrated workflow version missing"
   }
   if ($fragments.Count -eq 0 -and @($details.issues).Count -gt 0) {
     $fragments += [string]$details.issues[0]
@@ -392,6 +399,15 @@ function Get-WorkflowContractReleaseReadyIssues($Item) {
   if (-not (Get-OptionalBooleanProperty $details "import_rejected_unknown_type")) {
     $issues += "workflow_contract_sync import path no longer rejects unknown node types"
   }
+  if (-not (Get-OptionalBooleanProperty $details "import_missing_version_rejected")) {
+    $issues += "workflow_contract_sync import path no longer rejects missing workflow.version"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "import_preserved_empty_version")) {
+    $issues += "workflow_contract_sync import path still auto-fills workflow.version"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "explicit_migration_path_available")) {
+    $issues += "workflow_contract_sync explicit migration path is unavailable"
+  }
   if (-not (Get-OptionalBooleanProperty $details "payload_rejected_unknown_type")) {
     $issues += "workflow_contract_sync run payload path no longer rejects unknown node types"
   }
@@ -404,8 +420,8 @@ function Get-WorkflowContractReleaseReadyIssues($Item) {
   if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "default_version"))) {
     $issues += "workflow_contract_sync default workflow version missing"
   }
-  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "normalized_version"))) {
-    $issues += "workflow_contract_sync normalized workflow version missing"
+  if ([string]::IsNullOrWhiteSpace((Get-OptionalPropertyValue $details "explicit_migrated_version"))) {
+    $issues += "workflow_contract_sync explicit migrated workflow version missing"
   }
   return @($issues | Sort-Object -Unique)
 }
@@ -747,6 +763,8 @@ function New-TemplatePackContractDetails($Summary) {
     marketplace_entry_schema_version = Get-OptionalPropertyValue $Summary "marketplaceEntrySchemaVersion"
     import_migrated = (Get-OptionalBooleanProperty $Summary "importMigrated")
     install_migrated = (Get-OptionalBooleanProperty $Summary "installMigrated")
+    legacy_graph_missing_version_rejected = (Get-OptionalBooleanProperty $Summary "legacyGraphMissingVersionRejected")
+    install_rejects_missing_version = (Get-OptionalBooleanProperty $Summary "installRejectsMissingVersion")
     exported_artifact_schema_version = Get-OptionalPropertyValue $Summary "exportedArtifactSchemaVersion"
     template_count = [int]($Summary.templateCount)
     issues = @(Get-StringArrayProperty $Summary "issues")
@@ -759,12 +777,14 @@ function Get-TemplatePackContractReason($Summary, [string]$Status) {
   }
 
   $details = New-TemplatePackContractDetails $Summary
-  $base = "template pack contract sync checks {0} (artifact={1}; entry={2}; import_migrated={3}; install_migrated={4}; exported_artifact={5}; templates={6})" -f `
+  $base = "template pack contract sync checks {0} (artifact={1}; entry={2}; import_migrated={3}; install_migrated={4}; legacy_graph_missing_version_rejected={5}; install_rejects_missing_version={6}; exported_artifact={7}; templates={8})" -f `
     $(if ($Status -eq "failed") { "failed" } else { "passed" }),
     [string]$details.artifact_schema_version,
     [string]$details.marketplace_entry_schema_version,
     [string]$details.import_migrated,
     [string]$details.install_migrated,
+    [string]$details.legacy_graph_missing_version_rejected,
+    [string]$details.install_rejects_missing_version,
     [string]$details.exported_artifact_schema_version,
     [int]$details.template_count
 
@@ -784,6 +804,12 @@ function Get-TemplatePackContractReason($Summary, [string]$Status) {
   }
   if (-not [bool]$details.install_migrated) {
     $fragments += "template pack install migration missing"
+  }
+  if (-not [bool]$details.legacy_graph_missing_version_rejected) {
+    $fragments += "legacy graph alias no longer rejects missing workflow.version"
+  }
+  if (-not [bool]$details.install_rejects_missing_version) {
+    $fragments += "template pack install no longer fails closed on missing workflow.version"
   }
   if ([string]$details.exported_artifact_schema_version -ne [string]$details.artifact_schema_version) {
     $fragments += "template pack export schema drift"
@@ -816,6 +842,12 @@ function Get-TemplatePackContractReleaseReadyIssues($Item) {
   if (-not (Get-OptionalBooleanProperty $details "install_migrated")) {
     $issues += "template_pack_contract_sync template pack install migration missing"
   }
+  if (-not (Get-OptionalBooleanProperty $details "legacy_graph_missing_version_rejected")) {
+    $issues += "template_pack_contract_sync legacy graph alias no longer rejects missing workflow.version"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "install_rejects_missing_version")) {
+    $issues += "template_pack_contract_sync install path no longer fails closed on missing workflow.version"
+  }
   if ((Get-OptionalPropertyValue $details "artifact_schema_version") -ne (Get-OptionalPropertyValue $details "exported_artifact_schema_version")) {
     $issues += "template_pack_contract_sync exported artifact schema drift"
   }
@@ -834,7 +866,9 @@ function New-LocalTemplateStorageContractDetails($Summary) {
     storage_schema_version = Get-OptionalPropertyValue $Summary "storageSchemaVersion"
     entry_schema_version = Get-OptionalPropertyValue $Summary "entrySchemaVersion"
     legacy_storage_migrated = (Get-OptionalBooleanProperty $Summary "legacyStorageMigrated")
+    legacy_storage_missing_version_rejected = (Get-OptionalBooleanProperty $Summary "legacyStorageMissingVersionRejected")
     local_storage_normalized_on_load = (Get-OptionalBooleanProperty $Summary "localStorageNormalizedOnLoad")
+    local_storage_rejects_missing_version_on_load = (Get-OptionalBooleanProperty $Summary "localStorageRejectsMissingVersionOnLoad")
     local_save_versioned = (Get-OptionalBooleanProperty $Summary "localSaveVersioned")
     saved_entry_count = [int]($Summary.savedEntryCount)
     issues = @(Get-StringArrayProperty $Summary "issues")
@@ -847,12 +881,14 @@ function Get-LocalTemplateStorageContractReason($Summary, [string]$Status) {
   }
 
   $details = New-LocalTemplateStorageContractDetails $Summary
-  $base = "local template storage contract sync checks {0} (storage={1}; entry={2}; legacy_migrated={3}; normalized_on_load={4}; save_versioned={5}; saved_entries={6})" -f `
+  $base = "local template storage contract sync checks {0} (storage={1}; entry={2}; legacy_migrated={3}; legacy_missing_version_rejected={4}; normalized_on_load={5}; rejects_missing_version_on_load={6}; save_versioned={7}; saved_entries={8})" -f `
     $(if ($Status -eq "failed") { "failed" } else { "passed" }),
     [string]$details.storage_schema_version,
     [string]$details.entry_schema_version,
     [string]$details.legacy_storage_migrated,
+    [string]$details.legacy_storage_missing_version_rejected,
     [string]$details.local_storage_normalized_on_load,
+    [string]$details.local_storage_rejects_missing_version_on_load,
     [string]$details.local_save_versioned,
     [int]$details.saved_entry_count
 
@@ -870,8 +906,14 @@ function Get-LocalTemplateStorageContractReason($Summary, [string]$Status) {
   if (-not [bool]$details.legacy_storage_migrated) {
     $fragments += "legacy local template storage migration missing"
   }
+  if (-not [bool]$details.legacy_storage_missing_version_rejected) {
+    $fragments += "legacy graph alias no longer rejects missing workflow.version"
+  }
   if (-not [bool]$details.local_storage_normalized_on_load) {
     $fragments += "local template storage no longer rewrites legacy payloads on load"
+  }
+  if (-not [bool]$details.local_storage_rejects_missing_version_on_load) {
+    $fragments += "local template storage no longer fails closed on missing workflow.version"
   }
   if (-not [bool]$details.local_save_versioned) {
     $fragments += "saveCurrentAsTemplate no longer writes versioned storage"
@@ -901,8 +943,14 @@ function Get-LocalTemplateStorageContractReleaseReadyIssues($Item) {
   if (-not (Get-OptionalBooleanProperty $details "legacy_storage_migrated")) {
     $issues += "local_template_storage_contract_sync legacy storage migration missing"
   }
+  if (-not (Get-OptionalBooleanProperty $details "legacy_storage_missing_version_rejected")) {
+    $issues += "local_template_storage_contract_sync legacy graph alias no longer rejects missing workflow.version"
+  }
   if (-not (Get-OptionalBooleanProperty $details "local_storage_normalized_on_load")) {
     $issues += "local_template_storage_contract_sync legacy localStorage normalization missing"
+  }
+  if (-not (Get-OptionalBooleanProperty $details "local_storage_rejects_missing_version_on_load")) {
+    $issues += "local_template_storage_contract_sync local template load no longer fails closed on missing workflow.version"
   }
   if (-not (Get-OptionalBooleanProperty $details "local_save_versioned")) {
     $issues += "local_template_storage_contract_sync saveCurrentAsTemplate no longer writes versioned storage"

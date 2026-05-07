@@ -1,0 +1,22 @@
+{
+  "id": "pack_fixture_legacy_graph",
+  "name": "Fixture Template Pack",
+  "templates": [
+    {
+      "id": "tpl_fixture_legacy_graph",
+      "name": "Fixture Template",
+      "graph": {
+        "workflow_id": "wf_fixture_template_graph",
+        "name": "Fixture Template Graph",
+        "nodes": [
+          {
+            "id": "n1",
+            "type": "ingest_files",
+            "config": {}
+          }
+        ],
+        "edges": []
+      }
+    }
+  ]
+}

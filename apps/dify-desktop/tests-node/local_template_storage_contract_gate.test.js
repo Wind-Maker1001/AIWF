@@ -34,7 +34,9 @@ test("local template storage contract sync gate passes", () => {
   assert.equal(payload.storageSchemaVersion, "local_template_storage.v1");
   assert.equal(payload.entrySchemaVersion, "local_template_entry.v1");
   assert.equal(payload.legacyStorageMigrated, true);
+  assert.equal(payload.legacyStorageMissingVersionRejected, true);
   assert.equal(payload.localStorageNormalizedOnLoad, true);
+  assert.equal(payload.localStorageRejectsMissingVersionOnLoad, true);
   assert.equal(payload.localSaveVersioned, true);
   assert.ok(payload.savedEntryCount >= 1);
   assert.equal(payload.savedTemplateField, "workflow_definition");

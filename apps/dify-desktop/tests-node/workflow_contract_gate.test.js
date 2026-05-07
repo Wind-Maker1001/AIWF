@@ -31,12 +31,14 @@ test("workflow contract sync gate passes", () => {
   assert.ok(payload, `expected structured JSON payload in output:\n${result.stdout}\n${result.stderr}`);
   assert.deepEqual(payload.required, ["workflow_id", "version", "nodes", "edges"]);
   assert.equal(payload.defaultVersion, "1.0.0");
-  assert.equal(payload.importMigrated, true);
+  assert.equal(payload.importMissingVersionRejected, true);
+  assert.equal(payload.importPreservedEmptyVersion, true);
   assert.equal(payload.importRejectedUnknownType, true);
   assert.equal(payload.payloadRejectedUnknownType, true);
   assert.equal(payload.authoringRejectedUnknownType, true);
   assert.equal(payload.preflightUnknownTypeGuided, true);
-  assert.equal(payload.normalizedVersion, "1.0.0");
+  assert.equal(payload.explicitMigrationPathAvailable, true);
+  assert.equal(payload.explicitMigratedVersion, "1.0.0");
   assert.equal(payload.runPayloadDefersUnknownType, true);
   assert.equal(payload.engineUsesRustValidation, true);
   assert.equal(payload.preflightUsesRustWorkflowValidation, true);
