@@ -98,6 +98,37 @@ function fail(payload) {
     });
   }
 
+  const legacyPackMissingVersion = {
+    id: "pack_missing_version",
+    name: "Missing Version Pack",
+    templates: [{
+      id: "tpl_missing_version",
+      name: "Missing Version Template",
+      graph: {
+        workflow_id: "wf_template_pack_missing_version_gate",
+        name: "Template Pack Missing Version Gate",
+        nodes: [{ id: "n1", type: "ingest_files", config: {} }],
+        edges: [],
+      },
+    }],
+  };
+  let legacyGraphMissingVersionRejected = false;
+  try {
+    normalizeTemplatePackArtifact(legacyPackMissingVersion, {
+      allowVersionMigration: true,
+      source: "legacy_inline",
+      allowLegacyGraphAlias: true,
+    });
+  } catch (error) {
+    legacyGraphMissingVersionRejected = /workflow_definition\.version is required/i.test(String(error?.message || error));
+  }
+  if (!legacyGraphMissingVersionRejected) {
+    fail({
+      status: "failed",
+      issues: ["template pack contract no longer rejects legacy graph alias with missing workflow.version"],
+    });
+  }
+
   const exportFromEntry = exportTemplatePackArtifact({
     schema_version: TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
     id: "pack_entry",
@@ -201,6 +232,20 @@ function fail(payload) {
     });
   }
 
+  const missingVersionInstallResult = await installHandler(null, {
+    pack: legacyPackMissingVersion,
+    allowLegacyGraphAlias: true,
+  });
+  const installRejectsMissingVersion =
+    missingVersionInstallResult?.ok === false
+    && /workflow_definition\.version is required/i.test(String(missingVersionInstallResult?.error || ""));
+  if (!installRejectsMissingVersion) {
+    fail({
+      status: "failed",
+      issues: ["template pack install no longer fails closed for legacy graph payloads missing workflow.version"],
+    });
+  }
+
   const exportPath = path.join(tempRoot, "template_pack_export.json");
   const exportResult = await exportHandler(null, {
     id: "pack_1",
@@ -235,6 +280,8 @@ function fail(payload) {
     marketplaceEntrySchemaVersion: TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
     importMigrated: normalized.migrated,
     installMigrated: !!installResult.migrated,
+    legacyGraphMissingVersionRejected,
+    installRejectsMissingVersion,
     exportedArtifactSchemaVersion: String(exportedArtifact.schema_version || ""),
     templateCount: Array.isArray(exportedArtifact.templates) ? exportedArtifact.templates.length : 0,
     exportedTemplateField: "workflow_definition",

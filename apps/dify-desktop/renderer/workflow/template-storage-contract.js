@@ -48,6 +48,9 @@ function normalizeLocalTemplateEntry(entry, index = 0, options = {}) {
   if (!id) throw createLocalTemplateStorageError(`local template entry[${index}] id is required`, "local_template_entry_invalid", notes);
   if (!name) throw createLocalTemplateStorageError(`local template entry[${index}] name is required`, "local_template_entry_invalid", notes);
   if (!workflowDefinition) throw createLocalTemplateStorageError(`local template entry[${index}] workflow_definition is required`, "local_template_entry_invalid", notes);
+  if (!String(workflowDefinition.version || "").trim()) {
+    throw createLocalTemplateStorageError(`local template entry[${index}] workflow_definition.version is required`, "local_template_entry_invalid", notes);
+  }
 
   return {
     schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,

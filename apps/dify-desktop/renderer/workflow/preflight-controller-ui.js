@@ -51,7 +51,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
           endpoint,
           "/operators/workflow_contract_v1/validate",
           buildWorkflowContractValidationPayload(graph, {
-            allowVersionMigration: true,
+            allowVersionMigration: false,
             requireNonEmptyNodes: true,
             validationScope: "authoring",
           }),
@@ -76,14 +76,7 @@ function createWorkflowPreflightControllerUi(els, deps = {}) {
                 }))
                 : [],
               warnings: Array.isArray(body.notes) ? body.notes : [],
-              warning_items: Array.isArray(body.notes)
-                ? body.notes.map((note) => ({
-                  code: "migration_note",
-                  path: "workflow.version",
-                  message: String(note || ""),
-                  error_contract: body.error_item_contract || "",
-                }))
-                : [],
+              warning_items: [],
             }));
           }
         }

@@ -20,6 +20,7 @@ test("workflow store support derives next ids and normalizes imported graphs", a
 
   const graph = normalizeImportedGraph({
     workflow_id: "w1",
+    version: "1.0.0",
     name: "demo",
     nodes: [{ id: "n1", type: "load_rows_v2" }, { id: "n2", type: "aggregate_rows_v2" }],
     edges: [{ from: "n1", to: "n2" }, { from: "n2", to: "n2" }, { from: "x", to: "n1" }],
@@ -36,8 +37,20 @@ test("workflow store support derives next ids and normalizes imported graphs", a
     nodes: [{ id: "n1", type: "ingest_files" }],
     edges: [],
   });
-  assert.equal(imported.graph.version, "1.0.0");
-  assert.equal(imported.contract.migrated, true);
+  assert.equal(imported.graph.version, "");
+  assert.equal(imported.contract.migrated, false);
+  assert.deepEqual(imported.contract.errors, ["workflow.version is required"]);
+
+  const migrated = normalizeImportedGraphWithContract({
+    workflow_id: "w_migrate",
+    nodes: [{ id: "n1", type: "ingest_files" }],
+    edges: [],
+  }, {
+    allowVersionMigration: true,
+  });
+  assert.equal(migrated.graph.version, "1.0.0");
+  assert.equal(migrated.contract.migrated, true);
+  assert.deepEqual(migrated.contract.errors, []);
 
   assert.equal(
     wouldGraphCreateCycle(

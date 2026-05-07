@@ -132,7 +132,7 @@ function registerWorkflowStoreIpc(ctx, deps) {
           : {},
         {
           cfg: merged,
-          allowVersionMigration: source.allowVersionMigration === true,
+          allowVersionMigration: false,
           requireNonEmptyNodes: source.requireNonEmptyNodes === true,
           validationScope: String(source.validation_scope || "authoring"),
         },
@@ -175,7 +175,7 @@ function registerWorkflowStoreIpc(ctx, deps) {
       const templates = [];
       for (const template of (Array.isArray(normalizedPack.templates) ? normalizedPack.templates : [])) {
         const validated = await validateWorkflowDefinition(template.workflow_definition || {}, {
-          allowVersionMigration: true,
+          allowVersionMigration: false,
           requireNonEmptyNodes: true,
           validationScope: "authoring",
         });
@@ -387,7 +387,7 @@ function registerWorkflowStoreIpc(ctx, deps) {
       const workflowDefinition = JSON.parse(fs.readFileSync(filePath, "utf8"));
       if (validateGraphContract) {
         const validated = await validateWorkflowDefinition(workflowDefinition, {
-          allowVersionMigration: true,
+          allowVersionMigration: false,
           requireNonEmptyNodes: false,
           validationScope: "authoring",
         });

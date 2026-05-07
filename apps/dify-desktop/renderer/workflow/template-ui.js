@@ -64,7 +64,7 @@ function createWorkflowTemplateUi(els, deps = {}) {
       }
       return await window.aiwfDesktop.validateWorkflowDefinition({
         workflow_definition: workflowDefinition,
-        allowVersionMigration: true,
+        allowVersionMigration: false,
         requireNonEmptyNodes: true,
         validation_scope: "authoring",
       });

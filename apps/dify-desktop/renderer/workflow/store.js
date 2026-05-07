@@ -119,9 +119,12 @@ export function createWorkflowStore() {
 
   function importGraph(graph) {
     const imported = normalizeImportedGraphWithContract(graph);
+    state.lastImportContract = imported.contract;
+    if (Array.isArray(imported?.contract?.errors) && imported.contract.errors.length > 0) {
+      return imported;
+    }
     state.graph = imported.graph;
     state.linkFrom = null;
-    state.lastImportContract = imported.contract;
     return imported;
   }
 

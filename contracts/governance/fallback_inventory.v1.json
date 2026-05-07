@@ -24,18 +24,19 @@
     },
     {
       "id": "workflow.version_import_normalization",
-      "status": "active",
+      "status": "retired",
       "class": "migration",
       "owner": "desktop workflow architecture",
-      "scope": "workflow import and normalization compatibility path",
-      "reason": "Historical workflow payloads still include unversioned graph samples that must be migrated into versioned workflow_definition inputs.",
+      "scope": "historical workflow import and normalization compatibility path",
+      "reason": "Historical workflow payloads previously included unversioned graph samples that required migration into versioned workflow_definition inputs.",
       "added_at": "2026-03-20",
       "remove_by": "2026-05-19",
-      "success_metric": "new saves, versions, templates, and runs only persist workflow_definition with explicit version",
-      "kill_condition": "unversioned workflow imports are rejected on the main path after migration backlog reaches zero",
+      "success_metric": "new saves, versions, templates, and runs persist workflow_definition with explicit version; unversioned workflow inputs fail closed on the main path",
+      "kill_condition": "unversioned workflow imports are rejected on the main path and legacy conversion only remains available through the dev-only offline migration script",
       "evidence": [
         "docs/archive/fallback_governance_20260320.md",
-        "docs/archive/fallback_retirement_backlog_20260322.md"
+        "docs/archive/fallback_retirement_backlog_20260322.md",
+        "ops/scripts/migrate_workflow_version_import_fallback.js"
       ],
       "match_patterns": [
         "workflow.version migration",

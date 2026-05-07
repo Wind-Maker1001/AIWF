@@ -32,6 +32,7 @@ test("workflow store import/export preserves node config", async () => {
   const store = createWorkflowStore();
   store.importGraph({
     workflow_id: "w1",
+    version: "1.0.0",
     name: "x",
     nodes: [
       { id: "n1", type: "load_rows_v2", x: 1, y: 2, config: { source_type: "csv", source: "D:/a.csv", limit: 100 } },
@@ -58,6 +59,7 @@ test("workflow store preserves edge when condition", async () => {
   const store = createWorkflowStore();
   store.importGraph({
     workflow_id: "w_when",
+    version: "1.0.0",
     name: "edge-when",
     nodes: [
       { id: "n1", type: "manual_review", x: 1, y: 2 },

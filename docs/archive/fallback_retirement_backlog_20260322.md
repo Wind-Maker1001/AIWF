@@ -109,3 +109,10 @@
 - target_remove_by: 2026-06-30
 - removal_result: default mode no longer depends on Python legacy fallback for normal release traffic; fallback becomes exception-only or is removed entirely
 - residual_risk: rollout thresholds may stay noisy if shadow compare mismatch rate or rust error rate is not stable enough across release and package audits
+
+## 2026-05-07 Update
+
+- `workflow.version_import_normalization` is retired.
+- Main-path desktop authoring/import, template/import, runtime, and preflight flows now fail closed when `workflow.version` is missing.
+- Legacy conversion is only supported through the dev-only offline script:
+  - `ops/scripts/migrate_workflow_version_import_fallback.js`

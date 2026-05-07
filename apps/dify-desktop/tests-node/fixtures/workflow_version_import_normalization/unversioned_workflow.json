@@ -1,0 +1,12 @@
+{
+  "workflow_id": "wf_fixture_unversioned",
+  "name": "Fixture Workflow",
+  "nodes": [
+    {
+      "id": "n1",
+      "type": "ingest_files",
+      "config": {}
+    }
+  ],
+  "edges": []
+}

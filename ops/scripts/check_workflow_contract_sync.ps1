@@ -78,11 +78,31 @@ function fail(message) {
     ],
     edges: [{ from: "n1", to: "n2" }],
   });
-  if (!String(imported?.graph?.version || "").trim()) {
-    fail("normalizeImportedGraphWithContract did not preserve or fill workflow.version");
+  const importMissingVersionRejected =
+    Array.isArray(imported?.contract?.errors)
+    && imported.contract.errors.includes("workflow.version is required");
+  if (!importMissingVersionRejected) {
+    fail("normalizeImportedGraphWithContract no longer fails closed on missing workflow.version");
   }
-  if (!imported?.contract?.migrated) {
-    fail("normalizeImportedGraphWithContract did not record missing-version migration");
+  if (String(imported?.graph?.version || "").trim()) {
+    fail("normalizeImportedGraphWithContract unexpectedly normalized missing workflow.version on the main path");
+  }
+
+  const migrated = storeSupport.normalizeImportedGraphWithContract({
+    workflow_id: "wf_import_gate",
+    nodes: [
+      { id: "n1", type: "ingest_files" },
+      { id: "n2", type: "md_output" },
+    ],
+    edges: [{ from: "n1", to: "n2" }],
+  }, {
+    allowVersionMigration: true,
+  });
+  if (!migrated?.contract?.migrated) {
+    fail("explicit workflow.version migration path is no longer available");
+  }
+  if (String(migrated?.graph?.version || "").trim() !== String(defaultGraph.version || "").trim()) {
+    fail("explicit workflow.version migration path did not normalize to the canonical schema version");
   }
 
   const payload = runPayloadSupport.buildBaseRunPayload({}, {
@@ -310,12 +330,14 @@ function fail(message) {
   console.log(JSON.stringify({
     required,
     defaultVersion: defaultGraph.version,
-    importMigrated: imported.contract.migrated,
+    importMissingVersionRejected,
+    importPreservedEmptyVersion: !String(imported.graph.version || "").trim(),
     importRejectedUnknownType,
     payloadRejectedUnknownType,
     authoringRejectedUnknownType,
     preflightUnknownTypeGuided,
-    normalizedVersion: imported.graph.version,
+    explicitMigrationPathAvailable: migrated.contract.migrated,
+    explicitMigratedVersion: migrated.graph.version,
     runPayloadDefersUnknownType,
     engineUsesRustValidation,
     engineUsesCanonicalWorkflowField,

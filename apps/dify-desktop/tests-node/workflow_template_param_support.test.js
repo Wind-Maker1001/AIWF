@@ -54,7 +54,7 @@ test("workflow template param support validates template workflow through author
     validateWorkflowDefinition: async (workflowDefinition) => ({
       ok: true,
       workflow_definition: { ...workflowDefinition, version: "1.0.0" },
-      notes: ["workflow.version migrated to 1.0.0"],
+      notes: [],
     }),
   });
 

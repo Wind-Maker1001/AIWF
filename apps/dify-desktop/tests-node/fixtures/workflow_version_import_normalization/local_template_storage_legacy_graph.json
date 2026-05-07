@@ -1,0 +1,18 @@
+[
+  {
+    "id": "custom_fixture_legacy_graph",
+    "name": "Fixture Local Template",
+    "graph": {
+      "workflow_id": "wf_fixture_local_template_graph",
+      "name": "Fixture Local Template Graph",
+      "nodes": [
+        {
+          "id": "n1",
+          "type": "ingest_files",
+          "config": {}
+        }
+      ],
+      "edges": []
+    }
+  }
+]
