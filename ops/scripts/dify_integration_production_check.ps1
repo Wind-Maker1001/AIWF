@@ -7,7 +7,7 @@ param(
   [int]$RetryDelaySec = 5,
   [string]$AlertLog = "",
   [string]$AlertWebhook = "",
-  [bool]$EnableOfflineFallback = $true,
+  [bool]$EnableOfflineFallback = $false,
   [switch]$DryRun
 )
 
@@ -23,11 +23,11 @@ if (-not $AlertLog) {
   $AlertLog = Join-Path $root "tmp\dify_integration_alert.log"
 }
 $baselineScript = Join-Path $PSScriptRoot "dify_integration_baseline.ps1"
-$fallbackScript = Join-Path $PSScriptRoot "dify_run_with_offline_fallback.ps1"
 if (-not (Test-Path $baselineScript)) {
   throw "missing script: $baselineScript"
 }
-if (-not (Test-Path $fallbackScript)) {
+$fallbackScript = Join-Path $PSScriptRoot "dify_run_with_offline_fallback.ps1"
+if ($EnableOfflineFallback -and -not (Test-Path $fallbackScript)) {
   throw "missing script: $fallbackScript"
 }
 
@@ -61,7 +61,7 @@ Write-Host "fallback    : $EnableOfflineFallback"
 Write-Host "dry_run     : $DryRun"
 
 if ($DryRun) {
-  Info "would run integration check with retry/alert policy (and optional offline fallback)"
+  Info "would run integration check with retry/alert policy (default fail-closed; optional historical offline recovery only when explicitly enabled)"
   Ok "dry-run completed"
   exit 0
 }
@@ -72,6 +72,7 @@ for ($i = 1; $i -le $MaxRetries; $i++) {
   try {
     Info ("attempt {0}/{1}" -f $i, $MaxRetries)
     if ($EnableOfflineFallback) {
+      Warn "historical offline recovery explicitly enabled; default desktop production checks now fail closed"
       & $fallbackScript -EnvFile $EnvFile -BaseUrl $BaseUrl -PayloadFile $PayloadFile -TimeoutSec $TimeoutSec
     } else {
       & $baselineScript -EnvFile $EnvFile -BaseUrl $BaseUrl -PayloadFile $PayloadFile -TimeoutSec $TimeoutSec

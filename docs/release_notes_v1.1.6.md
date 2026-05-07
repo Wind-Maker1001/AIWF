@@ -73,3 +73,8 @@
 ### Deliverables
 - Installer: `AIWF Dify Desktop Setup 1.1.6.exe`
 - Portable: `AIWF Dify Desktop 1.1.6.exe`
+
+## Historical Note / 历史说明 (2026-05-07)
+
+- The GUI automatic `base_api -> offline_fallback` mode mutation described in this v1.1.6 note has since been retired on the current mainline.
+- 这里记录的自动回退行为仅保留为 v1.1.6 的历史发布上下文；当前主线默认是 fail-close，不再自动切换离线模式。

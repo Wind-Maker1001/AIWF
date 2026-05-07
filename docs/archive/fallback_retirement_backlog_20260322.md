@@ -116,3 +116,7 @@
 - Main-path desktop authoring/import, template/import, runtime, and preflight flows now fail closed when `workflow.version` is missing.
 - Legacy conversion is only supported through the dev-only offline script:
   - `ops/scripts/migrate_workflow_version_import_fallback.js`
+- `desktop.base_api_offline_fallback` is retired.
+- `base_api` desktop cleaning now defaults to explicit retry or fail-closed behavior without automatic mode mutation.
+- Historical explicit recovery remains opt-in only through:
+  - `ops/scripts/dify_run_with_offline_fallback.ps1`
