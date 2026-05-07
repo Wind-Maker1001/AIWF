@@ -74,18 +74,18 @@ $lines += "## Install"
 $lines += ("1. Run ""AIWF Dify Desktop Setup {0}.exe""" -f $Version)
 $lines += "2. Choose custom install path and finish setup"
 $lines += "3. Double-click desktop shortcut and verify main window opens"
-$lines += '4. Verify option `Auto fallback to offline when backend fails` is enabled'
+$lines += '4. Verify backend mode failures stay fail-closed by default (no automatic offline mode mutation)'
 $lines += ""
 $lines += "## GUI Flow"
 $lines += '1. Switch to backend mode and set Base URL to `http://127.0.0.1:19999`'
 $lines += "2. Drag mixed files (PDF/docx/txt/xlsx/image) and run"
-$lines += "3. Verify status shows auto switch to offline mode"
-$lines += '4. Verify result mode is `offline_fallback`'
-$lines += '5. Verify `xlsx/docx/pptx/md` artifacts open correctly'
+$lines += "3. Verify the request fails closed and does not auto-switch mode"
+$lines += '4. If you explicitly run the historical recovery helper, verify result mode is `offline_local` with `recovery_path=explicit_offline_replay`'
+$lines += '5. Verify `xlsx/docx/pptx/md` artifacts open correctly when recovery is explicitly invoked'
 $lines += ""
 $lines += "## Audit"
 $lines += '1. Open `%APPDATA%\\AIWF Dify Desktop\\logs\\run_mode_audit.jsonl`'
-$lines += '2. Verify latest line has `fallback_applied=true`, `reason`, and `job_id`'
+$lines += '2. Verify base_api failures record `reason`, `failure_class`, and `job_id` without `fallback_applied` mode mutation'
 $lines += ""
 $lines += "## Automation Results"
 $lines += "- gate: $($summary.gate)"

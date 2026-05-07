@@ -3,7 +3,8 @@ param(
   [string]$OutputRoot = "",
   [int]$FallbackTimeoutSec = 5,
   [switch]$WithAcceptance,
-  [switch]$SkipPackagedStartup
+  [switch]$SkipPackagedStartup,
+  [switch]$IncludeHistoricalOfflineFallbackScenario
 )
 
 Set-StrictMode -Version Latest
@@ -30,12 +31,12 @@ function Invoke-Step([string]$Name, [scriptblock]$Action) {
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $desktopDir = Join-Path $root "apps\dify-desktop"
 $startupScript = Join-Path $PSScriptRoot "check_desktop_packaged_startup.ps1"
-$fallbackScript = Join-Path $PSScriptRoot "dify_run_with_offline_fallback.ps1"
 $acceptReal = Join-Path $PSScriptRoot "acceptance_desktop_real_sample.ps1"
 $acceptFinance = Join-Path $PSScriptRoot "acceptance_desktop_finance_template.ps1"
 
 if (-not (Test-Path $desktopDir)) { throw "desktop dir not found: $desktopDir" }
-if (-not (Test-Path $fallbackScript)) { throw "fallback script not found: $fallbackScript" }
+$fallbackScript = Join-Path $PSScriptRoot "dify_run_with_offline_fallback.ps1"
+if ($IncludeHistoricalOfflineFallbackScenario -and -not (Test-Path $fallbackScript)) { throw "fallback script not found: $fallbackScript" }
 
 if (-not $OutputRoot) {
   $OutputRoot = Join-Path $root ("release\gate_v{0}" -f $Version)
@@ -81,14 +82,20 @@ if (-not $SkipPackagedStartup) {
   $results += [pscustomobject]([ordered]@{ name = "packaged startup check"; status = "skipped"; error = "" })
 }
 
-$results += Invoke-Step "fallback scenario check" {
-  powershell -ExecutionPolicy Bypass -File $fallbackScript -BaseUrl "http://127.0.0.1:19999" -TimeoutSec $FallbackTimeoutSec -OutputFile $fallbackOut
-  $code = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
-  if ($code -ne 0) { throw "dify_run_with_offline_fallback.ps1 exit code $code" }
-  if (-not (Test-Path $fallbackOut)) { throw "fallback output not found: $fallbackOut" }
-  $obj = Get-Content $fallbackOut -Raw -Encoding UTF8 | ConvertFrom-Json
-  if (-not $obj.ok) { throw "fallback output ok=false" }
-  if ([string]$obj.mode -ne "offline_fallback") { throw "fallback mode mismatch: $($obj.mode)" }
+if ($IncludeHistoricalOfflineFallbackScenario) {
+  $results += Invoke-Step "historical offline recovery scenario (retired)" {
+    powershell -ExecutionPolicy Bypass -File $fallbackScript -BaseUrl "http://127.0.0.1:19999" -TimeoutSec $FallbackTimeoutSec -OutputFile $fallbackOut
+    $code = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } else { 0 }
+    if ($code -ne 0) { throw "dify_run_with_offline_fallback.ps1 exit code $code" }
+    if (-not (Test-Path $fallbackOut)) { throw "fallback output not found: $fallbackOut" }
+    $obj = Get-Content $fallbackOut -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not $obj.ok) { throw "fallback output ok=false" }
+    if ([string]$obj.mode -ne "offline_local") { throw "historical recovery mode mismatch: $($obj.mode)" }
+    if ([string]$obj.recovery_path -ne "explicit_offline_replay") { throw "historical recovery path mismatch: $($obj.recovery_path)" }
+  }
+} else {
+  Warn "skip historical offline recovery scenario; automatic offline fallback is retired on the main path"
+  $results += [pscustomobject]([ordered]@{ name = "historical offline recovery scenario (retired)"; status = "skipped"; error = "" })
 }
 
 if ($WithAcceptance) {

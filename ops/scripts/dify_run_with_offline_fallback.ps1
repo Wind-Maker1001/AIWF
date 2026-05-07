@@ -156,7 +156,9 @@ const { runOfflineCleaning } = require("./offline_engine");
 
   $wrapped = @{
     ok = $true
-    mode = "offline_fallback"
+    mode = "offline_local"
+    recovery_path = "explicit_offline_replay"
+    historical_script = $true
     fallback_reason = $fallbackReason
     job_id = $resp.job_id
     run = $resp.run
@@ -178,9 +180,10 @@ Write-Host "payload    : $PayloadFile"
 Write-Host "output     : $OutputFile"
 Write-Host "fallback   : $FallbackOutputRoot"
 Write-Host "dry_run    : $DryRun"
+Warn "historical recovery helper only: desktop automatic base_api -> offline fallback is retired on the main path"
 
 if ($DryRun) {
-  Info "would call dify bridge; on error would fallback to offline engine"
+  Info "would call dify bridge; only an explicit historical recovery request would replay offline_local"
   Ok "dry-run completed"
   exit 0
 }
@@ -201,6 +204,7 @@ $artifactCount = if ($fallbackResp.artifacts) { @($fallbackResp.artifacts).Count
 
 Write-Host ""
 Write-Host "mode       : $($fallbackResp.mode)"
+Write-Host "recovery   : $($fallbackResp.recovery_path)"
 Write-Host "job_id     : $($fallbackResp.job_id)"
 Write-Host "artifacts  : $artifactCount"
 Write-Host "response   : $OutputFile"

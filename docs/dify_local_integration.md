@@ -67,6 +67,10 @@ Production check (retry + timeout + alert log):
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\dify_integration_production_check.ps1 -MaxRetries 3 -TimeoutSec 180
 ```
 
+Notes:
+- production check is fail-closed by default; it does not auto-switch to offline mode when `base_api` fails
+- a historical explicit recovery path still exists only when you intentionally pass `-EnableOfflineFallback $true`
+
 HTTP node template doc:
 - `docs/dify_workflow_http_node_template.md`
 

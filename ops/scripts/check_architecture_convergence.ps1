@@ -18,6 +18,8 @@ $inventoryPath = Join-Path $RepoRoot "contracts\governance\fallback_inventory.v1
 $localTemplateStorageSchemaPath = Join-Path $RepoRoot "contracts\desktop\local_template_storage.schema.json"
 $templatePackArtifactSchemaPath = Join-Path $RepoRoot "contracts\desktop\template_pack_artifact.schema.json"
 $workflowVersionMigrationScriptPath = Join-Path $RepoRoot "ops\scripts\migrate_workflow_version_import_fallback.js"
+$cleaningIpcPath = Join-Path $RepoRoot "apps\dify-desktop\main_ipc_cleaning.js"
+$difyProductionCheckPath = Join-Path $RepoRoot "ops\scripts\dify_integration_production_check.ps1"
 
 $issues = @()
 
@@ -35,6 +37,12 @@ if (-not (Test-Path $templatePackArtifactSchemaPath)) {
 }
 if (-not (Test-Path $workflowVersionMigrationScriptPath)) {
   $issues += "workflow version import migration script missing"
+}
+if (-not (Test-Path $cleaningIpcPath)) {
+  $issues += "desktop cleaning ipc module missing"
+}
+if (-not (Test-Path $difyProductionCheckPath)) {
+  $issues += "dify production check script missing"
 }
 
 $requiredLinkTargets = @(
@@ -129,6 +137,9 @@ if (Test-Path $inventoryPath) {
         $issues += "workflow.version_import_normalization missing migration script evidence"
       }
     }
+    if ([string]($entry.id) -eq "desktop.base_api_offline_fallback" -and [string]($entry.status) -eq "active") {
+      $issues += "desktop.base_api_offline_fallback fallback is still active"
+    }
   }
   $activeFallbackCount = @($activeFallbackIds).Count
 }
@@ -169,6 +180,20 @@ foreach ($file in $candidateFiles) {
 }
 if (@($localLegacyActiveMatches).Count -gt 0) {
   $issues += "active repo files still reference local_legacy: $(@($localLegacyActiveMatches) -join ', ')"
+}
+
+if (Test-Path $cleaningIpcPath) {
+  $cleaningIpcText = Get-Content -Raw -Encoding UTF8 $cleaningIpcPath
+  if ($cleaningIpcText -match "offline_fallback" -or $cleaningIpcText -match "fallback_applied") {
+    $issues += "desktop cleaning ipc still exposes automatic offline_fallback markers"
+  }
+}
+
+if (Test-Path $difyProductionCheckPath) {
+  $difyProductionCheckText = Get-Content -Raw -Encoding UTF8 $difyProductionCheckPath
+  if ($difyProductionCheckText -notmatch [regex]::Escape('[bool]$EnableOfflineFallback = $false')) {
+    $issues += "dify integration production check no longer defaults to fail-closed behavior"
+  }
 }
 
 Push-Location $RepoRoot
@@ -222,6 +247,8 @@ $payload = [ordered]@{
   inventoryPath = $inventoryPath
   localTemplateStorageSchemaPath = $localTemplateStorageSchemaPath
   templatePackArtifactSchemaPath = $templatePackArtifactSchemaPath
+  cleaningIpcPath = $cleaningIpcPath
+  difyProductionCheckPath = $difyProductionCheckPath
   activeFallbackCount = $activeFallbackCount
   activeFallbackIds = @($activeFallbackIds | Sort-Object -Unique)
   localLegacyActiveMatches = @($localLegacyActiveMatches | Sort-Object -Unique)

@@ -45,18 +45,19 @@
     },
     {
       "id": "desktop.base_api_offline_fallback",
-      "status": "active",
+      "status": "retired",
       "class": "adapter_compatibility",
       "owner": "desktop/runtime convergence",
-      "scope": "desktop base_api execution fallback to offline_local/offline_fallback mode",
-      "reason": "Desktop still supports an automatic local recovery path when base_api execution fails and offline cleaning remains available.",
+      "scope": "historical desktop base_api recovery compatibility path",
+      "reason": "Desktop previously supported an automatic local recovery path when base_api execution failed and offline cleaning remained available.",
       "added_at": "2026-04-11",
       "remove_by": "2026-07-31",
-      "success_metric": "base_api execution has an explicit retry or fail-closed path without automatic mode mutation",
-      "kill_condition": "automatic offline_fallback mode is removed or replaced by explicit operator choice",
+      "success_metric": "base_api execution defaults to explicit retry or fail-closed behavior without automatic mode mutation; historical recovery remains explicit operator choice only",
+      "kill_condition": "automatic offline_fallback mode is removed from the default desktop path and retained at most as an explicit historical recovery script",
       "evidence": [
-        "docs/release_notes_v1.1.6.md",
-        "ops/scripts/dify_run_with_offline_fallback.ps1"
+        "apps/dify-desktop/main_ipc_cleaning.js",
+        "apps/dify-desktop/tests-node/main_ipc_run_cleaning_fallback.test.js",
+        "ops/scripts/dify_integration_production_check.ps1"
       ],
       "match_patterns": [
         "offline_fallback",
