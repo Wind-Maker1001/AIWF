@@ -526,6 +526,15 @@ def _cleaning_rust_v2_strategy(params: Dict[str, Any]) -> Dict[str, str]:
     }
 
 
+def _allow_python_legacy_fallback(params: Dict[str, Any]) -> bool:
+    rules = _rules_dict(params)
+    if "allow_python_legacy_fallback" in rules:
+        return _to_bool(rules.get("allow_python_legacy_fallback"), default=False)
+    if "allow_python_legacy_fallback" in params:
+        return _to_bool(params.get("allow_python_legacy_fallback"), default=False)
+    return _to_bool(os.getenv("AIWF_CLEANING_RUST_V2_ALLOW_PYTHON_LEGACY_FALLBACK", "false"), default=False)
+
+
 def _shadow_compare_result(
     *,
     status: str,
@@ -652,6 +661,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     params = _prepare_cleaning_params(params)
     compiled_spec = compile_cleaning_params_to_spec(params)
     strategy = _cleaning_rust_v2_strategy(params)
+    allow_python_legacy_fallback = _allow_python_legacy_fallback(params)
     verify_on_default = bool(params.get("local_standalone")) or _to_bool(os.getenv("AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT", "false"), default=False)
     quality_rule_set_provenance = params.get("_quality_rule_set_provenance") if isinstance(params.get("_quality_rule_set_provenance"), dict) else {}
     profile_analysis = _profile_analysis(raw_rows, params)
@@ -813,6 +823,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
         *,
         shadow_compare: Optional[Dict[str, Any]] = None,
         skipped_reason: str = "default_without_verify",
+        eligibility_reason: str = "eligible",
     ) -> Dict[str, Any]:
         quality = dict(rust_v2["quality"])
         quality["cleaning_spec_version"] = CLEANING_SPEC_V2_VERSION
@@ -832,7 +843,7 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             "cleaning_spec": compiled_spec,
             "execution_mode": "rust_v2",
             "execution_audit": execution_audit,
-            "eligibility_reason": "eligible",
+            "eligibility_reason": eligibility_reason,
             "row_transform_engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3"),
             "postprocess_engine": "none",
             "quality_gate_engine": str((rust_v2.get("response") or {}).get("operator") or "transform_rows_v3"),
@@ -851,6 +862,27 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
             ),
         }))
 
+    def raise_rust_default_failure(*, rust_error: str, shadow_compare: Optional[Dict[str, Any]] = None) -> None:
+        compare_status = ""
+        compare_details = ""
+        if isinstance(shadow_compare, dict):
+            compare_status = str(shadow_compare.get("status") or "")
+            mismatches = shadow_compare.get("mismatches") if isinstance(shadow_compare.get("mismatches"), list) else []
+            compare_details = ", ".join(str(item) for item in mismatches if str(item).strip())
+        reason = str(rust_error or "rust_v2_error").strip() or "rust_v2_error"
+        message = (
+            "rust_v2 default execution failed without python legacy fallback: "
+            f"requested_mode={strategy.get('requested_mode') or ''}, "
+            f"effective_mode={strategy.get('effective_mode') or ''}, "
+            f"verify_on_default={verify_on_default}, "
+            f"reason={reason}"
+        )
+        if compare_status:
+            message += f", shadow_compare_status={compare_status}"
+        if compare_details:
+            message += f", shadow_compare_mismatches={compare_details}"
+        raise RuntimeError(message)
+
     if strategy["decision"] == "force_python":
         return build_python_result(skipped_reason="forced_python")
 
@@ -862,13 +894,19 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
     if strategy["decision"] == "force_rust":
         if rust_v2.get("ok"):
             return build_rust_result(rust_v2, skipped_reason="explicit_force_rust")
-        return build_python_result(
+        force_rust_shadow_compare = _shadow_compare_result(
+            status="rust_error",
+            matched=False,
+            mismatches=[str(rust_v2.get("error") or "rust_v2_error")],
+        )
+        if allow_python_legacy_fallback:
+            return build_python_result(
+                rust_error=str(rust_v2.get("error") or ""),
+                shadow_compare=force_rust_shadow_compare,
+            )
+        raise_rust_default_failure(
             rust_error=str(rust_v2.get("error") or ""),
-            shadow_compare=_shadow_compare_result(
-                status="rust_error",
-                matched=False,
-                mismatches=[str(rust_v2.get("error") or "rust_v2_error")],
-            ),
+            shadow_compare=force_rust_shadow_compare,
         )
 
     if strategy["decision"] == "shadow":
@@ -905,17 +943,30 @@ def _clean_rows(raw_rows: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[
                 )
                 if shadow_compare.get("status") == "matched":
                     return build_rust_result(rust_v2, shadow_compare=shadow_compare, skipped_reason="")
-                python_result["shadow_compare"] = shadow_compare
-                python_result["eligibility_reason"] = "shadow_compare_mismatch"
-                return python_result
+                if allow_python_legacy_fallback:
+                    python_result["shadow_compare"] = shadow_compare
+                    python_result["eligibility_reason"] = "shadow_compare_mismatch"
+                    return python_result
+                return build_rust_result(
+                    rust_v2,
+                    shadow_compare=shadow_compare,
+                    skipped_reason="",
+                    eligibility_reason="shadow_compare_mismatch_observed",
+                )
             return build_rust_result(rust_v2, skipped_reason="default_without_verify")
-        return build_python_result(
+        default_shadow_compare = _shadow_compare_result(
+            status="rust_error",
+            matched=False,
+            mismatches=[str(rust_v2.get("error") or "rust_v2_error")],
+        )
+        if allow_python_legacy_fallback:
+            return build_python_result(
+                rust_error=str(rust_v2.get("error") or ""),
+                shadow_compare=default_shadow_compare,
+            )
+        raise_rust_default_failure(
             rust_error=str(rust_v2.get("error") or ""),
-            shadow_compare=_shadow_compare_result(
-                status="rust_error",
-                matched=False,
-                mismatches=[str(rust_v2.get("error") or "rust_v2_error")],
-            ),
+            shadow_compare=default_shadow_compare,
         )
 
     return build_python_result(skipped_reason="mode_off")

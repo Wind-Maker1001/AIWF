@@ -75,6 +75,7 @@ class CleaningGuardrailTests(unittest.TestCase):
                         local_standalone=True,
                         office_outputs_enabled=False,
                         cleaning_template="finance_report_v1",
+                        rules={"allow_python_legacy_fallback": True},
                         input_csv_path=csv_path,
                     ),
                 )

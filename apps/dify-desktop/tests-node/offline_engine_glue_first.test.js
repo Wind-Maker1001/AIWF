@@ -168,7 +168,7 @@ test("runOfflineCleaning prefers glue-first result for mixed input when availabl
   }
 });
 
-test("runOfflineCleaning falls back to local cleaner on glue mismatch", async () => {
+test("runOfflineCleaning keeps glue-first rust result when shadow compare mismatch is advisory only", async () => {
   const originalLoad = Module._load;
   const originalFetch = global.fetch;
   Module._load = function patchedLoad(request, parent, isMain) {
@@ -269,15 +269,15 @@ test("runOfflineCleaning falls back to local cleaner on glue mismatch", async ()
         text: async () => JSON.stringify({
           ok: true,
           execution: {
-            execution_mode: "python_legacy",
-            execution_audit: { schema: "python_cleaning.audit.v1" },
-            eligibility_reason: "shadow_compare_mismatch",
+            execution_mode: "rust_v2",
+            execution_audit: { schema: "transform_rows_v2.audit.v1" },
+            eligibility_reason: "shadow_compare_mismatch_observed",
             requested_rust_v2_mode: "default",
             effective_rust_v2_mode: "default",
             verify_on_default: true,
             shadow_compare: { status: "mismatched", matched: false, mismatch_count: 1, mismatches: ["rows mismatch"], skipped_reason: "", compare_fields: ["rows", "quality", "reason_counts"] },
           },
-          profile: { quality: { rust_v2_used: false }, quality_gate: { evaluated: true, passed: true } },
+          profile: { quality: { rust_v2_used: true }, quality_gate: { evaluated: true, passed: true } },
           artifacts: [],
         }),
       };
@@ -295,10 +295,11 @@ test("runOfflineCleaning falls back to local cleaner on glue mismatch", async ()
         input_files: JSON.stringify(["D:/sample.txt"]),
       },
     });
-    assert.equal(out.execution.execution_mode, "python_legacy");
-    assert.equal(out.execution.requested_rust_v2_mode, "off");
-    assert.ok(Array.isArray(out.warnings));
-    assert.ok(out.warnings.some((item) => String(item).includes("shadow_compare_mismatch")));
+    assert.equal(out.execution.execution_mode, "rust_v2");
+    assert.equal(out.execution.requested_rust_v2_mode, "default");
+    assert.equal(out.execution.shadow_compare.status, "mismatched");
+    assert.equal(Array.isArray(out.warnings), true);
+    assert.equal(out.warnings.some((item) => String(item).includes("shadow_compare_mismatch")), false);
   } finally {
     global.fetch = originalFetch;
     Module._load = originalLoad;

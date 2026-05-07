@@ -4,18 +4,19 @@
   "entries": [
     {
       "id": "cleaning.default_rust_v2_python_legacy",
-      "status": "active",
+      "status": "retired",
       "class": "runtime_compatibility",
       "owner": "cleaning/runtime convergence",
-      "scope": "apps/glue-python default cleaning execution path",
-      "reason": "Default cleaning mode still keeps a Python legacy fallback when Rust v2 execution is unavailable or returns an execution error.",
+      "scope": "historical apps/glue-python default cleaning execution compatibility path",
+      "reason": "Default cleaning mode previously kept a Python legacy fallback when Rust v2 execution was unavailable or shadow compare mismatched.",
       "added_at": "2026-03-31",
       "remove_by": "2026-06-30",
-      "success_metric": "shadow compare mismatch rate and rust error rate stay below release thresholds across consecutive release audits",
-      "kill_condition": "default cleaning mode no longer depends on Python legacy fallback for normal release traffic",
+      "success_metric": "default cleaning mode stays on Rust v2 or fails closed; Python legacy fallback is only reachable through explicit opt-in recovery controls",
+      "kill_condition": "default cleaning mode no longer depends on Python legacy fallback for normal release traffic and legacy fallback survives only as an explicit opt-in exception path",
       "evidence": [
-        "docs/archive/fallback_governance_20260320.md",
-        "apps/glue-python/aiwf/flows/cleaning.py"
+        "apps/glue-python/aiwf/flows/cleaning.py",
+        "apps/glue-python/tests/test_cleaning_flow.py",
+        "apps/dify-desktop/tests-node/offline_engine_glue_first.test.js"
       ],
       "match_patterns": [
         "python_legacy",

@@ -120,3 +120,6 @@
 - `base_api` desktop cleaning now defaults to explicit retry or fail-closed behavior without automatic mode mutation.
 - Historical explicit recovery remains opt-in only through:
   - `ops/scripts/dify_run_with_offline_fallback.ps1`
+- `cleaning.default_rust_v2_python_legacy` is retired.
+- Glue default cleaning no longer silently drops back to `python_legacy` for normal default-mode traffic.
+- Historical Python recovery is now explicit opt-in only through `allow_python_legacy_fallback`.
