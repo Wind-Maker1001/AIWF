@@ -20,6 +20,7 @@ $templatePackArtifactSchemaPath = Join-Path $RepoRoot "contracts\desktop\templat
 $workflowVersionMigrationScriptPath = Join-Path $RepoRoot "ops\scripts\migrate_workflow_version_import_fallback.js"
 $cleaningIpcPath = Join-Path $RepoRoot "apps\dify-desktop\main_ipc_cleaning.js"
 $difyProductionCheckPath = Join-Path $RepoRoot "ops\scripts\dify_integration_production_check.ps1"
+$cleaningFlowPath = Join-Path $RepoRoot "apps\glue-python\aiwf\flows\cleaning.py"
 
 $issues = @()
 
@@ -43,6 +44,9 @@ if (-not (Test-Path $cleaningIpcPath)) {
 }
 if (-not (Test-Path $difyProductionCheckPath)) {
   $issues += "dify production check script missing"
+}
+if (-not (Test-Path $cleaningFlowPath)) {
+  $issues += "glue cleaning flow module missing"
 }
 
 $requiredLinkTargets = @(
@@ -140,6 +144,9 @@ if (Test-Path $inventoryPath) {
     if ([string]($entry.id) -eq "desktop.base_api_offline_fallback" -and [string]($entry.status) -eq "active") {
       $issues += "desktop.base_api_offline_fallback fallback is still active"
     }
+    if ([string]($entry.id) -eq "cleaning.default_rust_v2_python_legacy" -and [string]($entry.status) -eq "active") {
+      $issues += "cleaning.default_rust_v2_python_legacy fallback is still active"
+    }
   }
   $activeFallbackCount = @($activeFallbackIds).Count
 }
@@ -196,6 +203,16 @@ if (Test-Path $difyProductionCheckPath) {
   }
 }
 
+if (Test-Path $cleaningFlowPath) {
+  $cleaningFlowText = Get-Content -Raw -Encoding UTF8 $cleaningFlowPath
+  if ($cleaningFlowText -notmatch "def _allow_python_legacy_fallback") {
+    $issues += "glue cleaning flow missing explicit allow_python_legacy_fallback gate"
+  }
+  if ($cleaningFlowText -notmatch "shadow_compare_mismatch_observed") {
+    $issues += "glue cleaning flow no longer preserves rust execution on shadow compare mismatch"
+  }
+}
+
 Push-Location $RepoRoot
 try {
   $oldPythonPath = $env:PYTHONPATH
@@ -249,6 +266,7 @@ $payload = [ordered]@{
   templatePackArtifactSchemaPath = $templatePackArtifactSchemaPath
   cleaningIpcPath = $cleaningIpcPath
   difyProductionCheckPath = $difyProductionCheckPath
+  cleaningFlowPath = $cleaningFlowPath
   activeFallbackCount = $activeFallbackCount
   activeFallbackIds = @($activeFallbackIds | Sort-Object -Unique)
   localLegacyActiveMatches = @($localLegacyActiveMatches | Sort-Object -Unique)

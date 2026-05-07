@@ -2515,11 +2515,19 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertTrue(out["quality"].get("rust_v2_used"))
         self.assertEqual(out["execution_audit"]["schema"], "transform_rows_v2.audit.v1")
 
-    def test_clean_rows_fallback_when_rust_v2_unavailable(self):
+    def test_clean_rows_force_rust_fails_closed_when_rust_v2_unavailable(self):
+        with patch("requests.post", side_effect=RuntimeError("unreachable")):
+            with self.assertRaisesRegex(RuntimeError, "without python legacy fallback"):
+                cleaning._clean_rows(
+                    [{"id": "1", "amount": "10"}],
+                    {"rules": {"use_rust_v2": True}},
+                )
+
+    def test_clean_rows_force_rust_can_explicitly_opt_into_python_legacy_fallback(self):
         with patch("requests.post", side_effect=RuntimeError("unreachable")):
             out = cleaning._clean_rows(
                 [{"id": "1", "amount": "10"}],
-                {"rules": {"use_rust_v2": True}},
+                {"rules": {"use_rust_v2": True, "allow_python_legacy_fallback": True}},
             )
         self.assertEqual(out["rows"], [{"id": 1, "amount": 10.0}])
         self.assertFalse(out["quality"].get("rust_v2_used"))
@@ -2772,13 +2780,63 @@ class CleaningFlowTests(unittest.TestCase):
                 [{"id": "1", "amount": "10"}],
                 {"rules": {}},
             )
-        self.assertEqual(out["execution_mode"], "python_legacy")
-        self.assertEqual(out["eligibility_reason"], "shadow_compare_mismatch")
+        self.assertEqual(out["execution_mode"], "rust_v2")
+        self.assertEqual(out["eligibility_reason"], "shadow_compare_mismatch_observed")
         self.assertEqual(out["requested_rust_v2_mode"], "default")
         self.assertEqual(out["effective_rust_v2_mode"], "default")
         self.assertTrue(out["verify_on_default"])
         self.assertEqual(out["shadow_compare"]["status"], "mismatched")
         self.assertGreater(out["shadow_compare"]["mismatch_count"], 0)
+
+    def test_clean_rows_default_mode_with_verify_can_explicitly_opt_into_python_legacy_fallback_on_mismatch(self):
+        fake_resp = Mock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "ok": True,
+            "rows": [{"id": 1, "amount": 999.0}],
+            "quality": {
+                "input_rows": 1,
+                "output_rows": 1,
+                "invalid_rows": 0,
+                "filtered_rows": 0,
+                "duplicate_rows_removed": 0,
+                "required_missing_ratio": 0.0,
+            },
+            "trace_id": "default-verify-bad-legacy-optin",
+            "audit": {
+                "schema": "transform_rows_v2.audit.v1",
+                "reason_counts": {
+                    "invalid_object": 0,
+                    "cast_failed": 0,
+                    "required_missing": 0,
+                    "filter_rejected": 0,
+                    "duplicate_removed": 0,
+                },
+                "reason_samples": {
+                    "invalid_object": [],
+                    "cast_failed": [],
+                    "required_missing": [],
+                    "filter_rejected": [],
+                    "duplicate_removed": [],
+                },
+                "limits": {"sample_limit": 5},
+            },
+        }
+        with patch.dict(
+            os.environ,
+            {
+                "AIWF_CLEANING_RUST_V2_MODE": "default",
+                "AIWF_CLEANING_RUST_V2_VERIFY_ON_DEFAULT": "true",
+            },
+            clear=False,
+        ), patch("requests.post", return_value=fake_resp):
+            out = cleaning._clean_rows(
+                [{"id": "1", "amount": "10"}],
+                {"rules": {"allow_python_legacy_fallback": True}},
+            )
+        self.assertEqual(out["execution_mode"], "python_legacy")
+        self.assertEqual(out["eligibility_reason"], "shadow_compare_mismatch")
+        self.assertEqual(out["shadow_compare"]["status"], "mismatched")
 
     def test_clean_rows_local_standalone_defaults_to_default_verify(self):
         fake_resp = Mock()
@@ -2840,11 +2898,19 @@ class CleaningFlowTests(unittest.TestCase):
         self.assertEqual(out["shadow_compare"]["status"], "skipped")
         self.assertEqual(out["shadow_compare"]["skipped_reason"], "forced_python")
 
-    def test_clean_rows_default_mode_falls_back_on_rust_error(self):
+    def test_clean_rows_default_mode_fails_closed_on_rust_error(self):
+        with patch.dict(os.environ, {"AIWF_CLEANING_RUST_V2_MODE": "default"}, clear=False), patch("requests.post", side_effect=RuntimeError("unreachable")):
+            with self.assertRaisesRegex(RuntimeError, "without python legacy fallback"):
+                cleaning._clean_rows(
+                    [{"id": "1", "amount": "10"}],
+                    {"rules": {}},
+                )
+
+    def test_clean_rows_default_mode_can_explicitly_opt_into_python_legacy_fallback_on_rust_error(self):
         with patch.dict(os.environ, {"AIWF_CLEANING_RUST_V2_MODE": "default"}, clear=False), patch("requests.post", side_effect=RuntimeError("unreachable")):
             out = cleaning._clean_rows(
                 [{"id": "1", "amount": "10"}],
-                {"rules": {}},
+                {"rules": {"allow_python_legacy_fallback": True}},
             )
         self.assertEqual(out["execution_mode"], "python_legacy")
         self.assertEqual(out["eligibility_reason"], "rust_v2_error")
