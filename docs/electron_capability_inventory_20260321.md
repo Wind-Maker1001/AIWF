@@ -4,6 +4,16 @@ Date: 2026-03-21
 
 This inventory turns Electron retirement into an executable backlog.
 
+Machine-readable companion inventory:
+
+- `contracts/desktop/electron_compatibility_inventory.v1.json`
+
+2026-05-08 review update:
+
+- unresolved Electron-only capabilities were re-reviewed and moved into the machine-readable inventory above
+- the JSON inventory is now the CI-enforced source for owner / migration target / remove_by / blocker completeness
+- this markdown file remains the human-readable explanation layer
+
 Meaning:
 
 - `covered`: WinUI already has a usable primary-path equivalent
