@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window
     private readonly NodeCatalogService _nodeCatalog = new();
     private readonly WorkflowRunnerAdapter _runnerAdapter;
     private readonly GovernanceBridgeClient _governanceClient;
+    private readonly GovernanceAuditCoordinator _governanceAuditCoordinator;
     private readonly RunFlowCoordinator _runFlowCoordinator;
     private readonly CanvasRuntime.CanvasViewportEngine _canvasViewportEngine = new(CanvasMinScale, CanvasMaxScale);
     private readonly List<NodeTemplate> _quickNodeTemplates;
@@ -197,6 +198,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         _runnerAdapter = new WorkflowRunnerAdapter(_http);
         _governanceClient = new GovernanceBridgeClient(_http);
+        _governanceAuditCoordinator = new GovernanceAuditCoordinator(_governanceClient);
         _runFlowCoordinator = new RunFlowCoordinator(_http, _runnerAdapter);
         _quickNodeTemplates = _nodeCatalog
             .GetQuickTemplates()
