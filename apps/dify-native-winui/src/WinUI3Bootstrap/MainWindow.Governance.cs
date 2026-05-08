@@ -212,48 +212,34 @@ public sealed partial class MainWindow
             var baseUrl = GetBridgeBaseUrlOrThrow();
             var apiKey = ApiKeyTextBox.Text.Trim();
 
-            var runs = await _governanceClient.ListWorkflowRunsAsync(baseUrl, apiKey, limit: 40);
+            var auditState = await _governanceAuditCoordinator.RefreshAsync(
+                baseUrl,
+                apiKey,
+                GovernanceTimelineRunIdTextBox.Text.Trim(),
+                GovernanceAuditActionTextBox.Text.Trim());
             GovernanceRecentRunsListView.Items.Clear();
-            foreach (var item in runs)
+            foreach (var item in auditState.Runs)
             {
                 GovernanceRecentRunsListView.Items.Add(item);
             }
 
-            var runId = GovernanceTimelineRunIdTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(runId))
+            GovernanceTimelineListView.Items.Clear();
+            foreach (var item in auditState.Timeline)
             {
-                GovernanceTimelineListView.Items.Clear();
-            }
-            else
-            {
-                var timeline = await _governanceClient.GetWorkflowRunTimelineAsync(baseUrl, apiKey, runId);
-                GovernanceTimelineListView.Items.Clear();
-                foreach (var item in timeline)
-                {
-                    GovernanceTimelineListView.Items.Add(item);
-                }
+                GovernanceTimelineListView.Items.Add(item);
             }
 
-            var failures = await _governanceClient.GetWorkflowFailureSummaryAsync(baseUrl, apiKey, limit: 80);
             GovernanceFailureSummaryListView.Items.Clear();
-            foreach (var item in failures.Take(20))
+            foreach (var item in auditState.Failures.Take(20))
             {
                 GovernanceFailureSummaryListView.Items.Add(item);
             }
-
-            var audits = await _governanceClient.ListWorkflowAuditEventsAsync(
-                baseUrl,
-                apiKey,
-                limit: 60,
-                action: GovernanceAuditActionTextBox.Text.Trim());
             GovernanceAuditLogListView.Items.Clear();
-            foreach (var item in audits)
+            foreach (var item in auditState.AuditEvents)
             {
                 GovernanceAuditLogListView.Items.Add(item);
             }
-
-            GovernanceAuditSummaryTextBlock.Text =
-                $"runs={runs.Count}, failure_types={failures.Count}, audit_events={audits.Count}";
+            GovernanceAuditSummaryTextBlock.Text = auditState.SummaryText;
             SetGovernanceStatus("治理查询已刷新。", isError: false);
         }
         catch (Exception ex)
