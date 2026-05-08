@@ -11,6 +11,8 @@ if (-not $RepoRoot) {
   $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 }
 
+$electronInventoryContractPath = Join-Path $RepoRoot "contracts\desktop\electron_compatibility_inventory.v1.json"
+
 $checks = @(
   @{
     Path = Join-Path $RepoRoot "README.md"
@@ -232,6 +234,79 @@ foreach ($check in $checks) {
   foreach ($pattern in $check.Patterns) {
     if ($content -notmatch [regex]::Escape($pattern)) {
       throw "frontend convergence drift: '$pattern' missing in $($check.Path)"
+    }
+  }
+}
+
+if (-not (Test-Path $electronInventoryContractPath)) {
+  throw "frontend convergence check file missing: $electronInventoryContractPath"
+}
+
+$inventory = Get-Content $electronInventoryContractPath -Raw -Encoding UTF8 | ConvertFrom-Json
+if ([string]($inventory.schema_version) -ne "electron_compatibility_inventory.v1") {
+  throw "electron compatibility inventory schema_version drift"
+}
+if ([string]($inventory.authority_doc) -ne "docs/electron_capability_inventory_20260321.md") {
+  throw "electron compatibility inventory authority_doc drift"
+}
+
+try {
+  $nextReviewBy = [datetime]::ParseExact([string]$inventory.next_review_by, "yyyy-MM-dd", [System.Globalization.CultureInfo]::InvariantCulture)
+  if ($nextReviewBy.Date -lt (Get-Date).Date) {
+    throw "electron compatibility inventory next_review_by is overdue: $($inventory.next_review_by)"
+  }
+} catch {
+  if ([string]$_ -match "overdue") { throw }
+  throw "electron compatibility inventory next_review_by must use yyyy-MM-dd"
+}
+
+$capabilities = @($inventory.electron_only_capabilities)
+if ($capabilities.Count -lt 1) {
+  throw "electron compatibility inventory must contain electron_only_capabilities"
+}
+foreach ($capability in $capabilities) {
+  foreach ($field in @("id", "current_status", "winui_status", "disposition", "owner", "migration_target", "remove_by", "blocker")) {
+    if ([string]::IsNullOrWhiteSpace([string]$capability.$field)) {
+      throw "electron compatibility inventory missing $field for capability: $($capability.id)"
+    }
+  }
+  if (-not ($capability.electron_surface -is [System.Collections.IEnumerable]) -or @($capability.electron_surface).Count -lt 1) {
+    throw "electron compatibility inventory missing electron_surface for capability: $($capability.id)"
+  }
+  if ([string]($capability.current_status) -notin @("missing", "partial", "compat-hidden")) {
+    throw "electron compatibility inventory invalid current_status for capability: $($capability.id)"
+  }
+  try {
+    $removeBy = [datetime]::ParseExact([string]$capability.remove_by, "yyyy-MM-dd", [System.Globalization.CultureInfo]::InvariantCulture)
+    if ($removeBy.Date -lt (Get-Date).Date) {
+      throw "electron compatibility inventory capability remove_by is overdue: $($capability.id) -> $($capability.remove_by)"
+    }
+  } catch {
+    if ([string]$_ -match "overdue") { throw }
+    throw "electron compatibility inventory capability remove_by must use yyyy-MM-dd: $($capability.id)"
+  }
+}
+
+$retained = @($inventory.retained_compatibility_surfaces)
+if ($retained.Count -lt 1) {
+  throw "electron compatibility inventory must contain retained_compatibility_surfaces"
+}
+foreach ($surface in $retained) {
+  foreach ($field in @("id", "rule", "owner", "next_review_by")) {
+    if ([string]::IsNullOrWhiteSpace([string]$surface.$field)) {
+      throw "electron compatibility inventory missing $field for retained surface: $($surface.id)"
+    }
+  }
+}
+
+$deleteOnly = @($inventory.delete_only_rules)
+if ($deleteOnly.Count -lt 1) {
+  throw "electron compatibility inventory must contain delete_only_rules"
+}
+foreach ($rule in $deleteOnly) {
+  foreach ($field in @("id", "reason")) {
+    if ([string]::IsNullOrWhiteSpace([string]$rule.$field)) {
+      throw "electron compatibility inventory missing $field for delete-only rule: $($rule.id)"
     }
   }
 }

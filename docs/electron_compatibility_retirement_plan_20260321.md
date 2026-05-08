@@ -69,6 +69,7 @@ Deliverables:
 Inventory:
 
 - [electron_capability_inventory_20260321.md](electron_capability_inventory_20260321.md)
+- [../contracts/desktop/electron_compatibility_inventory.v1.json](../contracts/desktop/electron_compatibility_inventory.v1.json)
 - [archive/fallback_retirement_backlog_20260322.md](archive/fallback_retirement_backlog_20260322.md)
 
 Exit:
