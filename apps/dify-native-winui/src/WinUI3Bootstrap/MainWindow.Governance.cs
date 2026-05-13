@@ -471,26 +471,24 @@ public sealed partial class MainWindow
         {
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var apiKey = ApiKeyTextBox.Text.Trim();
-            var rules = await _governanceClient.GetWorkflowSandboxRulesAsync(baseUrl, apiKey);
-            SandboxRulesJsonTextBox.Text = PrettyGovernanceJson(rules.ToJsonString());
+            var state = await _governanceSandboxCoordinator.RefreshAsync(baseUrl, apiKey);
+            SandboxRulesJsonTextBox.Text = PrettyGovernanceJson(state.Rules.ToJsonString());
 
-            var versions = await _governanceClient.ListWorkflowSandboxRuleVersionsAsync(baseUrl, apiKey, 80);
             SandboxRuleVersionsListView.Items.Clear();
-            foreach (var item in versions)
+            foreach (var item in state.Versions)
             {
                 SandboxRuleVersionsListView.Items.Add(item);
             }
 
-            var autofixState = await _governanceClient.GetWorkflowSandboxAutoFixStateAsync(baseUrl, apiKey);
+            var autofixState = state.AutoFixState;
             _currentSandboxAutoFixState = autofixState;
             SandboxAutoFixStateTextBlock.Text = autofixState.DisplayText;
             SandboxAutoFixModeTextBox.Text = autofixState.ForcedIsolationMode;
             SandboxAutoFixUntilTextBox.Text = autofixState.ForcedUntil;
             SandboxAutoFixGreenStreakTextBox.Text = autofixState.GreenStreak.ToString();
 
-            var actions = await _governanceClient.ListWorkflowSandboxAutoFixActionsAsync(baseUrl, apiKey, 60);
             SandboxAutoFixActionsListView.Items.Clear();
-            foreach (var item in actions)
+            foreach (var item in state.AutoFixActions)
             {
                 SandboxAutoFixActionsListView.Items.Add(item);
             }

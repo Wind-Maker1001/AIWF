@@ -35,6 +35,7 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceAuditCoordinator.cs" Link="Source\GovernanceAuditCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceEditorSupport.cs" Link="Source\GovernanceEditorSupport.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceQualityRuleSetCoordinator.cs" Link="Source\GovernanceQualityRuleSetCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxCoordinator.cs" Link="Source\GovernanceSandboxCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultBindingService.cs" Link="Source\RunResultBindingService.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunFlowCoordinator.cs" Link="Source\RunFlowCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceCapabilities.Generated.cs" Link="Source\GovernanceCapabilities.Generated.cs" />
