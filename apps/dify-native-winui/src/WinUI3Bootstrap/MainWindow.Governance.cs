@@ -107,15 +107,7 @@ public sealed partial class MainWindow
     private void OnQualityRuleSetSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         _selectedQualityRuleSet = QualityRuleSetListView.SelectedItem as GovernanceQualityRuleSetItem;
-        if (_selectedQualityRuleSet is null)
-        {
-            return;
-        }
-
-        QualityRuleSetIdTextBox.Text = _selectedQualityRuleSet.Id;
-        QualityRuleSetNameTextBox.Text = _selectedQualityRuleSet.Name;
-        QualityRuleSetVersionTextBox.Text = string.IsNullOrWhiteSpace(_selectedQualityRuleSet.Version) ? "v1" : _selectedQualityRuleSet.Version;
-        QualityRuleSetJsonTextBox.Text = _selectedQualityRuleSet.RulesJson;
+        ApplyQualityRuleSetSelection();
     }
 
     private void OnSandboxRuleVersionSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -257,22 +249,20 @@ public sealed partial class MainWindow
     {
         try
         {
-            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var items = await _governanceClient.ListQualityRuleSetsAsync(baseUrl, ApiKeyTextBox.Text.Trim(), 80);
+            var refreshedBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var refreshedState = await _governanceQualityRuleSetCoordinator.RefreshAsync(
+                refreshedBaseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                _selectedQualityRuleSet?.Id);
             QualityRuleSetListView.Items.Clear();
-            foreach (var item in items)
+            foreach (var refreshedItem in refreshedState.Items)
             {
-                QualityRuleSetListView.Items.Add(item);
+                QualityRuleSetListView.Items.Add(refreshedItem);
             }
-
-            if (_selectedQualityRuleSet is null && items.Count > 0)
-            {
-                QualityRuleSetListView.SelectedItem = items[0];
-            }
-            else if (items.Count == 0)
-            {
-                _selectedQualityRuleSet = null;
-            }
+            _selectedQualityRuleSet = refreshedState.SelectedItem;
+            QualityRuleSetListView.SelectedItem = refreshedState.SelectedItem;
+            ApplyQualityRuleSetSelection();
+            return;
         }
         catch (Exception ex)
         {
@@ -281,10 +271,33 @@ public sealed partial class MainWindow
         }
     }
 
+    #if false
     private async Task SaveQualityRuleSetAsync()
     {
         try
         {
+            var saveBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var saveId = QualityRuleSetIdTextBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(saveId))
+            {
+                SetGovernanceStatus("璇峰厛濉啓璐ㄩ噺瑙勫垯闆?ID銆?, isError: true);
+                return;
+            }
+
+            var saveRules = ParseJsonObjectOrThrow(QualityRuleSetJsonTextBox.Text);
+            var savedItem = await _governanceQualityRuleSetCoordinator.SaveAsync(
+                saveBaseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                saveId,
+                QualityRuleSetNameTextBox.Text,
+                QualityRuleSetVersionTextBox.Text,
+                saveRules);
+            SetGovernanceStatus($"宸蹭繚瀛樿川閲忚鍒欓泦锛歿savedItem.Id}", isError: false);
+            _selectedQualityRuleSet = savedItem;
+            await RefreshQualityRuleSetsAsync();
+            return;
+
+#if false
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var id = QualityRuleSetIdTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(id))
@@ -304,6 +317,7 @@ public sealed partial class MainWindow
                 rules);
             SetGovernanceStatus($"已保存质量规则集：{item.Id}", isError: false);
             await RefreshQualityRuleSetsAsync();
+#endif
         }
         catch (Exception ex)
         {
@@ -315,6 +329,26 @@ public sealed partial class MainWindow
     {
         try
         {
+            var deleteBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var deleteId = string.IsNullOrWhiteSpace(QualityRuleSetIdTextBox.Text)
+                ? _selectedQualityRuleSet?.Id ?? string.Empty
+                : QualityRuleSetIdTextBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(deleteId))
+            {
+                SetGovernanceStatus("璇峰厛閫夋嫨鎴栧～鍐欎竴涓川閲忚鍒欓泦銆?, isError: true);
+                return;
+            }
+
+            await _governanceQualityRuleSetCoordinator.DeleteAsync(deleteBaseUrl, ApiKeyTextBox.Text.Trim(), deleteId);
+            SetGovernanceStatus($"宸插垹闄よ川閲忚鍒欓泦锛歿deleteId}", isError: false);
+            QualityRuleSetIdTextBox.Text = string.Empty;
+            QualityRuleSetNameTextBox.Text = string.Empty;
+            QualityRuleSetVersionTextBox.Text = "v1";
+            QualityRuleSetJsonTextBox.Text = string.Empty;
+            _selectedQualityRuleSet = null;
+            await RefreshQualityRuleSetsAsync();
+            return;
+
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var id = string.IsNullOrWhiteSpace(QualityRuleSetIdTextBox.Text)
                 ? _selectedQualityRuleSet?.Id ?? string.Empty
@@ -338,6 +372,97 @@ public sealed partial class MainWindow
         {
             SetGovernanceStatus($"删除质量规则集失败：{ex.Message}", isError: true);
         }
+    }
+
+    private void ApplyQualityRuleSetSelection()
+    {
+        if (_selectedQualityRuleSet is null)
+        {
+            return;
+        }
+
+        QualityRuleSetIdTextBox.Text = _selectedQualityRuleSet.Id;
+        QualityRuleSetNameTextBox.Text = _selectedQualityRuleSet.Name;
+        QualityRuleSetVersionTextBox.Text = string.IsNullOrWhiteSpace(_selectedQualityRuleSet.Version) ? "v1" : _selectedQualityRuleSet.Version;
+        QualityRuleSetJsonTextBox.Text = _selectedQualityRuleSet.RulesJson;
+    }
+
+    #endif
+
+    private async Task SaveQualityRuleSetAsync()
+    {
+        try
+        {
+            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var id = QualityRuleSetIdTextBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                SetGovernanceStatus("Quality rule set id is required.", isError: true);
+                return;
+            }
+
+            var rules = ParseJsonObjectOrThrow(QualityRuleSetJsonTextBox.Text);
+            var item = await _governanceQualityRuleSetCoordinator.SaveAsync(
+                baseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                id,
+                QualityRuleSetNameTextBox.Text,
+                QualityRuleSetVersionTextBox.Text,
+                rules);
+            SetGovernanceStatus($"Quality rule set saved: {item.Id}", isError: false);
+            _selectedQualityRuleSet = item;
+            await RefreshQualityRuleSetsAsync();
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Save quality rule set failed: {ex.Message}", isError: true);
+        }
+    }
+
+    private async Task DeleteQualityRuleSetAsync()
+    {
+        try
+        {
+            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var id = string.IsNullOrWhiteSpace(QualityRuleSetIdTextBox.Text)
+                ? _selectedQualityRuleSet?.Id ?? string.Empty
+                : QualityRuleSetIdTextBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                SetGovernanceStatus("Select or enter a quality rule set id first.", isError: true);
+                return;
+            }
+
+            await _governanceQualityRuleSetCoordinator.DeleteAsync(baseUrl, ApiKeyTextBox.Text.Trim(), id);
+            SetGovernanceStatus($"Quality rule set deleted: {id}", isError: false);
+            QualityRuleSetIdTextBox.Text = string.Empty;
+            QualityRuleSetNameTextBox.Text = string.Empty;
+            QualityRuleSetVersionTextBox.Text = "v1";
+            QualityRuleSetJsonTextBox.Text = string.Empty;
+            _selectedQualityRuleSet = null;
+            await RefreshQualityRuleSetsAsync();
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Delete quality rule set failed: {ex.Message}", isError: true);
+        }
+    }
+
+    private void ApplyQualityRuleSetSelection()
+    {
+        if (_selectedQualityRuleSet is null)
+        {
+            QualityRuleSetIdTextBox.Text = string.Empty;
+            QualityRuleSetNameTextBox.Text = string.Empty;
+            QualityRuleSetVersionTextBox.Text = "v1";
+            QualityRuleSetJsonTextBox.Text = string.Empty;
+            return;
+        }
+
+        QualityRuleSetIdTextBox.Text = _selectedQualityRuleSet.Id;
+        QualityRuleSetNameTextBox.Text = _selectedQualityRuleSet.Name;
+        QualityRuleSetVersionTextBox.Text = string.IsNullOrWhiteSpace(_selectedQualityRuleSet.Version) ? "v1" : _selectedQualityRuleSet.Version;
+        QualityRuleSetJsonTextBox.Text = _selectedQualityRuleSet.RulesJson;
     }
 
     private async Task RefreshSandboxGovernanceAsync()
