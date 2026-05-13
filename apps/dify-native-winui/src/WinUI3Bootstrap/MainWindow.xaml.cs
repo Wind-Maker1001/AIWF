@@ -48,6 +48,7 @@ public sealed partial class MainWindow : Window
     private readonly GovernanceBridgeClient _governanceClient;
     private readonly GovernanceAuditCoordinator _governanceAuditCoordinator;
     private readonly GovernanceQualityRuleSetCoordinator _governanceQualityRuleSetCoordinator;
+    private readonly GovernanceSandboxCoordinator _governanceSandboxCoordinator;
     private readonly RunFlowCoordinator _runFlowCoordinator;
     private readonly CanvasRuntime.CanvasViewportEngine _canvasViewportEngine = new(CanvasMinScale, CanvasMaxScale);
     private readonly List<NodeTemplate> _quickNodeTemplates;
@@ -201,6 +202,7 @@ public sealed partial class MainWindow : Window
         _governanceClient = new GovernanceBridgeClient(_http);
         _governanceAuditCoordinator = new GovernanceAuditCoordinator(_governanceClient);
         _governanceQualityRuleSetCoordinator = new GovernanceQualityRuleSetCoordinator(_governanceClient);
+        _governanceSandboxCoordinator = new GovernanceSandboxCoordinator(_governanceClient);
         _runFlowCoordinator = new RunFlowCoordinator(_http, _runnerAdapter);
         _quickNodeTemplates = _nodeCatalog
             .GetQuickTemplates()
