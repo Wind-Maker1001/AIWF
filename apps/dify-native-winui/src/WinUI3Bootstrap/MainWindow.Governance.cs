@@ -249,145 +249,29 @@ public sealed partial class MainWindow
     {
         try
         {
-            var refreshedBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var refreshedState = await _governanceQualityRuleSetCoordinator.RefreshAsync(
-                refreshedBaseUrl,
+            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var state = await _governanceQualityRuleSetCoordinator.RefreshAsync(
+                baseUrl,
                 ApiKeyTextBox.Text.Trim(),
                 _selectedQualityRuleSet?.Id);
             QualityRuleSetListView.Items.Clear();
-            foreach (var refreshedItem in refreshedState.Items)
+            foreach (var item in state.Items)
             {
-                QualityRuleSetListView.Items.Add(refreshedItem);
+                QualityRuleSetListView.Items.Add(item);
             }
-            _selectedQualityRuleSet = refreshedState.SelectedItem;
-            QualityRuleSetListView.SelectedItem = refreshedState.SelectedItem;
+
+            _selectedQualityRuleSet = state.SelectedItem;
+            QualityRuleSetListView.SelectedItem = state.SelectedItem;
             ApplyQualityRuleSetSelection();
-            return;
         }
         catch (Exception ex)
         {
             QualityRuleSetListView.Items.Clear();
-            SetGovernanceStatus($"刷新质量规则集失败：{ex.Message}", isError: true);
-        }
-    }
-
-    #if false
-    private async Task SaveQualityRuleSetAsync()
-    {
-        try
-        {
-            var saveBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var saveId = QualityRuleSetIdTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(saveId))
-            {
-                SetGovernanceStatus("璇峰厛濉啓璐ㄩ噺瑙勫垯闆?ID銆?, isError: true);
-                return;
-            }
-
-            var saveRules = ParseJsonObjectOrThrow(QualityRuleSetJsonTextBox.Text);
-            var savedItem = await _governanceQualityRuleSetCoordinator.SaveAsync(
-                saveBaseUrl,
-                ApiKeyTextBox.Text.Trim(),
-                saveId,
-                QualityRuleSetNameTextBox.Text,
-                QualityRuleSetVersionTextBox.Text,
-                saveRules);
-            SetGovernanceStatus($"宸蹭繚瀛樿川閲忚鍒欓泦锛歿savedItem.Id}", isError: false);
-            _selectedQualityRuleSet = savedItem;
-            await RefreshQualityRuleSetsAsync();
-            return;
-
-#if false
-            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var id = QualityRuleSetIdTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                SetGovernanceStatus("请先填写质量规则集 ID。", isError: true);
-                return;
-            }
-
-            var rules = ParseJsonObjectOrThrow(QualityRuleSetJsonTextBox.Text);
-            var item = await _governanceClient.SaveQualityRuleSetAsync(
-                baseUrl,
-                ApiKeyTextBox.Text.Trim(),
-                id,
-                string.IsNullOrWhiteSpace(QualityRuleSetNameTextBox.Text) ? id : QualityRuleSetNameTextBox.Text.Trim(),
-                string.IsNullOrWhiteSpace(QualityRuleSetVersionTextBox.Text) ? "v1" : QualityRuleSetVersionTextBox.Text.Trim(),
-                "workflow",
-                rules);
-            SetGovernanceStatus($"已保存质量规则集：{item.Id}", isError: false);
-            await RefreshQualityRuleSetsAsync();
-#endif
-        }
-        catch (Exception ex)
-        {
-            SetGovernanceStatus($"保存质量规则集失败：{ex.Message}", isError: true);
-        }
-    }
-
-    private async Task DeleteQualityRuleSetAsync()
-    {
-        try
-        {
-            var deleteBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var deleteId = string.IsNullOrWhiteSpace(QualityRuleSetIdTextBox.Text)
-                ? _selectedQualityRuleSet?.Id ?? string.Empty
-                : QualityRuleSetIdTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(deleteId))
-            {
-                SetGovernanceStatus("璇峰厛閫夋嫨鎴栧～鍐欎竴涓川閲忚鍒欓泦銆?, isError: true);
-                return;
-            }
-
-            await _governanceQualityRuleSetCoordinator.DeleteAsync(deleteBaseUrl, ApiKeyTextBox.Text.Trim(), deleteId);
-            SetGovernanceStatus($"宸插垹闄よ川閲忚鍒欓泦锛歿deleteId}", isError: false);
-            QualityRuleSetIdTextBox.Text = string.Empty;
-            QualityRuleSetNameTextBox.Text = string.Empty;
-            QualityRuleSetVersionTextBox.Text = "v1";
-            QualityRuleSetJsonTextBox.Text = string.Empty;
             _selectedQualityRuleSet = null;
-            await RefreshQualityRuleSetsAsync();
-            return;
-
-            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var id = string.IsNullOrWhiteSpace(QualityRuleSetIdTextBox.Text)
-                ? _selectedQualityRuleSet?.Id ?? string.Empty
-                : QualityRuleSetIdTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(id))
-            {
-                SetGovernanceStatus("请先选择或填写一个质量规则集。", isError: true);
-                return;
-            }
-
-            await _governanceClient.DeleteQualityRuleSetAsync(baseUrl, ApiKeyTextBox.Text.Trim(), id);
-            SetGovernanceStatus($"已删除质量规则集：{id}", isError: false);
-            QualityRuleSetIdTextBox.Text = string.Empty;
-            QualityRuleSetNameTextBox.Text = string.Empty;
-            QualityRuleSetVersionTextBox.Text = "v1";
-            QualityRuleSetJsonTextBox.Text = string.Empty;
-            _selectedQualityRuleSet = null;
-            await RefreshQualityRuleSetsAsync();
-        }
-        catch (Exception ex)
-        {
-            SetGovernanceStatus($"删除质量规则集失败：{ex.Message}", isError: true);
+            ApplyQualityRuleSetSelection();
+            SetGovernanceStatus($"Refresh quality rule sets failed: {ex.Message}", isError: true);
         }
     }
-
-    private void ApplyQualityRuleSetSelection()
-    {
-        if (_selectedQualityRuleSet is null)
-        {
-            return;
-        }
-
-        QualityRuleSetIdTextBox.Text = _selectedQualityRuleSet.Id;
-        QualityRuleSetNameTextBox.Text = _selectedQualityRuleSet.Name;
-        QualityRuleSetVersionTextBox.Text = string.IsNullOrWhiteSpace(_selectedQualityRuleSet.Version) ? "v1" : _selectedQualityRuleSet.Version;
-        QualityRuleSetJsonTextBox.Text = _selectedQualityRuleSet.RulesJson;
-    }
-
-    #endif
 
     private async Task SaveQualityRuleSetAsync()
     {
@@ -480,12 +364,12 @@ public sealed partial class MainWindow
                 SandboxRuleVersionsListView.Items.Add(item);
             }
 
-            var autofixState = state.AutoFixState;
-            _currentSandboxAutoFixState = autofixState;
-            SandboxAutoFixStateTextBlock.Text = autofixState.DisplayText;
-            SandboxAutoFixModeTextBox.Text = autofixState.ForcedIsolationMode;
-            SandboxAutoFixUntilTextBox.Text = autofixState.ForcedUntil;
-            SandboxAutoFixGreenStreakTextBox.Text = autofixState.GreenStreak.ToString();
+            var autoFixState = state.AutoFixState;
+            _currentSandboxAutoFixState = autoFixState;
+            SandboxAutoFixStateTextBlock.Text = autoFixState.DisplayText;
+            SandboxAutoFixModeTextBox.Text = autoFixState.ForcedIsolationMode;
+            SandboxAutoFixUntilTextBox.Text = autoFixState.ForcedUntil;
+            SandboxAutoFixGreenStreakTextBox.Text = autoFixState.GreenStreak.ToString();
 
             SandboxAutoFixActionsListView.Items.Clear();
             foreach (var item in state.AutoFixActions)
@@ -502,7 +386,7 @@ public sealed partial class MainWindow
             SandboxAutoFixUntilTextBox.Text = string.Empty;
             SandboxAutoFixGreenStreakTextBox.Text = "0";
             _currentSandboxAutoFixState = new GovernanceSandboxAutoFixState(string.Empty, string.Empty, 0, new JsonArray(), new JsonArray());
-            SetGovernanceStatus($"刷新 Sandbox 治理失败：{ex.Message}", isError: true);
+            SetGovernanceStatus($"Refresh sandbox governance failed: {ex.Message}", isError: true);
         }
     }
 
@@ -510,27 +394,18 @@ public sealed partial class MainWindow
     {
         try
         {
-            var saveBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var saveRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
-            var saveVersionId = await _governanceSandboxMutationCoordinator.SaveRulesAsync(
-                saveBaseUrl,
-                ApiKeyTextBox.Text.Trim(),
-                saveRules);
-            SetGovernanceStatus($"Sandbox rules saved: {saveVersionId}", isError: false);
-            await RefreshSandboxGovernanceAsync();
-            return;
-
-#if false
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var rules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
-            var versionId = await _governanceClient.SaveWorkflowSandboxRulesAsync(baseUrl, ApiKeyTextBox.Text.Trim(), rules);
-            SetGovernanceStatus($"已保存 Sandbox 规则：{versionId}", isError: false);
+            var versionId = await _governanceSandboxMutationCoordinator.SaveRulesAsync(
+                baseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                rules);
+            SetGovernanceStatus($"Sandbox rules saved: {versionId}", isError: false);
             await RefreshSandboxGovernanceAsync();
-#endif
         }
         catch (Exception ex)
         {
-            SetGovernanceStatus($"保存 Sandbox 规则失败：{ex.Message}", isError: true);
+            SetGovernanceStatus($"Save sandbox rules failed: {ex.Message}", isError: true);
         }
     }
 
@@ -538,39 +413,24 @@ public sealed partial class MainWindow
     {
         try
         {
-            var rollbackVersionId = _selectedSandboxRuleVersion?.VersionId ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(rollbackVersionId))
+            var versionId = _selectedSandboxRuleVersion?.VersionId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(versionId))
             {
                 SetGovernanceStatus("Select a sandbox rule version first.", isError: true);
                 return;
             }
 
-            var rollbackBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var rollbackNewVersion = await _governanceSandboxMutationCoordinator.RollbackRulesAsync(
-                rollbackBaseUrl,
-                ApiKeyTextBox.Text.Trim(),
-                rollbackVersionId);
-            SetGovernanceStatus($"Sandbox rules rolled back into new version: {rollbackNewVersion}", isError: false);
-            await RefreshSandboxGovernanceAsync();
-            return;
-
-#if false
-            var versionId = _selectedSandboxRuleVersion?.VersionId ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(versionId))
-            {
-                SetGovernanceStatus("请先选择一个 Sandbox 规则版本。", isError: true);
-                return;
-            }
-
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var newVersion = await _governanceClient.RollbackWorkflowSandboxRuleVersionAsync(baseUrl, ApiKeyTextBox.Text.Trim(), versionId);
-            SetGovernanceStatus($"已回滚 Sandbox 规则，生成新版本：{newVersion}", isError: false);
+            var newVersion = await _governanceSandboxMutationCoordinator.RollbackRulesAsync(
+                baseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                versionId);
+            SetGovernanceStatus($"Sandbox rules rolled back into new version: {newVersion}", isError: false);
             await RefreshSandboxGovernanceAsync();
-#endif
         }
         catch (Exception ex)
         {
-            SetGovernanceStatus($"回滚 Sandbox 规则失败：{ex.Message}", isError: true);
+            SetGovernanceStatus($"Rollback sandbox rules failed: {ex.Message}", isError: true);
         }
     }
 
@@ -578,49 +438,25 @@ public sealed partial class MainWindow
     {
         try
         {
-            var muteBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var muteCurrentRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
+            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var currentRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
             var muteResult = await _governanceSandboxMutationCoordinator.ApplyMuteAsync(
-                muteBaseUrl,
+                baseUrl,
                 ApiKeyTextBox.Text.Trim(),
-                muteCurrentRules,
+                currentRules,
                 SandboxMuteNodeTypeTextBox.Text,
                 SandboxMuteNodeIdTextBox.Text,
                 SandboxMuteCodeTextBox.Text,
                 SandboxMuteMinutesTextBox.Text,
                 DateTimeOffset.UtcNow);
+
             SandboxRulesJsonTextBox.Text = PrettyGovernanceJson(muteResult.Rules.ToJsonString());
             SetGovernanceStatus($"Sandbox mute applied: {muteResult.VersionId}", isError: false);
             await RefreshSandboxGovernanceAsync();
-            return;
-
-#if false
-            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var currentRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
-            var minutes = int.TryParse(SandboxMuteMinutesTextBox.Text.Trim(), out var parsedMinutes)
-                ? parsedMinutes
-                : 60;
-            var nextRules = GovernanceEditorSupport.ApplySandboxMute(
-                currentRules,
-                SandboxMuteNodeTypeTextBox.Text,
-                SandboxMuteNodeIdTextBox.Text,
-                SandboxMuteCodeTextBox.Text,
-                minutes,
-                DateTimeOffset.UtcNow);
-
-            SandboxRulesJsonTextBox.Text = PrettyGovernanceJson(nextRules.ToJsonString());
-            var versionId = await _governanceClient.SaveWorkflowSandboxRulesAsync(
-                baseUrl,
-                ApiKeyTextBox.Text.Trim(),
-                nextRules,
-                reason: "winui_governance_mute");
-            SetGovernanceStatus($"已应用 Sandbox 静默：{versionId}", isError: false);
-            await RefreshSandboxGovernanceAsync();
-#endif
         }
         catch (Exception ex)
         {
-            SetGovernanceStatus($"应用 Sandbox 静默失败：{ex.Message}", isError: true);
+            SetGovernanceStatus($"Apply sandbox mute failed: {ex.Message}", isError: true);
         }
     }
 
@@ -628,36 +464,16 @@ public sealed partial class MainWindow
     {
         try
         {
-            var autoFixBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             _currentSandboxAutoFixState = await _governanceSandboxMutationCoordinator.SaveAutoFixStateAsync(
-                autoFixBaseUrl,
+                baseUrl,
                 ApiKeyTextBox.Text.Trim(),
                 _currentSandboxAutoFixState,
                 SandboxAutoFixModeTextBox.Text,
                 SandboxAutoFixUntilTextBox.Text,
-            SandboxAutoFixGreenStreakTextBox.Text);
+                SandboxAutoFixGreenStreakTextBox.Text);
             SetGovernanceStatus("Sandbox AutoFix override saved.", isError: false);
             await RefreshSandboxGovernanceAsync();
-            return;
-
-#if false
-            var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var greenStreak = int.TryParse(SandboxAutoFixGreenStreakTextBox.Text.Trim(), out var parsedGreen)
-                ? Math.Max(0, parsedGreen)
-                : 0;
-            var nextState = _currentSandboxAutoFixState with
-            {
-                ForcedIsolationMode = SandboxAutoFixModeTextBox.Text.Trim(),
-                ForcedUntil = SandboxAutoFixUntilTextBox.Text.Trim(),
-                GreenStreak = greenStreak,
-            };
-            _currentSandboxAutoFixState = await _governanceClient.SaveWorkflowSandboxAutoFixStateAsync(
-                baseUrl,
-                ApiKeyTextBox.Text.Trim(),
-                nextState);
-            SetGovernanceStatus("Sandbox AutoFix override saved.", isError: false);
-            await RefreshSandboxGovernanceAsync();
-#endif
         }
         catch (Exception ex)
         {
