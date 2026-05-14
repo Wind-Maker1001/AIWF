@@ -510,11 +510,23 @@ public sealed partial class MainWindow
     {
         try
         {
+            var saveBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var saveRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
+            var saveVersionId = await _governanceSandboxMutationCoordinator.SaveRulesAsync(
+                saveBaseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                saveRules);
+            SetGovernanceStatus($"Sandbox rules saved: {saveVersionId}", isError: false);
+            await RefreshSandboxGovernanceAsync();
+            return;
+
+#if false
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var rules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
             var versionId = await _governanceClient.SaveWorkflowSandboxRulesAsync(baseUrl, ApiKeyTextBox.Text.Trim(), rules);
             SetGovernanceStatus($"已保存 Sandbox 规则：{versionId}", isError: false);
             await RefreshSandboxGovernanceAsync();
+#endif
         }
         catch (Exception ex)
         {
@@ -526,6 +538,23 @@ public sealed partial class MainWindow
     {
         try
         {
+            var rollbackVersionId = _selectedSandboxRuleVersion?.VersionId ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(rollbackVersionId))
+            {
+                SetGovernanceStatus("Select a sandbox rule version first.", isError: true);
+                return;
+            }
+
+            var rollbackBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var rollbackNewVersion = await _governanceSandboxMutationCoordinator.RollbackRulesAsync(
+                rollbackBaseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                rollbackVersionId);
+            SetGovernanceStatus($"Sandbox rules rolled back into new version: {rollbackNewVersion}", isError: false);
+            await RefreshSandboxGovernanceAsync();
+            return;
+
+#if false
             var versionId = _selectedSandboxRuleVersion?.VersionId ?? string.Empty;
             if (string.IsNullOrWhiteSpace(versionId))
             {
@@ -537,6 +566,7 @@ public sealed partial class MainWindow
             var newVersion = await _governanceClient.RollbackWorkflowSandboxRuleVersionAsync(baseUrl, ApiKeyTextBox.Text.Trim(), versionId);
             SetGovernanceStatus($"已回滚 Sandbox 规则，生成新版本：{newVersion}", isError: false);
             await RefreshSandboxGovernanceAsync();
+#endif
         }
         catch (Exception ex)
         {
@@ -548,6 +578,23 @@ public sealed partial class MainWindow
     {
         try
         {
+            var muteBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            var muteCurrentRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
+            var muteResult = await _governanceSandboxMutationCoordinator.ApplyMuteAsync(
+                muteBaseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                muteCurrentRules,
+                SandboxMuteNodeTypeTextBox.Text,
+                SandboxMuteNodeIdTextBox.Text,
+                SandboxMuteCodeTextBox.Text,
+                SandboxMuteMinutesTextBox.Text,
+                DateTimeOffset.UtcNow);
+            SandboxRulesJsonTextBox.Text = PrettyGovernanceJson(muteResult.Rules.ToJsonString());
+            SetGovernanceStatus($"Sandbox mute applied: {muteResult.VersionId}", isError: false);
+            await RefreshSandboxGovernanceAsync();
+            return;
+
+#if false
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var currentRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
             var minutes = int.TryParse(SandboxMuteMinutesTextBox.Text.Trim(), out var parsedMinutes)
@@ -569,6 +616,7 @@ public sealed partial class MainWindow
                 reason: "winui_governance_mute");
             SetGovernanceStatus($"已应用 Sandbox 静默：{versionId}", isError: false);
             await RefreshSandboxGovernanceAsync();
+#endif
         }
         catch (Exception ex)
         {
@@ -580,6 +628,19 @@ public sealed partial class MainWindow
     {
         try
         {
+            var autoFixBaseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            _currentSandboxAutoFixState = await _governanceSandboxMutationCoordinator.SaveAutoFixStateAsync(
+                autoFixBaseUrl,
+                ApiKeyTextBox.Text.Trim(),
+                _currentSandboxAutoFixState,
+                SandboxAutoFixModeTextBox.Text,
+                SandboxAutoFixUntilTextBox.Text,
+            SandboxAutoFixGreenStreakTextBox.Text);
+            SetGovernanceStatus("Sandbox AutoFix override saved.", isError: false);
+            await RefreshSandboxGovernanceAsync();
+            return;
+
+#if false
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var greenStreak = int.TryParse(SandboxAutoFixGreenStreakTextBox.Text.Trim(), out var parsedGreen)
                 ? Math.Max(0, parsedGreen)
@@ -596,6 +657,7 @@ public sealed partial class MainWindow
                 nextState);
             SetGovernanceStatus("Sandbox AutoFix override saved.", isError: false);
             await RefreshSandboxGovernanceAsync();
+#endif
         }
         catch (Exception ex)
         {
