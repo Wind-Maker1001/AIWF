@@ -135,9 +135,9 @@ public sealed partial class MainWindow
         try
         {
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var items = await _governanceClient.ListManualReviewsAsync(baseUrl, ApiKeyTextBox.Text.Trim());
+            var state = await _governanceManualReviewCoordinator.RefreshPendingAsync(baseUrl, ApiKeyTextBox.Text.Trim());
             PendingReviewsListView.Items.Clear();
-            foreach (var item in items)
+            foreach (var item in state.Items)
             {
                 PendingReviewsListView.Items.Add(new GovernanceReviewListEntry
                 {
@@ -146,24 +146,22 @@ public sealed partial class MainWindow
                 });
             }
 
-            GovernancePendingHintTextBlock.Text = items.Count == 0
-                ? "当前没有待审核项。"
-                : $"当前待审核项: {items.Count}";
-            if (items.Count == 0)
+            GovernancePendingHintTextBlock.Text = state.HintText;
+            if (state.Items.Count == 0)
             {
                 _selectedGovernanceReview = null;
                 PendingReviewsListView.SelectedItem = null;
                 ApplyGovernanceSelection();
             }
-            SetGovernanceStatus("待审核队列已刷新。", isError: false);
+            SetGovernanceStatus("Pending review queue refreshed.", isError: false);
         }
         catch (Exception ex)
         {
             PendingReviewsListView.Items.Clear();
-            GovernancePendingHintTextBlock.Text = "待审核队列不可用。";
+            GovernancePendingHintTextBlock.Text = "Pending review queue unavailable.";
             _selectedGovernanceReview = null;
             ApplyGovernanceSelection();
-            SetGovernanceStatus($"刷新待审核队列失败：{ex.Message}", isError: true);
+            SetGovernanceStatus($"Refresh pending review queue failed: {ex.Message}", isError: true);
         }
     }
 
@@ -172,13 +170,12 @@ public sealed partial class MainWindow
         try
         {
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
-            var status = ReadComboValue(GovernanceHistoryStatusComboBox);
-            var items = await _governanceClient.ListManualReviewHistoryAsync(
+            var items = await _governanceManualReviewCoordinator.RefreshHistoryAsync(
                 baseUrl,
                 ApiKeyTextBox.Text.Trim(),
-                runId: GovernanceHistoryRunIdTextBox.Text.Trim(),
-                reviewer: GovernanceHistoryReviewerTextBox.Text.Trim(),
-                status: status);
+                GovernanceHistoryRunIdTextBox.Text,
+                GovernanceHistoryReviewerTextBox.Text,
+                ReadComboValue(GovernanceHistoryStatusComboBox));
 
             ReviewHistoryListView.Items.Clear();
             foreach (var item in items)
@@ -193,7 +190,7 @@ public sealed partial class MainWindow
         catch (Exception ex)
         {
             ReviewHistoryListView.Items.Clear();
-            SetGovernanceStatus($"刷新审核历史失败：{ex.Message}", isError: true);
+            SetGovernanceStatus($"Refresh review history failed: {ex.Message}", isError: true);
         }
     }
 
@@ -492,7 +489,7 @@ public sealed partial class MainWindow
     {
         if (_selectedGovernanceReview?.Item is null)
         {
-            SetGovernanceStatus("请先选择一条待审核项。", isError: true);
+            SetGovernanceStatus("Select a pending review item first.", isError: true);
             return;
         }
 
@@ -500,19 +497,18 @@ public sealed partial class MainWindow
         {
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var selected = _selectedGovernanceReview.Item;
-            var item = await _governanceClient.SubmitManualReviewAsync(
+            var item = await _governanceManualReviewCoordinator.SubmitDecisionAsync(
                 baseUrl,
                 ApiKeyTextBox.Text.Trim(),
-                selected.RunId,
-                selected.ReviewKey,
+                selected,
                 approved,
-                GovernanceReviewerTextBox.Text.Trim(),
-                GovernanceCommentTextBox.Text.Trim());
+                GovernanceReviewerTextBox.Text,
+                GovernanceCommentTextBox.Text);
 
             SetGovernanceStatus(
                 approved
-                    ? $"已记录批准：{item.RunId} / {item.ReviewKey}"
-                    : $"已记录拒绝：{item.RunId} / {item.ReviewKey}",
+                    ? $"Review approved: {item.RunId} / {item.ReviewKey}"
+                    : $"Review rejected: {item.RunId} / {item.ReviewKey}",
                 isError: false);
             GovernanceCommentTextBox.Text = string.Empty;
             _selectedGovernanceReview = null;
@@ -522,7 +518,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            SetGovernanceStatus($"提交审核失败：{ex.Message}", isError: true);
+            SetGovernanceStatus($"Submit review decision failed: {ex.Message}", isError: true);
         }
     }
 
