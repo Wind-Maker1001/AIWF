@@ -47,6 +47,7 @@ public sealed partial class MainWindow : Window
     private readonly WorkflowRunnerAdapter _runnerAdapter;
     private readonly GovernanceBridgeClient _governanceClient;
     private readonly GovernanceAuditCoordinator _governanceAuditCoordinator;
+    private readonly GovernanceManualReviewCoordinator _governanceManualReviewCoordinator;
     private readonly GovernanceQualityRuleSetCoordinator _governanceQualityRuleSetCoordinator;
     private readonly GovernanceSandboxCoordinator _governanceSandboxCoordinator;
     private readonly GovernanceSandboxMutationCoordinator _governanceSandboxMutationCoordinator;
@@ -202,6 +203,7 @@ public sealed partial class MainWindow : Window
         _runnerAdapter = new WorkflowRunnerAdapter(_http);
         _governanceClient = new GovernanceBridgeClient(_http);
         _governanceAuditCoordinator = new GovernanceAuditCoordinator(_governanceClient);
+        _governanceManualReviewCoordinator = new GovernanceManualReviewCoordinator(_governanceClient);
         _governanceQualityRuleSetCoordinator = new GovernanceQualityRuleSetCoordinator(_governanceClient);
         _governanceSandboxCoordinator = new GovernanceSandboxCoordinator(_governanceClient);
         _governanceSandboxMutationCoordinator = new GovernanceSandboxMutationCoordinator(_governanceClient);
