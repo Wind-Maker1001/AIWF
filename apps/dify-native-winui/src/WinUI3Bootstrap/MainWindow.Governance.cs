@@ -146,7 +146,7 @@ public sealed partial class MainWindow
                 });
             }
 
-            GovernancePendingHintTextBlock.Text = state.HintText;
+            GovernancePendingHintTextBlock.Text = GovernanceManualReviewPresenter.BuildPendingHintText(state.Items.Count);
             if (state.Items.Count == 0)
             {
                 _selectedGovernanceReview = null;
@@ -524,21 +524,11 @@ public sealed partial class MainWindow
 
     private void ApplyGovernanceSelection()
     {
-        var selected = _selectedGovernanceReview?.Item;
-        if (selected is null)
-        {
-            SelectedReviewSummaryTextBlock.Text = "未选中待审核项";
-            SelectedReviewDetailTextBlock.Text = "-";
-            ApproveReviewButton.IsEnabled = false;
-            RejectReviewButton.IsEnabled = false;
-            return;
-        }
-
-        SelectedReviewSummaryTextBlock.Text = $"{selected.RunId} / {selected.ReviewKey}";
-        SelectedReviewDetailTextBlock.Text =
-            $"workflow={selected.WorkflowId} | node={selected.NodeId} | status={selected.Status}";
-        ApproveReviewButton.IsEnabled = true;
-        RejectReviewButton.IsEnabled = true;
+        var state = GovernanceManualReviewPresenter.BuildSelectionState(_selectedGovernanceReview?.Item);
+        SelectedReviewSummaryTextBlock.Text = state.SummaryText;
+        SelectedReviewDetailTextBlock.Text = state.DetailText;
+        ApproveReviewButton.IsEnabled = state.CanApprove;
+        RejectReviewButton.IsEnabled = state.CanReject;
     }
 
     private void SetGovernanceStatus(string message, bool isError)
@@ -564,8 +554,9 @@ public sealed partial class MainWindow
         {
             _currentGovernanceBoundary = null;
             _currentGovernanceBoundaryBaseUrl = string.Empty;
-            GovernanceBoundaryHintTextBlock.Text = "治理控制面边界不可用。";
-            GovernanceBoundaryRoutesTextBlock.Text = ex.Message;
+            var state = GovernanceBoundaryPresenter.Build(null, ex.Message);
+            GovernanceBoundaryHintTextBlock.Text = state.HintText;
+            GovernanceBoundaryRoutesTextBlock.Text = state.RoutesText;
             throw;
         }
     }
@@ -584,17 +575,9 @@ public sealed partial class MainWindow
 
     private void ApplyGovernanceBoundarySummary(GovernanceControlPlaneBoundary? boundary)
     {
-        if (boundary is null)
-        {
-            GovernanceBoundaryHintTextBlock.Text = "治理控制面边界不可用。";
-            GovernanceBoundaryRoutesTextBlock.Text = "-";
-            return;
-        }
-
-        GovernanceBoundaryHintTextBlock.Text =
-            $"治理状态由 {boundary.GovernanceStateControlPlaneOwner} 承载；job lifecycle 仍由 {boundary.JobLifecycleControlPlaneOwner} 负责。";
-        GovernanceBoundaryRoutesTextBlock.Text =
-            $"role={boundary.ControlPlaneRole} | surfaces={boundary.GovernanceSurfaces.Count} | meta={boundary.MetaRoute}";
+        var state = GovernanceBoundaryPresenter.Build(boundary);
+        GovernanceBoundaryHintTextBlock.Text = state.HintText;
+        GovernanceBoundaryRoutesTextBlock.Text = state.RoutesText;
     }
 
     private static JsonObject ParseJsonObjectOrThrow(string raw)
