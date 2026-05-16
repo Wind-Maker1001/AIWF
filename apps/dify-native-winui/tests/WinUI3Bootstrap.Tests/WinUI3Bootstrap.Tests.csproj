@@ -33,8 +33,10 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\ResultPanelState.cs" Link="Source\ResultPanelState.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\ArtifactPresentationMapper.cs" Link="Source\ArtifactPresentationMapper.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceAuditCoordinator.cs" Link="Source\GovernanceAuditCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceBoundaryPresenter.cs" Link="Source\GovernanceBoundaryPresenter.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceEditorSupport.cs" Link="Source\GovernanceEditorSupport.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceManualReviewCoordinator.cs" Link="Source\GovernanceManualReviewCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceManualReviewPresenter.cs" Link="Source\GovernanceManualReviewPresenter.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceQualityRuleSetCoordinator.cs" Link="Source\GovernanceQualityRuleSetCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxCoordinator.cs" Link="Source\GovernanceSandboxCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxMutationCoordinator.cs" Link="Source\GovernanceSandboxMutationCoordinator.cs" />
