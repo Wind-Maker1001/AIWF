@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
 using AIWF.Native.CanvasRuntime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -104,11 +101,15 @@ public sealed partial class MainWindow
             }
 
             var snapshot = BuildCanvasSnapshot();
-            var json = JsonSerializer.Serialize(snapshot, CanvasSnapshotJsonOptions);
-            var shouldWrite = await Task.Run(() => PersistCanvasSnapshot(json, _lastSavedCanvasSnapshotJson));
+            var shouldWrite = await Task.Run(() => _canvasAuthoringPersistenceService.SaveSnapshot(
+                snapshot,
+                CanvasSnapshotJsonOptions,
+                _lastSavedCanvasSnapshotJson));
             if (shouldWrite)
             {
-                _lastSavedCanvasSnapshotJson = json;
+                _lastSavedCanvasSnapshotJson = _canvasAuthoringPersistenceService
+                    .LoadSnapshot(CanvasSnapshotJsonOptions)
+                    .Json;
                 if (showStatus)
                 {
                     SetInlineStatus($"画布已保存：{CanvasStateFilePath}", InlineStatusTone.Success);
@@ -137,22 +138,6 @@ public sealed partial class MainWindow
         }
     }
 
-    private static bool PersistCanvasSnapshot(string json, string? previousJson)
-    {
-        var dir = Path.GetDirectoryName(CanvasStateFilePath) ?? ".";
-        Directory.CreateDirectory(dir);
-        var shouldWrite = CanvasSnapshotWriteDecider.ShouldWrite(
-            previousJson,
-            json,
-            File.Exists(CanvasStateFilePath));
-        if (shouldWrite)
-        {
-            File.WriteAllText(CanvasStateFilePath, json, Encoding.UTF8);
-        }
-
-        return shouldWrite;
-    }
-
     private void TryForceSaveCanvasSnapshotForSmoke()
     {
         if (_suppressCanvasAutosave)
@@ -163,10 +148,14 @@ public sealed partial class MainWindow
         try
         {
             var snapshot = BuildCanvasSnapshot();
-            var json = JsonSerializer.Serialize(snapshot, CanvasSnapshotJsonOptions);
-            if (PersistCanvasSnapshot(json, _lastSavedCanvasSnapshotJson))
+            if (_canvasAuthoringPersistenceService.SaveSnapshot(
+                snapshot,
+                CanvasSnapshotJsonOptions,
+                _lastSavedCanvasSnapshotJson))
             {
-                _lastSavedCanvasSnapshotJson = json;
+                _lastSavedCanvasSnapshotJson = _canvasAuthoringPersistenceService
+                    .LoadSnapshot(CanvasSnapshotJsonOptions)
+                    .Json;
             }
         }
         catch
@@ -222,20 +211,6 @@ public sealed partial class MainWindow
             CanvasMaxScale);
     }
 
-    private sealed record CanvasSnapshotLoadData(bool Exists, string? Json, CanvasSnapshot? Snapshot);
-
-    private static CanvasSnapshotLoadData ReadCanvasSnapshot()
-    {
-        if (!File.Exists(CanvasStateFilePath))
-        {
-            return new CanvasSnapshotLoadData(false, null, null);
-        }
-
-        var json = File.ReadAllText(CanvasStateFilePath, Encoding.UTF8);
-        var snapshot = JsonSerializer.Deserialize<CanvasSnapshot>(json);
-        return new CanvasSnapshotLoadData(true, json, snapshot);
-    }
-
     private void ScheduleCanvasSnapshotRestoreIfNeeded()
     {
         if (_canvasSnapshotRestoreTask is not null)
@@ -274,7 +249,7 @@ public sealed partial class MainWindow
         await _canvasSnapshotOperationLock.WaitAsync();
         try
         {
-            var loadData = await Task.Run(ReadCanvasSnapshot);
+            var loadData = await Task.Run(() => _canvasAuthoringPersistenceService.LoadSnapshot(CanvasSnapshotJsonOptions));
             if (restoreVersion != _canvasSnapshotRestoreVersion)
             {
                 return false;

@@ -52,6 +52,11 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioModels.cs" Link="Source\SqlStudioModels.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioDraftController.cs" Link="Source\SqlStudioDraftController.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlAuthoringBuilderCompiler.cs" Link="Source\SqlAuthoringBuilderCompiler.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlCanvasNodeDefaults.cs" Link="Source\SqlCanvasNodeDefaults.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowCanvasDocumentBuilder.cs" Link="Source\WorkflowCanvasDocumentBuilder.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\CanvasAuthoringPersistenceService.cs" Link="Source\CanvasAuthoringPersistenceService.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowCanvasNodeOutputPresenter.cs" Link="Source\WorkflowCanvasNodeOutputPresenter.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowDraftRunCoordinator.cs" Link="Source\WorkflowDraftRunCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioWorkflowMapper.cs" Link="Source\SqlStudioWorkflowMapper.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlStudioResultMapper.cs" Link="Source\SqlStudioResultMapper.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\SqlChartData.cs" Link="Source\SqlChartData.cs" />
