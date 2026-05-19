@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using AIWF.Native.Runtime;
@@ -41,22 +40,16 @@ public sealed partial class MainWindow
         try
         {
             var accelUrl = _sqlConnectionProfile.ResolveAccelUrl(BridgeUrlTextBox.Text);
-            var response = await _runnerAdapter.PostJsonAsync(
+            var result = await _workflowDraftRunCoordinator.ExecuteAsync(
                 accelUrl,
                 ApiKeyTextBox.Text.Trim(),
-                "/operators/workflow_draft_run_v1",
-                new JsonObject
-                {
-                    ["workflow_definition"] = SerializeWorkflowGraphDocument(document),
-                    ["job_id"] = string.IsNullOrWhiteSpace(JobIdTextBox.Text) ? document.WorkflowId : JobIdTextBox.Text.Trim(),
-                    ["run_id"] = Guid.NewGuid().ToString("N"),
-                    ["job_context"] = new JsonObject(),
-                    ["params"] = new JsonObject(),
-                });
+                string.IsNullOrWhiteSpace(JobIdTextBox.Text) ? document.WorkflowId : JobIdTextBox.Text.Trim(),
+                document);
 
-            var responseJson = response.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-            RawResponseTextBox.Text = responseJson;
-            if (!TryBindRunResult(responseJson, "Not retried"))
+            RawResponseTextBox.Text = result.PrettyResponseJson;
+            _lastBoundRunBusinessSuccess = RunResultBindingService.IsBusinessSuccess(result.BindingState);
+            ApplyRunResultBindingState(result.BindingState);
+            if (!result.ParsedBindingState)
             {
                 SetInlineStatus("画布 workflow 已运行，但结果只保留在原始 JSON 中。", InlineStatusTone.Neutral);
             }
@@ -65,14 +58,14 @@ public sealed partial class MainWindow
                 SetInlineStatus("画布 workflow 运行完成。", InlineStatusTone.Success);
             }
 
-            if (response["final_output"] is JsonObject finalOutput && finalOutput["rows"] is JsonArray)
+            if (result.FinalOutput is JsonObject finalOutput && finalOutput["rows"] is JsonArray)
             {
                 ApplySqlPreviewState(SqlStudioResultMapper.FromLoadRowsResponse(finalOutput, string.Empty));
             }
 
-            CaptureNodeOutputs(response);
-            ApplyNodeRunStatusToCanvas(response);
-            TryRenderChartFromWorkflowResult(response);
+            CaptureNodeOutputs(result.NodeOutputPresentation);
+            ApplyNodeRunStatusToCanvas(result.NodeOutputPresentation);
+            TryRenderCanvasWorkflowChart(result.NodeOutputPresentation.ChartSource);
             SetActiveSection(NavSection.Results);
         }
         catch (Exception ex)
@@ -122,177 +115,64 @@ public sealed partial class MainWindow
 
     private WorkflowGraphDocument? BuildWorkflowGraphDocumentFromCanvas()
     {
-        var borders = GetCanvasNodeBorders()
+        var nodes = GetCanvasNodeBorders()
             .Where(node => node.Tag is CanvasNodeTag tag
                 && tag.IsUserNode
                 && !string.IsNullOrWhiteSpace(tag.WorkflowNodeType))
-            .ToList();
-        if (borders.Count == 0)
+            .Select(node =>
+            {
+                var tag = (CanvasNodeTag)node.Tag;
+                return new CanvasWorkflowNodeState(
+                    tag.NodeKey,
+                    tag.WorkflowNodeType ?? "unknown",
+                    tag.TitleBlock?.Text ?? tag.NodeKey,
+                    tag.SubtitleBlock?.Text ?? string.Empty,
+                    Canvas.GetLeft(node),
+                    Canvas.GetTop(node),
+                    CloneJsonObject(tag.WorkflowConfig));
+            })
+            .ToArray();
+        if (nodes.Length == 0)
         {
             return null;
         }
 
-        var allowedIds = borders
-            .Select(node => ((CanvasNodeTag)node.Tag).NodeKey)
-            .ToHashSet(StringComparer.Ordinal);
         var edges = _connections
             .Where(edge =>
                 edge.Source.Tag is CanvasNodeTag sourceTag
-                && edge.Target.Tag is CanvasNodeTag targetTag
-                && allowedIds.Contains(sourceTag.NodeKey)
-                && allowedIds.Contains(targetTag.NodeKey))
-            .Select(edge => new WorkflowGraphEdgeDocument(
+                && edge.Target.Tag is CanvasNodeTag targetTag)
+            .Select(edge => new CanvasWorkflowEdgeState(
                 ((CanvasNodeTag)edge.Source.Tag).NodeKey,
                 ((CanvasNodeTag)edge.Target.Tag).NodeKey))
             .ToArray();
-        var incoming = edges
-            .GroupBy(edge => edge.To, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<string>)group.Select(item => item.From).ToArray(), StringComparer.Ordinal);
 
-        var nodes = borders.Select(border =>
-        {
-            var tag = (CanvasNodeTag)border.Tag;
-            var config = CloneJsonObject(tag.WorkflowConfig) ?? SqlCanvasNodeDefaults.Create(tag.WorkflowNodeType);
-            var predecessors = incoming.TryGetValue(tag.NodeKey, out var values) ? values : Array.Empty<string>();
-            ApplyRuntimeWorkflowInputs(tag.WorkflowNodeType, config, predecessors);
-            return new WorkflowGraphNodeDocument(
-                tag.NodeKey,
-                tag.WorkflowNodeType ?? "unknown",
-                tag.TitleBlock?.Text ?? tag.NodeKey,
-                tag.SubtitleBlock?.Text ?? string.Empty,
-                Canvas.GetLeft(border),
-                Canvas.GetTop(border),
-                config);
-        }).ToArray();
-
-        return new WorkflowGraphDocument(
-            WorkflowId: _canvasWorkflowId,
-            Version: _canvasWorkflowVersion,
-            Nodes: nodes,
-            Edges: edges,
-            Viewport: new WorkflowGraphViewportDocument(
+        return WorkflowCanvasDocumentBuilder.Build(
+            _canvasWorkflowId,
+            _canvasWorkflowVersion,
+            nodes,
+            edges,
+            new CanvasWorkflowViewportState(
                 CanvasTransform.ScaleX,
                 CanvasTransform.TranslateX,
                 CanvasTransform.TranslateY),
-            Selection: new WorkflowGraphSelectionDocument(
+            new CanvasWorkflowSelectionState(
                 _multiSelectedNodes
                     .Select(node => (node.Tag as CanvasNodeTag)?.NodeKey ?? string.Empty)
                     .Where(static key => !string.IsNullOrWhiteSpace(key))
                     .ToArray()));
     }
 
-    private static void ApplyRuntimeWorkflowInputs(string? workflowNodeType, JsonObject config, IReadOnlyList<string> predecessors)
-    {
-        if (string.IsNullOrWhiteSpace(workflowNodeType))
-        {
-            return;
-        }
-
-        switch (workflowNodeType)
-        {
-            case "columnar_eval_v1":
-            case "aggregate_rows_v2":
-            case "query_lang_v1":
-            case "sql_chart_v1":
-                if (predecessors.Count > 0)
-                {
-                    config["rows"] = new JsonArray();
-                    config["input_map"] = new JsonObject
-                    {
-                        ["rows"] = new JsonObject { ["from"] = predecessors[0], ["path"] = "rows" }
-                    };
-                }
-                break;
-            case "join_rows_v2":
-                if (predecessors.Count > 0)
-                {
-                    config["left_rows"] = new JsonArray();
-                }
-                if (predecessors.Count > 1)
-                {
-                    config["right_rows"] = new JsonArray();
-                }
-                if (predecessors.Count > 0)
-                {
-                    config["input_map"] = new JsonObject
-                    {
-                        ["left_rows"] = new JsonObject { ["from"] = predecessors[0], ["path"] = "rows" },
-                        ["right_rows"] = new JsonObject
-                        {
-                            ["from"] = predecessors.Count > 1 ? predecessors[1] : predecessors[0],
-                            ["path"] = "rows"
-                        }
-                    };
-                }
-                break;
-        }
-    }
-
-    private static JsonObject SerializeWorkflowGraphDocument(WorkflowGraphDocument document)
-    {
-        var nodes = new JsonArray();
-        foreach (var node in document.Nodes)
-        {
-            nodes.Add(new JsonObject
-            {
-                ["id"] = node.Id,
-                ["type"] = node.Type,
-                ["x"] = node.X,
-                ["y"] = node.Y,
-                ["config"] = CloneJsonObject(node.Config),
-            });
-        }
-
-        var edges = new JsonArray();
-        foreach (var edge in document.Edges)
-        {
-            edges.Add(new JsonObject
-            {
-                ["from"] = edge.From,
-                ["to"] = edge.To,
-            });
-        }
-
-        return new JsonObject
-        {
-            ["workflow_id"] = document.WorkflowId,
-            ["version"] = document.Version,
-            ["nodes"] = nodes,
-            ["edges"] = edges,
-        };
-    }
-
     private void SaveWorkflowGraphDocumentSidecar()
     {
         var document = BuildWorkflowGraphDocumentFromCanvas();
-        var dir = Path.GetDirectoryName(WorkflowGraphStateFilePath) ?? ".";
-        Directory.CreateDirectory(dir);
-        if (document is null)
-        {
-            if (File.Exists(WorkflowGraphStateFilePath))
-            {
-                File.Delete(WorkflowGraphStateFilePath);
-            }
-            return;
-        }
-
-        File.WriteAllText(
-            WorkflowGraphStateFilePath,
-            JsonSerializer.Serialize(document, CanvasSnapshotJsonOptions),
-            Encoding.UTF8);
+        _canvasAuthoringPersistenceService.SaveWorkflowGraph(document, CanvasSnapshotJsonOptions);
     }
 
     private void TryRestoreWorkflowGraphDocumentSidecar()
     {
-        if (!File.Exists(WorkflowGraphStateFilePath))
-        {
-            return;
-        }
-
         try
         {
-            var document = JsonSerializer.Deserialize<WorkflowGraphDocument>(
-                File.ReadAllText(WorkflowGraphStateFilePath, Encoding.UTF8));
+            var document = _canvasAuthoringPersistenceService.LoadWorkflowGraph(CanvasSnapshotJsonOptions);
             if (document is null)
             {
                 return;
@@ -635,23 +515,18 @@ public sealed partial class MainWindow
             : null;
     }
 
-    private void CaptureNodeOutputs(JsonObject response)
+    private void CaptureNodeOutputs(WorkflowCanvasNodeOutputPresentation response)
     {
         _lastNodeOutputs.Clear();
-        if (response["node_outputs"] is JsonObject outputs)
+        foreach (var item in response.Items)
         {
-            foreach (var kv in outputs)
-            {
-                if (kv.Value is JsonObject nodeOutput)
-                {
-                    _lastNodeOutputs[kv.Key] = nodeOutput;
-                }
-            }
+            _lastNodeOutputs[item.NodeKey] = item.RawOutput;
         }
     }
 
-    private void ApplyNodeRunStatusToCanvas(JsonObject response)
+    private void ApplyNodeRunStatusToCanvas(WorkflowCanvasNodeOutputPresentation response)
     {
+        var byNodeKey = response.Items.ToDictionary(static item => item.NodeKey, StringComparer.Ordinal);
         var borders = GetCanvasNodeBorders().ToList();
         foreach (var border in borders)
         {
@@ -660,9 +535,9 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            if (_lastNodeOutputs.TryGetValue(tag.NodeKey, out var output))
+            if (byNodeKey.TryGetValue(tag.NodeKey, out var output))
             {
-                var ok = output["ok"]?.GetValue<bool?>() == true;
+                var ok = output.Ok == true;
                 border.BorderBrush = new Microsoft.UI.Xaml.Media.SolidColorBrush(
                     ok ? Windows.UI.Color.FromArgb(255, 34, 197, 94)     // green
                        : Windows.UI.Color.FromArgb(255, 239, 68, 68));   // red
@@ -670,12 +545,21 @@ public sealed partial class MainWindow
 
                 if (tag.SubtitleBlock is not null)
                 {
-                    var status = output["status"]?.GetValue<string>() ?? (ok ? "done" : "error");
-                    var rowCount = output["rows"] is JsonArray rows ? rows.Count : 0;
-                    tag.SubtitleBlock.Text = ok ? $"{status} ({rowCount} rows)" : $"ERR: {status}";
+                    tag.SubtitleBlock.Text = output.Subtitle;
                 }
             }
         }
+    }
+
+    private void TryRenderCanvasWorkflowChart(JsonObject? chartSource)
+    {
+        if (chartSource is not null)
+        {
+            SqlChartRenderer.Render(SqlChartCanvas, SqlChartData.FromJson(chartSource), 700, 480);
+            return;
+        }
+
+        RenderChartFromPreviewData();
     }
 
     public void ShowNodeOutput(string nodeKey)

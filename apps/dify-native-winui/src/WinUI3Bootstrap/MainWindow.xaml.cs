@@ -52,6 +52,8 @@ public sealed partial class MainWindow : Window
     private readonly GovernanceSandboxCoordinator _governanceSandboxCoordinator;
     private readonly GovernanceSandboxMutationCoordinator _governanceSandboxMutationCoordinator;
     private readonly RunFlowCoordinator _runFlowCoordinator;
+    private readonly WorkflowDraftRunCoordinator _workflowDraftRunCoordinator;
+    private readonly CanvasAuthoringPersistenceService _canvasAuthoringPersistenceService;
     private readonly SqlStudioBrowseCoordinator _sqlStudioBrowseCoordinator;
     private readonly SqlStudioExecutionCoordinator _sqlStudioExecutionCoordinator;
     private readonly SqlStudioCanvasCoordinator _sqlStudioCanvasCoordinator;
@@ -211,6 +213,10 @@ public sealed partial class MainWindow : Window
         _governanceSandboxCoordinator = new GovernanceSandboxCoordinator(_governanceClient);
         _governanceSandboxMutationCoordinator = new GovernanceSandboxMutationCoordinator(_governanceClient);
         _runFlowCoordinator = new RunFlowCoordinator(_http, _runnerAdapter);
+        _workflowDraftRunCoordinator = new WorkflowDraftRunCoordinator(_runnerAdapter);
+        _canvasAuthoringPersistenceService = new CanvasAuthoringPersistenceService(
+            CanvasStateFilePath,
+            WorkflowGraphStateFilePath);
         _sqlStudioBrowseCoordinator = new SqlStudioBrowseCoordinator(_runnerAdapter);
         _sqlStudioExecutionCoordinator = new SqlStudioExecutionCoordinator(_runnerAdapter);
         _sqlStudioCanvasCoordinator = new SqlStudioCanvasCoordinator();

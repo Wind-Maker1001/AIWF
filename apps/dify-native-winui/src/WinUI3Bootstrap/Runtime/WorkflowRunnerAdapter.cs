@@ -57,7 +57,7 @@ public sealed class WorkflowRunnerAdapter
         return await PostJsonAsync(baseUrl, apiKey, "/cleaning/precheck", payload, cancellationToken);
     }
 
-    public async Task<JsonObject> PostJsonAsync(
+    public async Task<WorkflowHttpResult> PostJsonRawAsync(
         string baseUrl,
         string? apiKey,
         string endpointPath,
@@ -71,19 +71,30 @@ public sealed class WorkflowRunnerAdapter
             "application/json");
         using var response = await _http.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        return new WorkflowHttpResult(response.StatusCode, response.IsSuccessStatusCode, body);
+    }
+
+    public async Task<JsonObject> PostJsonAsync(
+        string baseUrl,
+        string? apiKey,
+        string endpointPath,
+        JsonNode payload,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await PostJsonRawAsync(baseUrl, apiKey, endpointPath, payload, cancellationToken);
         JsonNode? parsed = null;
         try
         {
-            parsed = JsonNode.Parse(body);
+            parsed = JsonNode.Parse(result.Body);
         }
         catch
         {
         }
 
-        if (!response.IsSuccessStatusCode)
+        if (!result.IsSuccessStatusCode)
         {
             var message = parsed?["error"]?.GetValue<string>()
-                ?? $"HTTP {(int)response.StatusCode}";
+                ?? $"HTTP {(int)result.StatusCode}";
             throw new InvalidOperationException(message);
         }
 
