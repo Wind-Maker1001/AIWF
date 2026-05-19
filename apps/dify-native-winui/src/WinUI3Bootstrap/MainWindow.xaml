@@ -1096,6 +1096,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <Border x:Name="GovernancePendingCard" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
@@ -1279,7 +1280,115 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="GovernanceQualityRuleCard" Grid.Row="4" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="WorkflowVersionsCard" Grid.Row="4" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Workflow Versions" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshWorkflowVersionsButton"
+                                            AutomationProperties.AutomationId="RefreshWorkflowVersionsButton"
+                                            Click="OnRefreshWorkflowVersionsClick"
+                                            Content="Refresh Versions"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button Grid.Column="2"
+                                            x:Name="RefreshWorkflowVersionCacheStatsButton"
+                                            AutomationProperties.AutomationId="RefreshWorkflowVersionCacheStatsButton"
+                                            Click="OnRefreshWorkflowVersionCacheStatsClick"
+                                            Content="Refresh Cache"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                    <Button Grid.Column="3"
+                                            x:Name="ClearWorkflowVersionCacheButton"
+                                            AutomationProperties.AutomationId="ClearWorkflowVersionCacheButton"
+                                            Click="OnClearWorkflowVersionCacheClick"
+                                            Content="Clear Cache"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                </Grid>
+                                <TextBlock x:Name="WorkflowVersionCacheStatsTextBlock"
+                                           AutomationProperties.AutomationId="WorkflowVersionCacheStatsTextBlock"
+                                           Text="-"
+                                           Foreground="#FF4B5563"
+                                           TextWrapping="Wrap" />
+                                <ListView x:Name="WorkflowVersionsListView"
+                                          AutomationProperties.AutomationId="WorkflowVersionsListView"
+                                          Height="180"
+                                          MinHeight="160"
+                                          SelectionChanged="OnWorkflowVersionSelectionChanged" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="WorkflowVersionCompareATextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="WorkflowVersionCompareATextBox"
+                                             PlaceholderText="version A"
+                                             TextChanged="OnWorkflowVersionCompareInputChanged"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <Button Grid.Column="1"
+                                            x:Name="UseWorkflowVersionAsAButton"
+                                            AutomationProperties.AutomationId="UseWorkflowVersionAsAButton"
+                                            Click="OnUseWorkflowVersionAsAClick"
+                                            Content="Use as A"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button Grid.Column="2"
+                                            x:Name="UseWorkflowVersionAsBButton"
+                                            AutomationProperties.AutomationId="UseWorkflowVersionAsBButton"
+                                            Click="OnUseWorkflowVersionAsBClick"
+                                            Content="Use as B"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="WorkflowVersionCompareBTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="WorkflowVersionCompareBTextBox"
+                                             PlaceholderText="version B"
+                                             TextChanged="OnWorkflowVersionCompareInputChanged"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBlock x:Name="WorkflowVersionCompareSummaryTextBlock"
+                                               Grid.Column="1"
+                                               AutomationProperties.AutomationId="WorkflowVersionCompareSummaryTextBlock"
+                                               Text="-"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center"
+                                               Foreground="#FF4B5563" />
+                                    <Button Grid.Column="2"
+                                            x:Name="CompareWorkflowVersionsButton"
+                                            AutomationProperties.AutomationId="CompareWorkflowVersionsButton"
+                                            Click="OnCompareWorkflowVersionsClick"
+                                            Content="Compare"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                </Grid>
+                                <ListView x:Name="WorkflowVersionCompareDetailsListView"
+                                          AutomationProperties.AutomationId="WorkflowVersionCompareDetailsListView"
+                                          Height="180"
+                                          MinHeight="160" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="GovernanceQualityRuleCard" Grid.Row="5" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -1349,7 +1458,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="GovernanceSandboxCard" Grid.Row="5" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="GovernanceSandboxCard" Grid.Row="6" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>

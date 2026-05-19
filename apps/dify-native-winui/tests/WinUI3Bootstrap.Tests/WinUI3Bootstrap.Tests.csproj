@@ -44,6 +44,10 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunFlowCoordinator.cs" Link="Source\RunFlowCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceCapabilities.Generated.cs" Link="Source\GovernanceCapabilities.Generated.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceBridgeClient.cs" Link="Source\GovernanceBridgeClient.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowVersionCacheService.cs" Link="Source\WorkflowVersionCacheService.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowVersionAdminCoordinator.cs" Link="Source\WorkflowVersionAdminCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowVersionComparePresenter.cs" Link="Source\WorkflowVersionComparePresenter.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowVersionCachePresenter.cs" Link="Source\WorkflowVersionCachePresenter.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunInputValidator.cs" Link="Source\RunInputValidator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultParser.cs" Link="Source\RunResultParser.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultPresentationMapper.cs" Link="Source\RunResultPresentationMapper.cs" />
