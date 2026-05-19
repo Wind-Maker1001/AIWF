@@ -50,37 +50,18 @@ public sealed partial class MainWindow
         _sqlConnectionProfile = CollectSqlConnectionProfileFromControls();
         try
         {
-            var accelUrl = _sqlConnectionProfile.ResolveAccelUrl(BridgeUrlTextBox.Text);
-            await _runnerAdapter.PostJsonAsync(
-                accelUrl,
-                ApiKeyTextBox.Text.Trim(),
-                "/operators/data_source_browser_v1",
-                new JsonObject
-                {
-                    ["source_type"] = _sqlConnectionProfile.NormalizedSourceType,
-                    ["source"] = _sqlConnectionProfile.BuildRuntimeSource(),
-                    ["op"] = "validate_connection",
-                });
-
-            var schemasPayload = await _runnerAdapter.PostJsonAsync(
-                accelUrl,
-                ApiKeyTextBox.Text.Trim(),
-                "/operators/data_source_browser_v1",
-                new JsonObject
-                {
-                    ["source_type"] = _sqlConnectionProfile.NormalizedSourceType,
-                    ["source"] = _sqlConnectionProfile.BuildRuntimeSource(),
-                    ["op"] = "list_schemas",
-                });
-            _schemaBrowserState = SqlStudioResultMapper.MergeBrowseResponse(SchemaBrowserState.Empty, schemasPayload, "list_schemas");
+            _schemaBrowserState = await _sqlStudioBrowseCoordinator.ValidateAndLoadSchemasAsync(
+                _sqlConnectionProfile,
+                BridgeUrlTextBox.Text,
+                ApiKeyTextBox.Text.Trim());
             RenderSchemaBrowserState();
             SqlPreviewStatusTextBlock.Text = "Connection verified. Schema list loaded.";
-            SetInlineStatus("SQL Studio 连接验证通过。", InlineStatusTone.Success);
+            SetInlineStatus("SQL Studio connection verified.", InlineStatusTone.Success);
         }
         catch (Exception ex)
         {
             SqlPreviewStatusTextBlock.Text = $"Connection failed: {ex.Message}";
-            SetInlineStatus($"SQL Studio 连接失败: {ex.Message}", InlineStatusTone.Error);
+            SetInlineStatus($"SQL Studio connection failed: {ex.Message}", InlineStatusTone.Error);
         }
     }
 
@@ -101,18 +82,12 @@ public sealed partial class MainWindow
 
         try
         {
-            var payload = await _runnerAdapter.PostJsonAsync(
-                _sqlConnectionProfile.ResolveAccelUrl(BridgeUrlTextBox.Text),
+            _schemaBrowserState = await _sqlStudioBrowseCoordinator.LoadTablesAsync(
+                _sqlConnectionProfile,
+                BridgeUrlTextBox.Text,
                 ApiKeyTextBox.Text.Trim(),
-                "/operators/data_source_browser_v1",
-                new JsonObject
-                {
-                    ["source_type"] = _sqlConnectionProfile.NormalizedSourceType,
-                    ["source"] = _sqlConnectionProfile.BuildRuntimeSource(),
-                    ["op"] = "list_tables",
-                    ["schema"] = item.Name,
-                });
-            _schemaBrowserState = SqlStudioResultMapper.MergeBrowseResponse(_schemaBrowserState, payload, "list_tables");
+                _schemaBrowserState,
+                item.Name);
             RenderSchemaBrowserState();
         }
         catch (Exception ex)
@@ -141,19 +116,13 @@ public sealed partial class MainWindow
 
         try
         {
-            var payload = await _runnerAdapter.PostJsonAsync(
-                _sqlConnectionProfile.ResolveAccelUrl(BridgeUrlTextBox.Text),
+            _schemaBrowserState = await _sqlStudioBrowseCoordinator.DescribeTableAsync(
+                _sqlConnectionProfile,
+                BridgeUrlTextBox.Text,
                 ApiKeyTextBox.Text.Trim(),
-                "/operators/data_source_browser_v1",
-                new JsonObject
-                {
-                    ["source_type"] = _sqlConnectionProfile.NormalizedSourceType,
-                    ["source"] = _sqlConnectionProfile.BuildRuntimeSource(),
-                    ["op"] = "describe_table",
-                    ["schema"] = schema,
-                    ["table"] = item.Name,
-                });
-            _schemaBrowserState = SqlStudioResultMapper.MergeBrowseResponse(_schemaBrowserState, payload, "describe_table");
+                _schemaBrowserState,
+                schema,
+                item.Name);
             RenderSchemaBrowserState();
         }
         catch (Exception ex)
@@ -212,118 +181,53 @@ public sealed partial class MainWindow
     {
         _sqlConnectionProfile = CollectSqlConnectionProfileFromControls();
         _sqlBuilderDraft = CollectSqlBuilderDraftFromControls();
-        if (!_sqlTextDraft.IsTextOwned)
-        {
-            SetSqlTextDraft(SqlStudioDraftController.SyncGeneratedSql(_sqlBuilderDraft, _sqlConnectionProfile, _sqlTextDraft));
-        }
-
-        try
-        {
-            var payload = await _runnerAdapter.PostJsonAsync(
-                _sqlConnectionProfile.ResolveAccelUrl(BridgeUrlTextBox.Text),
-                ApiKeyTextBox.Text.Trim(),
-                "/operators/load_rows_v3",
-                new JsonObject
-                {
-                    ["source_type"] = _sqlConnectionProfile.NormalizedSourceType,
-                    ["source"] = _sqlConnectionProfile.BuildRuntimeSource(),
-                    ["query"] = _sqlTextDraft.Text,
-                    ["limit"] = Math.Max(1, _sqlBuilderDraft.Limit),
-                    ["max_retries"] = 2,
-                    ["retry_backoff_ms"] = 150,
-                });
-
-            ApplySqlPreviewState(SqlStudioResultMapper.FromLoadRowsResponse(payload, _sqlTextDraft.Text));
-            RawResponseTextBox.Text = _sqlPreviewState.RawJson;
-            RenderChartFromPreviewData();
-            _queryHistory.AddHistoryEntry(_sqlTextDraft.Text, _sqlConnectionProfile.NormalizedSourceType,
-                _sqlConnectionProfile.Database, _sqlPreviewState.GridRows.Count, true);
-            RenderQueryHistoryList();
-        }
-        catch (Exception ex)
-        {
-            ApplySqlPreviewState(new SqlPreviewState(
-                Ok: false,
-                StatusText: $"Preview failed: {ex.Message}",
-                GeneratedSql: _sqlTextDraft.Text,
-                RawJson: string.Empty,
-                Diagnostics: ex.Message,
-                RowDisplayItems: Array.Empty<string>(),
-                ColumnHeaders: Array.Empty<string>(),
-                GridRows: Array.Empty<IReadOnlyList<string>>()));
-            _queryHistory.AddHistoryEntry(_sqlTextDraft.Text, _sqlConnectionProfile.NormalizedSourceType,
-                _sqlConnectionProfile.Database, 0, false);
-            RenderQueryHistoryList();
-        }
+        var result = await _sqlStudioExecutionCoordinator.PreviewAsync(
+            _sqlConnectionProfile,
+            _sqlBuilderDraft,
+            _sqlTextDraft,
+            BridgeUrlTextBox.Text,
+            ApiKeyTextBox.Text.Trim());
+        SetSqlTextDraft(result.EffectiveTextDraft);
+        ApplySqlPreviewState(result.PreviewState);
+        RawResponseTextBox.Text = result.RawJson;
+        RenderChartFromPreviewData();
+        _queryHistory.AddHistoryEntry(
+            result.ExecutedSql,
+            _sqlConnectionProfile.NormalizedSourceType,
+            _sqlConnectionProfile.Database,
+            result.RowCount,
+            result.Success);
+        RenderQueryHistoryList();
     }
 
     private async void OnSqlExplainClick(object sender, RoutedEventArgs e)
     {
         _sqlConnectionProfile = CollectSqlConnectionProfileFromControls();
         _sqlBuilderDraft = CollectSqlBuilderDraftFromControls();
-        if (!_sqlTextDraft.IsTextOwned)
-        {
-            SetSqlTextDraft(SqlStudioDraftController.SyncGeneratedSql(_sqlBuilderDraft, _sqlConnectionProfile, _sqlTextDraft));
-        }
-
-        var explainPrefix = _sqlConnectionProfile.NormalizedSourceType switch
-        {
-            SqlConnectionProfile.SqlServer => "SET SHOWPLAN_TEXT ON; ",
-            SqlConnectionProfile.Postgres => "EXPLAIN ANALYZE ",
-            _ => "EXPLAIN QUERY PLAN ",
-        };
-
-        try
-        {
-            var payload = await _runnerAdapter.PostJsonAsync(
-                _sqlConnectionProfile.ResolveAccelUrl(BridgeUrlTextBox.Text),
-                ApiKeyTextBox.Text.Trim(),
-                "/operators/load_rows_v3",
-                new JsonObject
-                {
-                    ["source_type"] = _sqlConnectionProfile.NormalizedSourceType,
-                    ["source"] = _sqlConnectionProfile.BuildRuntimeSource(),
-                    ["query"] = explainPrefix + _sqlTextDraft.Text,
-                    ["limit"] = 200,
-                    ["max_retries"] = 1,
-                    ["retry_backoff_ms"] = 100,
-                });
-
-            var rows = payload["rows"] as JsonArray;
-            var lines = rows?.OfType<JsonObject>()
-                .Select(row => string.Join(" | ", row.Select(kv => kv.Value?.ToString() ?? "")))
-                .ToArray() ?? Array.Empty<string>();
-
-            SqlExplainTextBox.Text = lines.Length > 0
-                ? string.Join("\n", lines)
-                : payload.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-            SetInlineStatus("执行计划已加载。", InlineStatusTone.Success);
-        }
-        catch (Exception ex)
-        {
-            SqlExplainTextBox.Text = $"EXPLAIN failed: {ex.Message}";
-            SetInlineStatus($"执行计划失败: {ex.Message}", InlineStatusTone.Error);
-        }
+        var result = await _sqlStudioExecutionCoordinator.ExplainAsync(
+            _sqlConnectionProfile,
+            _sqlBuilderDraft,
+            _sqlTextDraft,
+            BridgeUrlTextBox.Text,
+            ApiKeyTextBox.Text.Trim());
+        SetSqlTextDraft(result.EffectiveTextDraft);
+        SqlExplainTextBox.Text = result.ExplainText;
+        SetInlineStatus(result.StatusMessage, result.Success ? InlineStatusTone.Success : InlineStatusTone.Error);
     }
-
     private void OnSqlSendToCanvasClick(object sender, RoutedEventArgs e)
     {
         _sqlConnectionProfile = CollectSqlConnectionProfileFromControls();
         _sqlBuilderDraft = CollectSqlBuilderDraftFromControls();
-        if (!_sqlTextDraft.IsTextOwned)
-        {
-            SetSqlTextDraft(SqlStudioDraftController.SyncGeneratedSql(_sqlBuilderDraft, _sqlConnectionProfile, _sqlTextDraft));
-        }
-
-        var workflowId = string.IsNullOrWhiteSpace(SqlSelectedTableTextBox.Text)
-            ? "native_sql_workflow"
-            : $"sql_{SqlSelectedTableTextBox.Text.Trim().Replace(' ', '_')}";
-        var document = SqlStudioWorkflowMapper.Build(_sqlConnectionProfile, _sqlBuilderDraft, _sqlTextDraft, workflowId);
-        ApplyWorkflowGraphDocumentToCanvas(document);
-        SetInlineStatus("SQL 草稿已发送到画布。", InlineStatusTone.Success);
+        var result = _sqlStudioCanvasCoordinator.BuildWorkflowDocument(
+            _sqlConnectionProfile,
+            _sqlBuilderDraft,
+            _sqlTextDraft,
+            SqlSelectedTableTextBox.Text);
+        SetSqlTextDraft(result.EffectiveTextDraft);
+        ApplyWorkflowGraphDocumentToCanvas(result.Document);
+        SetInlineStatus(result.StatusMessage, InlineStatusTone.Success);
         SetActiveSection(NavSection.Canvas);
     }
-
     private SqlConnectionProfile CollectSqlConnectionProfileFromControls()
     {
         return new SqlConnectionProfile(
@@ -511,7 +415,7 @@ public sealed partial class MainWindow
         for (var i = 0; i < columns.Count; i++)
         {
             var colIndex = i;
-            var sortIndicator = _sortColumnIndex == i ? (_sortDescending ? " ▼" : " ▲") : "";
+            var sortIndicator = _sortColumnIndex == i ? (_sortDescending ? " v" : " ^") : "";
             var headerButton = new Button
             {
                 Content = columns[i] + sortIndicator,
@@ -692,7 +596,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        // No chart data — render from preview rows
+        // No chart data 闁?render from preview rows
         RenderChartFromPreviewData();
     }
 
@@ -783,7 +687,7 @@ public sealed partial class MainWindow
     {
         if (_sqlPreviewState.ColumnHeaders.Count == 0 || _sqlPreviewState.GridRows.Count == 0)
         {
-            SetInlineStatus("没有数据可分析。", InlineStatusTone.Error);
+            SetInlineStatus("No data available for column stats.", InlineStatusTone.Error);
             return;
         }
 
@@ -793,7 +697,7 @@ public sealed partial class MainWindow
         {
             SqlColumnStatsListView.Items.Add(stat.Summary);
         }
-        SetInlineStatus($"已分析 {stats.Count} 列。", InlineStatusTone.Success);
+        SetInlineStatus($"Analyzed {stats.Count} columns.", InlineStatusTone.Success);
     }
 
     private async void OnSqlSaveQueryClick(object sender, RoutedEventArgs e)
@@ -801,16 +705,16 @@ public sealed partial class MainWindow
         var sqlText = _sqlTextDraft.Text.Trim();
         if (string.IsNullOrWhiteSpace(sqlText))
         {
-            SetInlineStatus("没有可保存的查询。", InlineStatusTone.Error);
+            SetInlineStatus("No query available to save.", InlineStatusTone.Error);
             return;
         }
 
         var dialog = new ContentDialog
         {
-            Title = "保存查询",
-            Content = new TextBox { PlaceholderText = "输入查询名称", Name = "QueryNameInput" },
-            PrimaryButtonText = "保存",
-            CloseButtonText = "取消",
+            Title = "Save Query",
+            Content = new TextBox { PlaceholderText = "Enter query name", Name = "QueryNameInput" },
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
             XamlRoot = Content.XamlRoot,
         };
 
@@ -821,7 +725,7 @@ public sealed partial class MainWindow
             _queryHistory.SaveQuery(input.Text.Trim(), sqlText,
                 _sqlConnectionProfile.NormalizedSourceType, _sqlConnectionProfile.Database);
             RenderQueryHistoryList();
-            SetInlineStatus($"查询已保存: {input.Text.Trim()}", InlineStatusTone.Success);
+            SetInlineStatus($"闁哄被鍎撮妤€顔忛煫顓犵閻? {input.Text.Trim()}", InlineStatusTone.Success);
         }
     }
 
@@ -854,7 +758,7 @@ public sealed partial class MainWindow
     {
         if (_sqlPreviewState.ColumnHeaders.Count == 0)
         {
-            SetInlineStatus("没有可导出的数据。", InlineStatusTone.Error);
+            SetInlineStatus("No data available to export.", InlineStatusTone.Error);
             return;
         }
 
@@ -866,7 +770,7 @@ public sealed partial class MainWindow
     {
         if (_sqlPreviewState.ColumnHeaders.Count == 0)
         {
-            SetInlineStatus("没有可导出的数据。", InlineStatusTone.Error);
+            SetInlineStatus("No data available to export.", InlineStatusTone.Error);
             return;
         }
 
@@ -892,11 +796,11 @@ public sealed partial class MainWindow
             }
 
             await Windows.Storage.FileIO.WriteTextAsync(file, content);
-            SetInlineStatus($"已导出到 {file.Path}", InlineStatusTone.Success);
+            SetInlineStatus($"鐎瑰憡褰冮閬嶅礄閸濆嫬鐓?{file.Path}", InlineStatusTone.Success);
         }
         catch (Exception ex)
         {
-            SetInlineStatus($"导出失败: {ex.Message}", InlineStatusTone.Error);
+            SetInlineStatus($"閻庣數鍘ч崵顓熷緞鏉堫偉袝: {ex.Message}", InlineStatusTone.Error);
         }
     }
 
