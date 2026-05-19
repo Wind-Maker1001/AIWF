@@ -54,6 +54,9 @@ public sealed partial class MainWindow : Window
     private readonly RunFlowCoordinator _runFlowCoordinator;
     private readonly WorkflowDraftRunCoordinator _workflowDraftRunCoordinator;
     private readonly CanvasAuthoringPersistenceService _canvasAuthoringPersistenceService;
+    private readonly SqlStudioBrowseCoordinator _sqlStudioBrowseCoordinator;
+    private readonly SqlStudioExecutionCoordinator _sqlStudioExecutionCoordinator;
+    private readonly SqlStudioCanvasCoordinator _sqlStudioCanvasCoordinator;
     private readonly CanvasRuntime.CanvasViewportEngine _canvasViewportEngine = new(CanvasMinScale, CanvasMaxScale);
     private readonly List<NodeTemplate> _quickNodeTemplates;
     private NavSection _activeSection = NavSection.Workspace;
@@ -214,6 +217,9 @@ public sealed partial class MainWindow : Window
         _canvasAuthoringPersistenceService = new CanvasAuthoringPersistenceService(
             CanvasStateFilePath,
             WorkflowGraphStateFilePath);
+        _sqlStudioBrowseCoordinator = new SqlStudioBrowseCoordinator(_runnerAdapter);
+        _sqlStudioExecutionCoordinator = new SqlStudioExecutionCoordinator(_runnerAdapter);
+        _sqlStudioCanvasCoordinator = new SqlStudioCanvasCoordinator();
         _quickNodeTemplates = _nodeCatalog
             .GetQuickTemplates()
             .Select(static x => new NodeTemplate
