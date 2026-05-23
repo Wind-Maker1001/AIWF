@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json.Nodes;
 using AIWF.Native.Runtime;
 using Xunit;
 
@@ -570,6 +571,161 @@ public sealed class GovernanceBridgeClientTests
     }
 
     [Fact]
+    public async Task ListWorkflowAppsAsync_UsesGeneratedWorkflowAppsRoute()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal("http://127.0.0.1:18081/governance/workflow-apps?limit=120", request.RequestUri!.AbsoluteUri);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "ok": true,
+                  "items": [
+                    {
+                      "app_id": "finance_app",
+                      "name": "Finance App",
+                      "workflow_id": "wf_finance",
+                      "published_version_id": "ver_finance_001",
+                      "updated_at": "2026-05-23T10:00:00Z",
+                      "provider": "glue-python",
+                      "owner": "glue-python"
+                    }
+                  ]
+                }
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var items = await client.ListWorkflowAppsAsync("http://127.0.0.1:18081", "");
+
+        var item = Assert.Single(items);
+        Assert.Equal("finance_app", item.AppId);
+        Assert.Equal("ver_finance_001", item.PublishedVersionId);
+    }
+
+    [Fact]
+    public async Task SaveWorkflowVersionAsync_PostsCanonicalVersionPayload()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(async request =>
+        {
+            Assert.Equal(HttpMethod.Put, request.Method);
+            Assert.Equal("http://127.0.0.1:18081/governance/workflow-versions/ver_finance_001", request.RequestUri!.AbsoluteUri);
+            var body = await request.Content!.ReadAsStringAsync();
+            Assert.Contains("\"version_id\":\"ver_finance_001\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"workflow_id\":\"wf_finance\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"workflow_name\":\"Finance Flow\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"workflow_definition\"", body, StringComparison.Ordinal);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "ok": true,
+                  "item": {
+                    "version_id": "ver_finance_001",
+                    "workflow_id": "wf_finance",
+                    "workflow_name": "Finance Flow",
+                    "ts": "2026-05-23T10:00:00Z"
+                  }
+                }
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var saved = await client.SaveWorkflowVersionAsync(
+            "http://127.0.0.1:18081",
+            "",
+            "ver_finance_001",
+            "wf_finance",
+            "Finance Flow",
+            new JsonObject
+            {
+                ["workflow_id"] = "wf_finance",
+                ["version"] = "1.0.0",
+                ["nodes"] = new JsonArray(),
+                ["edges"] = new JsonArray(),
+            });
+
+        Assert.Equal("ver_finance_001", saved.VersionId);
+        Assert.Equal("wf_finance", saved.WorkflowId);
+    }
+
+    [Fact]
+    public async Task SaveWorkflowAppAsync_PostsCanonicalPublishPayload()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(async request =>
+        {
+            Assert.Equal(HttpMethod.Put, request.Method);
+            Assert.Equal("http://127.0.0.1:18081/governance/workflow-apps/finance_app", request.RequestUri!.AbsoluteUri);
+            var body = await request.Content!.ReadAsStringAsync();
+            Assert.Contains("\"app_id\":\"finance_app\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"published_version_id\":\"ver_finance_001\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"params_schema\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"template_policy\"", body, StringComparison.Ordinal);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "ok": true,
+                  "item": {
+                    "app_id": "finance_app",
+                    "name": "Finance App",
+                    "workflow_id": "wf_finance",
+                    "published_version_id": "ver_finance_001",
+                    "updated_at": "2026-05-23T10:00:00Z",
+                    "provider": "glue-python",
+                    "owner": "glue-python"
+                  }
+                }
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var item = await client.SaveWorkflowAppAsync(
+            "http://127.0.0.1:18081",
+            "",
+            "finance_app",
+            "Finance App",
+            "wf_finance",
+            "ver_finance_001",
+            new JsonObject { ["region"] = new JsonObject { ["type"] = "string" } },
+            new JsonObject { ["version"] = 1 });
+
+        Assert.Equal("finance_app", item.AppId);
+        Assert.Equal("Finance App", item.Name);
+    }
+
+    [Fact]
+    public async Task SaveWorkflowAppAsync_ThrowsStructuredFailure()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(_ =>
+            Json(HttpStatusCode.BadRequest, """
+                {
+                  "ok": false,
+                  "error": "workflow app published_version_id not found: ver_missing",
+                  "error_code": "governance_validation_invalid",
+                  "error_items": [
+                    {
+                      "path": "published_version_id",
+                      "code": "validation_error",
+                      "message": "workflow app published_version_id not found: ver_missing"
+                    }
+                  ]
+                }
+                """)));
+
+        var client = new GovernanceBridgeClient(http);
+        var ex = await Assert.ThrowsAsync<GovernanceRequestFailureException>(() =>
+            client.SaveWorkflowAppAsync(
+                "http://127.0.0.1:18081",
+                "",
+                "finance_app",
+                "Finance App",
+                "wf_finance",
+                "ver_missing",
+                new JsonObject(),
+                new JsonObject()));
+
+        Assert.Equal("governance_validation_invalid", ex.ErrorCode);
+        Assert.Single(ex.ErrorItems);
+        Assert.Equal("published_version_id", ex.ErrorItems[0].Path);
+    }
+
+    [Fact]
     public async Task SandboxGovernanceApis_ParseRulesAndVersions()
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
@@ -901,6 +1057,14 @@ public sealed class GovernanceBridgeClientTests
                     "capability": "workflow_versions",
                     "route_prefix": "/governance/workflow-versions",
                     "owned_route_prefixes": ["/governance/workflow-versions"],
+                    "state_owner": "glue-python",
+                    "control_plane_role": "governance_state",
+                    "lifecycle_mutation_allowed": false
+                  },
+                  {
+                    "capability": "workflow_apps",
+                    "route_prefix": "/governance/workflow-apps",
+                    "owned_route_prefixes": ["/governance/workflow-apps"],
                     "state_owner": "glue-python",
                     "control_plane_role": "governance_state",
                     "lifecycle_mutation_allowed": false

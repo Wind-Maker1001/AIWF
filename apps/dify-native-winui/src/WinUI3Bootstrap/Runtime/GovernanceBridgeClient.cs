@@ -163,6 +163,29 @@ public sealed record GovernanceWorkflowVersionCompareResult(
     GovernanceWorkflowVersionCompareSummary Summary,
     IReadOnlyList<GovernanceWorkflowVersionCompareNodeDiffItem> NodeDiff);
 
+public sealed record GovernanceWorkflowAppItem(
+    string AppId,
+    string Name,
+    string WorkflowId,
+    string PublishedVersionId,
+    string UpdatedAt,
+    string Provider,
+    string Owner)
+{
+    public string DisplayText =>
+        string.IsNullOrWhiteSpace(Name)
+            ? $"{AppId} | {PublishedVersionId}"
+            : $"{Name} | {AppId} | {PublishedVersionId}";
+
+    public override string ToString() => DisplayText;
+}
+
+public sealed record GovernanceSavedWorkflowVersionItem(
+    string VersionId,
+    string WorkflowId,
+    string WorkflowName,
+    string Timestamp);
+
 public sealed record GovernanceErrorItem(
     string Path,
     string Code,
@@ -431,6 +454,101 @@ public sealed class GovernanceBridgeClient
         }
 
         return ParseWorkflowVersionCompareResult(root);
+    }
+
+    public async Task<IReadOnlyList<GovernanceWorkflowAppItem>> ListWorkflowAppsAsync(
+        string baseUrl,
+        string? apiKey,
+        int limit = 120,
+        CancellationToken cancellationToken = default)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 5000);
+        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.WORKFLOW_APPS, cancellationToken: cancellationToken);
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"{routePrefix}?limit={safeLimit}", apiKey);
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseRoot(body, response.IsSuccessStatusCode);
+        var array = root?["items"] as JsonArray;
+        if (array is null)
+        {
+            return Array.Empty<GovernanceWorkflowAppItem>();
+        }
+
+        return array.OfType<JsonObject>().Select(ParseWorkflowAppItem).ToList();
+    }
+
+    public async Task<GovernanceSavedWorkflowVersionItem> SaveWorkflowVersionAsync(
+        string baseUrl,
+        string? apiKey,
+        string versionId,
+        string workflowId,
+        string workflowName,
+        JsonObject workflowDefinition,
+        CancellationToken cancellationToken = default)
+    {
+        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.WORKFLOW_VERSIONS, cancellationToken: cancellationToken);
+        var payload = new JsonObject
+        {
+            ["version"] = new JsonObject
+            {
+                ["version_id"] = (versionId ?? string.Empty).Trim(),
+                ["workflow_id"] = (workflowId ?? string.Empty).Trim(),
+                ["workflow_name"] = (workflowName ?? string.Empty).Trim(),
+                ["workflow_definition"] = workflowDefinition.DeepClone(),
+            }
+        };
+        using var request = BuildRequest(HttpMethod.Put, baseUrl, $"{routePrefix}/{Uri.EscapeDataString((versionId ?? string.Empty).Trim())}", apiKey);
+        request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseRoot(body, response.IsSuccessStatusCode);
+        if (root?["item"] is not JsonObject item)
+        {
+            throw new InvalidOperationException("workflow version response missing item payload");
+        }
+
+        return new GovernanceSavedWorkflowVersionItem(
+            VersionId: item["version_id"]?.GetValue<string>() ?? string.Empty,
+            WorkflowId: item["workflow_id"]?.GetValue<string>() ?? string.Empty,
+            WorkflowName: item["workflow_name"]?.GetValue<string>() ?? string.Empty,
+            Timestamp: item["ts"]?.GetValue<string>() ?? string.Empty);
+    }
+
+    public async Task<GovernanceWorkflowAppItem> SaveWorkflowAppAsync(
+        string baseUrl,
+        string? apiKey,
+        string appId,
+        string name,
+        string workflowId,
+        string publishedVersionId,
+        JsonObject paramsSchema,
+        JsonObject templatePolicy,
+        CancellationToken cancellationToken = default)
+    {
+        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.WORKFLOW_APPS, cancellationToken: cancellationToken);
+        var payload = new JsonObject
+        {
+            ["app"] = new JsonObject
+            {
+                ["app_id"] = (appId ?? string.Empty).Trim(),
+                ["name"] = (name ?? string.Empty).Trim(),
+                ["workflow_id"] = (workflowId ?? string.Empty).Trim(),
+                ["published_version_id"] = (publishedVersionId ?? string.Empty).Trim(),
+                ["params_schema"] = paramsSchema.DeepClone(),
+                ["template_policy"] = templatePolicy.DeepClone(),
+            }
+        };
+        using var request = BuildRequest(HttpMethod.Put, baseUrl, $"{routePrefix}/{Uri.EscapeDataString((appId ?? string.Empty).Trim())}", apiKey);
+        request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseRoot(body, response.IsSuccessStatusCode);
+        if (root?["item"] is not JsonObject item)
+        {
+            throw new InvalidOperationException("workflow app response missing item payload");
+        }
+
+        return ParseWorkflowAppItem(item);
     }
 
     public async Task<GovernanceQualityRuleSetItem> SaveQualityRuleSetAsync(
@@ -740,6 +858,18 @@ public sealed class GovernanceBridgeClient
                 AddedEdges: summaryNode["added_edges"]?.GetValue<int?>() ?? 0,
                 RemovedEdges: summaryNode["removed_edges"]?.GetValue<int?>() ?? 0),
             NodeDiff: nodeDiff);
+    }
+
+    private static GovernanceWorkflowAppItem ParseWorkflowAppItem(JsonObject item)
+    {
+        return new GovernanceWorkflowAppItem(
+            AppId: item["app_id"]?.GetValue<string>() ?? string.Empty,
+            Name: item["name"]?.GetValue<string>() ?? string.Empty,
+            WorkflowId: item["workflow_id"]?.GetValue<string>() ?? string.Empty,
+            PublishedVersionId: item["published_version_id"]?.GetValue<string>() ?? string.Empty,
+            UpdatedAt: item["updated_at"]?.GetValue<string>() ?? string.Empty,
+            Provider: item["provider"]?.GetValue<string>() ?? string.Empty,
+            Owner: item["owner"]?.GetValue<string>() ?? string.Empty);
     }
 
     private static GovernanceSandboxRuleVersionItem ParseSandboxRuleVersionItem(JsonObject item)

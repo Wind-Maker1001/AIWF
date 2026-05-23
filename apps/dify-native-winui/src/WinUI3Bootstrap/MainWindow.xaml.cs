@@ -52,6 +52,8 @@ public sealed partial class MainWindow : Window
     private readonly GovernanceSandboxCoordinator _governanceSandboxCoordinator;
     private readonly GovernanceSandboxMutationCoordinator _governanceSandboxMutationCoordinator;
     private readonly WorkflowVersionAdminCoordinator _workflowVersionAdminCoordinator;
+    private readonly WorkflowAppPublishPreflightCoordinator _workflowAppPublishPreflightCoordinator;
+    private readonly WorkflowAppPublishCoordinator _workflowAppPublishCoordinator;
     private readonly RunFlowCoordinator _runFlowCoordinator;
     private readonly WorkflowDraftRunCoordinator _workflowDraftRunCoordinator;
     private readonly CanvasAuthoringPersistenceService _canvasAuthoringPersistenceService;
@@ -216,6 +218,10 @@ public sealed partial class MainWindow : Window
         _workflowVersionAdminCoordinator = new WorkflowVersionAdminCoordinator(
             _governanceClient,
             new WorkflowVersionCacheService());
+        _workflowAppPublishPreflightCoordinator = new WorkflowAppPublishPreflightCoordinator(_runnerAdapter);
+        _workflowAppPublishCoordinator = new WorkflowAppPublishCoordinator(
+            _governanceClient,
+            _workflowAppPublishPreflightCoordinator);
         _runFlowCoordinator = new RunFlowCoordinator(_http, _runnerAdapter);
         _workflowDraftRunCoordinator = new WorkflowDraftRunCoordinator(_runnerAdapter);
         _canvasAuthoringPersistenceService = new CanvasAuthoringPersistenceService(

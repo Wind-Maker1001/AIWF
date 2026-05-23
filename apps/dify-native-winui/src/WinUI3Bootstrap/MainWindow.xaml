@@ -1097,6 +1097,8 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <Border x:Name="GovernancePendingCard" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
@@ -1388,7 +1390,155 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="GovernanceQualityRuleCard" Grid.Row="5" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="WorkflowAppsCard" Grid.Row="5" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Workflow Apps" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshWorkflowAppsButton"
+                                            AutomationProperties.AutomationId="RefreshWorkflowAppsButton"
+                                            Click="OnRefreshWorkflowAppsClick"
+                                            Content="Refresh Apps"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button Grid.Column="2"
+                                            x:Name="PublishWorkflowAppButton"
+                                            AutomationProperties.AutomationId="PublishWorkflowAppButton"
+                                            Click="OnPublishWorkflowAppClick"
+                                            Content="Publish"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                </Grid>
+                                <ListView x:Name="WorkflowAppsListView"
+                                          AutomationProperties.AutomationId="WorkflowAppsListView"
+                                          Height="140"
+                                          MinHeight="120"
+                                          SelectionChanged="OnWorkflowAppSelectionChanged" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="WorkflowAppPublishNameTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="WorkflowAppPublishNameTextBox"
+                                             PlaceholderText="app name"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="WorkflowAppIdTextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="WorkflowAppIdTextBox"
+                                             PlaceholderText="optional app id"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <ComboBox x:Name="WorkflowAppPublishSourceComboBox"
+                                              Grid.Column="2"
+                                              AutomationProperties.AutomationId="WorkflowAppPublishSourceComboBox"
+                                              Style="{StaticResource TouchComboBoxStyle}"
+                                              SelectedIndex="0"
+                                              SelectionChanged="OnWorkflowAppPublishSourceSelectionChanged">
+                                        <ComboBoxItem Content="canvas" />
+                                        <ComboBoxItem Content="sql_studio" />
+                                    </ComboBox>
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox x:Name="PublishRequirePreflightCheckBox"
+                                              Grid.Column="0"
+                                              AutomationProperties.AutomationId="PublishRequirePreflightCheckBox"
+                                              Content="Require Preflight"
+                                              IsChecked="True"
+                                              Click="OnWorkflowAppPublishPolicyChanged" />
+                                    <Button x:Name="RunWorkflowAppPublishPreflightButton"
+                                            Grid.Column="1"
+                                            AutomationProperties.AutomationId="RunWorkflowAppPublishPreflightButton"
+                                            Click="OnRunWorkflowAppPublishPreflightClick"
+                                            Content="Run Preflight"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <TextBlock x:Name="WorkflowAppPublishedVersionTextBlock"
+                                               Grid.Column="2"
+                                               AutomationProperties.AutomationId="WorkflowAppPublishedVersionTextBlock"
+                                               Text="-"
+                                               Foreground="#FF4B5563"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap" />
+                                </Grid>
+                                <TextBlock x:Name="WorkflowAppPublishPreflightSummaryTextBlock"
+                                           AutomationProperties.AutomationId="WorkflowAppPublishPreflightSummaryTextBlock"
+                                           Text="-"
+                                           Foreground="#FF4B5563"
+                                           TextWrapping="Wrap" />
+                                <ListView x:Name="WorkflowAppPublishPreflightIssuesListView"
+                                          AutomationProperties.AutomationId="WorkflowAppPublishPreflightIssuesListView"
+                                          Height="140"
+                                          MinHeight="120" />
+                                <TextBox x:Name="WorkflowAppSchemaJsonTextBox"
+                                         AutomationProperties.AutomationId="WorkflowAppSchemaJsonTextBox"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="140"
+                                         PlaceholderText="params_schema JSON"
+                                         Style="{StaticResource TouchTextBoxStyle}" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="ApplyWorkflowAppSchemaJsonButton"
+                                            Grid.Column="0"
+                                            AutomationProperties.AutomationId="ApplyWorkflowAppSchemaJsonButton"
+                                            Click="OnApplyWorkflowAppSchemaJsonClick"
+                                            Content="Apply Schema"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button x:Name="SyncWorkflowAppRunParamsJsonButton"
+                                            Grid.Column="1"
+                                            AutomationProperties.AutomationId="SyncWorkflowAppRunParamsJsonButton"
+                                            Click="OnSyncWorkflowAppRunParamsJsonClick"
+                                            Content="Sync Params JSON"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button x:Name="LoadWorkflowAppRunParamsJsonButton"
+                                            Grid.Column="2"
+                                            AutomationProperties.AutomationId="LoadWorkflowAppRunParamsJsonButton"
+                                            Click="OnLoadWorkflowAppRunParamsJsonClick"
+                                            Content="Load Params JSON"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <StackPanel x:Name="WorkflowAppRunParamsFormHost"
+                                            AutomationProperties.AutomationId="WorkflowAppRunParamsFormHost"
+                                            Spacing="6" />
+                                <TextBox x:Name="WorkflowAppRunParamsJsonTextBox"
+                                         AutomationProperties.AutomationId="WorkflowAppRunParamsJsonTextBox"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="120"
+                                         PlaceholderText="runtime_defaults JSON"
+                                         Style="{StaticResource TouchTextBoxStyle}" />
+                                <TextBox x:Name="WorkflowAppTemplatePolicyPreviewTextBox"
+                                         AutomationProperties.AutomationId="WorkflowAppTemplatePolicyPreviewTextBox"
+                                         IsReadOnly="True"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="120"
+                                         PlaceholderText="template_policy preview"
+                                         Style="{StaticResource TouchTextBoxStyle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="GovernanceQualityRuleCard" Grid.Row="7" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -1458,7 +1608,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="GovernanceSandboxCard" Grid.Row="6" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="GovernanceSandboxCard" Grid.Row="8" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
