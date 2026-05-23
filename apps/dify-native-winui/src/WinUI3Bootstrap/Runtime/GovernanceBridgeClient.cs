@@ -127,6 +127,63 @@ public sealed record GovernanceSurfaceItem(
     public override string ToString() => $"{Capability} | {RoutePrefix} | {StateOwner} | {ControlPlaneRole}";
 }
 
+public sealed record GovernanceWorkflowVersionItem(
+    string VersionId,
+    string WorkflowName,
+    string WorkflowId,
+    string Timestamp,
+    string Provider,
+    string Owner)
+{
+    public string DisplayText =>
+        string.IsNullOrWhiteSpace(WorkflowName)
+            ? $"{VersionId} | {WorkflowId}"
+            : $"{WorkflowName} | {VersionId} | {WorkflowId}";
+
+    public override string ToString() => DisplayText;
+}
+
+public sealed record GovernanceWorkflowVersionCompareSummary(
+    string VersionA,
+    string VersionB,
+    int ChangedNodes,
+    int AddedEdges,
+    int RemovedEdges);
+
+public sealed record GovernanceWorkflowVersionCompareNodeDiffItem(
+    string NodeId,
+    string NodeType,
+    string Change,
+    bool ConfigChanged,
+    bool StatusChanged);
+
+public sealed record GovernanceWorkflowVersionCompareResult(
+    bool Ok,
+    string Provider,
+    GovernanceWorkflowVersionCompareSummary Summary,
+    IReadOnlyList<GovernanceWorkflowVersionCompareNodeDiffItem> NodeDiff);
+
+public sealed record GovernanceErrorItem(
+    string Path,
+    string Code,
+    string Message);
+
+public sealed class GovernanceRequestFailureException : InvalidOperationException
+{
+    public GovernanceRequestFailureException(
+        string message,
+        string errorCode,
+        IReadOnlyList<GovernanceErrorItem>? errorItems = null) : base(message)
+    {
+        ErrorCode = errorCode ?? string.Empty;
+        ErrorItems = errorItems ?? Array.Empty<GovernanceErrorItem>();
+    }
+
+    public string ErrorCode { get; }
+
+    public IReadOnlyList<GovernanceErrorItem> ErrorItems { get; }
+}
+
 public sealed record GovernanceControlPlaneBoundary(
     string SchemaVersion,
     string Status,
@@ -327,6 +384,53 @@ public sealed class GovernanceBridgeClient
         var array = root?["sets"] as JsonArray;
         if (array is null) return Array.Empty<GovernanceQualityRuleSetItem>();
         return array.OfType<JsonObject>().Select(ParseQualityRuleSetItem).ToList();
+    }
+
+    public async Task<IReadOnlyList<GovernanceWorkflowVersionItem>> ListWorkflowVersionsAsync(
+        string baseUrl,
+        string? apiKey,
+        int limit = 120,
+        CancellationToken cancellationToken = default)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 5000);
+        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.WORKFLOW_VERSIONS, cancellationToken: cancellationToken);
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"{routePrefix}?limit={safeLimit}", apiKey);
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseRoot(body, response.IsSuccessStatusCode);
+        var array = root?["items"] as JsonArray;
+        if (array is null)
+        {
+            return Array.Empty<GovernanceWorkflowVersionItem>();
+        }
+
+        return array.OfType<JsonObject>().Select(ParseWorkflowVersionItem).ToList();
+    }
+
+    public async Task<GovernanceWorkflowVersionCompareResult> CompareWorkflowVersionsAsync(
+        string baseUrl,
+        string? apiKey,
+        string versionA,
+        string versionB,
+        CancellationToken cancellationToken = default)
+    {
+        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.WORKFLOW_VERSIONS, cancellationToken: cancellationToken);
+        var payload = new JsonObject
+        {
+            ["version_a"] = (versionA ?? string.Empty).Trim(),
+            ["version_b"] = (versionB ?? string.Empty).Trim(),
+        };
+        using var request = BuildRequest(HttpMethod.Post, baseUrl, $"{routePrefix}/compare", apiKey);
+        request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseRoot(body, response.IsSuccessStatusCode);
+        if (root is null)
+        {
+            throw new InvalidOperationException("workflow version compare response missing payload");
+        }
+
+        return ParseWorkflowVersionCompareResult(root);
     }
 
     public async Task<GovernanceQualityRuleSetItem> SaveQualityRuleSetAsync(
@@ -602,6 +706,42 @@ public sealed class GovernanceBridgeClient
             RulesJson: rulesJson);
     }
 
+    private static GovernanceWorkflowVersionItem ParseWorkflowVersionItem(JsonObject item)
+    {
+        return new GovernanceWorkflowVersionItem(
+            VersionId: item["version_id"]?.GetValue<string>() ?? string.Empty,
+            WorkflowName: item["workflow_name"]?.GetValue<string>() ?? string.Empty,
+            WorkflowId: item["workflow_id"]?.GetValue<string>() ?? string.Empty,
+            Timestamp: item["ts"]?.GetValue<string>() ?? string.Empty,
+            Provider: item["provider"]?.GetValue<string>() ?? string.Empty,
+            Owner: item["owner"]?.GetValue<string>() ?? string.Empty);
+    }
+
+    private static GovernanceWorkflowVersionCompareResult ParseWorkflowVersionCompareResult(JsonObject root)
+    {
+        var summaryNode = root["summary"] as JsonObject ?? new JsonObject();
+        var nodeDiff = (root["node_diff"] as JsonArray)
+            ?.OfType<JsonObject>()
+            .Select(item => new GovernanceWorkflowVersionCompareNodeDiffItem(
+                NodeId: item["id"]?.GetValue<string>() ?? string.Empty,
+                NodeType: item["type_b"]?.GetValue<string>() ?? item["type_a"]?.GetValue<string>() ?? string.Empty,
+                Change: item["change"]?.GetValue<string>() ?? string.Empty,
+                ConfigChanged: item["config_changed"]?.GetValue<bool?>() ?? false,
+                StatusChanged: item["status_changed"]?.GetValue<bool?>() ?? false))
+            .ToList() ?? [];
+
+        return new GovernanceWorkflowVersionCompareResult(
+            Ok: root["ok"]?.GetValue<bool?>() == true,
+            Provider: root["provider"]?.GetValue<string>() ?? string.Empty,
+            Summary: new GovernanceWorkflowVersionCompareSummary(
+                VersionA: summaryNode["version_a"]?.GetValue<string>() ?? string.Empty,
+                VersionB: summaryNode["version_b"]?.GetValue<string>() ?? string.Empty,
+                ChangedNodes: summaryNode["changed_nodes"]?.GetValue<int?>() ?? 0,
+                AddedEdges: summaryNode["added_edges"]?.GetValue<int?>() ?? 0,
+                RemovedEdges: summaryNode["removed_edges"]?.GetValue<int?>() ?? 0),
+            NodeDiff: nodeDiff);
+    }
+
     private static GovernanceSandboxRuleVersionItem ParseSandboxRuleVersionItem(JsonObject item)
     {
         var rulesJson = item["rules"]?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "{}";
@@ -670,8 +810,7 @@ public sealed class GovernanceBridgeClient
 
         if (!isSuccessStatusCode)
         {
-            var message = root?["error"]?.GetValue<string>() ?? json;
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(message) ? "governance request failed" : message);
+            throw BuildFailureException(root, json, "governance request failed");
         }
 
         return root;
@@ -690,11 +829,28 @@ public sealed class GovernanceBridgeClient
 
         if (!isSuccessStatusCode)
         {
-            var message = root?["error"]?.GetValue<string>() ?? json;
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(message) ? "request failed" : message);
+            throw BuildFailureException(root as JsonObject, json, "request failed");
         }
 
         return root;
+    }
+
+    private static InvalidOperationException BuildFailureException(JsonObject? root, string raw, string fallbackMessage)
+    {
+        var message = root?["error"]?.GetValue<string>() ?? raw;
+        var normalizedMessage = string.IsNullOrWhiteSpace(message) ? fallbackMessage : message;
+        var errorCode = root?["error_code"]?.GetValue<string>() ?? string.Empty;
+        var errorItems = (root?["error_items"] as JsonArray)
+            ?.OfType<JsonObject>()
+            .Select(item => new GovernanceErrorItem(
+                item["path"]?.GetValue<string>() ?? string.Empty,
+                item["code"]?.GetValue<string>() ?? string.Empty,
+                item["message"]?.GetValue<string>() ?? string.Empty))
+            .ToArray() ?? Array.Empty<GovernanceErrorItem>();
+
+        return string.IsNullOrWhiteSpace(errorCode) && errorItems.Length == 0
+            ? new InvalidOperationException(normalizedMessage)
+            : new GovernanceRequestFailureException(normalizedMessage, errorCode, errorItems);
     }
 
     private static HttpRequestMessage BuildRequest(HttpMethod method, string baseUrl, string endpointPath, string? apiKey)

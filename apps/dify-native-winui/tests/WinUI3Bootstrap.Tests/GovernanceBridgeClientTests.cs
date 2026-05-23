@@ -462,6 +462,114 @@ public sealed class GovernanceBridgeClientTests
     }
 
     [Fact]
+    public async Task ListWorkflowVersionsAsync_UsesGeneratedWorkflowVersionsRoute()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal("http://127.0.0.1:18081/governance/workflow-versions?limit=120", request.RequestUri!.AbsoluteUri);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "ok": true,
+                  "items": [
+                    {
+                      "version_id": "ver_a",
+                      "workflow_name": "Workflow A",
+                      "workflow_id": "wf_a",
+                      "ts": "2026-05-19T10:00:00Z",
+                      "provider": "glue-python",
+                      "owner": "glue-python"
+                    }
+                  ]
+                }
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var items = await client.ListWorkflowVersionsAsync("http://127.0.0.1:18081", "");
+
+        var item = Assert.Single(items);
+        Assert.Equal("ver_a", item.VersionId);
+        Assert.Equal("Workflow A", item.WorkflowName);
+        Assert.Equal("wf_a", item.WorkflowId);
+    }
+
+    [Fact]
+    public async Task CompareWorkflowVersionsAsync_PostsBodyAndParsesSummaryAndNodeDiff()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(async request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("http://127.0.0.1:18081/governance/workflow-versions/compare", request.RequestUri!.AbsoluteUri);
+            var body = await request.Content!.ReadAsStringAsync();
+            Assert.Contains("\"version_a\":\"ver_a\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"version_b\":\"ver_b\"", body, StringComparison.Ordinal);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "ok": true,
+                  "provider": "glue-python",
+                  "summary": {
+                    "version_a": "ver_a",
+                    "version_b": "ver_b",
+                    "changed_nodes": 1,
+                    "added_edges": 1,
+                    "removed_edges": 0
+                  },
+                  "node_diff": [
+                    {
+                      "id": "n1",
+                      "change": "updated",
+                      "type_a": "load_rows_v3",
+                      "type_b": "load_rows_v3",
+                      "config_changed": true
+                    }
+                  ]
+                }
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var result = await client.CompareWorkflowVersionsAsync("http://127.0.0.1:18081", "", "ver_a", "ver_b");
+
+        Assert.True(result.Ok);
+        Assert.Equal("glue-python", result.Provider);
+        Assert.Equal("ver_a", result.Summary.VersionA);
+        Assert.Equal(1, result.Summary.ChangedNodes);
+        var diff = Assert.Single(result.NodeDiff);
+        Assert.Equal("n1", diff.NodeId);
+        Assert.Equal("updated", diff.Change);
+        Assert.True(diff.ConfigChanged);
+        Assert.False(diff.StatusChanged);
+    }
+
+    [Fact]
+    public async Task CompareWorkflowVersionsAsync_ThrowsStructuredFailure()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(_ =>
+            Json(HttpStatusCode.BadRequest, """
+                {
+                  "ok": false,
+                  "error": "version not found",
+                  "error_code": "workflow_graph_invalid",
+                  "error_items": [
+                    {
+                      "path": "request.version_a",
+                      "code": "missing",
+                      "message": "version not found"
+                    }
+                  ]
+                }
+                """)));
+
+        var client = new GovernanceBridgeClient(http);
+        var ex = await Assert.ThrowsAsync<GovernanceRequestFailureException>(() =>
+            client.CompareWorkflowVersionsAsync("http://127.0.0.1:18081", "", "ver_x", "ver_y"));
+
+        Assert.Equal("workflow_graph_invalid", ex.ErrorCode);
+        Assert.Single(ex.ErrorItems);
+        Assert.Equal("request.version_a", ex.ErrorItems[0].Path);
+    }
+
+    [Fact]
     public async Task SandboxGovernanceApis_ParseRulesAndVersions()
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
@@ -785,6 +893,14 @@ public sealed class GovernanceBridgeClientTests
                     "capability": "manual_reviews",
                     "route_prefix": "/governance/manual-reviews",
                     "owned_route_prefixes": ["/governance/manual-reviews"],
+                    "state_owner": "glue-python",
+                    "control_plane_role": "governance_state",
+                    "lifecycle_mutation_allowed": false
+                  },
+                  {
+                    "capability": "workflow_versions",
+                    "route_prefix": "/governance/workflow-versions",
+                    "owned_route_prefixes": ["/governance/workflow-versions"],
                     "state_owner": "glue-python",
                     "control_plane_role": "governance_state",
                     "lifecycle_mutation_allowed": false
