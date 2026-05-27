@@ -3,6 +3,9 @@ const {
 } = require("./workflow_graph");
 
 const TEMPLATE_PACK_ENTRY_SCHEMA_VERSION = "template_pack_entry.v1";
+const LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION = "local_template_storage.v1";
+const LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION = "local_template_entry.v1";
+const TEMPLATE_WORKFLOW_DEFINITION_FIELD = "workflow_definition";
 
 function createWorkflowIpcStateSupport(ctx) {
   const {
@@ -49,6 +52,10 @@ function createWorkflowIpcStateSupport(ctx) {
     return path.join(workflowStoreDir(), "template_marketplace.json");
   }
 
+  function localTemplateStorePath() {
+    return path.join(workflowStoreDir(), "local_templates.json");
+  }
+
   function workflowAuditPath() {
     return path.join(workflowStoreDir(), "workflow_audit.jsonl");
   }
@@ -92,6 +99,40 @@ function createWorkflowIpcStateSupport(ctx) {
       source: String(source.source || "unknown").trim() || "unknown",
       templates,
       created_at: String(source.created_at || new Date().toISOString()),
+    };
+  }
+
+  function normalizeLocalTemplateEntry(item, index = 0) {
+    const source = item && typeof item === "object" ? item : {};
+    const workflowDefinition = source.workflow_definition && typeof source.workflow_definition === "object"
+      ? deepClone(source.workflow_definition)
+      : (source.graph && typeof source.graph === "object" ? deepClone(source.graph) : null);
+    const id = String(source.id || `custom_${index + 1}`).trim() || `custom_${index + 1}`;
+    const name = String(source.name || id).trim() || id;
+    if (!workflowDefinition || typeof workflowDefinition !== "object") {
+      throw new Error(`local template entry[${index}] workflow_definition is required`);
+    }
+    if (!String(workflowDefinition.version || "").trim()) {
+      throw new Error(`local template entry[${index}] workflow_definition.version is required`);
+    }
+    return {
+      schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+      id,
+      name,
+      workflow_definition: workflowDefinition,
+      template_spec_version: Number.isFinite(Number(source.template_spec_version))
+        ? Math.max(1, Math.floor(Number(source.template_spec_version)))
+        : 1,
+      params_schema: source.params_schema && typeof source.params_schema === "object" && !Array.isArray(source.params_schema)
+        ? deepClone(source.params_schema)
+        : {},
+      governance: source.governance && typeof source.governance === "object" && !Array.isArray(source.governance)
+        ? deepClone(source.governance)
+        : {},
+      runtime_defaults: source.runtime_defaults && typeof source.runtime_defaults === "object" && !Array.isArray(source.runtime_defaults)
+        ? deepClone(source.runtime_defaults)
+        : {},
+      created_at: String(source.created_at || nowIso()),
     };
   }
 
@@ -409,6 +450,60 @@ function createWorkflowIpcStateSupport(ctx) {
     });
   }
 
+  function loadLocalTemplateStore() {
+    const raw = readJsonFile(localTemplateStorePath(), {
+      schema_version: LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
+      items: [],
+    });
+    const notes = [];
+    let itemsSource = [];
+    if (Array.isArray(raw)) {
+      itemsSource = raw;
+      notes.push(`local template storage schema_version migrated to ${LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION}`);
+    } else {
+      const source = raw && typeof raw === "object" ? raw : {};
+      const rawSchemaVersion = String(source.schema_version || "").trim();
+      if (!rawSchemaVersion) {
+        notes.push(`local template storage schema_version migrated to ${LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION}`);
+        itemsSource = Array.isArray(source.items) ? source.items : [];
+      } else if (rawSchemaVersion !== LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION) {
+        itemsSource = [];
+      } else {
+        itemsSource = Array.isArray(source.items) ? source.items : [];
+      }
+    }
+    const items = [];
+    for (let i = 0; i < itemsSource.length; i += 1) {
+      try {
+        items.push(normalizeLocalTemplateEntry(itemsSource[i], i));
+      } catch {}
+    }
+    return {
+      schema_version: LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
+      items,
+      migrated: notes.length > 0,
+      notes,
+    };
+  }
+
+  function listLocalTemplates(limit = 500) {
+    const normalized = loadLocalTemplateStore();
+    if (normalized.migrated) {
+      saveLocalTemplates(normalized.items);
+    }
+    return normalized.items.slice(0, Math.max(1, Math.min(5000, Number(limit || 500))));
+  }
+
+  function saveLocalTemplates(items) {
+    const normalizedItems = Array.isArray(items)
+      ? items.map((item, index) => normalizeLocalTemplateEntry(item, index))
+      : [];
+    writeJsonFile(localTemplateStorePath(), {
+      schema_version: LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
+      items: normalizedItems,
+    });
+  }
+
   function listTemplateMarketplace(limit = 500) {
     const obj = normalizeJsonContainer(
       readJsonFile(templateMarketplacePath(), { items: [] }),
@@ -452,8 +547,11 @@ function createWorkflowIpcStateSupport(ctx) {
     isMockIoAllowed,
     isPathWithin,
     listTemplateMarketplace,
+    listLocalTemplates,
+    loadLocalTemplateStore,
     loadQueueControl,
     loadWorkflowQueue,
+    localTemplateStorePath,
     mockIoRoots,
     nodeCacheMetricsPath,
     nodeCachePath,
@@ -465,6 +563,7 @@ function createWorkflowIpcStateSupport(ctx) {
     resolveOutputRoot,
     runHistoryPath,
     saveQueueControl,
+    saveLocalTemplates,
     saveTemplateMarketplace,
     saveWorkflowQueue,
     templateMarketplacePath,
@@ -477,6 +576,9 @@ function createWorkflowIpcStateSupport(ctx) {
 }
 
 module.exports = {
+  LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+  LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
+  TEMPLATE_WORKFLOW_DEFINITION_FIELD,
   TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
   createWorkflowIpcStateSupport,
 };

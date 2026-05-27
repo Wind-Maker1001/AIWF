@@ -2,7 +2,11 @@ const {
   NODE_CONFIG_VALIDATION_ERROR_CONTRACT_AUTHORITY,
   WORKFLOW_CONTRACT_AUTHORITY,
 } = require("./workflow_contract");
-const { TEMPLATE_PACK_ENTRY_SCHEMA_VERSION } = require("./workflow_ipc_state");
+const {
+  LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+  TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
+  TEMPLATE_WORKFLOW_DEFINITION_FIELD,
+} = require("./workflow_ipc_state");
 const {
   exportTemplatePackArtifact,
   normalizeTemplatePackArtifact,
@@ -20,10 +24,12 @@ function registerWorkflowStoreIpc(ctx, deps) {
   const {
     appendAudit,
     isMockIoAllowed,
+    listLocalTemplates,
     listTemplateMarketplace,
     nowIso,
     qualityRuleSetSupport,
     resolveMockFilePath,
+    saveLocalTemplates,
     saveTemplateMarketplace,
     workflowVersionStore,
     workflowValidationSupport = {
@@ -120,6 +126,70 @@ function registerWorkflowStoreIpc(ctx, deps) {
   ipcMain.handle("aiwf:listTemplateMarketplace", async (_evt, req) => {
     const limit = Number(req?.limit || 500);
     return { ok: true, items: listTemplateMarketplace(limit) };
+  });
+
+  ipcMain.handle("aiwf:listLocalTemplates", async (_evt, req) => {
+    const limit = Number(req?.limit || 500);
+    return { ok: true, items: listLocalTemplates(limit) };
+  });
+
+  ipcMain.handle("aiwf:saveLocalTemplate", async (_evt, req) => {
+    try {
+      const source = req?.template && typeof req.template === "object"
+        ? req.template
+        : (req && typeof req === "object" ? req : {});
+      const name = String(source.name || "").trim();
+      if (!name) return { ok: false, error: "template name required" };
+      const workflowDefinitionSource =
+        source[TEMPLATE_WORKFLOW_DEFINITION_FIELD] && typeof source[TEMPLATE_WORKFLOW_DEFINITION_FIELD] === "object"
+          ? source[TEMPLATE_WORKFLOW_DEFINITION_FIELD]
+          : (source.graph && typeof source.graph === "object" ? source.graph : null);
+      if (!workflowDefinitionSource) return { ok: false, error: "workflow_definition required" };
+      const validated = await validateWorkflowDefinition(workflowDefinitionSource, {
+        allowVersionMigration: false,
+        requireNonEmptyNodes: true,
+        validationScope: "authoring",
+      });
+      const normalizedWorkflowDefinition = validated?.normalized_workflow_definition && typeof validated.normalized_workflow_definition === "object"
+        ? validated.normalized_workflow_definition
+        : workflowDefinitionSource;
+      const id = String(source.id || `custom_${Date.now()}`).trim() || `custom_${Date.now()}`;
+      const item = {
+        schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+        id,
+        name,
+        workflow_definition: normalizedWorkflowDefinition,
+        template_spec_version: Number.isFinite(Number(source.template_spec_version))
+          ? Math.max(1, Math.floor(Number(source.template_spec_version)))
+          : 1,
+        params_schema: source.params_schema && typeof source.params_schema === "object" && !Array.isArray(source.params_schema)
+          ? JSON.parse(JSON.stringify(source.params_schema))
+          : {},
+        governance: source.governance && typeof source.governance === "object" && !Array.isArray(source.governance)
+          ? JSON.parse(JSON.stringify(source.governance))
+          : {},
+        runtime_defaults: source.runtime_defaults && typeof source.runtime_defaults === "object" && !Array.isArray(source.runtime_defaults)
+          ? JSON.parse(JSON.stringify(source.runtime_defaults))
+          : {},
+        created_at: String(source.created_at || nowIso()),
+      };
+      const items = listLocalTemplates(5000);
+      const index = items.findIndex((row) => String(row?.id || "") === id);
+      if (index >= 0) items[index] = item;
+      else items.unshift(item);
+      saveLocalTemplates(items);
+      appendAudit("local_template_save", {
+        id,
+        name,
+        notes: Array.isArray(validated?.notes) ? validated.notes : [],
+      });
+      return { ok: true, item, notes: Array.isArray(validated?.notes) ? validated.notes : [] };
+    } catch (error) {
+      if (error && typeof error === "object" && String(error.code || "") === "workflow_contract_invalid") {
+        return workflowContractFailure(error);
+      }
+      return { ok: false, error: String(error?.message || error || "local template save failed") };
+    }
   });
 
   ipcMain.handle("aiwf:validateWorkflowDefinition", async (_evt, req) => {

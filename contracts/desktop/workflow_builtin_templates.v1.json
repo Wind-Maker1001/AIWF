@@ -1,0 +1,91 @@
+{
+  "schema_version": "workflow_builtin_templates.v1",
+  "items": [
+    {
+      "schema_version": "local_template_entry.v1",
+      "id": "debate_evidence_v1",
+      "name": "辩论证据流水线v1",
+      "workflow_definition": {
+        "workflow_id": "debate_evidence_v1",
+        "template_key": "debate_evidence",
+        "template_version": 1,
+        "version": "1.0.0",
+        "name": "辩论证据流水线 {{title}}",
+        "nodes": [
+          { "id": "n1", "type": "ingest_files", "x": 40, "y": 120, "config": {} },
+          { "id": "n2", "type": "clean_md", "x": 320, "y": 120, "config": { "export_canonical_bundle": true, "canonical_title": "{{title}}" } },
+          { "id": "n3", "type": "manual_review", "x": 600, "y": 120, "config": { "review_key": "debate_review", "default_approve": false } },
+          { "id": "n4", "type": "ai_refine", "x": 880, "y": 60, "config": {} },
+          { "id": "n5", "type": "md_output", "x": 1160, "y": 60, "config": {} },
+          { "id": "n6", "type": "md_output", "x": 880, "y": 200, "config": {} }
+        ],
+        "edges": [
+          { "from": "n1", "to": "n2" },
+          { "from": "n2", "to": "n3" },
+          { "from": "n3", "to": "n4", "when": { "field": "approved", "op": "eq", "value": true } },
+          { "from": "n4", "to": "n5" },
+          { "from": "n3", "to": "n6", "when": { "field": "approved", "op": "eq", "value": false } }
+        ]
+      },
+      "template_spec_version": 1,
+      "params_schema": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "min_length": 1,
+          "group": "基础",
+          "description": "模板标题"
+        }
+      },
+      "governance": {},
+      "runtime_defaults": {},
+      "created_at": ""
+    },
+    {
+      "schema_version": "local_template_entry.v1",
+      "id": "finance_report_v2",
+      "name": "财报清洗流水线v2",
+      "workflow_definition": {
+        "workflow_id": "finance_report_v2",
+        "template_key": "finance_report",
+        "template_version": 2,
+        "version": "1.0.0",
+        "name": "财报清洗流水线 {{title}}",
+        "nodes": [
+          { "id": "n1", "type": "ingest_files", "x": 40, "y": 100, "config": {} },
+          { "id": "n2", "type": "clean_md", "x": 300, "y": 100, "config": { "export_canonical_bundle": true, "canonical_title": "{{title}}" } },
+          { "id": "n3", "type": "finance_ratio_v1", "x": 560, "y": 100, "config": { "rows": [], "input_map": { "rows": "$prev.detail.rows" } } },
+          { "id": "n4", "type": "anomaly_explain_v1", "x": 820, "y": 100, "config": { "rows": [], "score_field": "anomaly_score", "threshold": 0.8 } },
+          { "id": "n5", "type": "md_output", "x": 1080, "y": 100, "config": {} }
+        ],
+        "edges": [
+          { "from": "n1", "to": "n2" },
+          { "from": "n2", "to": "n3" },
+          { "from": "n3", "to": "n4" },
+          { "from": "n4", "to": "n5" }
+        ]
+      },
+      "template_spec_version": 1,
+      "params_schema": {
+        "title": {
+          "type": "string",
+          "required": true,
+          "min_length": 1,
+          "group": "基础",
+          "description": "财报任务名称"
+        },
+        "language": {
+          "type": "string",
+          "required": true,
+          "enum": ["zh-CN", "en-US"],
+          "default": "zh-CN",
+          "group": "AI 参数",
+          "description": "输出语言偏好"
+        }
+      },
+      "governance": {},
+      "runtime_defaults": {},
+      "created_at": ""
+    }
+  ]
+}

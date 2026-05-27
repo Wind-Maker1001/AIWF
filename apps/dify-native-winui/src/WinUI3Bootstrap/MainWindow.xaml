@@ -925,6 +925,125 @@
                                                 <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF4B5563" />
                                             </Button.Resources>
                                         </Button>
+                                        <Border BorderBrush="#1F0F172A" BorderThickness="1" CornerRadius="10" Padding="10" Background="#99FFFFFF" Margin="0,6,0,0">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="Workflow Templates" Style="{StaticResource CanvasSectionTitleStyle}" />
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <ComboBox x:Name="WorkflowTemplateSelectComboBox"
+                                                              Grid.Column="0"
+                                                              AutomationProperties.AutomationId="WorkflowTemplateSelectComboBox"
+                                                              Style="{StaticResource TouchComboBoxStyle}"
+                                                              SelectionChanged="OnWorkflowTemplateSelectionChanged" />
+                                                    <Button x:Name="RefreshWorkflowTemplatesButton"
+                                                            Grid.Column="1"
+                                                            AutomationProperties.AutomationId="RefreshWorkflowTemplatesButton"
+                                                            Click="OnRefreshWorkflowTemplatesClick"
+                                                            Content="刷新模板"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                </Grid>
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Button x:Name="ApplySelectedWorkflowTemplateButton"
+                                                            Grid.Column="0"
+                                                            AutomationProperties.AutomationId="ApplySelectedWorkflowTemplateButton"
+                                                            Click="OnApplySelectedWorkflowTemplateClick"
+                                                            Content="应用模板"
+                                                            MinHeight="36"
+                                                            Padding="14,0"
+                                                            IsEnabled="False" />
+                                                    <Button x:Name="SaveCurrentWorkflowAsTemplateButton"
+                                                            Grid.Column="1"
+                                                            AutomationProperties.AutomationId="SaveCurrentWorkflowAsTemplateButton"
+                                                            Click="OnSaveCurrentWorkflowAsTemplateClick"
+                                                            Content="保存当前为模板"
+                                                            MinHeight="36"
+                                                            Padding="14,0"
+                                                            IsEnabled="False" />
+                                                </Grid>
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Button x:Name="InstallWorkflowTemplatePackButton"
+                                                            Grid.Column="0"
+                                                            AutomationProperties.AutomationId="InstallWorkflowTemplatePackButton"
+                                                            Click="OnInstallWorkflowTemplatePackClick"
+                                                            Content="安装模板包"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                    <Button x:Name="RemoveWorkflowTemplatePackButton"
+                                                            Grid.Column="1"
+                                                            AutomationProperties.AutomationId="RemoveWorkflowTemplatePackButton"
+                                                            Click="OnRemoveWorkflowTemplatePackClick"
+                                                            Content="移除模板包"
+                                                            MinHeight="36"
+                                                            Padding="14,0"
+                                                            IsEnabled="False" />
+                                                    <Button x:Name="ExportWorkflowTemplatePackButton"
+                                                            Grid.Column="2"
+                                                            AutomationProperties.AutomationId="ExportWorkflowTemplatePackButton"
+                                                            Click="OnExportWorkflowTemplatePackClick"
+                                                            Content="导出模板包"
+                                                            MinHeight="36"
+                                                            Padding="14,0"
+                                                            IsEnabled="False" />
+                                                </Grid>
+                                                <TextBlock x:Name="WorkflowTemplateOriginTextBlock"
+                                                           AutomationProperties.AutomationId="WorkflowTemplateOriginTextBlock"
+                                                           Text="-"
+                                                           Foreground="#FF4B5563"
+                                                           TextWrapping="Wrap" />
+                                                <StackPanel x:Name="WorkflowTemplateParamsFormHost"
+                                                            AutomationProperties.AutomationId="WorkflowTemplateParamsFormHost"
+                                                            Spacing="6" />
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Button x:Name="SyncWorkflowTemplateParamsJsonButton"
+                                                            Grid.Column="0"
+                                                            AutomationProperties.AutomationId="SyncWorkflowTemplateParamsJsonButton"
+                                                            Click="OnSyncWorkflowTemplateParamsJsonClick"
+                                                            Content="同步参数 JSON"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                    <Button x:Name="LoadWorkflowTemplateParamsJsonButton"
+                                                            Grid.Column="1"
+                                                            AutomationProperties.AutomationId="LoadWorkflowTemplateParamsJsonButton"
+                                                            Click="OnLoadWorkflowTemplateParamsJsonClick"
+                                                            Content="加载参数 JSON"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                </Grid>
+                                                <TextBox x:Name="WorkflowTemplateParamsJsonTextBox"
+                                                         AutomationProperties.AutomationId="WorkflowTemplateParamsJsonTextBox"
+                                                         AcceptsReturn="True"
+                                                         TextWrapping="Wrap"
+                                                         MinHeight="120"
+                                                         PlaceholderText="template params JSON"
+                                                         Style="{StaticResource TouchTextBoxStyle}" />
+                                                <CheckBox x:Name="TemplateRequirePreflightCheckBox"
+                                                          AutomationProperties.AutomationId="TemplateRequirePreflightCheckBox"
+                                                          Content="Require Preflight"
+                                                          IsChecked="True" />
+                                                <TextBlock x:Name="WorkflowTemplateStatusTextBlock"
+                                                           AutomationProperties.AutomationId="WorkflowTemplateStatusTextBlock"
+                                                           Text="-"
+                                                           Foreground="#FF4B5563"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </ScrollViewer>
                             </Border>

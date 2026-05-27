@@ -74,6 +74,7 @@ function registerWorkflowIpc(ctx) {
     diagnosticsLogPath,
     extractSandboxViolations,
     isMockIoAllowed,
+    listLocalTemplates,
     listTemplateMarketplace,
     loadQueueControl,
     loadWorkflowQueue,
@@ -83,6 +84,7 @@ function registerWorkflowIpc(ctx) {
     resolveMockFilePath,
     resolveOutputRoot,
     runHistoryPath,
+    saveLocalTemplates,
     saveQueueControl,
     saveTemplateMarketplace,
     saveWorkflowQueue,
@@ -283,10 +285,12 @@ function registerWorkflowIpc(ctx) {
     {
       appendAudit: appendAuditMirrored,
       isMockIoAllowed,
+      listLocalTemplates,
       listTemplateMarketplace,
       nowIso,
       qualityRuleSetSupport,
       resolveMockFilePath,
+      saveLocalTemplates,
       saveTemplateMarketplace,
       workflowVersionStore,
       workflowValidationSupport,
@@ -361,7 +365,6 @@ module.exports = {
   createWorkflowAuditMirrorSupport,
   registerWorkflowIpc,
 };
-
 
 
 
