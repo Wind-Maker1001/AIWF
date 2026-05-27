@@ -61,7 +61,7 @@
     {
       "id": "workflow_version_cache_compare_ui",
       "current_status": "compat-hidden",
-      "winui_status": "missing",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/version-cache-*.js"
       ],
@@ -69,7 +69,7 @@
       "owner": "workflow/platform backend",
       "migration_target": "WinUI version viewer over backend version diff/index services",
       "remove_by": "2026-06-18",
-      "blocker": "still need WinUI viewer"
+      "blocker": "WinUI version compare viewer and local cache parity landed on 2026-05-23"
     },
     {
       "id": "queue_control_run_history_admin_panels",
@@ -114,7 +114,7 @@
     {
       "id": "publish_workflow_app_surface",
       "current_status": "compat-hidden",
-      "winui_status": "missing",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/app-publish-ui.js"
       ],
@@ -122,7 +122,7 @@
       "owner": "workflow/product backend+frontend",
       "migration_target": "WinUI publish form over backend workflow app publish APIs",
       "remove_by": "2026-06-18",
-      "blocker": "still need WinUI publish form"
+      "blocker": "WinUI publish workflow app surface landed on 2026-05-23"
     },
     {
       "id": "baseline_compare_lineage_helper_surfaces",
