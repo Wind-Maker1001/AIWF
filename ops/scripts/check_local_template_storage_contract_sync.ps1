@@ -134,6 +134,7 @@ function fail(payload) {
       graph: templateGraph(),
     }]),
   };
+  const sharedTemplates = [];
 
   global.window = {
     localStorage: {
@@ -142,6 +143,13 @@ function fail(payload) {
       },
       setItem(key, value) {
         localStorageState[key] = value;
+      },
+    },
+    aiwfDesktop: {
+      listLocalTemplates: async () => ({ items: sharedTemplates.slice() }),
+      saveLocalTemplate: async ({ template }) => {
+        sharedTemplates.push(template);
+        return { ok: true, item: template };
       },
     },
   };
@@ -157,6 +165,7 @@ function fail(payload) {
     setStatus: () => {},
   });
 
+  await support.refreshLocalTemplates();
   const loadedTemplates = support.loadLocalTemplates();
   const migratedStorage = JSON.parse(localStorageState["aiwf.workflow.templates.v1"]);
   const localStorageNormalizedOnLoad = Array.isArray(loadedTemplates)
@@ -164,7 +173,9 @@ function fail(payload) {
     && loadedTemplates[0].schema_version === LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION
     && migratedStorage.schema_version === LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION
     && Array.isArray(migratedStorage.items)
-    && migratedStorage.items[0].schema_version === LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION;
+    && migratedStorage.items[0].schema_version === LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION
+    && sharedTemplates.length === 1
+    && sharedTemplates[0].schema_version === LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION;
   if (!localStorageNormalizedOnLoad) {
     fail({
       status: "failed",
@@ -184,6 +195,10 @@ function fail(payload) {
         invalidLocalStorageState[key] = value;
       },
     },
+    aiwfDesktop: {
+      listLocalTemplates: async () => ({ items: [] }),
+      saveLocalTemplate: async ({ template }) => ({ ok: true, item: template }),
+    },
   };
   const invalidSupport = createWorkflowTemplateMarketplaceSupport({
     workflowName: { value: "My Flow" },
@@ -193,7 +208,7 @@ function fail(payload) {
     currentTemplateGovernance: () => ({ preflight_gate_required: true }),
     parseRunParamsLoose: () => ({ region: "cn" }),
     renderTemplateSelect: () => {},
-    setStatus: () => {},
+      setStatus: () => {},
   });
   const invalidLoadedTemplates = invalidSupport.loadLocalTemplates();
   const localStorageRejectsMissingVersionOnLoad =
@@ -219,23 +234,29 @@ function fail(payload) {
         localStorageState[key] = value;
       },
     },
+    aiwfDesktop: {
+      listLocalTemplates: async () => ({ items: sharedTemplates.slice() }),
+      saveLocalTemplate: async ({ template }) => {
+        sharedTemplates.push(template);
+        return { ok: true, item: template };
+      },
+    },
   };
-  support.saveCurrentAsTemplate();
+  await support.saveCurrentAsTemplate();
   const savedStorage = JSON.parse(localStorageState["aiwf.workflow.templates.v1"]);
-  const localSaveVersioned = savedStorage.schema_version === LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION
-    && Array.isArray(savedStorage.items)
-    && savedStorage.items.some((item) => String(item?.name || "") === "My Local Template" && item.schema_version === LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
+  const localSaveVersioned = Array.isArray(sharedTemplates)
+    && sharedTemplates.some((item) => String(item?.name || "") === "My Local Template" && item.schema_version === LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
   delete global.prompt;
   delete global.window;
 
   if (!localSaveVersioned) {
     fail({
       status: "failed",
-      issues: ["saveCurrentAsTemplate did not persist versioned local template storage"],
+      issues: ["saveCurrentAsTemplate did not persist versioned shared local template storage"],
     });
   }
-  const savedTemplate = Array.isArray(savedStorage.items)
-    ? savedStorage.items.find((item) => String(item?.name || "") === "My Local Template")
+  const savedTemplate = Array.isArray(sharedTemplates)
+    ? sharedTemplates.find((item) => String(item?.name || "") === "My Local Template")
     : null;
   if (!savedTemplate?.workflow_definition || Object.prototype.hasOwnProperty.call(savedTemplate, "graph")) {
     fail({
@@ -254,7 +275,7 @@ function fail(payload) {
     localStorageNormalizedOnLoad,
     localStorageRejectsMissingVersionOnLoad,
     localSaveVersioned,
-    savedEntryCount: Array.isArray(savedStorage.items) ? savedStorage.items.length : 0,
+    savedEntryCount: Array.isArray(sharedTemplates) ? sharedTemplates.length : 0,
     savedTemplateField: "workflow_definition",
     savedLegacyGraphFieldPresent: Object.prototype.hasOwnProperty.call(savedTemplate || {}, "graph"),
   }));
