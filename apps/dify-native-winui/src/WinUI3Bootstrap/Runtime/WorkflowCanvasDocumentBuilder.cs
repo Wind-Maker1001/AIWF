@@ -108,6 +108,74 @@ public static class WorkflowCanvasDocumentBuilder
         };
     }
 
+    public static WorkflowGraphDocument ImportWorkflowDefinition(JsonObject workflowDefinition)
+    {
+        var source = workflowDefinition ?? throw new ArgumentNullException(nameof(workflowDefinition));
+        var workflowId = (source["workflow_id"]?.GetValue<string>() ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(workflowId))
+        {
+            workflowId = "native_template_workflow";
+        }
+
+        var version = (source["version"]?.GetValue<string>() ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            version = "1.0.0";
+        }
+
+        var nodes = (source["nodes"] as JsonArray)
+            ?.OfType<JsonObject>()
+            .Select(node =>
+            {
+                var nodeId = (node["id"]?.GetValue<string>() ?? string.Empty).Trim();
+                var nodeType = (node["type"]?.GetValue<string>() ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(nodeId) || string.IsNullOrWhiteSpace(nodeType))
+                {
+                    return null;
+                }
+
+                return new WorkflowGraphNodeDocument(
+                    Id: nodeId,
+                    Type: nodeType,
+                    Title: string.IsNullOrWhiteSpace(node["title"]?.GetValue<string>() ?? string.Empty)
+                        ? nodeType
+                        : node["title"]?.GetValue<string>() ?? nodeType,
+                    Subtitle: node["subtitle"]?.GetValue<string>() ?? string.Empty,
+                    X: ReadDouble(node["x"]),
+                    Y: ReadDouble(node["y"]),
+                    Config: CloneJsonObject(node["config"] as JsonObject) ?? new JsonObject());
+            })
+            .Where(static node => node is not null)
+            .Cast<WorkflowGraphNodeDocument>()
+            .ToArray() ?? Array.Empty<WorkflowGraphNodeDocument>();
+
+        var allowedIds = nodes.Select(static item => item.Id).ToHashSet(StringComparer.Ordinal);
+        var edges = (source["edges"] as JsonArray)
+            ?.OfType<JsonObject>()
+            .Select(edge =>
+            {
+                var from = (edge["from"]?.GetValue<string>() ?? string.Empty).Trim();
+                var to = (edge["to"]?.GetValue<string>() ?? string.Empty).Trim();
+                return string.IsNullOrWhiteSpace(from)
+                    || string.IsNullOrWhiteSpace(to)
+                    || !allowedIds.Contains(from)
+                    || !allowedIds.Contains(to)
+                    ? null
+                    : new WorkflowGraphEdgeDocument(from, to);
+            })
+            .Where(static edge => edge is not null)
+            .Cast<WorkflowGraphEdgeDocument>()
+            .ToArray() ?? Array.Empty<WorkflowGraphEdgeDocument>();
+
+        return new WorkflowGraphDocument(
+            WorkflowId: workflowId,
+            Version: version,
+            Nodes: nodes,
+            Edges: edges,
+            Viewport: WorkflowGraphViewportDocument.Default,
+            Selection: WorkflowGraphSelectionDocument.Empty);
+    }
+
     private static IReadOnlyList<CanvasWorkflowNodeState> NormalizeNodes(IReadOnlyList<CanvasWorkflowNodeState> nodes)
     {
         var normalized = new List<CanvasWorkflowNodeState>(nodes.Count);
@@ -212,5 +280,30 @@ public static class WorkflowCanvasDocumentBuilder
         return source is null
             ? null
             : JsonNode.Parse(source.ToJsonString()) as JsonObject;
+    }
+
+    private static double ReadDouble(JsonNode? value)
+    {
+        if (value is not JsonValue jsonValue)
+        {
+            return 0;
+        }
+
+        if (jsonValue.TryGetValue<double>(out var asDouble))
+        {
+            return asDouble;
+        }
+
+        if (jsonValue.TryGetValue<int>(out var asInt))
+        {
+            return asInt;
+        }
+
+        if (jsonValue.TryGetValue<long>(out var asLong))
+        {
+            return asLong;
+        }
+
+        return 0;
     }
 }

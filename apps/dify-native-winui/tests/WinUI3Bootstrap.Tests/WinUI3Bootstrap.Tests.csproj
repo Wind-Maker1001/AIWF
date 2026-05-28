@@ -54,6 +54,11 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowAppPublishPreflightPresenter.cs" Link="Source\WorkflowAppPublishPreflightPresenter.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowAppPublishPresenter.cs" Link="Source\WorkflowAppPublishPresenter.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowAppPublishCoordinator.cs" Link="Source\WorkflowAppPublishCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowTemplateContractSupport.cs" Link="Source\WorkflowTemplateContractSupport.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowTemplateLocalStoreService.cs" Link="Source\WorkflowTemplateLocalStoreService.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowTemplatePackService.cs" Link="Source\WorkflowTemplatePackService.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowTemplateCatalogService.cs" Link="Source\WorkflowTemplateCatalogService.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowTemplateAuthoringCoordinator.cs" Link="Source\WorkflowTemplateAuthoringCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunInputValidator.cs" Link="Source\RunInputValidator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultParser.cs" Link="Source\RunResultParser.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultPresentationMapper.cs" Link="Source\RunResultPresentationMapper.cs" />

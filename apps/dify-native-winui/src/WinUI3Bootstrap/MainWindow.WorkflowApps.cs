@@ -60,8 +60,17 @@ public sealed partial class MainWindow
             var schema = WorkflowAppSchemaSupport.ParseSchemaJson(WorkflowAppSchemaJsonTextBox.Text);
             var preferred = WorkflowAppRunParamsSupport.ParseRunParamsJson(WorkflowAppRunParamsJsonTextBox.Text);
             _workflowAppSchemaFields = WorkflowAppSchemaSupport.EnumerateFields(schema);
-            RenderWorkflowAppRunParamsForm(_workflowAppSchemaFields, WorkflowAppRunParamsSupport.BuildDefaultsFromSchema(_workflowAppSchemaFields, preferred));
-            SyncWorkflowAppRunParamsJsonFromForm();
+            if (_workflowAppSchemaFields.Count > 0)
+            {
+                RenderWorkflowAppRunParamsForm(_workflowAppSchemaFields, WorkflowAppRunParamsSupport.BuildDefaultsFromSchema(_workflowAppSchemaFields, preferred));
+                SyncWorkflowAppRunParamsJsonFromForm();
+            }
+            else
+            {
+                RenderWorkflowAppRunParamsForm(Array.Empty<WorkflowAppSchemaField>(), new JsonObject());
+                WorkflowAppRunParamsJsonTextBox.Text = PrettyJson(preferred.ToJsonString());
+                UpdateWorkflowAppTemplatePolicyPreviewFromCurrentState();
+            }
             SetGovernanceStatus("Workflow app schema applied.", isError: false);
         }
         catch (Exception ex)
@@ -81,8 +90,16 @@ public sealed partial class MainWindow
         try
         {
             var preferred = WorkflowAppRunParamsSupport.ParseRunParamsJson(WorkflowAppRunParamsJsonTextBox.Text);
-            RenderWorkflowAppRunParamsForm(_workflowAppSchemaFields, WorkflowAppRunParamsSupport.BuildDefaultsFromSchema(_workflowAppSchemaFields, preferred));
-            SyncWorkflowAppRunParamsJsonFromForm();
+            if (_workflowAppSchemaFields.Count > 0)
+            {
+                RenderWorkflowAppRunParamsForm(_workflowAppSchemaFields, WorkflowAppRunParamsSupport.BuildDefaultsFromSchema(_workflowAppSchemaFields, preferred));
+                SyncWorkflowAppRunParamsJsonFromForm();
+            }
+            else
+            {
+                WorkflowAppRunParamsJsonTextBox.Text = PrettyJson(preferred.ToJsonString());
+                UpdateWorkflowAppTemplatePolicyPreviewFromCurrentState();
+            }
             SetGovernanceStatus("Workflow app run params loaded from JSON.", isError: false);
         }
         catch (Exception ex)
@@ -257,6 +274,22 @@ public sealed partial class MainWindow
 
     private Control CreateWorkflowAppRunParamControl(WorkflowAppSchemaField field, JsonNode? value)
     {
+        if (field.EnumValues is { Count: > 0 })
+        {
+            var combo = new ComboBox
+            {
+                Style = ResolveStyleResource("TouchComboBoxStyle"),
+                MinHeight = 44,
+                Tag = field.Type,
+            };
+            foreach (var enumValue in field.EnumValues)
+            {
+                combo.Items.Add(new ComboBoxItem { Content = enumValue });
+            }
+            SetComboByText(combo, value?.GetValue<string>() ?? field.EnumValues[0]);
+            return combo;
+        }
+
         if (string.Equals(field.Type, "boolean", StringComparison.Ordinal))
         {
             var combo = new ComboBox
@@ -289,6 +322,11 @@ public sealed partial class MainWindow
 
     private JsonObject CollectWorkflowAppRunParamsFromControls()
     {
+        if (_workflowAppSchemaFields.Count == 0)
+        {
+            return WorkflowAppRunParamsSupport.ParseRunParamsJson(WorkflowAppRunParamsJsonTextBox.Text);
+        }
+
         var raw = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var field in _workflowAppSchemaFields)
         {

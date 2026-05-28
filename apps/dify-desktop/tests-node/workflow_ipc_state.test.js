@@ -5,6 +5,8 @@ const os = require("os");
 const path = require("path");
 
 const {
+  LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+  LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
   TEMPLATE_PACK_ENTRY_SCHEMA_VERSION,
   createWorkflowIpcStateSupport,
 } = require("../workflow_ipc_state");
@@ -95,9 +97,35 @@ test("workflow ipc state persists minimal workflow_store containers and reads le
   assert.equal(marketplaceJson.items.length, 1);
   assert.equal(marketplaceJson.items[0].schema_version, TEMPLATE_PACK_ENTRY_SCHEMA_VERSION);
 
+  support.saveLocalTemplates([{
+    id: "custom_1",
+    name: "Local One",
+    workflow_definition: {
+      workflow_id: "wf_local",
+      version: "1.0.0",
+      nodes: [{ id: "n1", type: "ingest_files" }],
+      edges: [],
+    },
+  }]);
+  const localTemplatesJson = JSON.parse(fs.readFileSync(support.localTemplateStorePath(), "utf8"));
+  assert.equal(localTemplatesJson.schema_version, LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION);
+  assert.equal(localTemplatesJson.items.length, 1);
+  assert.equal(localTemplatesJson.items[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
+  assert.equal(localTemplatesJson.items[0].workflow_definition.version, "1.0.0");
+
   fs.writeFileSync(support.workflowQueuePath(), `${JSON.stringify({ items: [{ run_id: "legacy_run" }] }, null, 2)}\n`, "utf8");
   fs.writeFileSync(support.workflowQueueControlPath(), `${JSON.stringify({ paused: false, quotas: { beta: 2 } }, null, 2)}\n`, "utf8");
   fs.writeFileSync(support.templateMarketplacePath(), `${JSON.stringify({ items: [{ id: "legacy_pack", name: "Legacy", templates: [] }] }, null, 2)}\n`, "utf8");
+  fs.writeFileSync(support.localTemplateStorePath(), `${JSON.stringify([{
+    id: "legacy_local",
+    name: "Legacy Local",
+    graph: {
+      workflow_id: "wf_legacy_local",
+      version: "1.0.0",
+      nodes: [{ id: "n1", type: "ingest_files" }],
+      edges: [],
+    },
+  }], null, 2)}\n`, "utf8");
 
   assert.deepEqual(support.loadWorkflowQueue(), [{ run_id: "legacy_run" }]);
   assert.deepEqual(support.loadQueueControl(), { paused: false, quotas: { beta: 2 } });
@@ -109,6 +137,13 @@ test("workflow ipc state persists minimal workflow_store containers and reads le
   assert.equal(marketplaceItems[0].version, "v1");
   assert.equal(marketplaceItems[0].source, "unknown");
   assert.deepEqual(marketplaceItems[0].templates, []);
+  const localTemplateItems = support.listLocalTemplates(20);
+  assert.equal(localTemplateItems.length, 1);
+  assert.equal(localTemplateItems[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
+  assert.equal(localTemplateItems[0].id, "legacy_local");
+  assert.equal(localTemplateItems[0].name, "Legacy Local");
+  assert.equal(localTemplateItems[0].workflow_definition.workflow_id, "wf_legacy_local");
+  assert.equal(Object.prototype.hasOwnProperty.call(localTemplateItems[0], "graph"), false);
 });
 
 test("workflow ipc state node cache tracks hits misses and sets", () => {

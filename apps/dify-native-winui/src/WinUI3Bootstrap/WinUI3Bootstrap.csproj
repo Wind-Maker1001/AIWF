@@ -19,4 +19,11 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.6901" PrivateAssets="all" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.7.250606001" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\..\..\contracts\desktop\workflow_builtin_templates.v1.json">
+      <Link>contracts\desktop\workflow_builtin_templates.v1.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

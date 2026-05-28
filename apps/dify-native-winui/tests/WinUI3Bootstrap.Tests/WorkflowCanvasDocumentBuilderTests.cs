@@ -98,4 +98,49 @@ public sealed class WorkflowCanvasDocumentBuilderTests
         Assert.Single(payload["edges"]!.AsArray());
         Assert.Equal("load_rows_v3", payload["nodes"]![0]!["type"]?.GetValue<string>());
     }
+
+    [Fact]
+    public void ImportWorkflowDefinition_MapsWorkflowDefinitionToCanvasDocument()
+    {
+        var document = WorkflowCanvasDocumentBuilder.ImportWorkflowDefinition(new JsonObject
+        {
+            ["workflow_id"] = "wf_template",
+            ["version"] = "1.0.0",
+            ["nodes"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["id"] = "n1",
+                    ["type"] = "ingest_files",
+                    ["x"] = 40,
+                    ["y"] = 80,
+                    ["config"] = new JsonObject()
+                },
+                new JsonObject
+                {
+                    ["id"] = "n2",
+                    ["type"] = "clean_md",
+                    ["title"] = "Clean",
+                    ["subtitle"] = "Step",
+                    ["x"] = 160,
+                    ["y"] = 120,
+                    ["config"] = new JsonObject { ["mode"] = "strict" }
+                }
+            },
+            ["edges"] = new JsonArray
+            {
+                new JsonObject { ["from"] = "n1", ["to"] = "n2" }
+            }
+        });
+
+        Assert.Equal("wf_template", document.WorkflowId);
+        Assert.Equal("1.0.0", document.Version);
+        Assert.Equal("ingest_files", document.Nodes[0].Title);
+        Assert.Equal(string.Empty, document.Nodes[0].Subtitle);
+        Assert.Equal("Clean", document.Nodes[1].Title);
+        Assert.Equal("Step", document.Nodes[1].Subtitle);
+        Assert.Single(document.Edges);
+        Assert.Equal(WorkflowGraphViewportDocument.Default, document.Viewport);
+        Assert.Empty(document.Selection.NodeIds);
+    }
 }

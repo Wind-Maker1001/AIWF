@@ -73,7 +73,7 @@ test("workflow template ui installs template pack and refreshes template select"
 
   assert.equal(select.innerHTML, '<option value="">选择模板...</option>');
   assert.deepEqual(select.appended, [{ value: "tpl_1", textContent: "Finance Template" }]);
-  assert.deepEqual(statuses, [{ text: "模板包已安装: Finance Pack", ok: true }]);
+  assert.deepEqual(statuses, [{ text: "Template pack installed: Finance Pack", ok: true }]);
 });
 
 test("workflow template ui removes and exports current template pack", async () => {
@@ -121,8 +121,8 @@ test("workflow template ui removes and exports current template pack", async () 
   }
 
   assert.deepEqual(statuses, [
-    { text: "模板包已移除: pack_1", ok: true },
-    { text: "模板包已导出: D:/exports/pack_1.json", ok: true },
+    { text: "Template pack removed: pack_1", ok: true },
+    { text: "Template pack exported: D:/exports/pack_1.json", ok: true },
   ]);
 });
 
@@ -153,8 +153,8 @@ test("workflow template ui guards template pack actions for non-pack templates",
   }
 
   assert.deepEqual(statuses, [
-    { text: "当前模板不是模板包来源，无法移除", ok: false },
-    { text: "当前模板不是模板包来源，无法导出", ok: false },
+    { text: "Current template is not backed by a template pack.", ok: false },
+    { text: "Current template is not backed by a template pack.", ok: false },
   ]);
 });
 

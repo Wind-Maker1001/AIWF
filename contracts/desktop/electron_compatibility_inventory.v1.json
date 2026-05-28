@@ -101,7 +101,7 @@
     {
       "id": "template_marketplace_pack_install_export",
       "current_status": "compat-hidden",
-      "winui_status": "missing",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/template-ui*.js"
       ],
@@ -109,7 +109,7 @@
       "owner": "workflow/product frontend",
       "migration_target": "WinUI template marketplace and pack management frontend",
       "remove_by": "2026-06-18",
-      "blocker": "still need a WinUI template marketplace decision and surface"
+      "blocker": "WinUI local-only template marketplace, pack install/export, shared local template storage migration, and builtin template parity landed on 2026-05-27"
     },
     {
       "id": "publish_workflow_app_surface",

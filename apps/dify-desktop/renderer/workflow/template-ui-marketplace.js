@@ -2,7 +2,6 @@ import {
   LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
   TEMPLATE_WORKFLOW_DEFINITION_FIELD,
   parseLocalTemplateStorageText,
-  stringifyLocalTemplateStorage,
 } from "./template-storage-contract.js";
 import { formatAiwfError } from "./workflow-contract.js";
 
@@ -19,7 +18,9 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     setMarketplaceTemplates = () => {},
   } = deps;
 
-  function loadLocalTemplates() {
+  let localTemplates = [];
+
+  function readLegacyLocalTemplates() {
     try {
       const raw = window.localStorage.getItem(templateStorageKey);
       if (!raw) return [];
@@ -37,19 +38,44 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     }
   }
 
-  function saveLocalTemplates(items) {
+  function loadLocalTemplates() {
+    return Array.isArray(localTemplates) && localTemplates.length ? localTemplates : readLegacyLocalTemplates();
+  }
+
+  async function refreshLocalTemplates() {
+    let sharedItems = [];
     try {
-      window.localStorage.setItem(templateStorageKey, stringifyLocalTemplateStorage({
-        schema_version: "local_template_storage.v1",
-        items: Array.isArray(items) ? items : [],
-      }, {
-        allowStorageSchemaMigration: false,
-        allowEntrySchemaMigration: true,
-      }));
+      const out = await window.aiwfDesktop.listLocalTemplates({ limit: 500 });
+      sharedItems = Array.isArray(out?.items) ? out.items : [];
     } catch {}
+
+    if (!sharedItems.length) {
+      const legacyItems = readLegacyLocalTemplates();
+      if (legacyItems.length && window?.aiwfDesktop?.saveLocalTemplate) {
+        for (const item of legacyItems) {
+          const ret = await window.aiwfDesktop.saveLocalTemplate({ template: item });
+          if (!ret?.ok) {
+            setStatus(`Template migration failed: ${formatAiwfError(ret)}`, false);
+            localTemplates = legacyItems;
+            return;
+          }
+        }
+        try {
+          const out = await window.aiwfDesktop.listLocalTemplates({ limit: 500 });
+          sharedItems = Array.isArray(out?.items) ? out.items : legacyItems;
+        } catch {
+          sharedItems = legacyItems;
+        }
+      } else {
+        sharedItems = legacyItems;
+      }
+    }
+
+    localTemplates = Array.isArray(sharedItems) ? sharedItems : [];
   }
 
   async function refreshTemplateMarketplace() {
+    await refreshLocalTemplates();
     try {
       const out = await window.aiwfDesktop.listTemplateMarketplace({ limit: 500 });
       const packs = Array.isArray(out?.items) ? out.items : [];
@@ -71,31 +97,36 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     return [...builtinTemplates, ...loadLocalTemplates(), ...getMarketplaceTemplates()];
   }
 
-  function saveCurrentAsTemplate() {
-    const name = String(prompt("请输入模板名称", String(els.workflowName?.value || "自定义模板")) || "").trim();
+  async function saveCurrentAsTemplate() {
+    const name = String(prompt("Enter template name", String(els.workflowName?.value || "Custom Template")) || "").trim();
     if (!name) return;
-    const custom = loadLocalTemplates();
     const id = `custom_${Date.now()}`;
-    custom.push({
-      schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
-      id,
-      name,
-      [TEMPLATE_WORKFLOW_DEFINITION_FIELD]: graphPayload(),
-      template_spec_version: 1,
-      governance: currentTemplateGovernance(),
-      runtime_defaults: parseRunParamsLoose(),
-      created_at: new Date().toISOString(),
+    const out = await window.aiwfDesktop.saveLocalTemplate({
+      template: {
+        schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+        id,
+        name,
+        [TEMPLATE_WORKFLOW_DEFINITION_FIELD]: graphPayload(),
+        template_spec_version: 1,
+        governance: currentTemplateGovernance(),
+        runtime_defaults: parseRunParamsLoose(),
+        created_at: new Date().toISOString(),
+      },
     });
-    saveLocalTemplates(custom);
+    if (!out?.ok) {
+      setStatus(`Save template failed: ${formatAiwfError(out)}`, false);
+      return;
+    }
+    await refreshLocalTemplates();
     renderTemplateSelect();
     if (els.templateSelect) els.templateSelect.value = id;
-    setStatus(`模板已保存: ${name}`, true);
+    setStatus(`Template saved: ${name}`, true);
   }
 
   async function installTemplatePack() {
     const out = await window.aiwfDesktop.loadWorkflow({ validateGraphContract: false });
     if (!out?.ok || !out?.path) {
-      if (!out?.canceled) setStatus(`读取模板包失败: ${formatAiwfError(out)}`, false);
+      if (!out?.canceled) setStatus(`Load template pack failed: ${formatAiwfError(out)}`, false);
       return;
     }
     const ret = await window.aiwfDesktop.installTemplatePack({
@@ -103,12 +134,12 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
       allowLegacyGraphAlias: true,
     });
     if (!ret?.ok) {
-      setStatus(`安装模板包失败: ${formatAiwfError(ret)}`, false);
+      setStatus(`Install template pack failed: ${formatAiwfError(ret)}`, false);
       return;
     }
     await refreshTemplateMarketplace();
     renderTemplateSelect();
-    setStatus(`模板包已安装: ${ret?.item?.name || ret?.item?.id || ""}`, true);
+    setStatus(`Template pack installed: ${ret?.item?.name || ret?.item?.id || ""}`, true);
   }
 
   async function removeTemplatePackByCurrentTemplate() {
@@ -116,17 +147,17 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     const template = allTemplates().find((item) => String(item?.id || "") === id);
     const packId = String(template?.__pack_id || "").trim();
     if (!packId) {
-      setStatus("当前模板不是模板包来源，无法移除", false);
+      setStatus("Current template is not backed by a template pack.", false);
       return;
     }
     const out = await window.aiwfDesktop.removeTemplatePack({ id: packId });
     if (!out?.ok) {
-      setStatus(`移除模板包失败: ${formatAiwfError(out)}`, false);
+      setStatus(`Remove template pack failed: ${formatAiwfError(out)}`, false);
       return;
     }
     await refreshTemplateMarketplace();
     renderTemplateSelect();
-    setStatus(`模板包已移除: ${packId}`, true);
+    setStatus(`Template pack removed: ${packId}`, true);
   }
 
   async function exportTemplatePackByCurrentTemplate() {
@@ -134,12 +165,12 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     const template = allTemplates().find((item) => String(item?.id || "") === id);
     const packId = String(template?.__pack_id || "").trim();
     if (!packId) {
-      setStatus("当前模板不是模板包来源，无法导出", false);
+      setStatus("Current template is not backed by a template pack.", false);
       return;
     }
     const out = await window.aiwfDesktop.exportTemplatePack({ id: packId });
-    if (out?.ok) setStatus(`模板包已导出: ${out.path}`, true);
-    else if (!out?.canceled) setStatus(`导出模板包失败: ${formatAiwfError(out)}`, false);
+    if (out?.ok) setStatus(`Template pack exported: ${out.path}`, true);
+    else if (!out?.canceled) setStatus(`Export template pack failed: ${formatAiwfError(out)}`, false);
   }
 
   return {
@@ -147,10 +178,10 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     exportTemplatePackByCurrentTemplate,
     installTemplatePack,
     loadLocalTemplates,
+    refreshLocalTemplates,
     refreshTemplateMarketplace,
     removeTemplatePackByCurrentTemplate,
     saveCurrentAsTemplate,
-    saveLocalTemplates,
   };
 }
 

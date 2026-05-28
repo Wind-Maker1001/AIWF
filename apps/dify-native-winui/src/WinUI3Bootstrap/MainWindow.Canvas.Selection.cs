@@ -151,6 +151,7 @@ public sealed partial class MainWindow
             DeleteNodeButton.IsEnabled = false;
             DeleteConnectionButton.IsEnabled = true;
             RenderSelectedNodeWorkflowEditor(null);
+            UpdateWorkflowTemplateActionState();
             return;
         }
 
@@ -164,6 +165,7 @@ public sealed partial class MainWindow
             DeleteNodeButton.IsEnabled = true;
             DeleteConnectionButton.IsEnabled = false;
             RenderSelectedNodeWorkflowEditor(null);
+            UpdateWorkflowTemplateActionState();
             return;
         }
 
@@ -177,6 +179,7 @@ public sealed partial class MainWindow
             DeleteNodeButton.IsEnabled = false;
             DeleteConnectionButton.IsEnabled = false;
             RenderSelectedNodeWorkflowEditor(null);
+            UpdateWorkflowTemplateActionState();
             return;
         }
 
@@ -188,5 +191,6 @@ public sealed partial class MainWindow
         DeleteNodeButton.IsEnabled = tag.IsUserNode;
         DeleteConnectionButton.IsEnabled = false;
         RenderSelectedNodeWorkflowEditor(tag);
+        UpdateWorkflowTemplateActionState();
     }
 }

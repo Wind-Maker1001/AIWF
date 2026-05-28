@@ -37,6 +37,7 @@ test("workflow template marketplace support migrates legacy local template stora
       graph: templateGraph(),
     }]),
   };
+  const sharedTemplates = [];
 
   global.window = {
     localStorage: {
@@ -45,14 +46,24 @@ test("workflow template marketplace support migrates legacy local template stora
         localStorageState[key] = value;
       },
     },
+    aiwfDesktop: {
+      listLocalTemplates: async () => ({ items: sharedTemplates.slice() }),
+      saveLocalTemplate: async ({ template }) => {
+        sharedTemplates.push(template);
+        return { ok: true, item: template };
+      },
+    },
   };
 
   try {
     const support = createWorkflowTemplateMarketplaceSupport({}, {});
+    await support.refreshLocalTemplates();
     const items = support.loadLocalTemplates();
 
     assert.equal(items.length, 1);
     assert.equal(items[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
+    assert.equal(sharedTemplates.length, 1);
+    assert.deepEqual(sharedTemplates[0].workflow_definition, templateGraph());
     const stored = JSON.parse(localStorageState["aiwf.workflow.templates.v1"]);
     assert.equal(stored.schema_version, LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION);
     assert.equal(stored.items[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
@@ -67,15 +78,21 @@ test("workflow template marketplace support saves current template using version
   const { createWorkflowTemplateMarketplaceSupport } = await loadTemplateMarketplaceModule();
   const {
     LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
-    LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION,
   } = await loadTemplateStorageContractModule();
-
   const localStorageState = {};
+  const sharedTemplates = [];
   global.window = {
     localStorage: {
       getItem: (key) => localStorageState[key] || null,
       setItem: (key, value) => {
         localStorageState[key] = value;
+      },
+    },
+    aiwfDesktop: {
+      listLocalTemplates: async () => ({ items: sharedTemplates.slice() }),
+      saveLocalTemplate: async ({ template }) => {
+        sharedTemplates.push(template);
+        return { ok: true, item: template };
       },
     },
   };
@@ -94,17 +111,15 @@ test("workflow template marketplace support saves current template using version
       setStatus: (text, ok) => statuses.push({ text, ok }),
     });
 
-    support.saveCurrentAsTemplate();
+    await support.saveCurrentAsTemplate();
 
-    const stored = JSON.parse(localStorageState["aiwf.workflow.templates.v1"]);
-    assert.equal(stored.schema_version, LOCAL_TEMPLATE_STORAGE_SCHEMA_VERSION);
-    assert.equal(stored.items.length, 1);
-    assert.equal(stored.items[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
-    assert.equal(stored.items[0].name, "My Local Template");
-    assert.deepEqual(stored.items[0].workflow_definition, templateGraph());
-    assert.equal(Object.prototype.hasOwnProperty.call(stored.items[0], "graph"), false);
-    assert.deepEqual(stored.items[0].runtime_defaults, { region: "cn" });
-    assert.deepEqual(stored.items[0].governance, { preflight_gate_required: true });
+    assert.equal(sharedTemplates.length, 1);
+    assert.equal(sharedTemplates[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
+    assert.equal(sharedTemplates[0].name, "My Local Template");
+    assert.deepEqual(sharedTemplates[0].workflow_definition, templateGraph());
+    assert.equal(Object.prototype.hasOwnProperty.call(sharedTemplates[0], "graph"), false);
+    assert.deepEqual(sharedTemplates[0].runtime_defaults, { region: "cn" });
+    assert.deepEqual(sharedTemplates[0].governance, { preflight_gate_required: true });
     assert.equal(statuses.length, 1);
     assert.equal(statuses[0].ok, true);
   } finally {

@@ -54,6 +54,7 @@ public sealed partial class MainWindow : Window
     private readonly WorkflowVersionAdminCoordinator _workflowVersionAdminCoordinator;
     private readonly WorkflowAppPublishPreflightCoordinator _workflowAppPublishPreflightCoordinator;
     private readonly WorkflowAppPublishCoordinator _workflowAppPublishCoordinator;
+    private readonly WorkflowTemplateAuthoringCoordinator _workflowTemplateAuthoringCoordinator;
     private readonly RunFlowCoordinator _runFlowCoordinator;
     private readonly WorkflowDraftRunCoordinator _workflowDraftRunCoordinator;
     private readonly CanvasAuthoringPersistenceService _canvasAuthoringPersistenceService;
@@ -222,6 +223,15 @@ public sealed partial class MainWindow : Window
         _workflowAppPublishCoordinator = new WorkflowAppPublishCoordinator(
             _governanceClient,
             _workflowAppPublishPreflightCoordinator);
+        var workflowTemplateLocalStoreService = new WorkflowTemplateLocalStoreService();
+        var workflowTemplatePackService = new WorkflowTemplatePackService();
+        _workflowTemplateAuthoringCoordinator = new WorkflowTemplateAuthoringCoordinator(
+            _runnerAdapter,
+            new WorkflowTemplateCatalogService(
+                workflowTemplateLocalStoreService,
+                workflowTemplatePackService),
+            workflowTemplateLocalStoreService,
+            workflowTemplatePackService);
         _runFlowCoordinator = new RunFlowCoordinator(_http, _runnerAdapter);
         _workflowDraftRunCoordinator = new WorkflowDraftRunCoordinator(_runnerAdapter);
         _canvasAuthoringPersistenceService = new CanvasAuthoringPersistenceService(
