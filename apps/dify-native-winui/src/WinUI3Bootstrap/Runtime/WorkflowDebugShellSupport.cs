@@ -4,6 +4,24 @@ namespace AIWF.Native.Runtime;
 
 public static class WorkflowDebugShellSupport
 {
+    public static bool ShouldEnable(IEnumerable<string> args, string? releaseFlag, string? allowFlag)
+    {
+        if (string.Equals((releaseFlag ?? string.Empty).Trim(), "1", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (var arg in args)
+        {
+            if (string.Equals((arg ?? string.Empty).Trim(), "--workflow-debug-api", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return string.Equals((allowFlag ?? string.Empty).Trim(), "1", StringComparison.Ordinal);
+    }
+
     public static IReadOnlyList<string> ParseNodeIds(string raw)
     {
         return (raw ?? string.Empty)

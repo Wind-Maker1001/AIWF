@@ -156,11 +156,10 @@ public sealed partial class MainWindow : Window
         Environment.GetEnvironmentVariable("AIWF_NATIVE_UIA_SMOKE"),
         "1",
         StringComparison.Ordinal);
-    private static readonly bool IsWorkflowDebugShellEnabled =
-        !string.Equals(Environment.GetEnvironmentVariable("AIWF_RELEASE"), "1", StringComparison.Ordinal)
-        && (
-            Environment.GetCommandLineArgs().Any(static arg => string.Equals(arg, "--workflow-debug-api", StringComparison.OrdinalIgnoreCase))
-            || string.Equals(Environment.GetEnvironmentVariable("AIWF_ALLOW_WORKFLOW_DEBUG_API"), "1", StringComparison.Ordinal));
+    private static readonly bool IsWorkflowDebugShellEnabled = WorkflowDebugShellSupport.ShouldEnable(
+        Environment.GetCommandLineArgs(),
+        Environment.GetEnvironmentVariable("AIWF_RELEASE"),
+        Environment.GetEnvironmentVariable("AIWF_ALLOW_WORKFLOW_DEBUG_API"));
     private static readonly TimeSpan SuccessStatusDuration = TimeSpan.FromMilliseconds(1800);
     private static readonly TimeSpan NeutralStatusDuration = TimeSpan.FromMilliseconds(1500);
     private double _canvasWidth = DefaultCanvasWidth;

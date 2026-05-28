@@ -7,6 +7,15 @@ namespace AIWF.Native.Tests;
 public sealed class WorkflowDebugShellSupportTests
 {
     [Fact]
+    public void ShouldEnable_RequiresExplicitOptInAndRespectsReleaseKillSwitch()
+    {
+        Assert.True(WorkflowDebugShellSupport.ShouldEnable(["--workflow-debug-api"], "", ""));
+        Assert.True(WorkflowDebugShellSupport.ShouldEnable([], "", "1"));
+        Assert.False(WorkflowDebugShellSupport.ShouldEnable([], "", ""));
+        Assert.False(WorkflowDebugShellSupport.ShouldEnable(["--workflow-debug-api"], "1", "1"));
+    }
+
+    [Fact]
     public void ParseNodeIds_NormalizesCsvAndDeduplicates()
     {
         var ids = WorkflowDebugShellSupport.ParseNodeIds(" n1, n2,\n n1 ,, n3 ");

@@ -140,7 +140,7 @@
     {
       "id": "workflow_debug_api_shell",
       "current_status": "compat-hidden",
-      "winui_status": "missing",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/debug-api-ui.js"
       ],
@@ -148,7 +148,7 @@
       "owner": "frontend/devex",
       "migration_target": "delete or re-home behind shared debug contracts",
       "remove_by": "2026-06-18",
-      "blocker": "still likely dev-only, not user-facing"
+      "blocker": "WinUI dev-only workflow debug shell landed on 2026-05-28 with explicit opt-in gating and graph helper parity"
     }
   ],
   "retained_compatibility_surfaces": [
