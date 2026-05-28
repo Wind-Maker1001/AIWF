@@ -72,6 +72,7 @@ public sealed partial class MainWindow
         OkMetricTextBlock.Text = state.OkMetricText;
         ModeMetricTextBlock.Text = state.ModeMetricText;
         DurationMetricTextBlock.Text = state.DurationMetricText;
+        SyncWorkflowDiagnosticsRunIdFromResultState(state);
     }
 
     private static string PrettyJson(string text)

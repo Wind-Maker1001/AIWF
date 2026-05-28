@@ -157,6 +157,7 @@ public sealed partial class MainWindow
         RunReferenceTextBlock.Text = "Run succeeded. Results updated.";
         SetInlineStatus("Workflow request completed.", InlineStatusTone.Success);
         SetActiveSection(NavSection.Results);
+        _ = RefreshWorkflowDiagnosticsAsync(showStatus: false);
         return true;
     }
 
