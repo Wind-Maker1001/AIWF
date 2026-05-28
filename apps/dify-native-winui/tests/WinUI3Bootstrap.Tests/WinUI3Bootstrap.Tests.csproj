@@ -60,6 +60,7 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowTemplatePackService.cs" Link="Source\WorkflowTemplatePackService.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowTemplateCatalogService.cs" Link="Source\WorkflowTemplateCatalogService.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowTemplateAuthoringCoordinator.cs" Link="Source\WorkflowTemplateAuthoringCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowDebugShellSupport.cs" Link="Source\WorkflowDebugShellSupport.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunInputValidator.cs" Link="Source\RunInputValidator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultParser.cs" Link="Source\RunResultParser.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\RunResultPresentationMapper.cs" Link="Source\RunResultPresentationMapper.cs" />

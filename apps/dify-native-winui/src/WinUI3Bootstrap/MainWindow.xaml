@@ -1044,6 +1044,97 @@
                                                            TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Border>
+                                        <Border x:Name="WorkflowDebugShellBorder"
+                                                AutomationProperties.AutomationId="WorkflowDebugShellBorder"
+                                                BorderBrush="#1F0F172A"
+                                                BorderThickness="1"
+                                                CornerRadius="10"
+                                                Padding="10"
+                                                Background="#99FFFFFF"
+                                                Margin="0,6,0,0"
+                                                Visibility="Collapsed">
+                                            <StackPanel Spacing="8">
+                                                <TextBlock Text="Workflow Debug" Style="{StaticResource CanvasSectionTitleStyle}" />
+                                                <TextBlock Text="Developer-only workflow graph helpers." Foreground="#FF4B5563" TextWrapping="Wrap" />
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox x:Name="WorkflowDebugLinkFromTextBox"
+                                                             Grid.Column="0"
+                                                             AutomationProperties.AutomationId="WorkflowDebugLinkFromTextBox"
+                                                             PlaceholderText="from node id"
+                                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                                    <TextBox x:Name="WorkflowDebugLinkToTextBox"
+                                                             Grid.Column="1"
+                                                             AutomationProperties.AutomationId="WorkflowDebugLinkToTextBox"
+                                                             PlaceholderText="to node id"
+                                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                                    <Button x:Name="ToggleWorkflowDebugLinkButton"
+                                                            Grid.Column="2"
+                                                            AutomationProperties.AutomationId="ToggleWorkflowDebugLinkButton"
+                                                            Click="OnToggleWorkflowDebugLinkClick"
+                                                            Content="Toggle Link"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                </Grid>
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBox x:Name="WorkflowDebugSelectNodesTextBox"
+                                                             Grid.Column="0"
+                                                             AutomationProperties.AutomationId="WorkflowDebugSelectNodesTextBox"
+                                                             PlaceholderText="node ids csv"
+                                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                                    <Button x:Name="SelectWorkflowDebugNodesButton"
+                                                            Grid.Column="1"
+                                                            AutomationProperties.AutomationId="SelectWorkflowDebugNodesButton"
+                                                            Click="OnSelectWorkflowDebugNodesClick"
+                                                            Content="Select Nodes"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                </Grid>
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Button x:Name="ExportWorkflowDebugGraphButton"
+                                                            Grid.Column="0"
+                                                            AutomationProperties.AutomationId="ExportWorkflowDebugGraphButton"
+                                                            Click="OnExportWorkflowDebugGraphClick"
+                                                            Content="Export Graph"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                    <Button x:Name="ImportWorkflowDebugGraphButton"
+                                                            Grid.Column="1"
+                                                            AutomationProperties.AutomationId="ImportWorkflowDebugGraphButton"
+                                                            Click="OnImportWorkflowDebugGraphClick"
+                                                            Content="Import Graph"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                    <Button x:Name="WorkflowDebugRouteStatsButton"
+                                                            Grid.Column="2"
+                                                            AutomationProperties.AutomationId="WorkflowDebugRouteStatsButton"
+                                                            Click="OnWorkflowDebugRouteStatsClick"
+                                                            Content="Route Stats"
+                                                            MinHeight="36"
+                                                            Padding="14,0" />
+                                                </Grid>
+                                                <TextBox x:Name="WorkflowDebugOutputTextBox"
+                                                         AutomationProperties.AutomationId="WorkflowDebugOutputTextBox"
+                                                         AcceptsReturn="True"
+                                                         TextWrapping="Wrap"
+                                                         MinHeight="160"
+                                                         PlaceholderText="debug output"
+                                                         Style="{StaticResource TouchTextBoxStyle}" />
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </ScrollViewer>
                             </Border>

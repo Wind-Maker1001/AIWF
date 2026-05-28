@@ -19,6 +19,7 @@ public sealed partial class MainWindow
         UpdateNodePropertyPanel();
         UpdateCanvasZoomIndicator();
         InitializeWorkflowTemplateSection();
+        InitializeWorkflowDebugShellSection();
     }
 
     private void OnCanvasViewportSizeChanged(object sender, SizeChangedEventArgs e)
