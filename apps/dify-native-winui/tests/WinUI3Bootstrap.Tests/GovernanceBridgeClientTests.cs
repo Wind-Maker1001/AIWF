@@ -307,6 +307,60 @@ public sealed class GovernanceBridgeClientTests
     }
 
     [Fact]
+    public async Task ListWorkflowRunRecordsAsync_ParsesStepsAndDurations()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/history?limit=80", request.RequestUri!.AbsoluteUri);
+            return Json(HttpStatusCode.OK, """
+                [
+                  {
+                    "run_id": "run_1",
+                    "workflow_id": "wf_finance",
+                    "status": "failed",
+                    "ok": false,
+                    "ts": "2026-03-21T00:00:00Z",
+                    "run_request_kind": "reference",
+                    "version_id": "ver_1",
+                    "published_version_id": "",
+                    "workflow_definition_source": "version_reference",
+                    "result": {
+                      "steps": [
+                        {
+                          "step_id": "clean_md",
+                          "status": "DONE",
+                          "started_at": "2026-03-21T00:00:00Z",
+                          "ended_at": "2026-03-21T00:00:01Z",
+                          "error": ""
+                        },
+                        {
+                          "step_id": "ai_refine",
+                          "status": "FAILED",
+                          "started_at": "2026-03-21T00:00:01Z",
+                          "ended_at": "2026-03-21T00:00:03Z",
+                          "error": "boom"
+                        }
+                      ]
+                    }
+                  }
+                ]
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var items = await client.ListWorkflowRunRecordsAsync("http://127.0.0.1:18081", "");
+
+        var item = Assert.Single(items);
+        Assert.Equal("reference", item.RunRequestKind);
+        Assert.Equal("ver_1", item.VersionId);
+        Assert.Equal(2, item.Steps.Count);
+        Assert.Equal("clean_md", item.Steps[0].StepId);
+        Assert.Equal(1, item.Steps[0].Seconds);
+        Assert.Equal("boom", item.Steps[1].Error);
+        Assert.Equal(2, item.Steps[1].Seconds);
+    }
+
+    [Fact]
     public async Task GetWorkflowRunTimelineAsync_ParsesEntries()
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>

@@ -7,7 +7,7 @@
     {
       "id": "workflow_diagnostics_panel",
       "current_status": "compat-hidden",
-      "winui_status": "missing",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/diagnostics-*.js"
       ],
@@ -15,7 +15,7 @@
       "owner": "runtime/backend",
       "migration_target": "WinUI diagnostics viewer over backend diagnostics query APIs",
       "remove_by": "2026-06-18",
-      "blocker": "need WinUI diagnostics page shell"
+      "blocker": "WinUI diagnostics viewer over lifecycle run history, timeline, failure aggregation, and rust runtime stats landed on 2026-05-28"
     },
     {
       "id": "audit_timeline_failure_summary_review_history",

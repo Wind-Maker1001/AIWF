@@ -38,6 +38,39 @@ public sealed record GovernanceWorkflowRunItem(
     public override string ToString() => DisplayText;
 }
 
+public sealed record GovernanceWorkflowRunStepItem(
+    string StepId,
+    string Status,
+    string StartedAt,
+    string EndedAt,
+    double Seconds,
+    string Error)
+{
+    public string DisplayText => $"{StepId} | {Status} | {Seconds:0.###}s";
+
+    public override string ToString() => DisplayText;
+}
+
+public sealed record GovernanceWorkflowRunRecordItem(
+    string RunId,
+    string WorkflowId,
+    string Status,
+    bool Ok,
+    string Timestamp,
+    string RunRequestKind,
+    string VersionId,
+    string PublishedVersionId,
+    string WorkflowDefinitionSource,
+    IReadOnlyList<GovernanceWorkflowRunStepItem> Steps)
+{
+    public string DisplayText =>
+        string.IsNullOrWhiteSpace(WorkflowId)
+            ? $"{RunId} | {Status}"
+            : $"{WorkflowId} | {RunId} | {Status}";
+
+    public override string ToString() => DisplayText;
+}
+
 public sealed record GovernanceTimelineEntry(
     string NodeId,
     string Type,
@@ -331,6 +364,22 @@ public sealed class GovernanceBridgeClient
         var array = root as JsonArray;
         if (array is null) return Array.Empty<GovernanceWorkflowRunItem>();
         return array.OfType<JsonObject>().Select(ParseWorkflowRunItem).ToList();
+    }
+
+    public async Task<IReadOnlyList<GovernanceWorkflowRunRecordItem>> ListWorkflowRunRecordsAsync(
+        string baseUrl,
+        string? apiKey,
+        int limit = 80,
+        CancellationToken cancellationToken = default)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 5000);
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"/api/v1/jobs/history?limit={safeLimit}", apiKey);
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseNode(body, response.IsSuccessStatusCode);
+        var array = root as JsonArray;
+        if (array is null) return Array.Empty<GovernanceWorkflowRunRecordItem>();
+        return array.OfType<JsonObject>().Select(ParseWorkflowRunRecordItem).ToList();
     }
 
     public async Task<IReadOnlyList<GovernanceTimelineEntry>> GetWorkflowRunTimelineAsync(
@@ -793,6 +842,39 @@ public sealed class GovernanceBridgeClient
             Timestamp: item["ts"]?.GetValue<string>() ?? string.Empty);
     }
 
+    private static GovernanceWorkflowRunRecordItem ParseWorkflowRunRecordItem(JsonObject item)
+    {
+        var result = item["result"] as JsonObject;
+        var steps = (result?["steps"] as JsonArray)
+            ?.OfType<JsonObject>()
+            .Select(ParseWorkflowRunStepItem)
+            .ToArray() ?? Array.Empty<GovernanceWorkflowRunStepItem>();
+        return new GovernanceWorkflowRunRecordItem(
+            RunId: item["run_id"]?.GetValue<string>() ?? string.Empty,
+            WorkflowId: item["workflow_id"]?.GetValue<string>() ?? string.Empty,
+            Status: item["status"]?.GetValue<string>() ?? string.Empty,
+            Ok: item["ok"]?.GetValue<bool?>() ?? false,
+            Timestamp: item["ts"]?.GetValue<string>() ?? string.Empty,
+            RunRequestKind: item["run_request_kind"]?.GetValue<string>() ?? string.Empty,
+            VersionId: item["version_id"]?.GetValue<string>() ?? string.Empty,
+            PublishedVersionId: item["published_version_id"]?.GetValue<string>() ?? string.Empty,
+            WorkflowDefinitionSource: item["workflow_definition_source"]?.GetValue<string>() ?? string.Empty,
+            Steps: steps);
+    }
+
+    private static GovernanceWorkflowRunStepItem ParseWorkflowRunStepItem(JsonObject item)
+    {
+        var startedAt = item["started_at"]?.GetValue<string>() ?? string.Empty;
+        var endedAt = item["ended_at"]?.GetValue<string>() ?? string.Empty;
+        return new GovernanceWorkflowRunStepItem(
+            StepId: item["step_id"]?.GetValue<string>() ?? string.Empty,
+            Status: item["status"]?.GetValue<string>() ?? string.Empty,
+            StartedAt: startedAt,
+            EndedAt: endedAt,
+            Seconds: ComputeSeconds(startedAt, endedAt),
+            Error: item["error"]?.GetValue<string>() ?? string.Empty);
+    }
+
     private static GovernanceTimelineEntry ParseTimelineEntry(JsonObject item)
     {
         return new GovernanceTimelineEntry(
@@ -963,6 +1045,17 @@ public sealed class GovernanceBridgeClient
         }
 
         return root;
+    }
+
+    private static double ComputeSeconds(string startedAt, string endedAt)
+    {
+        if (!DateTimeOffset.TryParse(startedAt, out var started)
+            || !DateTimeOffset.TryParse(endedAt, out var ended))
+        {
+            return 0;
+        }
+
+        return Math.Max(0, Math.Round((ended - started).TotalSeconds, 3));
     }
 
     private static InvalidOperationException BuildFailureException(JsonObject? root, string raw, string fallbackMessage)

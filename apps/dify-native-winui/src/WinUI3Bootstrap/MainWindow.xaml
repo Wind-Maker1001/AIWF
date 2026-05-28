@@ -1182,6 +1182,63 @@
                                 </Border>
                             </StackPanel>
                         </Border>
+
+                        <Border x:Name="WorkflowDiagnosticsCard" Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="运行诊断面板" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshWorkflowDiagnosticsButton"
+                                            AutomationProperties.AutomationId="RefreshWorkflowDiagnosticsButton"
+                                            Click="OnRefreshWorkflowDiagnosticsClick"
+                                            Content="刷新诊断"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="5*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="WorkflowDiagnosticsRunIdTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="WorkflowDiagnosticsRunIdTextBox"
+                                             PlaceholderText="run id"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBlock x:Name="WorkflowDiagnosticsSummaryTextBlock"
+                                               Grid.Column="1"
+                                               AutomationProperties.AutomationId="WorkflowDiagnosticsSummaryTextBlock"
+                                               Text="-"
+                                               Foreground="#FF4B5563"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="6">
+                                        <TextBlock Text="当前运行时间线" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <ListView x:Name="WorkflowCurrentRunDiagnosticsListView"
+                                                  AutomationProperties.AutomationId="WorkflowCurrentRunDiagnosticsListView"
+                                                  Height="220"
+                                                  MinHeight="180" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="6">
+                                        <TextBlock Text="聚合诊断" FontWeight="SemiBold" Foreground="#FF374151" />
+                                        <ListView x:Name="WorkflowDiagnosticsListView"
+                                                  AutomationProperties.AutomationId="WorkflowDiagnosticsListView"
+                                                  Height="220"
+                                                  MinHeight="180" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </ScrollViewer>
             </Grid>
