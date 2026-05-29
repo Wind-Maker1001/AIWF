@@ -88,7 +88,7 @@
     {
       "id": "quality_rule_set_center",
       "current_status": "compat-hidden",
-      "winui_status": "partial",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/quality-rule-set-*.js"
       ],
@@ -96,7 +96,7 @@
       "owner": "governance/backend+frontend",
       "migration_target": "WinUI quality rule editor over backend quality rule set APIs",
       "remove_by": "2026-06-18",
-      "blocker": "still need versioning/editor parity in WinUI"
+      "blocker": "WinUI quality rule set editor with list/save/delete plus save-from-canvas graph rule extraction parity landed on 2026-05-29"
     },
     {
       "id": "template_marketplace_pack_install_export",
