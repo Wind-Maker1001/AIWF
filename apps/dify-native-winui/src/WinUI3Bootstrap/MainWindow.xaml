@@ -1442,6 +1442,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="审核历史" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
                                     <Button Grid.Column="1"
@@ -1451,11 +1452,21 @@
                                             Content="刷新"
                                             MinHeight="36"
                                             Padding="14,0" />
+                                    <Button Grid.Column="2"
+                                            x:Name="ExportReviewHistoryButton"
+                                            AutomationProperties.AutomationId="ExportReviewHistoryButton"
+                                            Click="OnExportReviewHistoryClick"
+                                            Content="导出"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
                                 </Grid>
                                 <Grid ColumnSpacing="10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="2*" />
                                         <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <TextBox x:Name="GovernanceHistoryRunIdTextBox"
@@ -1468,8 +1479,18 @@
                                              AutomationProperties.AutomationId="GovernanceHistoryReviewerTextBox"
                                              PlaceholderText="筛选审核人"
                                              Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="GovernanceHistoryDateFromTextBox"
+                                             Grid.Column="2"
+                                             AutomationProperties.AutomationId="GovernanceHistoryDateFromTextBox"
+                                             PlaceholderText="date_from (ISO)"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="GovernanceHistoryDateToTextBox"
+                                             Grid.Column="3"
+                                             AutomationProperties.AutomationId="GovernanceHistoryDateToTextBox"
+                                             PlaceholderText="date_to (ISO)"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
                                     <ComboBox x:Name="GovernanceHistoryStatusComboBox"
-                                              Grid.Column="2"
+                                              Grid.Column="4"
                                               AutomationProperties.AutomationId="GovernanceHistoryStatusComboBox"
                                               Style="{StaticResource TouchComboBoxStyle}"
                                               SelectedIndex="0">

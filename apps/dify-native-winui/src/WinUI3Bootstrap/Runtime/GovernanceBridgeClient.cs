@@ -351,12 +351,16 @@ public sealed class GovernanceBridgeClient
         string? runId = null,
         string? reviewer = null,
         string? status = null,
+        string? dateFrom = null,
+        string? dateTo = null,
         CancellationToken cancellationToken = default)
     {
         var query = new List<string> { $"limit={Math.Clamp(limit, 1, 5000)}" };
         if (!string.IsNullOrWhiteSpace(runId)) query.Add($"run_id={Uri.EscapeDataString(runId.Trim())}");
         if (!string.IsNullOrWhiteSpace(reviewer)) query.Add($"reviewer={Uri.EscapeDataString(reviewer.Trim())}");
         if (!string.IsNullOrWhiteSpace(status)) query.Add($"status={Uri.EscapeDataString(status.Trim())}");
+        if (!string.IsNullOrWhiteSpace(dateFrom)) query.Add($"date_from={Uri.EscapeDataString(dateFrom.Trim())}");
+        if (!string.IsNullOrWhiteSpace(dateTo)) query.Add($"date_to={Uri.EscapeDataString(dateTo.Trim())}");
         var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.MANUAL_REVIEWS, cancellationToken: cancellationToken);
         using var request = BuildRequest(HttpMethod.Get, baseUrl, $"{routePrefix}/history?{string.Join("&", query)}", apiKey);
         using var response = await _http.SendAsync(request, cancellationToken);
