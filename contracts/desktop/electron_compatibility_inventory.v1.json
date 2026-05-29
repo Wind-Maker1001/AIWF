@@ -20,7 +20,7 @@
     {
       "id": "audit_timeline_failure_summary_review_history",
       "current_status": "compat-hidden",
-      "winui_status": "partial",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/audit-*.js",
         "renderer/workflow/review-queue-*.js"
@@ -29,7 +29,7 @@
       "owner": "governance/backend",
       "migration_target": "WinUI governance viewer over backend audit query APIs",
       "remove_by": "2026-06-18",
-      "blocker": "WinUI timeline/failure/audit viewer plus governance audit export and review history filters/export landed by 2026-05-29; remaining gap is offline_local mirror retirement and any broader governance-only export/report surfaces"
+      "blocker": "WinUI timeline/failure/audit viewer plus governance audit export and review history filters/export reached primary-path parity on 2026-05-29"
     },
     {
       "id": "review_queue_manual_review_admin_surface",
