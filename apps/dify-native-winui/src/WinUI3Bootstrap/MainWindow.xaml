@@ -1805,6 +1805,136 @@
                             </StackPanel>
                         </Border>
 
+                        <Border x:Name="RunBaselinesCard" Grid.Row="6" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Run Baselines &amp; Lineage" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshRunBaselinesButton"
+                                            AutomationProperties.AutomationId="RefreshRunBaselinesButton"
+                                            Click="OnRefreshRunBaselinesClick"
+                                            Content="Refresh Baselines"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                </Grid>
+                                <ListView x:Name="RunBaselinesListView"
+                                          AutomationProperties.AutomationId="RunBaselinesListView"
+                                          Height="140"
+                                          MinHeight="120"
+                                          SelectionChanged="OnRunBaselineSelectionChanged" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                        <ColumnDefinition Width="2*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="RunBaselineNameTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="RunBaselineNameTextBox"
+                                             PlaceholderText="optional baseline name"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="RunBaselineRunATextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="RunBaselineRunATextBox"
+                                             PlaceholderText="Run A"
+                                             TextChanged="OnRunBaselineInputChanged"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="RunBaselineRunBTextBox"
+                                             Grid.Column="2"
+                                             AutomationProperties.AutomationId="RunBaselineRunBTextBox"
+                                             PlaceholderText="Run B"
+                                             TextChanged="OnRunBaselineInputChanged"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="UseGovernanceRunAsAButton"
+                                            Grid.Column="0"
+                                            AutomationProperties.AutomationId="UseGovernanceRunAsAButton"
+                                            Click="OnUseGovernanceRunAsAClick"
+                                            Content="Use Run as A"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="UseGovernanceRunAsBButton"
+                                            Grid.Column="1"
+                                            AutomationProperties.AutomationId="UseGovernanceRunAsBButton"
+                                            Click="OnUseGovernanceRunAsBClick"
+                                            Content="Use Run as B"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="SaveRunBaselineButton"
+                                            Grid.Column="2"
+                                            AutomationProperties.AutomationId="SaveRunBaselineButton"
+                                            Click="OnSaveRunBaselineClick"
+                                            Content="Save Baseline"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="CompareRunsButton"
+                                            Grid.Column="3"
+                                            AutomationProperties.AutomationId="CompareRunsButton"
+                                            Click="OnCompareRunsClick"
+                                            Content="Compare Runs"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="CompareWithBaselineButton"
+                                            Grid.Column="4"
+                                            AutomationProperties.AutomationId="CompareWithBaselineButton"
+                                            Click="OnCompareWithBaselineClick"
+                                            Content="Compare Baseline"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="LoadRunLineageButton"
+                                            Grid.Column="0"
+                                            AutomationProperties.AutomationId="LoadRunLineageButton"
+                                            Click="OnLoadRunLineageClick"
+                                            Content="Load Lineage"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <TextBlock x:Name="RunBaselineSummaryTextBlock"
+                                               Grid.Column="1"
+                                               AutomationProperties.AutomationId="RunBaselineSummaryTextBlock"
+                                               Text="-"
+                                               Foreground="#FF4B5563"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                                <ListView x:Name="RunBaselineDetailsListView"
+                                          AutomationProperties.AutomationId="RunBaselineDetailsListView"
+                                          Height="180"
+                                          MinHeight="160" />
+                                <TextBox x:Name="RunLineageTextBox"
+                                         AutomationProperties.AutomationId="RunLineageTextBox"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="140"
+                                         IsReadOnly="True"
+                                         PlaceholderText="lineage payload"
+                                         Style="{StaticResource TouchTextBoxStyle}" />
+                            </StackPanel>
+                        </Border>
+
                         <Border x:Name="GovernanceQualityRuleCard" Grid.Row="7" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>

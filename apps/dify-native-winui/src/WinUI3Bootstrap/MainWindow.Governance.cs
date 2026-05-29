@@ -26,6 +26,7 @@ public sealed partial class MainWindow
         await RefreshGovernanceAuditAsync();
         await RefreshWorkflowVersionsAdminAsync();
         await RefreshWorkflowAppsAsync();
+        await RefreshRunBaselinesAsync();
         await RefreshQualityRuleSetsAsync();
         await RefreshSandboxGovernanceAsync();
     }
@@ -128,7 +129,12 @@ public sealed partial class MainWindow
         if (GovernanceRecentRunsListView.SelectedItem is GovernanceWorkflowRunItem item)
         {
             GovernanceTimelineRunIdTextBox.Text = item.RunId;
+            ApplyRunBaselineActionState();
             await RefreshGovernanceAuditAsync();
+        }
+        else
+        {
+            ApplyRunBaselineActionState();
         }
     }
 
