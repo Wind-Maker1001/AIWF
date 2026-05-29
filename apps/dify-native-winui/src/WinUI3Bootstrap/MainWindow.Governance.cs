@@ -14,6 +14,7 @@ public sealed partial class MainWindow
     private GovernanceQualityRuleSetItem? _selectedQualityRuleSet;
     private GovernanceSandboxRuleVersionItem? _selectedSandboxRuleVersion;
     private IReadOnlyList<GovernanceManualReviewItem> _currentReviewHistoryItems = Array.Empty<GovernanceManualReviewItem>();
+    private GovernanceAuditRefreshResult? _currentGovernanceAuditState;
     private GovernanceControlPlaneBoundary? _currentGovernanceBoundary;
     private string _currentGovernanceBoundaryBaseUrl = string.Empty;
     private GovernanceSandboxAutoFixState _currentSandboxAutoFixState =
@@ -50,6 +51,11 @@ public sealed partial class MainWindow
     private async void OnRefreshGovernanceAuditClick(object sender, RoutedEventArgs e)
     {
         await RefreshGovernanceAuditAsync();
+    }
+
+    private async void OnExportGovernanceAuditClick(object sender, RoutedEventArgs e)
+    {
+        await ExportGovernanceAuditAsync();
     }
 
     private async void OnRefreshQualityRuleSetsClick(object sender, RoutedEventArgs e)
@@ -288,6 +294,7 @@ public sealed partial class MainWindow
                 apiKey,
                 GovernanceTimelineRunIdTextBox.Text.Trim(),
                 GovernanceAuditActionTextBox.Text.Trim());
+            _currentGovernanceAuditState = auditState;
             GovernanceRecentRunsListView.Items.Clear();
             foreach (var item in auditState.Runs)
             {
@@ -315,12 +322,64 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
+            _currentGovernanceAuditState = null;
             GovernanceRecentRunsListView.Items.Clear();
             GovernanceTimelineListView.Items.Clear();
             GovernanceFailureSummaryListView.Items.Clear();
             GovernanceAuditLogListView.Items.Clear();
             GovernanceAuditSummaryTextBlock.Text = "-";
             SetGovernanceStatus($"刷新治理查询失败：{ex.Message}", isError: true);
+        }
+    }
+
+    private async Task ExportGovernanceAuditAsync()
+    {
+        try
+        {
+            if (_currentGovernanceAuditState is null)
+            {
+                await RefreshGovernanceAuditAsync();
+            }
+
+            if (_currentGovernanceAuditState is null)
+            {
+                SetGovernanceStatus("No governance audit data available to export.", isError: true);
+                return;
+            }
+
+            var picker = new Windows.Storage.Pickers.FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = $"governance_audit_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.FileTypeChoices.Add("JSON Files", new List<string> { ".json" });
+            picker.FileTypeChoices.Add("Markdown Files", new List<string> { ".md" });
+
+            var file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            var extension = Path.GetExtension(file.Path).ToLowerInvariant();
+            var content = extension == ".md"
+                ? GovernanceAuditExportSupport.RenderMarkdown(
+                    GovernanceTimelineRunIdTextBox.Text.Trim(),
+                    GovernanceAuditActionTextBox.Text.Trim(),
+                    _currentGovernanceAuditState)
+                : JsonSerializer.Serialize(
+                    GovernanceAuditExportSupport.BuildExportEnvelope(
+                        GovernanceTimelineRunIdTextBox.Text.Trim(),
+                        GovernanceAuditActionTextBox.Text.Trim(),
+                        _currentGovernanceAuditState),
+                    new JsonSerializerOptions { WriteIndented = true });
+
+            await Windows.Storage.FileIO.WriteTextAsync(file, content);
+            SetGovernanceStatus($"Governance audit exported: {file.Path}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Export governance audit failed: {ex.Message}", isError: true);
         }
     }
 

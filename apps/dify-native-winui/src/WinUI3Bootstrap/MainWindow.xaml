@@ -1512,6 +1512,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="运行审计" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
                                     <Button Grid.Column="1"
@@ -1521,6 +1522,14 @@
                                             Content="刷新"
                                             MinHeight="36"
                                             Padding="14,0" />
+                                    <Button Grid.Column="2"
+                                            x:Name="ExportGovernanceAuditButton"
+                                            AutomationProperties.AutomationId="ExportGovernanceAuditButton"
+                                            Click="OnExportGovernanceAuditClick"
+                                            Content="导出"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
                                 </Grid>
                                 <Grid ColumnSpacing="10">
                                     <Grid.ColumnDefinitions>
