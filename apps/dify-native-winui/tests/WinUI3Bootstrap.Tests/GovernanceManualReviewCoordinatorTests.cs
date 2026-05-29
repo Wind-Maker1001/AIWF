@@ -24,7 +24,7 @@ public sealed class GovernanceManualReviewCoordinatorTests
                     new GovernanceManualReviewItem("run_2", "gate_b", "wf_1", "n2", "", "", "", "", "pending", false),
                 ]);
             },
-            listReviewHistory: (_, _, _, _, _, _, _) => throw new NotImplementedException(),
+            listReviewHistory: (_, _, _, _, _, _, _, _, _) => throw new NotImplementedException(),
             submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException());
 
         var result = await coordinator.RefreshPendingAsync("http://127.0.0.1:18081", "token");
@@ -41,7 +41,7 @@ public sealed class GovernanceManualReviewCoordinatorTests
     {
         var coordinator = new GovernanceManualReviewCoordinator(
             listPendingReviews: (_, _, _, _) => Task.FromResult<IReadOnlyList<GovernanceManualReviewItem>>(Array.Empty<GovernanceManualReviewItem>()),
-            listReviewHistory: (_, _, _, _, _, _, _) => throw new NotImplementedException(),
+            listReviewHistory: (_, _, _, _, _, _, _, _, _) => throw new NotImplementedException(),
             submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException());
 
         var result = await coordinator.RefreshPendingAsync("http://127.0.0.1:18081", "");
@@ -56,16 +56,20 @@ public sealed class GovernanceManualReviewCoordinatorTests
         string? seenRunId = "unset";
         string? seenReviewer = "unset";
         string? seenStatus = "unset";
+        string? seenDateFrom = "unset";
+        string? seenDateTo = "unset";
         int seenLimit = 0;
 
         var coordinator = new GovernanceManualReviewCoordinator(
             listPendingReviews: (_, _, _, _) => throw new NotImplementedException(),
-            listReviewHistory: (_, _, limit, runId, reviewer, status, _) =>
+            listReviewHistory: (_, _, limit, runId, reviewer, status, dateFrom, dateTo, _) =>
             {
                 seenLimit = limit;
                 seenRunId = runId;
                 seenReviewer = reviewer;
                 seenStatus = status;
+                seenDateFrom = dateFrom;
+                seenDateTo = dateTo;
                 return Task.FromResult<IReadOnlyList<GovernanceManualReviewItem>>(Array.Empty<GovernanceManualReviewItem>());
             },
             submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException());
@@ -75,12 +79,16 @@ public sealed class GovernanceManualReviewCoordinatorTests
             "",
             "   ",
             " alice ",
-            "");
+            "",
+            " 2026-05-01T00:00:00Z ",
+            "   ");
 
         Assert.Equal(120, seenLimit);
         Assert.Null(seenRunId);
         Assert.Equal("alice", seenReviewer);
         Assert.Null(seenStatus);
+        Assert.Equal("2026-05-01T00:00:00Z", seenDateFrom);
+        Assert.Null(seenDateTo);
     }
 
     [Fact]
@@ -94,7 +102,7 @@ public sealed class GovernanceManualReviewCoordinatorTests
 
         var coordinator = new GovernanceManualReviewCoordinator(
             listPendingReviews: (_, _, _, _) => throw new NotImplementedException(),
-            listReviewHistory: (_, _, _, _, _, _, _) => throw new NotImplementedException(),
+            listReviewHistory: (_, _, _, _, _, _, _, _, _) => throw new NotImplementedException(),
             submitReviewDecision: (_, _, runId, reviewKey, approved, reviewer, comment, _) =>
             {
                 seenRunId = runId;

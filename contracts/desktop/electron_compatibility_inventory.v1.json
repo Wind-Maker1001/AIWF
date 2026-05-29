@@ -29,7 +29,7 @@
       "owner": "governance/backend",
       "migration_target": "WinUI governance viewer over backend audit query APIs",
       "remove_by": "2026-06-18",
-      "blocker": "still need broader governance coverage in WinUI"
+      "blocker": "WinUI review history date filters and export landed on 2026-05-29; remaining gap is broader audit/timeline export parity and offline_local mirror retirement"
     },
     {
       "id": "review_queue_manual_review_admin_surface",
@@ -42,7 +42,7 @@
       "owner": "governance/frontend+backend",
       "migration_target": "WinUI manual review UI over backend review state transitions",
       "remove_by": "2026-06-18",
-      "blocker": "still need broader governance coverage in WinUI"
+      "blocker": "WinUI manual review queue/history plus review history date filters and export landed by 2026-05-29; remaining gap is broader governance parity and offline_local provider retirement"
     },
     {
       "id": "sandbox_alerts_rules_autofix_management",

@@ -7,7 +7,7 @@ public sealed record GovernancePendingReviewRefreshResult(
 public sealed class GovernanceManualReviewCoordinator
 {
     private readonly Func<string, string?, int, CancellationToken, Task<IReadOnlyList<GovernanceManualReviewItem>>> _listPendingReviews;
-    private readonly Func<string, string?, int, string?, string?, string?, CancellationToken, Task<IReadOnlyList<GovernanceManualReviewItem>>> _listReviewHistory;
+    private readonly Func<string, string?, int, string?, string?, string?, string?, string?, CancellationToken, Task<IReadOnlyList<GovernanceManualReviewItem>>> _listReviewHistory;
     private readonly Func<string, string?, string, string, bool, string, string, CancellationToken, Task<GovernanceManualReviewItem>> _submitReviewDecision;
 
     public GovernanceManualReviewCoordinator(GovernanceBridgeClient client)
@@ -20,7 +20,7 @@ public sealed class GovernanceManualReviewCoordinator
 
     public GovernanceManualReviewCoordinator(
         Func<string, string?, int, CancellationToken, Task<IReadOnlyList<GovernanceManualReviewItem>>> listPendingReviews,
-        Func<string, string?, int, string?, string?, string?, CancellationToken, Task<IReadOnlyList<GovernanceManualReviewItem>>> listReviewHistory,
+        Func<string, string?, int, string?, string?, string?, string?, string?, CancellationToken, Task<IReadOnlyList<GovernanceManualReviewItem>>> listReviewHistory,
         Func<string, string?, string, string, bool, string, string, CancellationToken, Task<GovernanceManualReviewItem>> submitReviewDecision)
     {
         _listPendingReviews = listPendingReviews;
@@ -47,12 +47,16 @@ public sealed class GovernanceManualReviewCoordinator
         string? runId,
         string? reviewer,
         string? status,
+        string? dateFrom,
+        string? dateTo,
         int limit = 120,
         CancellationToken cancellationToken = default)
     {
         var normalizedRunId = NormalizeOptional(runId);
         var normalizedReviewer = NormalizeOptional(reviewer);
         var normalizedStatus = NormalizeOptional(status);
+        var normalizedDateFrom = NormalizeOptional(dateFrom);
+        var normalizedDateTo = NormalizeOptional(dateTo);
         return _listReviewHistory(
             baseUrl,
             apiKey,
@@ -60,6 +64,8 @@ public sealed class GovernanceManualReviewCoordinator
             normalizedRunId,
             normalizedReviewer,
             normalizedStatus,
+            normalizedDateFrom,
+            normalizedDateTo,
             cancellationToken);
     }
 

@@ -13,6 +13,7 @@ public sealed partial class MainWindow
     private GovernanceReviewListEntry? _selectedGovernanceReview;
     private GovernanceQualityRuleSetItem? _selectedQualityRuleSet;
     private GovernanceSandboxRuleVersionItem? _selectedSandboxRuleVersion;
+    private IReadOnlyList<GovernanceManualReviewItem> _currentReviewHistoryItems = Array.Empty<GovernanceManualReviewItem>();
     private GovernanceControlPlaneBoundary? _currentGovernanceBoundary;
     private string _currentGovernanceBoundaryBaseUrl = string.Empty;
     private GovernanceSandboxAutoFixState _currentSandboxAutoFixState =
@@ -39,6 +40,11 @@ public sealed partial class MainWindow
     private async void OnRefreshReviewHistoryClick(object sender, RoutedEventArgs e)
     {
         await RefreshReviewHistoryAsync();
+    }
+
+    private async void OnExportReviewHistoryClick(object sender, RoutedEventArgs e)
+    {
+        await ExportReviewHistoryAsync();
     }
 
     private async void OnRefreshGovernanceAuditClick(object sender, RoutedEventArgs e)
@@ -183,8 +189,11 @@ public sealed partial class MainWindow
                 ApiKeyTextBox.Text.Trim(),
                 GovernanceHistoryRunIdTextBox.Text,
                 GovernanceHistoryReviewerTextBox.Text,
-                ReadComboValue(GovernanceHistoryStatusComboBox));
+                ReadComboValue(GovernanceHistoryStatusComboBox),
+                GovernanceHistoryDateFromTextBox.Text,
+                GovernanceHistoryDateToTextBox.Text);
 
+            _currentReviewHistoryItems = items;
             ReviewHistoryListView.Items.Clear();
             foreach (var item in items)
             {
@@ -197,8 +206,68 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
+            _currentReviewHistoryItems = Array.Empty<GovernanceManualReviewItem>();
             ReviewHistoryListView.Items.Clear();
             SetGovernanceStatus($"Refresh review history failed: {ex.Message}", isError: true);
+        }
+    }
+
+    private async Task ExportReviewHistoryAsync()
+    {
+        try
+        {
+            if (_currentReviewHistoryItems.Count == 0)
+            {
+                await RefreshReviewHistoryAsync();
+            }
+
+            var items = _currentReviewHistoryItems;
+            if (items.Count == 0)
+            {
+                SetGovernanceStatus("No review history items available to export.", isError: true);
+                return;
+            }
+
+            var picker = new Windows.Storage.Pickers.FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = $"manual_review_history_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.FileTypeChoices.Add("JSON Files", new List<string> { ".json" });
+
+            var file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            var payload = new JsonObject
+            {
+                ["exported_at"] = DateTimeOffset.UtcNow.ToString("O"),
+                ["total"] = items.Count,
+                ["items"] = new JsonArray(items.Select(item => new JsonObject
+                {
+                    ["run_id"] = item.RunId,
+                    ["review_key"] = item.ReviewKey,
+                    ["workflow_id"] = item.WorkflowId,
+                    ["node_id"] = item.NodeId,
+                    ["reviewer"] = item.Reviewer,
+                    ["comment"] = item.Comment,
+                    ["created_at"] = item.CreatedAt,
+                    ["decided_at"] = item.DecidedAt,
+                    ["status"] = item.Status,
+                    ["approved"] = item.Approved,
+                }).ToArray()),
+            };
+
+            await Windows.Storage.FileIO.WriteTextAsync(
+                file,
+                JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+            SetGovernanceStatus($"Review history exported: {file.Path} ({items.Count} items)", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Export review history failed: {ex.Message}", isError: true);
         }
     }
 

@@ -224,11 +224,20 @@ public sealed class GovernanceBridgeClientTests
             Assert.Contains("run_id=run_1", request.RequestUri!.Query, StringComparison.Ordinal);
             Assert.Contains("reviewer=alice", request.RequestUri.Query, StringComparison.Ordinal);
             Assert.Contains("status=approved", request.RequestUri.Query, StringComparison.Ordinal);
+            Assert.Contains("date_from=2026-05-01T00%3A00%3A00Z", request.RequestUri.Query, StringComparison.Ordinal);
+            Assert.Contains("date_to=2026-05-31T23%3A59%3A59Z", request.RequestUri.Query, StringComparison.Ordinal);
             return Json(HttpStatusCode.OK, """{"ok":true,"items":[]}""");
         }));
 
         var client = new GovernanceBridgeClient(http);
-        var items = await client.ListManualReviewHistoryAsync("http://127.0.0.1:18081", "", runId: "run_1", reviewer: "alice", status: "approved");
+        var items = await client.ListManualReviewHistoryAsync(
+            "http://127.0.0.1:18081",
+            "",
+            runId: "run_1",
+            reviewer: "alice",
+            status: "approved",
+            dateFrom: "2026-05-01T00:00:00Z",
+            dateTo: "2026-05-31T23:59:59Z");
 
         Assert.Empty(items);
     }
