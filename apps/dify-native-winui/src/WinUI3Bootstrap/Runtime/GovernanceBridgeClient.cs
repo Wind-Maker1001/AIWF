@@ -71,6 +71,27 @@ public sealed record GovernanceWorkflowRunRecordItem(
     public override string ToString() => DisplayText;
 }
 
+public sealed record GovernanceWorkflowRunRecordDetail(
+    string RunId,
+    string WorkflowId,
+    string Status,
+    bool Ok,
+    string Timestamp,
+    string RunRequestKind,
+    string VersionId,
+    string PublishedVersionId,
+    string WorkflowDefinitionSource,
+    IReadOnlyList<GovernanceWorkflowRunStepItem> Steps,
+    JsonObject ResultPayload)
+{
+    public string DisplayText =>
+        string.IsNullOrWhiteSpace(WorkflowId)
+            ? $"{RunId} | {Status}"
+            : $"{WorkflowId} | {RunId} | {Status}";
+
+    public override string ToString() => DisplayText;
+}
+
 public sealed record GovernanceTimelineEntry(
     string NodeId,
     string Type,
@@ -218,6 +239,25 @@ public sealed record GovernanceSavedWorkflowVersionItem(
     string WorkflowId,
     string WorkflowName,
     string Timestamp);
+
+public sealed record GovernanceRunBaselineItem(
+    string BaselineId,
+    string Name,
+    string RunId,
+    string WorkflowId,
+    string CreatedAt,
+    string Notes,
+    string Provider,
+    string Owner,
+    string SourceOfTruth)
+{
+    public string DisplayText =>
+        string.IsNullOrWhiteSpace(WorkflowId)
+            ? $"{BaselineId} | {RunId} | {Name}"
+            : $"{Name} | {BaselineId} | {WorkflowId} | {RunId}";
+
+    public override string ToString() => DisplayText;
+}
 
 public sealed record GovernanceErrorItem(
     string Path,
@@ -382,6 +422,24 @@ public sealed class GovernanceBridgeClient
         return array.OfType<JsonObject>().Select(ParseWorkflowRunRecordItem).ToList();
     }
 
+    public async Task<GovernanceWorkflowRunRecordDetail> GetWorkflowRunRecordAsync(
+        string baseUrl,
+        string? apiKey,
+        string runId,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"/api/v1/jobs/{Uri.EscapeDataString(runId.Trim())}/record", apiKey);
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseRoot(body, response.IsSuccessStatusCode);
+        if (root is null)
+        {
+            throw new InvalidOperationException("workflow run record response missing payload");
+        }
+
+        return ParseWorkflowRunRecordDetail(root);
+    }
+
     public async Task<IReadOnlyList<GovernanceTimelineEntry>> GetWorkflowRunTimelineAsync(
         string baseUrl,
         string? apiKey,
@@ -456,6 +514,68 @@ public sealed class GovernanceBridgeClient
         var array = root?["sets"] as JsonArray;
         if (array is null) return Array.Empty<GovernanceQualityRuleSetItem>();
         return array.OfType<JsonObject>().Select(ParseQualityRuleSetItem).ToList();
+    }
+
+    public async Task<IReadOnlyList<GovernanceRunBaselineItem>> ListRunBaselinesAsync(
+        string baseUrl,
+        string? apiKey,
+        int limit = 120,
+        CancellationToken cancellationToken = default)
+    {
+        var safeLimit = Math.Clamp(limit, 1, 5000);
+        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.RUN_BASELINES, cancellationToken: cancellationToken);
+        using var request = BuildRequest(HttpMethod.Get, baseUrl, $"{routePrefix}?limit={safeLimit}", apiKey);
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseRoot(body, response.IsSuccessStatusCode);
+        var provider = root?["provider"]?.GetValue<string>() ?? string.Empty;
+        var array = root?["items"] as JsonArray;
+        if (array is null)
+        {
+            return Array.Empty<GovernanceRunBaselineItem>();
+        }
+
+        return array
+            .OfType<JsonObject>()
+            .Select(item => ParseRunBaselineItem(item, provider))
+            .ToList();
+    }
+
+    public async Task<GovernanceRunBaselineItem> SaveRunBaselineAsync(
+        string baseUrl,
+        string? apiKey,
+        string baselineId,
+        string name,
+        string runId,
+        string workflowId,
+        string createdAt,
+        string notes,
+        CancellationToken cancellationToken = default)
+    {
+        var routePrefix = await ResolveGovernanceRoutePrefixAsync(baseUrl, apiKey, GovernanceCapabilitiesGenerated.RUN_BASELINES, cancellationToken: cancellationToken);
+        var payload = new JsonObject
+        {
+            ["baseline"] = new JsonObject
+            {
+                ["baseline_id"] = (baselineId ?? string.Empty).Trim(),
+                ["name"] = (name ?? string.Empty).Trim(),
+                ["run_id"] = (runId ?? string.Empty).Trim(),
+                ["workflow_id"] = (workflowId ?? string.Empty).Trim(),
+                ["created_at"] = (createdAt ?? string.Empty).Trim(),
+                ["notes"] = (notes ?? string.Empty).Trim(),
+            }
+        };
+        using var request = BuildRequest(HttpMethod.Put, baseUrl, $"{routePrefix}/{Uri.EscapeDataString((baselineId ?? string.Empty).Trim())}", apiKey);
+        request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        var root = ParseRoot(body, response.IsSuccessStatusCode);
+        if (root?["item"] is not JsonObject item)
+        {
+            throw new InvalidOperationException("run baseline response missing item payload");
+        }
+
+        return ParseRunBaselineItem(item, root["provider"]?.GetValue<string>() ?? string.Empty);
     }
 
     public async Task<IReadOnlyList<GovernanceWorkflowVersionItem>> ListWorkflowVersionsAsync(
@@ -862,6 +982,27 @@ public sealed class GovernanceBridgeClient
             Steps: steps);
     }
 
+    private static GovernanceWorkflowRunRecordDetail ParseWorkflowRunRecordDetail(JsonObject item)
+    {
+        var result = item["result"] as JsonObject;
+        var steps = (result?["steps"] as JsonArray)
+            ?.OfType<JsonObject>()
+            .Select(ParseWorkflowRunStepItem)
+            .ToArray() ?? Array.Empty<GovernanceWorkflowRunStepItem>();
+        return new GovernanceWorkflowRunRecordDetail(
+            RunId: item["run_id"]?.GetValue<string>() ?? string.Empty,
+            WorkflowId: item["workflow_id"]?.GetValue<string>() ?? string.Empty,
+            Status: item["status"]?.GetValue<string>() ?? string.Empty,
+            Ok: item["ok"]?.GetValue<bool?>() ?? false,
+            Timestamp: item["ts"]?.GetValue<string>() ?? string.Empty,
+            RunRequestKind: item["run_request_kind"]?.GetValue<string>() ?? string.Empty,
+            VersionId: item["version_id"]?.GetValue<string>() ?? string.Empty,
+            PublishedVersionId: item["published_version_id"]?.GetValue<string>() ?? string.Empty,
+            WorkflowDefinitionSource: item["workflow_definition_source"]?.GetValue<string>() ?? string.Empty,
+            Steps: steps,
+            ResultPayload: CloneJsonObject(result));
+    }
+
     private static GovernanceWorkflowRunStepItem ParseWorkflowRunStepItem(JsonObject item)
     {
         var startedAt = item["started_at"]?.GetValue<string>() ?? string.Empty;
@@ -904,6 +1045,20 @@ public sealed class GovernanceBridgeClient
             Version: item["version"]?.GetValue<string>() ?? string.Empty,
             Scope: item["scope"]?.GetValue<string>() ?? string.Empty,
             RulesJson: rulesJson);
+    }
+
+    private static GovernanceRunBaselineItem ParseRunBaselineItem(JsonObject item, string provider)
+    {
+        return new GovernanceRunBaselineItem(
+            BaselineId: item["baseline_id"]?.GetValue<string>() ?? string.Empty,
+            Name: item["name"]?.GetValue<string>() ?? string.Empty,
+            RunId: item["run_id"]?.GetValue<string>() ?? string.Empty,
+            WorkflowId: item["workflow_id"]?.GetValue<string>() ?? string.Empty,
+            CreatedAt: item["created_at"]?.GetValue<string>() ?? string.Empty,
+            Notes: item["notes"]?.GetValue<string>() ?? string.Empty,
+            Provider: string.IsNullOrWhiteSpace(provider) ? item["provider"]?.GetValue<string>() ?? string.Empty : provider,
+            Owner: item["owner"]?.GetValue<string>() ?? string.Empty,
+            SourceOfTruth: item["source_of_truth"]?.GetValue<string>() ?? string.Empty);
     }
 
     private static GovernanceWorkflowVersionItem ParseWorkflowVersionItem(JsonObject item)
@@ -1045,6 +1200,13 @@ public sealed class GovernanceBridgeClient
         }
 
         return root;
+    }
+
+    private static JsonObject CloneJsonObject(JsonObject? source)
+    {
+        return source is null
+            ? new JsonObject()
+            : JsonNode.Parse(source.ToJsonString()) as JsonObject ?? new JsonObject();
     }
 
     private static double ComputeSeconds(string startedAt, string endedAt)

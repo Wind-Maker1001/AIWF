@@ -52,6 +52,7 @@ public sealed partial class MainWindow : Window
     private readonly GovernanceSandboxCoordinator _governanceSandboxCoordinator;
     private readonly GovernanceSandboxMutationCoordinator _governanceSandboxMutationCoordinator;
     private readonly WorkflowVersionAdminCoordinator _workflowVersionAdminCoordinator;
+    private readonly WorkflowRunBaselineCoordinator _workflowRunBaselineCoordinator;
     private readonly WorkflowAppPublishPreflightCoordinator _workflowAppPublishPreflightCoordinator;
     private readonly WorkflowAppPublishCoordinator _workflowAppPublishCoordinator;
     private readonly WorkflowTemplateAuthoringCoordinator _workflowTemplateAuthoringCoordinator;
@@ -224,6 +225,7 @@ public sealed partial class MainWindow : Window
         _workflowVersionAdminCoordinator = new WorkflowVersionAdminCoordinator(
             _governanceClient,
             new WorkflowVersionCacheService());
+        _workflowRunBaselineCoordinator = new WorkflowRunBaselineCoordinator(_governanceClient);
         _workflowAppPublishPreflightCoordinator = new WorkflowAppPublishPreflightCoordinator(_runnerAdapter);
         _workflowAppPublishCoordinator = new WorkflowAppPublishCoordinator(
             _governanceClient,

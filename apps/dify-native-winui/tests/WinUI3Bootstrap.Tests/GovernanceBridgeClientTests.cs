@@ -780,6 +780,130 @@ public sealed class GovernanceBridgeClientTests
     }
 
     [Fact]
+    public async Task ListRunBaselinesAsync_UsesGeneratedRunBaselinesRoute()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal("http://127.0.0.1:18081/governance/run-baselines?limit=120", request.RequestUri!.AbsoluteUri);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "ok": true,
+                  "provider": "glue-python",
+                  "items": [
+                    {
+                      "baseline_id": "base_1",
+                      "name": "Base One",
+                      "run_id": "run_1",
+                      "workflow_id": "wf_finance",
+                      "created_at": "2026-05-29T00:00:00Z",
+                      "notes": "seed",
+                      "owner": "glue-python",
+                      "source_of_truth": "glue-python.governance.run_baselines"
+                    }
+                  ]
+                }
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var items = await client.ListRunBaselinesAsync("http://127.0.0.1:18081", "");
+
+        var item = Assert.Single(items);
+        Assert.Equal("base_1", item.BaselineId);
+        Assert.Equal("glue-python", item.Provider);
+    }
+
+    [Fact]
+    public async Task SaveRunBaselineAsync_PostsCanonicalPayload()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(async request =>
+        {
+            Assert.Equal(HttpMethod.Put, request.Method);
+            Assert.Equal("http://127.0.0.1:18081/governance/run-baselines/base_1", request.RequestUri!.AbsoluteUri);
+            var body = await request.Content!.ReadAsStringAsync();
+            Assert.Contains("\"baseline_id\":\"base_1\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"run_id\":\"run_1\"", body, StringComparison.Ordinal);
+            Assert.Contains("\"workflow_id\":\"wf_finance\"", body, StringComparison.Ordinal);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "ok": true,
+                  "provider": "glue-python",
+                  "item": {
+                    "baseline_id": "base_1",
+                    "name": "Base One",
+                    "run_id": "run_1",
+                    "workflow_id": "wf_finance",
+                    "created_at": "2026-05-29T00:00:00Z",
+                    "notes": "seed",
+                    "owner": "glue-python",
+                    "source_of_truth": "glue-python.governance.run_baselines"
+                  }
+                }
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var item = await client.SaveRunBaselineAsync(
+            "http://127.0.0.1:18081",
+            "",
+            "base_1",
+            "Base One",
+            "run_1",
+            "wf_finance",
+            "2026-05-29T00:00:00Z",
+            "seed");
+
+        Assert.Equal("base_1", item.BaselineId);
+        Assert.Equal("run_1", item.RunId);
+    }
+
+    [Fact]
+    public async Task GetWorkflowRunRecordAsync_ParsesDetailPayload()
+    {
+        using var http = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            Assert.Equal("http://127.0.0.1:18081/api/v1/jobs/run_1/record", request.RequestUri!.AbsoluteUri);
+            return Json(HttpStatusCode.OK, """
+                {
+                  "run_id": "run_1",
+                  "workflow_id": "wf_finance",
+                  "status": "failed",
+                  "ok": false,
+                  "ts": "2026-05-29T00:00:00Z",
+                  "run_request_kind": "reference",
+                  "version_id": "ver_1",
+                  "published_version_id": "",
+                  "workflow_definition_source": "version_reference",
+                  "result": {
+                    "lineage": {
+                      "node_count": 2,
+                      "edge_count": 1
+                    },
+                    "steps": [
+                      {
+                        "step_id": "clean_md",
+                        "status": "DONE",
+                        "started_at": "2026-05-29T00:00:00Z",
+                        "ended_at": "2026-05-29T00:00:02Z",
+                        "error": ""
+                      }
+                    ]
+                  }
+                }
+                """);
+        }));
+
+        var client = new GovernanceBridgeClient(http);
+        var item = await client.GetWorkflowRunRecordAsync("http://127.0.0.1:18081", "", "run_1");
+
+        Assert.Equal("run_1", item.RunId);
+        Assert.Equal("ver_1", item.VersionId);
+        Assert.Single(item.Steps);
+        Assert.Equal(2, item.Steps[0].Seconds);
+        Assert.Equal(2, item.ResultPayload["lineage"]?["node_count"]?.GetValue<int>());
+    }
+
+    [Fact]
     public async Task SandboxGovernanceApis_ParseRulesAndVersions()
     {
         using var http = new HttpClient(new StubHttpMessageHandler(request =>
@@ -1119,6 +1243,14 @@ public sealed class GovernanceBridgeClientTests
                     "capability": "workflow_apps",
                     "route_prefix": "/governance/workflow-apps",
                     "owned_route_prefixes": ["/governance/workflow-apps"],
+                    "state_owner": "glue-python",
+                    "control_plane_role": "governance_state",
+                    "lifecycle_mutation_allowed": false
+                  },
+                  {
+                    "capability": "run_baselines",
+                    "route_prefix": "/governance/run-baselines",
+                    "owned_route_prefixes": ["/governance/run-baselines"],
                     "state_owner": "glue-python",
                     "control_plane_role": "governance_state",
                     "lifecycle_mutation_allowed": false
