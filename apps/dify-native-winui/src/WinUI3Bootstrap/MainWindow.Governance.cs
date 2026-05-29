@@ -672,7 +672,7 @@ public sealed partial class MainWindow
         {
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
             var selected = _selectedGovernanceReview.Item;
-            var item = await _governanceManualReviewCoordinator.SubmitDecisionAsync(
+            var result = await _governanceManualReviewCoordinator.SubmitDecisionAndResumeAsync(
                 baseUrl,
                 ApiKeyTextBox.Text.Trim(),
                 selected,
@@ -680,11 +680,16 @@ public sealed partial class MainWindow
                 GovernanceReviewerTextBox.Text,
                 GovernanceCommentTextBox.Text);
 
-            SetGovernanceStatus(
-                approved
-                    ? $"Review approved: {item.RunId} / {item.ReviewKey}"
-                    : $"Review rejected: {item.RunId} / {item.ReviewKey}",
-                isError: false);
+            if (result.ResumedResponse is not null)
+            {
+                RawResponseTextBox.Text = PrettyJson(result.ResumedResponse.Body);
+                if (result.ResumeSucceeded && TryBindRunResult(result.ResumedResponse.Body))
+                {
+                    SetActiveSection(NavSection.Results);
+                }
+            }
+
+            SetGovernanceStatus(result.StatusText, isError: !result.ResumeSucceeded && result.ResumeAttempted);
             GovernanceCommentTextBox.Text = string.Empty;
             _selectedGovernanceReview = null;
             PendingReviewsListView.SelectedItem = null;

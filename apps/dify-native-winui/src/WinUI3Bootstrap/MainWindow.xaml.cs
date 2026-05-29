@@ -218,7 +218,7 @@ public sealed partial class MainWindow : Window
         _runnerAdapter = new WorkflowRunnerAdapter(_http);
         _governanceClient = new GovernanceBridgeClient(_http);
         _governanceAuditCoordinator = new GovernanceAuditCoordinator(_governanceClient);
-        _governanceManualReviewCoordinator = new GovernanceManualReviewCoordinator(_governanceClient);
+        _governanceManualReviewCoordinator = new GovernanceManualReviewCoordinator(_governanceClient, _runnerAdapter);
         _governanceQualityRuleSetCoordinator = new GovernanceQualityRuleSetCoordinator(_governanceClient);
         _governanceSandboxCoordinator = new GovernanceSandboxCoordinator(_governanceClient);
         _governanceSandboxMutationCoordinator = new GovernanceSandboxMutationCoordinator(_governanceClient);

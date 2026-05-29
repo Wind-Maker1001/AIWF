@@ -883,10 +883,17 @@ public sealed class GovernanceBridgeClientTests
                   "version_id": "ver_1",
                   "published_version_id": "",
                   "workflow_definition_source": "version_reference",
+                  "payload": {
+                    "compatibility_path": "run-reference",
+                    "version_id": "ver_1",
+                    "params": {
+                      "region": "cn"
+                    }
+                  },
                   "result": {
                     "lineage": {
                       "node_count": 2,
-                      "edge_count": 1
+                        "edge_count": 1
                     },
                     "steps": [
                       {
@@ -907,6 +914,7 @@ public sealed class GovernanceBridgeClientTests
 
         Assert.Equal("run_1", item.RunId);
         Assert.Equal("ver_1", item.VersionId);
+        Assert.Equal("run-reference", item.Payload["compatibility_path"]?.GetValue<string>() ?? string.Empty);
         Assert.Single(item.Steps);
         Assert.Equal(2, item.Steps[0].Seconds);
         Assert.Equal(2, item.ResultPayload["lineage"]?["node_count"]?.GetValue<int>());

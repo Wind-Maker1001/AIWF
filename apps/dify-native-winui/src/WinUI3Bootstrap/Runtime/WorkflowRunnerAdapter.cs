@@ -48,6 +48,21 @@ public sealed class WorkflowRunnerAdapter
         return new WorkflowHttpResult(response.StatusCode, response.IsSuccessStatusCode, body);
     }
 
+    public async Task<WorkflowHttpResult> RunWorkflowReferenceAsync(
+        string baseUrl,
+        string? apiKey,
+        string jobId,
+        JsonObject payload,
+        CancellationToken cancellationToken = default)
+    {
+        var encodedJobId = Uri.EscapeDataString(jobId.Trim());
+        using var request = BuildRequest(HttpMethod.Post, baseUrl, $"/api/v1/jobs/{encodedJobId}/run-reference", apiKey);
+        request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
+        using var response = await _http.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        return new WorkflowHttpResult(response.StatusCode, response.IsSuccessStatusCode, body);
+    }
+
     public async Task<JsonObject> PrecheckCleaningAsync(
         string baseUrl,
         string? apiKey,
