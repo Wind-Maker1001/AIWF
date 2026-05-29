@@ -135,7 +135,7 @@
       "owner": "workflow/governance backend+frontend",
       "migration_target": "WinUI lineage/baseline viewer over backend compare services",
       "remove_by": "2026-06-18",
-      "blocker": "WinUI baseline list/save/compare viewer landed on 2026-05-29; remaining gap is historical lineage persistence/query parity and compare report export parity"
+      "blocker": "WinUI baseline list/save/compare viewer plus compare report and lineage export parity landed on 2026-05-29; remaining gap is historical lineage persistence/query parity"
     },
     {
       "id": "workflow_debug_api_shell",

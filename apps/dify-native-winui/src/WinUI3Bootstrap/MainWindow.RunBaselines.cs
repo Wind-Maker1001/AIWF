@@ -7,6 +7,9 @@ namespace AIWF.Native;
 public sealed partial class MainWindow
 {
     private GovernanceRunBaselineItem? _selectedRunBaseline;
+    private WorkflowRunCompareResult? _lastRunCompareResult;
+    private WorkflowRunBaselineRegressionResult? _lastRunBaselineRegressionResult;
+    private WorkflowRunLineageResult? _lastRunLineageResult;
 
     private async Task RefreshRunBaselinesAsync()
     {
@@ -64,6 +67,8 @@ public sealed partial class MainWindow
             !string.IsNullOrWhiteSpace(RunBaselineRunBTextBox.Text)
             && (_selectedRunBaseline is not null || RunBaselinesListView.Items.Count > 0);
         LoadRunLineageButton.IsEnabled = !string.IsNullOrWhiteSpace(RunBaselineRunATextBox.Text);
+        ExportRunCompareReportButton.IsEnabled = _lastRunCompareResult is not null || _lastRunBaselineRegressionResult is not null;
+        ExportRunLineageButton.IsEnabled = _lastRunLineageResult?.Ok == true;
     }
 
     private async void OnRefreshRunBaselinesClick(object sender, RoutedEventArgs e)
@@ -156,7 +161,10 @@ public sealed partial class MainWindow
                 ApiKeyTextBox.Text.Trim(),
                 runA,
                 runB);
+            _lastRunCompareResult = result;
+            _lastRunBaselineRegressionResult = null;
             ApplyRunBaselineCompareResult(result);
+            ApplyRunBaselineActionState();
             SetGovernanceStatus("Run compare completed.", isError: false);
         }
         catch (Exception ex)
@@ -182,7 +190,10 @@ public sealed partial class MainWindow
                 ApiKeyTextBox.Text.Trim(),
                 runId,
                 _selectedRunBaseline?.BaselineId);
+            _lastRunBaselineRegressionResult = result;
+            _lastRunCompareResult = result.Compare;
             ApplyRunBaselineRegressionResult(result);
+            ApplyRunBaselineActionState();
             SetGovernanceStatus("Baseline compare completed.", isError: false);
         }
         catch (Exception ex)
@@ -209,13 +220,85 @@ public sealed partial class MainWindow
                 runId,
                 RawResponseTextBox.Text,
                 JobIdTextBlock.Text);
+            _lastRunLineageResult = result;
             RunLineageTextBox.Text = result.RawJson;
             RunBaselineSummaryTextBlock.Text = result.StatusMessage;
+            ApplyRunBaselineActionState();
             SetGovernanceStatus(result.StatusMessage, isError: !result.Ok);
         }
         catch (Exception ex)
         {
             SetGovernanceStatus($"Load lineage failed: {ex.Message}", isError: true);
+        }
+    }
+
+    private async void OnExportRunCompareReportClick(object sender, RoutedEventArgs e)
+    {
+        var compare = _lastRunCompareResult ?? _lastRunBaselineRegressionResult?.Compare;
+        if (compare is null)
+        {
+            SetGovernanceStatus("No compare result available to export.", isError: true);
+            return;
+        }
+
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = $"run_compare_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.FileTypeChoices.Add("Markdown", new List<string> { ".md" });
+            picker.FileTypeChoices.Add("HTML", new List<string> { ".html" });
+
+            var file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            var extension = Path.GetExtension(file.Path).ToLowerInvariant();
+            var content = extension == ".html"
+                ? WorkflowRunBaselineExportSupport.RenderCompareHtml(compare)
+                : WorkflowRunBaselineExportSupport.RenderCompareMarkdown(compare);
+            await Windows.Storage.FileIO.WriteTextAsync(file, content);
+            SetGovernanceStatus($"Run compare report exported: {file.Path}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Export run compare report failed: {ex.Message}", isError: true);
+        }
+    }
+
+    private async void OnExportRunLineageClick(object sender, RoutedEventArgs e)
+    {
+        if (_lastRunLineageResult?.Ok != true)
+        {
+            SetGovernanceStatus("No lineage payload available to export.", isError: true);
+            return;
+        }
+
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = $"run_lineage_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.FileTypeChoices.Add("JSON", new List<string> { ".json" });
+
+            var file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            await Windows.Storage.FileIO.WriteTextAsync(file, _lastRunLineageResult.RawJson);
+            SetGovernanceStatus($"Run lineage exported: {file.Path}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Export run lineage failed: {ex.Message}", isError: true);
         }
     }
 
