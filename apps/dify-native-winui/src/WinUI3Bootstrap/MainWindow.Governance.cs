@@ -62,6 +62,11 @@ public sealed partial class MainWindow
         await SaveQualityRuleSetAsync();
     }
 
+    private async void OnSaveQualityRuleSetFromCanvasClick(object sender, RoutedEventArgs e)
+    {
+        await SaveQualityRuleSetFromCanvasAsync();
+    }
+
     private async void OnDeleteQualityRuleSetClick(object sender, RoutedEventArgs e)
     {
         await DeleteQualityRuleSetAsync();
@@ -374,6 +379,40 @@ public sealed partial class MainWindow
         catch (Exception ex)
         {
             SetGovernanceStatus($"Save quality rule set failed: {ex.Message}", isError: true);
+        }
+    }
+
+    private async Task SaveQualityRuleSetFromCanvasAsync()
+    {
+        try
+        {
+            var document = BuildWorkflowGraphDocumentFromCanvas();
+            var rules = QualityRuleSetEditorSupport.CollectQualityRulesFromWorkflowDocument(document);
+            if (rules.Count == 0)
+            {
+                SetGovernanceStatus("Current canvas does not contain a quality_check node with rules.", isError: true);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(QualityRuleSetIdTextBox.Text))
+            {
+                QualityRuleSetIdTextBox.Text = "canvas_default";
+            }
+            if (string.IsNullOrWhiteSpace(QualityRuleSetNameTextBox.Text))
+            {
+                QualityRuleSetNameTextBox.Text = QualityRuleSetIdTextBox.Text.Trim();
+            }
+            if (string.IsNullOrWhiteSpace(QualityRuleSetVersionTextBox.Text))
+            {
+                QualityRuleSetVersionTextBox.Text = "v1";
+            }
+
+            QualityRuleSetJsonTextBox.Text = JsonSerializer.Serialize(rules, new JsonSerializerOptions { WriteIndented = true });
+            await SaveQualityRuleSetAsync();
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Save quality rule set from canvas failed: {ex.Message}", isError: true);
         }
     }
 

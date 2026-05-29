@@ -38,6 +38,7 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceManualReviewCoordinator.cs" Link="Source\GovernanceManualReviewCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceManualReviewPresenter.cs" Link="Source\GovernanceManualReviewPresenter.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceQualityRuleSetCoordinator.cs" Link="Source\GovernanceQualityRuleSetCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\QualityRuleSetEditorSupport.cs" Link="Source\QualityRuleSetEditorSupport.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxCoordinator.cs" Link="Source\GovernanceSandboxCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxMutationCoordinator.cs" Link="Source\GovernanceSandboxMutationCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowDiagnosticsCoordinator.cs" Link="Source\WorkflowDiagnosticsCoordinator.cs" />
