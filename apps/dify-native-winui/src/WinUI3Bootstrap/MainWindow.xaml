@@ -1878,6 +1878,8 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <Button x:Name="UseGovernanceRunAsAButton"
                                             Grid.Column="0"
@@ -1916,6 +1918,22 @@
                                             AutomationProperties.AutomationId="CompareWithBaselineButton"
                                             Click="OnCompareWithBaselineClick"
                                             Content="Compare Baseline"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="ExportRunCompareReportButton"
+                                            Grid.Column="5"
+                                            AutomationProperties.AutomationId="ExportRunCompareReportButton"
+                                            Click="OnExportRunCompareReportClick"
+                                            Content="Export Compare"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="ExportRunLineageButton"
+                                            Grid.Column="6"
+                                            AutomationProperties.AutomationId="ExportRunLineageButton"
+                                            Click="OnExportRunLineageClick"
+                                            Content="Export Lineage"
                                             MinHeight="36"
                                             Padding="14,0"
                                             IsEnabled="False" />
