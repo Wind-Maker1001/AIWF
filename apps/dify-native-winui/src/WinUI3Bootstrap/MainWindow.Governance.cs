@@ -529,6 +529,7 @@ public sealed partial class MainWindow
             var apiKey = ApiKeyTextBox.Text.Trim();
             var state = await _governanceSandboxCoordinator.RefreshAsync(baseUrl, apiKey);
             SandboxRulesJsonTextBox.Text = PrettyGovernanceJson(state.Rules.ToJsonString());
+            ApplySandboxRulesToFields(state.Rules);
 
             SandboxRuleVersionsListView.Items.Clear();
             foreach (var item in state.Versions)
@@ -567,6 +568,7 @@ public sealed partial class MainWindow
         try
         {
             var baseUrl = await EnsureGovernanceBoundaryLoadedAsync();
+            SyncSandboxRulesJsonFromFields();
             var rules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
             var versionId = await _governanceSandboxMutationCoordinator.SaveRulesAsync(
                 baseUrl,
@@ -658,6 +660,133 @@ public sealed partial class MainWindow
         SandboxAutoFixModeTextBox.Text = string.Empty;
         SandboxAutoFixUntilTextBox.Text = string.Empty;
         await SaveSandboxAutoFixStateAsync();
+    }
+
+    private void ApplySandboxRulesToFields(JsonObject rules)
+    {
+        var presetState = GovernanceSandboxPresetSupport.FromRulesAndAutoFix(
+            rules,
+            SandboxThresholdYellowTextBox.Text,
+            SandboxThresholdRedTextBox.Text,
+            SandboxDedupWindowSecTextBox.Text);
+        SandboxWhitelistCodesTextBox.Text = presetState.WhitelistCodes;
+        SandboxWhitelistNodeTypesTextBox.Text = presetState.WhitelistNodeTypes;
+    }
+
+    private void SyncSandboxRulesJsonFromFields()
+    {
+        JsonObject currentRules;
+        try
+        {
+            currentRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
+        }
+        catch
+        {
+            currentRules = new JsonObject();
+        }
+
+        var nextRules = GovernanceSandboxPresetSupport.BuildRules(
+            SandboxWhitelistCodesTextBox.Text,
+            SandboxWhitelistNodeTypesTextBox.Text,
+            currentRules);
+        SandboxRulesJsonTextBox.Text = PrettyGovernanceJson(nextRules.ToJsonString());
+    }
+
+    private void ApplySandboxPresetToUi(GovernanceSandboxPresetViewState preset)
+    {
+        SandboxThresholdYellowTextBox.Text = preset.Yellow.ToString();
+        SandboxThresholdRedTextBox.Text = preset.Red.ToString();
+        SandboxDedupWindowSecTextBox.Text = preset.DedupWindowSec.ToString();
+        SandboxWhitelistCodesTextBox.Text = preset.WhitelistCodes;
+        SandboxWhitelistNodeTypesTextBox.Text = preset.WhitelistNodeTypes;
+        SyncSandboxRulesJsonFromFields();
+    }
+
+    private GovernanceSandboxPresetViewState CollectCurrentSandboxPresetState()
+    {
+        JsonObject currentRules;
+        try
+        {
+            currentRules = ParseJsonObjectOrThrow(SandboxRulesJsonTextBox.Text);
+        }
+        catch
+        {
+            currentRules = new JsonObject();
+        }
+
+        return GovernanceSandboxPresetSupport.FromRulesAndAutoFix(
+            currentRules,
+            SandboxThresholdYellowTextBox.Text,
+            SandboxThresholdRedTextBox.Text,
+            SandboxDedupWindowSecTextBox.Text);
+    }
+
+    private void OnApplySandboxPresetClick(object sender, RoutedEventArgs e)
+    {
+        var preset = GovernanceSandboxPresetSupport.ResolvePreset(ReadComboText(SandboxPresetComboBox));
+        ApplySandboxPresetToUi(preset);
+        SetGovernanceStatus($"Sandbox preset applied: {ReadComboText(SandboxPresetComboBox)}", isError: false);
+    }
+
+    private async void OnExportSandboxPresetClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = $"sandbox_preset_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.FileTypeChoices.Add("JSON Files", new List<string> { ".json" });
+
+            var file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            var payload = new JsonObject
+            {
+                ["exported_at"] = DateTimeOffset.UtcNow.ToString("O"),
+                ["preset"] = GovernanceSandboxPresetSupport.BuildPresetPayload(CollectCurrentSandboxPresetState()),
+            };
+            await Windows.Storage.FileIO.WriteTextAsync(
+                file,
+                JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }));
+            SetGovernanceStatus($"Sandbox preset exported: {file.Path}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Export sandbox preset failed: {ex.Message}", isError: true);
+        }
+    }
+
+    private async void OnImportSandboxPresetClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.FileTypeFilter.Add(".json");
+            var file = await picker.PickSingleFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            var text = await Windows.Storage.FileIO.ReadTextAsync(file);
+            var root = JsonNode.Parse(text) as JsonObject
+                ?? throw new InvalidOperationException("Sandbox preset file must be a JSON object.");
+            var preset = GovernanceSandboxPresetSupport.ParsePresetPayload(
+                root["preset"] as JsonObject ?? root);
+            ApplySandboxPresetToUi(preset);
+            SetGovernanceStatus($"Sandbox preset imported: {file.Path}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Import sandbox preset failed: {ex.Message}", isError: true);
+        }
     }
 
     private async Task SubmitGovernanceReviewDecisionAsync(bool approved)
