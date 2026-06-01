@@ -34,7 +34,7 @@
     {
       "id": "review_queue_manual_review_admin_surface",
       "current_status": "compat-hidden",
-      "winui_status": "partial",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/review-queue-*.js"
       ],
@@ -42,7 +42,7 @@
       "owner": "governance/frontend+backend",
       "migration_target": "WinUI manual review UI over backend review state transitions",
       "remove_by": "2026-06-18",
-      "blocker": "WinUI manual review queue/history plus review history date filters and export landed by 2026-05-29; remaining gap is broader governance parity and offline_local provider retirement"
+      "blocker": "WinUI manual review queue/history plus review history date filters/export and approve-reject auto-resume parity landed by 2026-05-30"
     },
     {
       "id": "sandbox_alerts_rules_autofix_management",

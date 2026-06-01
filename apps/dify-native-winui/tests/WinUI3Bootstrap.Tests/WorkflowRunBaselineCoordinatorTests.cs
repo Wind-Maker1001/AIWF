@@ -168,6 +168,7 @@ public sealed class WorkflowRunBaselineCoordinatorTests
             VersionId: "ver_1",
             PublishedVersionId: string.Empty,
             WorkflowDefinitionSource: "version_reference",
+            Payload: new JsonObject(),
             Steps: steps ?? Array.Empty<GovernanceWorkflowRunStepItem>(),
             ResultPayload: resultPayload ?? new JsonObject());
     }

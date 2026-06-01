@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using AIWF.Native.Runtime;
 using Xunit;
 
@@ -25,7 +26,10 @@ public sealed class GovernanceManualReviewCoordinatorTests
                 ]);
             },
             listReviewHistory: (_, _, _, _, _, _, _, _, _) => throw new NotImplementedException(),
-            submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException());
+            submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException(),
+            getRunRecord: (_, _, _, _) => throw new NotImplementedException(),
+            runReference: (_, _, _, _, _) => throw new NotImplementedException(),
+            runFlow: (_, _, _, _, _, _) => throw new NotImplementedException());
 
         var result = await coordinator.RefreshPendingAsync("http://127.0.0.1:18081", "token");
 
@@ -42,7 +46,10 @@ public sealed class GovernanceManualReviewCoordinatorTests
         var coordinator = new GovernanceManualReviewCoordinator(
             listPendingReviews: (_, _, _, _) => Task.FromResult<IReadOnlyList<GovernanceManualReviewItem>>(Array.Empty<GovernanceManualReviewItem>()),
             listReviewHistory: (_, _, _, _, _, _, _, _, _) => throw new NotImplementedException(),
-            submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException());
+            submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException(),
+            getRunRecord: (_, _, _, _) => throw new NotImplementedException(),
+            runReference: (_, _, _, _, _) => throw new NotImplementedException(),
+            runFlow: (_, _, _, _, _, _) => throw new NotImplementedException());
 
         var result = await coordinator.RefreshPendingAsync("http://127.0.0.1:18081", "");
 
@@ -72,7 +79,10 @@ public sealed class GovernanceManualReviewCoordinatorTests
                 seenDateTo = dateTo;
                 return Task.FromResult<IReadOnlyList<GovernanceManualReviewItem>>(Array.Empty<GovernanceManualReviewItem>());
             },
-            submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException());
+            submitReviewDecision: (_, _, _, _, _, _, _, _) => throw new NotImplementedException(),
+            getRunRecord: (_, _, _, _) => throw new NotImplementedException(),
+            runReference: (_, _, _, _, _) => throw new NotImplementedException(),
+            runFlow: (_, _, _, _, _, _) => throw new NotImplementedException());
 
         await coordinator.RefreshHistoryAsync(
             "http://127.0.0.1:18081",
@@ -111,7 +121,10 @@ public sealed class GovernanceManualReviewCoordinatorTests
                 seenReviewer = reviewer;
                 seenComment = comment;
                 return Task.FromResult(new GovernanceManualReviewItem(runId, reviewKey, "wf_1", "n1", reviewer, comment, "", "", approved ? "approved" : "rejected", approved));
-            });
+            },
+            getRunRecord: (_, _, _, _) => throw new NotImplementedException(),
+            runReference: (_, _, _, _, _) => throw new NotImplementedException(),
+            runFlow: (_, _, _, _, _, _) => throw new NotImplementedException());
 
         var item = await coordinator.SubmitDecisionAsync(
             "http://127.0.0.1:18081",
@@ -136,5 +149,110 @@ public sealed class GovernanceManualReviewCoordinatorTests
                 false,
                 "",
                 ""));
+    }
+
+    [Fact]
+    public async Task SubmitDecisionAndResumeAsync_RerunsReferenceWorkflowWithManualReviewBag()
+    {
+        JsonObject? seenPayload = null;
+
+        var coordinator = new GovernanceManualReviewCoordinator(
+            listPendingReviews: (_, _, _, _) => throw new NotImplementedException(),
+            listReviewHistory: (_, _, _, _, _, _, _, _, _) => throw new NotImplementedException(),
+            submitReviewDecision: (_, _, runId, reviewKey, approved, reviewer, comment, _) =>
+                Task.FromResult(new GovernanceManualReviewItem(runId, reviewKey, "wf_1", "n1", reviewer, comment, "", "", approved ? "approved" : "rejected", approved)),
+            getRunRecord: (_, _, runId, _) => Task.FromResult(new GovernanceWorkflowRunRecordDetail(
+                RunId: runId,
+                WorkflowId: "wf_1",
+                Status: "pending_review",
+                Ok: false,
+                Timestamp: "2026-05-30T00:00:00Z",
+                RunRequestKind: "reference",
+                VersionId: "ver_1",
+                PublishedVersionId: "",
+                WorkflowDefinitionSource: "version_reference",
+                Payload: new JsonObject
+                {
+                    ["version_id"] = "ver_1",
+                    ["actor"] = "alice",
+                    ["ruleset_version"] = "v1",
+                    ["params"] = new JsonObject
+                    {
+                        ["region"] = "cn"
+                    }
+                },
+                Steps: Array.Empty<GovernanceWorkflowRunStepItem>(),
+                ResultPayload: new JsonObject())),
+            runReference: (_, _, _, payload, _) =>
+            {
+                seenPayload = payload;
+                return Task.FromResult(new WorkflowHttpResult(System.Net.HttpStatusCode.OK, true, """{"ok":true}"""));
+            },
+            runFlow: (_, _, _, _, _, _) => throw new NotImplementedException());
+
+        var result = await coordinator.SubmitDecisionAndResumeAsync(
+            "http://127.0.0.1:18081",
+            "",
+            new GovernanceManualReviewItem("run_1", "gate_a", "wf_1", "n1", "", "", "", "", "pending", false),
+            true,
+            "alice",
+            "looks good");
+
+        Assert.True(result.ReviewSaved);
+        Assert.True(result.ResumeAttempted);
+        Assert.True(result.ResumeSucceeded);
+        Assert.NotNull(seenPayload);
+        Assert.Equal("ver_1", seenPayload!["version_id"]?.GetValue<string>());
+        Assert.Equal(true, seenPayload!["params"]?["manual_review"]?["gate_a"]?["approved"]?.GetValue<bool>());
+        Assert.Equal("alice", seenPayload!["params"]?["manual_review"]?["gate_a"]?["reviewer"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SubmitDecisionAndResumeAsync_RerunsLegacyFlowWhenFlowPresent()
+    {
+        string? seenFlow = null;
+
+        var coordinator = new GovernanceManualReviewCoordinator(
+            listPendingReviews: (_, _, _, _) => throw new NotImplementedException(),
+            listReviewHistory: (_, _, _, _, _, _, _, _, _) => throw new NotImplementedException(),
+            submitReviewDecision: (_, _, runId, reviewKey, approved, reviewer, comment, _) =>
+                Task.FromResult(new GovernanceManualReviewItem(runId, reviewKey, "wf_1", "n1", reviewer, comment, "", "", approved ? "approved" : "rejected", approved)),
+            getRunRecord: (_, _, runId, _) => Task.FromResult(new GovernanceWorkflowRunRecordDetail(
+                RunId: runId,
+                WorkflowId: "wf_1",
+                Status: "pending_review",
+                Ok: false,
+                Timestamp: "2026-05-30T00:00:00Z",
+                RunRequestKind: "legacy_flow",
+                VersionId: "",
+                PublishedVersionId: "",
+                WorkflowDefinitionSource: "draft_inline",
+                Payload: new JsonObject
+                {
+                    ["flow"] = "cleaning",
+                    ["actor"] = "alice",
+                    ["ruleset_version"] = "v1",
+                    ["params"] = new JsonObject()
+                },
+                Steps: Array.Empty<GovernanceWorkflowRunStepItem>(),
+                ResultPayload: new JsonObject())),
+            runReference: (_, _, _, _, _) => throw new NotImplementedException(),
+            runFlow: (_, _, _, flow, _, _) =>
+            {
+                seenFlow = flow;
+                return Task.FromResult(new WorkflowHttpResult(System.Net.HttpStatusCode.OK, true, """{"ok":true}"""));
+            });
+
+        var result = await coordinator.SubmitDecisionAndResumeAsync(
+            "http://127.0.0.1:18081",
+            "",
+            new GovernanceManualReviewItem("run_1", "gate_a", "wf_1", "n1", "", "", "", "", "pending", false),
+            false,
+            "alice",
+            "reject");
+
+        Assert.True(result.ResumeAttempted);
+        Assert.True(result.ResumeSucceeded);
+        Assert.Equal("cleaning", seenFlow);
     }
 }

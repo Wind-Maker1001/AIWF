@@ -81,6 +81,7 @@ public sealed record GovernanceWorkflowRunRecordDetail(
     string VersionId,
     string PublishedVersionId,
     string WorkflowDefinitionSource,
+    JsonObject Payload,
     IReadOnlyList<GovernanceWorkflowRunStepItem> Steps,
     JsonObject ResultPayload)
 {
@@ -1003,6 +1004,7 @@ public sealed class GovernanceBridgeClient
             VersionId: item["version_id"]?.GetValue<string>() ?? string.Empty,
             PublishedVersionId: item["published_version_id"]?.GetValue<string>() ?? string.Empty,
             WorkflowDefinitionSource: item["workflow_definition_source"]?.GetValue<string>() ?? string.Empty,
+            Payload: CloneJsonObject(item["payload"] as JsonObject),
             Steps: steps,
             ResultPayload: CloneJsonObject(result));
     }
