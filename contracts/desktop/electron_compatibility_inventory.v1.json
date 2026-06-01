@@ -56,7 +56,7 @@
       "owner": "governance/backend+frontend",
       "migration_target": "WinUI governance editor over backend sandbox policy/version APIs",
       "remove_by": "2026-06-18",
-      "blocker": "remaining gap is Electron-only deep debug tooling"
+      "blocker": "WinUI sandbox rules/autofix editor plus preset apply/import/export parity landed on 2026-06-01; remaining gap is sandbox alert aggregation/health parity and sandbox audit export parity"
     },
     {
       "id": "workflow_version_cache_compare_ui",

@@ -2101,6 +2101,87 @@
                                           Height="180"
                                           MinHeight="160"
                                           SelectionChanged="OnSandboxRuleVersionSelectionChanged" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="SandboxPresetComboBox"
+                                              Grid.Column="0"
+                                              AutomationProperties.AutomationId="SandboxPresetComboBox"
+                                              Style="{StaticResource TouchComboBoxStyle}"
+                                              SelectedIndex="1">
+                                        <ComboBoxItem Content="strict" />
+                                        <ComboBoxItem Content="balanced" />
+                                        <ComboBoxItem Content="loose" />
+                                    </ComboBox>
+                                    <Button Grid.Column="1"
+                                            x:Name="ApplySandboxPresetButton"
+                                            AutomationProperties.AutomationId="ApplySandboxPresetButton"
+                                            Click="OnApplySandboxPresetClick"
+                                            Content="应用预设"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button Grid.Column="2"
+                                            x:Name="ExportSandboxPresetButton"
+                                            AutomationProperties.AutomationId="ExportSandboxPresetButton"
+                                            Click="OnExportSandboxPresetClick"
+                                            Content="导出预设"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                    <Button Grid.Column="3"
+                                            x:Name="ImportSandboxPresetButton"
+                                            AutomationProperties.AutomationId="ImportSandboxPresetButton"
+                                            Click="OnImportSandboxPresetClick"
+                                            Content="导入预设"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SandboxThresholdYellowTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="SandboxThresholdYellowTextBox"
+                                             PlaceholderText="yellow threshold"
+                                             Text="1"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="SandboxThresholdRedTextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="SandboxThresholdRedTextBox"
+                                             PlaceholderText="red threshold"
+                                             Text="3"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="SandboxDedupWindowSecTextBox"
+                                             Grid.Column="2"
+                                             AutomationProperties.AutomationId="SandboxDedupWindowSecTextBox"
+                                             PlaceholderText="dedup window sec"
+                                             Text="600"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                </Grid>
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SandboxWhitelistCodesTextBox"
+                                             Grid.Column="0"
+                                             AutomationProperties.AutomationId="SandboxWhitelistCodesTextBox"
+                                             PlaceholderText="whitelist codes csv"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                    <TextBox x:Name="SandboxWhitelistNodeTypesTextBox"
+                                             Grid.Column="1"
+                                             AutomationProperties.AutomationId="SandboxWhitelistNodeTypesTextBox"
+                                             PlaceholderText="whitelist node types csv"
+                                             Style="{StaticResource TouchTextBoxStyle}" />
+                                </Grid>
                                 <TextBox x:Name="SandboxRulesJsonTextBox"
                                          AutomationProperties.AutomationId="SandboxRulesJsonTextBox"
                                          AcceptsReturn="True"
