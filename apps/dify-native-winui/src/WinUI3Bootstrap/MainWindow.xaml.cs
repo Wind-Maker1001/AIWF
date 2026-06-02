@@ -51,6 +51,7 @@ public sealed partial class MainWindow : Window
     private readonly GovernanceQualityRuleSetCoordinator _governanceQualityRuleSetCoordinator;
     private readonly GovernanceSandboxCoordinator _governanceSandboxCoordinator;
     private readonly GovernanceSandboxMutationCoordinator _governanceSandboxMutationCoordinator;
+    private readonly GovernanceSandboxAlertCoordinator _governanceSandboxAlertCoordinator;
     private readonly WorkflowVersionAdminCoordinator _workflowVersionAdminCoordinator;
     private readonly WorkflowRunBaselineCoordinator _workflowRunBaselineCoordinator;
     private readonly WorkflowAppPublishPreflightCoordinator _workflowAppPublishPreflightCoordinator;
@@ -59,6 +60,7 @@ public sealed partial class MainWindow : Window
     private readonly WorkflowDiagnosticsCoordinator _workflowDiagnosticsCoordinator;
     private readonly RunFlowCoordinator _runFlowCoordinator;
     private readonly WorkflowDraftRunCoordinator _workflowDraftRunCoordinator;
+    private readonly WorkflowRunAuditStoreService _workflowRunAuditStoreService;
     private readonly CanvasAuthoringPersistenceService _canvasAuthoringPersistenceService;
     private readonly SqlStudioBrowseCoordinator _sqlStudioBrowseCoordinator;
     private readonly SqlStudioExecutionCoordinator _sqlStudioExecutionCoordinator;
@@ -220,8 +222,10 @@ public sealed partial class MainWindow : Window
         _governanceAuditCoordinator = new GovernanceAuditCoordinator(_governanceClient);
         _governanceManualReviewCoordinator = new GovernanceManualReviewCoordinator(_governanceClient, _runnerAdapter);
         _governanceQualityRuleSetCoordinator = new GovernanceQualityRuleSetCoordinator(_governanceClient);
+        _workflowRunAuditStoreService = new WorkflowRunAuditStoreService();
         _governanceSandboxCoordinator = new GovernanceSandboxCoordinator(_governanceClient);
         _governanceSandboxMutationCoordinator = new GovernanceSandboxMutationCoordinator(_governanceClient);
+        _governanceSandboxAlertCoordinator = new GovernanceSandboxAlertCoordinator(_workflowRunAuditStoreService);
         _workflowVersionAdminCoordinator = new WorkflowVersionAdminCoordinator(
             _governanceClient,
             new WorkflowVersionCacheService());
