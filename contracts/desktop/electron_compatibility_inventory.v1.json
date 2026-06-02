@@ -127,7 +127,7 @@
     {
       "id": "baseline_compare_lineage_helper_surfaces",
       "current_status": "compat-hidden",
-      "winui_status": "partial",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/support-ui-*.js"
       ],
@@ -135,7 +135,7 @@
       "owner": "workflow/governance backend+frontend",
       "migration_target": "WinUI lineage/baseline viewer over backend compare services",
       "remove_by": "2026-06-18",
-      "blocker": "WinUI baseline list/save/compare viewer plus compare report and lineage export parity landed on 2026-05-29; remaining gap is historical lineage persistence/query parity"
+      "blocker": "WinUI baseline list/save/compare viewer plus compare report export, lineage export, and local run-audit backed historical lineage/query parity landed on 2026-06-02"
     },
     {
       "id": "workflow_debug_api_shell",
