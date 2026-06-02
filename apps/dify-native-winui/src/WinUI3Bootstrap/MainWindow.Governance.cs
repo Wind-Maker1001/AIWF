@@ -15,6 +15,7 @@ public sealed partial class MainWindow
     private GovernanceSandboxRuleVersionItem? _selectedSandboxRuleVersion;
     private IReadOnlyList<GovernanceManualReviewItem> _currentReviewHistoryItems = Array.Empty<GovernanceManualReviewItem>();
     private GovernanceAuditRefreshResult? _currentGovernanceAuditState;
+    private GovernanceSandboxAlertRefreshResult? _currentSandboxAlertState;
     private GovernanceControlPlaneBoundary? _currentGovernanceBoundary;
     private string _currentGovernanceBoundaryBaseUrl = string.Empty;
     private GovernanceSandboxAutoFixState _currentSandboxAutoFixState =
@@ -81,6 +82,11 @@ public sealed partial class MainWindow
     private async void OnRefreshSandboxGovernanceClick(object sender, RoutedEventArgs e)
     {
         await RefreshSandboxGovernanceAsync();
+    }
+
+    private async void OnExportSandboxAuditClick(object sender, RoutedEventArgs e)
+    {
+        await ExportSandboxAuditAsync();
     }
 
     private async void OnSaveSandboxRulesClick(object sender, RoutedEventArgs e)
@@ -549,16 +555,30 @@ public sealed partial class MainWindow
             {
                 SandboxAutoFixActionsListView.Items.Add(item);
             }
+
+            var yellow = int.TryParse(SandboxThresholdYellowTextBox.Text.Trim(), out var parsedYellow) ? Math.Max(1, parsedYellow) : 1;
+            var red = int.TryParse(SandboxThresholdRedTextBox.Text.Trim(), out var parsedRed) ? Math.Max(yellow + 1, parsedRed) : Math.Max(yellow + 1, 3);
+            var dedupWindowSec = int.TryParse(SandboxDedupWindowSecTextBox.Text.Trim(), out var parsedDedup) ? Math.Max(0, parsedDedup) : 600;
+            _currentSandboxAlertState = _governanceSandboxAlertCoordinator.Refresh(
+                500,
+                state.Rules,
+                yellow,
+                red,
+                dedupWindowSec);
+            ApplySandboxAlertState(_currentSandboxAlertState);
         }
         catch (Exception ex)
         {
             SandboxRuleVersionsListView.Items.Clear();
+            SandboxAlertsListView.Items.Clear();
+            SandboxHealthTextBlock.Text = "-";
             SandboxAutoFixActionsListView.Items.Clear();
             SandboxAutoFixStateTextBlock.Text = "-";
             SandboxAutoFixModeTextBox.Text = string.Empty;
             SandboxAutoFixUntilTextBox.Text = string.Empty;
             SandboxAutoFixGreenStreakTextBox.Text = "0";
             _currentSandboxAutoFixState = new GovernanceSandboxAutoFixState(string.Empty, string.Empty, 0, new JsonArray(), new JsonArray());
+            _currentSandboxAlertState = null;
             SetGovernanceStatus($"Refresh sandbox governance failed: {ex.Message}", isError: true);
         }
     }
@@ -789,6 +809,66 @@ public sealed partial class MainWindow
         }
     }
 
+    private void ApplySandboxAlertState(GovernanceSandboxAlertRefreshResult state)
+    {
+        SandboxHealthTextBlock.Text = state.Health.DisplayText;
+        SandboxAlertsListView.Items.Clear();
+        if (state.ByNode.Count == 0)
+        {
+            SandboxAlertsListView.Items.Add("No sandbox alerts.");
+            return;
+        }
+
+        foreach (var item in state.ByNode)
+        {
+            SandboxAlertsListView.Items.Add(item);
+        }
+    }
+
+    private async Task ExportSandboxAuditAsync()
+    {
+        try
+        {
+            if (_currentSandboxAlertState is null)
+            {
+                await RefreshSandboxGovernanceAsync();
+            }
+
+            if (_currentSandboxAlertState is null)
+            {
+                SetGovernanceStatus("No sandbox audit data available to export.", isError: true);
+                return;
+            }
+
+            var picker = new Windows.Storage.Pickers.FileSavePicker();
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hWnd);
+            picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = $"sandbox_audit_{DateTime.Now:yyyyMMdd_HHmmss}";
+            picker.FileTypeChoices.Add("Markdown Files", new List<string> { ".md" });
+            picker.FileTypeChoices.Add("JSON Files", new List<string> { ".json" });
+
+            var file = await picker.PickSaveFileAsync();
+            if (file is null)
+            {
+                return;
+            }
+
+            var extension = Path.GetExtension(file.Path).ToLowerInvariant();
+            var content = extension == ".json"
+                ? JsonSerializer.Serialize(
+                    GovernanceSandboxAuditExportSupport.BuildExportEnvelope(_currentSandboxAlertState),
+                    new JsonSerializerOptions { WriteIndented = true })
+                : GovernanceSandboxAuditExportSupport.RenderMarkdown(_currentSandboxAlertState);
+            await Windows.Storage.FileIO.WriteTextAsync(file, content);
+            SetGovernanceStatus($"Sandbox audit exported: {file.Path}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetGovernanceStatus($"Export sandbox audit failed: {ex.Message}", isError: true);
+        }
+    }
+
     private async Task SubmitGovernanceReviewDecisionAsync(bool approved)
     {
         if (_selectedGovernanceReview?.Item is null)
@@ -811,6 +891,11 @@ public sealed partial class MainWindow
 
             if (result.ResumedResponse is not null)
             {
+                TryMirrorWorkflowRun(
+                    result.ResumedResponse.Body,
+                    selected.RunId,
+                    workflowId: selected.WorkflowId,
+                    runRequestKind: "reference");
                 RawResponseTextBox.Text = PrettyJson(result.ResumedResponse.Body);
                 if (result.ResumeSucceeded && TryBindRunResult(result.ResumedResponse.Body))
                 {

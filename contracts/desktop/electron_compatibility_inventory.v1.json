@@ -47,7 +47,7 @@
     {
       "id": "sandbox_alerts_rules_autofix_management",
       "current_status": "compat-hidden",
-      "winui_status": "partial",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/sandbox-*.js",
         "renderer/workflow/panels-ui-governance-*"
@@ -56,7 +56,7 @@
       "owner": "governance/backend+frontend",
       "migration_target": "WinUI governance editor over backend sandbox policy/version APIs",
       "remove_by": "2026-06-18",
-      "blocker": "WinUI sandbox rules/autofix editor plus preset apply/import/export parity landed on 2026-06-01; remaining gap is sandbox alert aggregation/health parity and sandbox audit export parity"
+      "blocker": "WinUI sandbox rules/autofix editor plus preset apply/import/export, alert/health viewer, and sandbox audit export parity landed on 2026-06-02"
     },
     {
       "id": "workflow_version_cache_compare_ui",

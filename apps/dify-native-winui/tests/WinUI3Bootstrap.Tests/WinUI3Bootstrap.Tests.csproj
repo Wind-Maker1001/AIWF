@@ -43,7 +43,10 @@
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxMutationCoordinator.cs" Link="Source\GovernanceSandboxMutationCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxPresetSupport.cs" Link="Source\GovernanceSandboxPresetSupport.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceAuditExportSupport.cs" Link="Source\GovernanceAuditExportSupport.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxAuditExportSupport.cs" Link="Source\GovernanceSandboxAuditExportSupport.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\GovernanceSandboxAlertCoordinator.cs" Link="Source\GovernanceSandboxAlertCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowDiagnosticsCoordinator.cs" Link="Source\WorkflowDiagnosticsCoordinator.cs" />
+    <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowRunAuditStoreService.cs" Link="Source\WorkflowRunAuditStoreService.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowRunBaselineCoordinator.cs" Link="Source\WorkflowRunBaselineCoordinator.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowRunBaselineExportSupport.cs" Link="Source\WorkflowRunBaselineExportSupport.cs" />
     <Compile Include="..\..\src\WinUI3Bootstrap\Runtime\WorkflowRunBaselinePresenter.cs" Link="Source\WorkflowRunBaselinePresenter.cs" />

@@ -176,6 +176,13 @@ public sealed partial class MainWindow
             RunReferenceTextBlock.Text = "Preparing run...";
             var input = CollectRunRequestInput();
             var exec = await ExecuteRunRequestAsync(input);
+            TryMirrorWorkflowRun(
+                exec.Body,
+                exec.EffectiveJobId,
+                input.Payload,
+                workflowId: exec.EffectiveJobId,
+                runRequestKind: "legacy_flow",
+                workflowDefinitionSource: "legacy_flow_dispatch");
             TryApplyRunExecutionResult(exec);
         }
         catch (Exception ex)
