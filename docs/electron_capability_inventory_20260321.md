@@ -65,7 +65,7 @@ Routing rule confirmed on 2026-03-21:
 
 | Capability | Why it may remain | Rule |
 | --- | --- | --- |
-| Workflow Studio compatibility entrypoint | still useful for legacy node/config/admin work while WinUI catches up | no new primary user features |
+| Workflow Studio compatibility entrypoint | keep only as a script/argv-only compatibility launcher while residual legacy use exists | keep off default in-app menu and no new primary user features |
 | Legacy Electron installer/portable packaging | still useful for existing users who rely on current shell | compatibility-only release path only |
 | Dev/debug helpers tied to Electron runtime | may still reduce debugging cost during transition | keep off primary onboarding and primary release path |
 

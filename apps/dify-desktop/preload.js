@@ -83,7 +83,6 @@ contextBridge.exposeInMainWorld("aiwfDesktop", {
     return ipcRenderer.invoke("aiwf:saveWorkflow", request);
   },
   loadWorkflow: (opts) => ipcRenderer.invoke("aiwf:loadWorkflow", opts),
-  openWorkflowStudio: () => ipcRenderer.invoke("aiwf:openWorkflowStudio"),
   openPath: (p) => ipcRenderer.invoke("aiwf:openPath", p),
   getLatestArtifactsDir: () => ipcRenderer.invoke("aiwf:getLatestArtifactsDir"),
   getSamplePoolInfo: (cfg) => ipcRenderer.invoke("aiwf:getSamplePoolInfo", cfg),

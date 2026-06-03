@@ -179,11 +179,6 @@ function registerWorkflowRunIpc(ctx, deps) {
     };
   }
 
-  ipcMain.handle("aiwf:openWorkflowStudio", async () => {
-    createWorkflowWindow();
-    return { ok: true };
-  });
-
   ipcMain.handle("aiwf:runWorkflow", async (_evt, payload, cfg) => {
     try {
       const merged = normalizeWorkflowConfig({ ...loadConfig(), ...(cfg || {}) });

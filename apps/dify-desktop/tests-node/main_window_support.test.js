@@ -5,6 +5,7 @@ const { createWindowSupport } = require("../main_window_support");
 function makeSupport(isPackaged, env = {}) {
   Object.assign(process.env, env);
   const created = [];
+  let lastMenuTemplate = null;
   const support = createWindowSupport({
     app: { isPackaged, getPath: () => "D:\\tmp" },
     BrowserWindow: class {
@@ -16,11 +17,17 @@ function makeSupport(isPackaged, env = {}) {
         this.loaded = { file, loadOptions };
       }
     },
-    Menu: { setApplicationMenu() {}, buildFromTemplate(v) { return v; } },
+    Menu: {
+      setApplicationMenu() {},
+      buildFromTemplate(v) {
+        lastMenuTemplate = v;
+        return v;
+      },
+    },
     shell: { openPath() {} },
     path: require("path"),
   });
-  return { support, created };
+  return { support, created, getMenuTemplate: () => lastMenuTemplate };
 }
 
 function withEnv(env, fn) {
@@ -97,4 +104,16 @@ test("workflow admin mode can combine with debug api in dev", () => {
     assert.equal(created.length, 1);
     assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", legacyAdmin: "1" });
   });
+});
+
+test("main menu hides legacy workflow launchers by default", () => {
+  const { support, getMenuTemplate } = makeSupport(false);
+  support.createWindow();
+  const template = getMenuTemplate();
+  assert.ok(Array.isArray(template));
+  const helpMenu = template.find((item) => item?.label === "帮助");
+  assert.ok(helpMenu);
+  const labels = Array.isArray(helpMenu.submenu) ? helpMenu.submenu.map((item) => item?.label) : [];
+  assert.ok(!labels.includes("打开 Legacy Workflow Studio"));
+  assert.ok(!labels.includes("打开 Legacy Workflow 管理面"));
 });
