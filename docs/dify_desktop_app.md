@@ -2,12 +2,12 @@
 
 This document describes the secondary Electron compatibility frontend under `apps/dify-desktop`.
 
-WinUI is the primary frontend. Electron remains for Workflow Studio compatibility, advanced diagnostics, and current Electron packaging paths.
+WinUI is the primary frontend. Electron remains for script/argv-only Workflow Studio compatibility, advanced diagnostics, and current Electron packaging paths.
 
 ## Current Surfaces
 
 - home screen for offline jobs, queue management, precheck, and local release helpers
-- explicit `Legacy Workflow Studio` compatibility window for advanced workflow editing
+- explicit script/argv-only `Legacy Workflow Studio` compatibility window for advanced workflow editing
 - governance / diagnostics / publish panels are compatibility-only and require explicit admin mode: `--workflow-admin` or `?legacyAdmin=1`
 - optional `base_api` mode for calling local AIWF backend endpoints
 

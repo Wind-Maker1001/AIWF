@@ -26,8 +26,6 @@
     const tpl = [{
       label: "帮助",
       submenu: [
-        { label: "打开 Legacy Workflow Studio", click: () => createWorkflowWindow() },
-        { label: "打开 Legacy Workflow 管理面", click: () => createWorkflowWindow({ legacyAdmin: true }) },
         { label: "打开配置目录", click: () => shell.openPath(app.getPath("userData")) },
         { label: "打开输出目录", click: () => shell.openPath((() => { try { const cfg = typeof loadConfig === "function" ? loadConfig() : null; const fromCfg = String(cfg?.outputRoot || "").trim(); if (fromCfg) return fromCfg; } catch {} return path.join(app.getPath("desktop"), "AIWF_Builds"); })()) },
       ],

@@ -208,7 +208,6 @@ $checks = @(
   @{
     Path = Join-Path $RepoRoot "apps\dify-desktop\main_window_support.js"
     Patterns = @(
-      "createWorkflowWindow({ legacyAdmin: true })",
       "openWorkflowAdmin",
       "--workflow-admin",
       "legacyAdmin"

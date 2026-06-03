@@ -102,6 +102,7 @@ Rules:
 - Electron changes require explicit compatibility justification
 - Electron package outputs are secondary artifacts, not the main release artifact
 - high-risk compatibility-only code must carry a deletion condition
+- Workflow Studio compatibility entrypoints should stay script/argv-only rather than remaining visible as default in-app launchers
 
 Exit:
 

@@ -11,7 +11,7 @@ Workflow run audit remains local-runtime by default for local workflow execution
 ## Current Role
 
 - WinUI is the primary desktop frontend.
-- Electron remains only as a secondary compatibility shell and Workflow Studio compatibility entrypoint.
+- Electron remains only as a secondary compatibility shell and script/argv-only Workflow Studio compatibility entrypoint.
 
 ## Run
 
@@ -94,7 +94,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_uia_sm
 
 Use Electron only when you explicitly need:
 
-- Workflow Studio compatibility entrypoint
+- Workflow Studio compatibility entrypoint through explicit scripts or argv
 - Existing Electron advanced diagnostics / compatibility tools
 - Existing Electron compatibility packaging path
 
