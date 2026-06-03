@@ -53,14 +53,18 @@ public sealed class WorkflowRunBaselineCoordinator
     private readonly Func<string, string?, int, CancellationToken, Task<IReadOnlyList<GovernanceRunBaselineItem>>> _listBaselines;
     private readonly Func<string, string?, string, string, string, string, string, string, CancellationToken, Task<GovernanceRunBaselineItem>> _saveBaseline;
     private readonly Func<string, string?, string, CancellationToken, Task<GovernanceWorkflowRunRecordDetail>> _getRunRecord;
+    private readonly Func<string, GovernanceWorkflowRunRecordDetail?> _getLocalRunRecord;
     private readonly Func<DateTimeOffset> _now;
     private readonly Func<string> _randomHex;
 
-    public WorkflowRunBaselineCoordinator(GovernanceBridgeClient client)
+    public WorkflowRunBaselineCoordinator(
+        GovernanceBridgeClient client,
+        WorkflowRunAuditStoreService? runAuditStoreService = null)
         : this(
             client.ListRunBaselinesAsync,
             client.SaveRunBaselineAsync,
-            client.GetWorkflowRunRecordAsync)
+            client.GetWorkflowRunRecordAsync,
+            runAuditStoreService is null ? null : new Func<string, GovernanceWorkflowRunRecordDetail?>(runAuditStoreService.GetRun))
     {
     }
 
@@ -68,12 +72,14 @@ public sealed class WorkflowRunBaselineCoordinator
         Func<string, string?, int, CancellationToken, Task<IReadOnlyList<GovernanceRunBaselineItem>>> listBaselines,
         Func<string, string?, string, string, string, string, string, string, CancellationToken, Task<GovernanceRunBaselineItem>> saveBaseline,
         Func<string, string?, string, CancellationToken, Task<GovernanceWorkflowRunRecordDetail>> getRunRecord,
+        Func<string, GovernanceWorkflowRunRecordDetail?>? getLocalRunRecord = null,
         Func<DateTimeOffset>? now = null,
         Func<string>? randomHex = null)
     {
         _listBaselines = listBaselines;
         _saveBaseline = saveBaseline;
         _getRunRecord = getRunRecord;
+        _getLocalRunRecord = getLocalRunRecord ?? (_ => null);
         _now = now ?? (() => DateTimeOffset.UtcNow);
         _randomHex = randomHex ?? (() => Guid.NewGuid().ToString("N")[..8]);
     }
@@ -94,7 +100,7 @@ public sealed class WorkflowRunBaselineCoordinator
         string? notes = null,
         CancellationToken cancellationToken = default)
     {
-        var record = await _getRunRecord(baseUrl, apiKey, runId, cancellationToken);
+        var record = await ResolveRunRecordAsync(baseUrl, apiKey, runId, cancellationToken);
         var effectiveName = string.IsNullOrWhiteSpace(name)
             ? $"baseline_{runId[..Math.Min(8, runId.Length)]}"
             : name.Trim();
@@ -117,8 +123,8 @@ public sealed class WorkflowRunBaselineCoordinator
         string runB,
         CancellationToken cancellationToken = default)
     {
-        var recordA = await _getRunRecord(baseUrl, apiKey, runA, cancellationToken);
-        var recordB = await _getRunRecord(baseUrl, apiKey, runB, cancellationToken);
+        var recordA = await ResolveRunRecordAsync(baseUrl, apiKey, runA, cancellationToken);
+        var recordB = await ResolveRunRecordAsync(baseUrl, apiKey, runB, cancellationToken);
         return BuildRunCompare(recordA, recordB);
     }
 
@@ -164,7 +170,7 @@ public sealed class WorkflowRunBaselineCoordinator
         string currentRunId,
         CancellationToken cancellationToken = default)
     {
-        var record = await _getRunRecord(baseUrl, apiKey, runId, cancellationToken);
+        var record = await ResolveRunRecordAsync(baseUrl, apiKey, runId, cancellationToken);
         var lineage = ResolveLineage(record.ResultPayload);
         if (lineage is null
             && string.Equals(runId.Trim(), (currentRunId ?? string.Empty).Trim(), StringComparison.Ordinal))
@@ -192,6 +198,22 @@ public sealed class WorkflowRunBaselineCoordinator
             edgeCount,
             lineage.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
             $"Lineage loaded: nodes={nodeCount}, edges={edgeCount}");
+    }
+
+    private async Task<GovernanceWorkflowRunRecordDetail> ResolveRunRecordAsync(
+        string baseUrl,
+        string? apiKey,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        var normalizedRunId = (runId ?? string.Empty).Trim();
+        var local = _getLocalRunRecord(normalizedRunId);
+        if (local is not null)
+        {
+            return local;
+        }
+
+        return await _getRunRecord(baseUrl, apiKey, normalizedRunId, cancellationToken);
     }
 
     internal static WorkflowRunCompareResult BuildRunCompare(

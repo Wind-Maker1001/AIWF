@@ -229,7 +229,7 @@ public sealed partial class MainWindow : Window
         _workflowVersionAdminCoordinator = new WorkflowVersionAdminCoordinator(
             _governanceClient,
             new WorkflowVersionCacheService());
-        _workflowRunBaselineCoordinator = new WorkflowRunBaselineCoordinator(_governanceClient);
+        _workflowRunBaselineCoordinator = new WorkflowRunBaselineCoordinator(_governanceClient, _workflowRunAuditStoreService);
         _workflowAppPublishPreflightCoordinator = new WorkflowAppPublishPreflightCoordinator(_runnerAdapter);
         _workflowAppPublishCoordinator = new WorkflowAppPublishCoordinator(
             _governanceClient,

@@ -40,8 +40,8 @@ public sealed class WorkflowRunBaselineCoordinatorTests
                 return Task.FromResult(new GovernanceRunBaselineItem(baselineId, name, runId, workflowId, createdAt, notes, "glue-python", "glue-python", "glue-python.governance.run_baselines"));
             },
             (_, _, runId, _) => Task.FromResult(CreateRunRecord(runId)),
-            () => DateTimeOffset.Parse("2026-05-29T08:00:00Z"),
-            () => "deadbeef");
+            now: () => DateTimeOffset.Parse("2026-05-29T08:00:00Z"),
+            randomHex: () => "deadbeef");
 
         var baseline = await coordinator.SaveCurrentRunAsBaselineAsync(
             "http://127.0.0.1:18081",
@@ -151,6 +151,74 @@ public sealed class WorkflowRunBaselineCoordinatorTests
         Assert.True(fallback.Ok);
         Assert.Equal(2, fallback.NodeCount);
         Assert.Equal(1, fallback.EdgeCount);
+    }
+
+    [Fact]
+    public async Task CompareRunsAsync_UsesLocalMirrorBeforeRemote()
+    {
+        var backendCalled = false;
+        var coordinator = new WorkflowRunBaselineCoordinator(
+            (_, _, _, _) => Task.FromResult<IReadOnlyList<GovernanceRunBaselineItem>>(Array.Empty<GovernanceRunBaselineItem>()),
+            (_, _, _, _, _, _, _, _, _) => throw new NotSupportedException(),
+            (_, _, _, _) =>
+            {
+                backendCalled = true;
+                throw new NotSupportedException();
+            },
+            getLocalRunRecord: runId => runId switch
+            {
+                "run_a" => CreateRunRecord("run_a", steps:
+                [
+                    new GovernanceWorkflowRunStepItem("clean_md", "DONE", "2026-05-29T00:00:00Z", "2026-05-29T00:00:01Z", 1, "")
+                ]),
+                "run_b" => CreateRunRecord("run_b", steps:
+                [
+                    new GovernanceWorkflowRunStepItem("clean_md", "FAILED", "2026-05-29T00:00:00Z", "2026-05-29T00:00:03Z", 3, "boom")
+                ]),
+                _ => null
+            });
+
+        var compare = await coordinator.CompareRunsAsync("http://127.0.0.1:18081", "", "run_a", "run_b");
+
+        Assert.False(backendCalled);
+        Assert.True(compare.Ok);
+        Assert.Equal(1, compare.Summary.ChangedNodes);
+    }
+
+    [Fact]
+    public async Task LoadLineageAsync_UsesLocalMirrorHistoryBeforeBackend()
+    {
+        var backendCalled = false;
+        var coordinator = new WorkflowRunBaselineCoordinator(
+            (_, _, _, _) => Task.FromResult<IReadOnlyList<GovernanceRunBaselineItem>>(Array.Empty<GovernanceRunBaselineItem>()),
+            (_, _, _, _, _, _, _, _, _) => throw new NotSupportedException(),
+            (_, _, _, _) =>
+            {
+                backendCalled = true;
+                throw new NotSupportedException();
+            },
+            getLocalRunRecord: runId => runId == "run_hist"
+                ? CreateRunRecord(runId, resultPayload: new JsonObject
+                {
+                    ["lineage"] = new JsonObject
+                    {
+                        ["node_count"] = 4,
+                        ["edge_count"] = 3
+                    }
+                })
+                : null);
+
+        var result = await coordinator.LoadLineageAsync(
+            "http://127.0.0.1:18081",
+            "",
+            "run_hist",
+            "{}",
+            "");
+
+        Assert.False(backendCalled);
+        Assert.True(result.Ok);
+        Assert.Equal(4, result.NodeCount);
+        Assert.Equal(3, result.EdgeCount);
     }
 
     private static GovernanceWorkflowRunRecordDetail CreateRunRecord(
