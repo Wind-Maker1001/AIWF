@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 namespace AIWF.Native.Runtime;
 
 public sealed record WorkflowDraftRunExecutionResult(
+    JsonObject RequestPayload,
     string PrettyResponseJson,
     bool ParsedBindingState,
     RunResultBindingState BindingState,
@@ -26,14 +27,7 @@ public sealed class WorkflowDraftRunCoordinator
         WorkflowGraphDocument document,
         CancellationToken cancellationToken = default)
     {
-        var payload = new JsonObject
-        {
-            ["workflow_definition"] = WorkflowCanvasDocumentBuilder.SerializeWorkflowDefinition(document),
-            ["job_id"] = string.IsNullOrWhiteSpace(jobId) ? document.WorkflowId : jobId.Trim(),
-            ["run_id"] = Guid.NewGuid().ToString("N"),
-            ["job_context"] = new JsonObject(),
-            ["params"] = new JsonObject(),
-        };
+        var payload = BuildRequestPayload(jobId, document);
 
         var httpResult = await _runner.PostJsonRawAsync(
             accelUrl,
@@ -75,11 +69,24 @@ public sealed class WorkflowDraftRunCoordinator
                 out bindingState);
 
         return new WorkflowDraftRunExecutionResult(
+            RequestPayload: JsonNode.Parse(payload.ToJsonString()) as JsonObject ?? new JsonObject(),
             prettyResponseJson,
             parsedBindingState,
             bindingState,
             response["final_output"] as JsonObject,
             WorkflowCanvasNodeOutputPresenter.Create(response));
+    }
+
+    public static JsonObject BuildRequestPayload(string jobId, WorkflowGraphDocument document)
+    {
+        return new JsonObject
+        {
+            ["workflow_definition"] = WorkflowCanvasDocumentBuilder.SerializeWorkflowDefinition(document),
+            ["job_id"] = string.IsNullOrWhiteSpace(jobId) ? document.WorkflowId : jobId.Trim(),
+            ["run_id"] = Guid.NewGuid().ToString("N"),
+            ["job_context"] = new JsonObject(),
+            ["params"] = new JsonObject(),
+        };
     }
 
     private static bool IsRecognizedRunResponse(JsonObject response)

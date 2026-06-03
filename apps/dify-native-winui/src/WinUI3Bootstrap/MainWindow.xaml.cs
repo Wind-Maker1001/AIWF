@@ -54,6 +54,8 @@ public sealed partial class MainWindow : Window
     private readonly GovernanceSandboxAlertCoordinator _governanceSandboxAlertCoordinator;
     private readonly WorkflowVersionAdminCoordinator _workflowVersionAdminCoordinator;
     private readonly WorkflowRunBaselineCoordinator _workflowRunBaselineCoordinator;
+    private readonly WorkflowQueueStoreService _workflowQueueStoreService;
+    private readonly WorkflowQueueAdminCoordinator _workflowQueueAdminCoordinator;
     private readonly WorkflowAppPublishPreflightCoordinator _workflowAppPublishPreflightCoordinator;
     private readonly WorkflowAppPublishCoordinator _workflowAppPublishCoordinator;
     private readonly WorkflowTemplateAuthoringCoordinator _workflowTemplateAuthoringCoordinator;
@@ -223,6 +225,7 @@ public sealed partial class MainWindow : Window
         _governanceManualReviewCoordinator = new GovernanceManualReviewCoordinator(_governanceClient, _runnerAdapter);
         _governanceQualityRuleSetCoordinator = new GovernanceQualityRuleSetCoordinator(_governanceClient);
         _workflowRunAuditStoreService = new WorkflowRunAuditStoreService();
+        _workflowQueueStoreService = new WorkflowQueueStoreService();
         _governanceSandboxCoordinator = new GovernanceSandboxCoordinator(_governanceClient);
         _governanceSandboxMutationCoordinator = new GovernanceSandboxMutationCoordinator(_governanceClient);
         _governanceSandboxAlertCoordinator = new GovernanceSandboxAlertCoordinator(_workflowRunAuditStoreService);
@@ -246,6 +249,11 @@ public sealed partial class MainWindow : Window
         _workflowDiagnosticsCoordinator = new WorkflowDiagnosticsCoordinator(_governanceClient, _runnerAdapter);
         _runFlowCoordinator = new RunFlowCoordinator(_http, _runnerAdapter);
         _workflowDraftRunCoordinator = new WorkflowDraftRunCoordinator(_runnerAdapter);
+        _workflowQueueAdminCoordinator = new WorkflowQueueAdminCoordinator(
+            _workflowQueueStoreService,
+            _workflowRunAuditStoreService,
+            _runFlowCoordinator,
+            _runnerAdapter);
         _canvasAuthoringPersistenceService = new CanvasAuthoringPersistenceService(
             CanvasStateFilePath,
             WorkflowGraphStateFilePath);

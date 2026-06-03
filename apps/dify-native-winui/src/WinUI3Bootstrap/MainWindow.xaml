@@ -1366,6 +1366,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <Border x:Name="GovernancePendingCard" Grid.Row="0" Style="{StaticResource CardBorderStyle}">
@@ -1579,7 +1580,168 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="WorkflowVersionsCard" Grid.Row="4" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="WorkflowQueueAdminCard" Grid.Row="4" Style="{StaticResource CardBorderStyle}">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Queue Admin &amp; Run History" FontSize="16" FontWeight="SemiBold" Foreground="#FF111111" />
+                                    <Button Grid.Column="1"
+                                            x:Name="RefreshQueueAdminButton"
+                                            AutomationProperties.AutomationId="RefreshQueueAdminButton"
+                                            Click="OnRefreshQueueAdminClick"
+                                            Content="Refresh"
+                                            MinHeight="36"
+                                            Padding="14,0" />
+                                    <Button Grid.Column="2"
+                                            x:Name="QueueCurrentFlowButton"
+                                            AutomationProperties.AutomationId="QueueCurrentFlowButton"
+                                            Click="OnQueueCurrentFlowClick"
+                                            Content="Queue Flow"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                    <Button Grid.Column="3"
+                                            x:Name="QueueCurrentCanvasButton"
+                                            AutomationProperties.AutomationId="QueueCurrentCanvasButton"
+                                            Click="OnQueueCurrentCanvasClick"
+                                            Content="Queue Canvas"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                    <Button Grid.Column="4"
+                                            x:Name="PauseWorkflowQueueButton"
+                                            AutomationProperties.AutomationId="PauseWorkflowQueueButton"
+                                            Click="OnPauseWorkflowQueueClick"
+                                            Content="Pause Queue"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                    <Button Grid.Column="5"
+                                            x:Name="ResumeWorkflowQueueButton"
+                                            AutomationProperties.AutomationId="ResumeWorkflowQueueButton"
+                                            Click="OnResumeWorkflowQueueClick"
+                                            Content="Resume Queue"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0" />
+                                </Grid>
+                                <TextBlock x:Name="WorkflowQueueSummaryTextBlock"
+                                           AutomationProperties.AutomationId="WorkflowQueueSummaryTextBlock"
+                                           Text="-"
+                                           Foreground="#FF4B5563"
+                                           TextWrapping="Wrap" />
+                                <ListView x:Name="WorkflowQueueListView"
+                                          AutomationProperties.AutomationId="WorkflowQueueListView"
+                                          Height="140"
+                                          MinHeight="120"
+                                          SelectionChanged="OnWorkflowQueueSelectionChanged" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="CancelWorkflowQueueTaskButton"
+                                            Grid.Column="0"
+                                            AutomationProperties.AutomationId="CancelWorkflowQueueTaskButton"
+                                            Click="OnCancelWorkflowQueueTaskClick"
+                                            Content="Cancel Task"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="RetryWorkflowQueueTaskButton"
+                                            Grid.Column="1"
+                                            AutomationProperties.AutomationId="RetryWorkflowQueueTaskButton"
+                                            Click="OnRetryWorkflowQueueTaskClick"
+                                            Content="Retry Task"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0"
+                                            IsEnabled="False" />
+                                    <TextBlock x:Name="WorkflowRunHistorySummaryTextBlock"
+                                               Grid.Column="2"
+                                               AutomationProperties.AutomationId="WorkflowRunHistorySummaryTextBlock"
+                                               Text="-"
+                                               Foreground="#FF4B5563"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap" />
+                                </Grid>
+                                <TextBox x:Name="WorkflowQueueTaskDetailTextBox"
+                                         AutomationProperties.AutomationId="WorkflowQueueTaskDetailTextBox"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="120"
+                                         IsReadOnly="True"
+                                         PlaceholderText="queue task details"
+                                         Style="{StaticResource TouchTextBoxStyle}" />
+                                <ListView x:Name="WorkflowRunHistoryListView"
+                                          AutomationProperties.AutomationId="WorkflowRunHistoryListView"
+                                          Height="140"
+                                          MinHeight="120"
+                                          SelectionChanged="OnWorkflowRunHistorySelectionChanged" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="ReplayWorkflowRunButton"
+                                            Grid.Column="0"
+                                            AutomationProperties.AutomationId="ReplayWorkflowRunButton"
+                                            Click="OnReplayWorkflowRunClick"
+                                            Content="Replay Run"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="RetryFailedWorkflowRunButton"
+                                            Grid.Column="1"
+                                            AutomationProperties.AutomationId="RetryFailedWorkflowRunButton"
+                                            Click="OnRetryFailedWorkflowRunClick"
+                                            Content="Retry Failed Step"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="UseQueueRunAsAButton"
+                                            Grid.Column="2"
+                                            AutomationProperties.AutomationId="UseQueueRunAsAButton"
+                                            Click="OnUseQueueRunAsAClick"
+                                            Content="Use Run as A"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0"
+                                            IsEnabled="False" />
+                                    <Button x:Name="UseQueueRunAsBButton"
+                                            Grid.Column="3"
+                                            AutomationProperties.AutomationId="UseQueueRunAsBButton"
+                                            Click="OnUseQueueRunAsBClick"
+                                            Content="Use Run as B"
+                                            MinHeight="36"
+                                            Padding="14,0"
+                                            Margin="8,0,0,0"
+                                            IsEnabled="False" />
+                                </Grid>
+                                <TextBox x:Name="WorkflowRunHistoryDetailTextBox"
+                                         AutomationProperties.AutomationId="WorkflowRunHistoryDetailTextBox"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="140"
+                                         IsReadOnly="True"
+                                         PlaceholderText="run history details"
+                                         Style="{StaticResource TouchTextBoxStyle}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="WorkflowVersionsCard" Grid.Row="5" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -1687,7 +1849,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="WorkflowAppsCard" Grid.Row="5" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="WorkflowAppsCard" Grid.Row="6" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -1835,7 +1997,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="RunBaselinesCard" Grid.Row="6" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="RunBaselinesCard" Grid.Row="7" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -1983,7 +2145,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="GovernanceQualityRuleCard" Grid.Row="7" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="GovernanceQualityRuleCard" Grid.Row="8" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -2062,7 +2224,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border x:Name="GovernanceSandboxCard" Grid.Row="8" Style="{StaticResource CardBorderStyle}">
+                        <Border x:Name="GovernanceSandboxCard" Grid.Row="9" Style="{StaticResource CardBorderStyle}">
                             <StackPanel Spacing="8">
                                 <Grid>
                                     <Grid.ColumnDefinitions>

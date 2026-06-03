@@ -74,7 +74,7 @@
     {
       "id": "queue_control_run_history_admin_panels",
       "current_status": "compat-hidden",
-      "winui_status": "partial",
+      "winui_status": "covered",
       "electron_surface": [
         "renderer/workflow/run-queue-*.js",
         "renderer/workflow/panels-ui-*.js"
@@ -83,7 +83,7 @@
       "owner": "workflow/platform backend+frontend",
       "migration_target": "WinUI queue admin surface over backend queue control APIs",
       "remove_by": "2026-06-18",
-      "blocker": "WinUI has run path, not admin queue tooling"
+      "blocker": "WinUI local queue admin surface with pause/resume, task cancel/retry, current flow/canvas queueing, and run history replay landed on 2026-06-03"
     },
     {
       "id": "quality_rule_set_center",
