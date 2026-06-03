@@ -27,6 +27,7 @@ public sealed partial class MainWindow
         await RefreshPendingReviewsAsync();
         await RefreshReviewHistoryAsync();
         await RefreshGovernanceAuditAsync();
+        await RefreshQueueAdminAsync();
         await RefreshWorkflowVersionsAdminAsync();
         await RefreshWorkflowAppsAsync();
         await RefreshRunBaselinesAsync();

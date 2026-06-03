@@ -7,12 +7,21 @@ namespace AIWF.Native.Runtime;
 public sealed class WorkflowRunAuditStoreService
 {
     private readonly string _runHistoryPath;
+    private readonly string? _legacyRunHistoryPath;
 
     public WorkflowRunAuditStoreService(string? runHistoryPath = null)
     {
-        _runHistoryPath = string.IsNullOrWhiteSpace(runHistoryPath)
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AIWF", "workflow-run-history.jsonl")
-            : Path.GetFullPath(runHistoryPath);
+        if (string.IsNullOrWhiteSpace(runHistoryPath))
+        {
+            var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AIWF");
+            _runHistoryPath = Path.Combine(root, "workflow_store", "run_history.jsonl");
+            _legacyRunHistoryPath = Path.Combine(root, "workflow-run-history.jsonl");
+        }
+        else
+        {
+            _runHistoryPath = Path.GetFullPath(runHistoryPath);
+            _legacyRunHistoryPath = null;
+        }
     }
 
     public string RunHistoryPath => _runHistoryPath;
@@ -49,28 +58,57 @@ public sealed class WorkflowRunAuditStoreService
 
     public IReadOnlyList<GovernanceWorkflowRunRecordDetail> ListRuns(int limit = 200)
     {
-        if (!File.Exists(_runHistoryPath))
+        var candidateFiles = new List<string>();
+        if (File.Exists(_runHistoryPath))
+        {
+            candidateFiles.Add(_runHistoryPath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_legacyRunHistoryPath)
+            && File.Exists(_legacyRunHistoryPath)
+            && !string.Equals(_legacyRunHistoryPath, _runHistoryPath, StringComparison.OrdinalIgnoreCase))
+        {
+            candidateFiles.Add(_legacyRunHistoryPath);
+        }
+
+        if (candidateFiles.Count == 0)
         {
             return Array.Empty<GovernanceWorkflowRunRecordDetail>();
         }
 
         var safeLimit = Math.Clamp(limit, 1, 5000);
-        var lines = File.ReadAllLines(_runHistoryPath, Encoding.UTF8)
-            .Where(static line => !string.IsNullOrWhiteSpace(line))
-            .Reverse()
-            .Take(safeLimit);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         var items = new List<GovernanceWorkflowRunRecordDetail>();
-        foreach (var line in lines)
+        foreach (var filePath in candidateFiles)
         {
-            try
+            var lines = File.ReadAllLines(filePath, Encoding.UTF8)
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .Reverse();
+            foreach (var line in lines)
             {
-                if (JsonNode.Parse(line) is JsonObject root)
+                if (items.Count >= safeLimit)
                 {
-                    items.Add(ParseRecord(root));
+                    return items;
                 }
-            }
-            catch
-            {
+
+                try
+                {
+                    if (JsonNode.Parse(line) is not JsonObject root)
+                    {
+                        continue;
+                    }
+
+                    var parsed = ParseRecord(root);
+                    if (!seen.Add(parsed.RunId))
+                    {
+                        continue;
+                    }
+
+                    items.Add(parsed);
+                }
+                catch
+                {
+                }
             }
         }
 

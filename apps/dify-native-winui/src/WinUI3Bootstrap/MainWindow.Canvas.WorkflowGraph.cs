@@ -47,6 +47,13 @@ public sealed partial class MainWindow
                 document);
 
             RawResponseTextBox.Text = result.PrettyResponseJson;
+            TryMirrorWorkflowRun(
+                result.PrettyResponseJson,
+                result.RequestPayload["run_id"]?.GetValue<string>() ?? document.WorkflowId,
+                result.RequestPayload,
+                workflowId: document.WorkflowId,
+                runRequestKind: "draft",
+                workflowDefinitionSource: "draft_inline");
             _lastBoundRunBusinessSuccess = RunResultBindingService.IsBusinessSuccess(result.BindingState);
             ApplyRunResultBindingState(result.BindingState);
             if (!result.ParsedBindingState)
