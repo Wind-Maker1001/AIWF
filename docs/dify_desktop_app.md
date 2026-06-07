@@ -96,6 +96,8 @@ Compatibility admin entrypoint:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -WorkflowAdmin
 ```
 
+Those launch helpers no longer package Electron artifacts. Use the dedicated compatibility release wrapper when you explicitly need Electron packaging.
+
 Core package scripts:
 
 ```powershell
