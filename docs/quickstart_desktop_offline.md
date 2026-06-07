@@ -27,6 +27,8 @@ Windows packaging:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_electron_compatibility.ps1 -Version "<version>"
 ```
 
+The generic launch helpers no longer package Electron artifacts. Keep Electron packaging behind the dedicated compatibility release wrapper above.
+
 Artifacts are written under `apps/dify-desktop/dist`.
 
 ## Default Desktop Behavior

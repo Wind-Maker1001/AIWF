@@ -33,6 +33,10 @@ if ($Workflow -and $WorkflowAdmin) {
   throw "Use either -Workflow or -WorkflowAdmin, not both."
 }
 
+if ($BuildWin -or $BuildInstaller) {
+  throw "Electron packaging is compatibility-only and must use release_electron_compatibility.ps1."
+}
+
 Warn "Electron is the secondary compatibility frontend. WinUI is the primary frontend; use run_aiwf_frontend.ps1 or run_dify_native_winui.ps1 unless you explicitly need Workflow Studio compatibility. Governance and diagnostics surfaces now require explicit admin mode."
 
 if (-not $SkipEnsureGlueBridge) {
@@ -65,20 +69,6 @@ try {
   npm run smoke
   if ($LASTEXITCODE -ne 0) { throw "desktop smoke failed" }
   Ok "desktop smoke passed"
-
-  if ($BuildWin) {
-    Info "building windows portable exe"
-    npm run build:win
-    if ($LASTEXITCODE -ne 0) { throw "build windows portable exe failed" }
-    Ok "windows portable exe built at $ProjectDir\\dist"
-    if ($BuildInstaller) {
-      Info "building windows installer exe"
-      npm run build:win:installer
-      if ($LASTEXITCODE -ne 0) { throw "build windows installer exe failed" }
-      Ok "windows installer exe built at $ProjectDir\\dist"
-    }
-    exit 0
-  }
 
   $devArgs = @("run", "dev")
   if ($WorkflowAdmin) {

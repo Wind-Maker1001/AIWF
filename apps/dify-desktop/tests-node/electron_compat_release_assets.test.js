@@ -10,6 +10,8 @@ function readText(relPath) {
 test("electron compatibility release wrapper is explicit and secondary", () => {
   const wrapper = readText("ops/scripts/release_electron_compatibility.ps1");
   const frontendRelease = readText("ops/scripts/release_frontend_productize.ps1");
+  const runFrontend = readText("ops/scripts/run_aiwf_frontend.ps1");
+  const runDesktop = readText("ops/scripts/run_dify_desktop.ps1");
   const legacy = readText("ops/scripts/release_productize.ps1");
   const desktopDoc = readText("docs/dify_desktop_app.md");
   const retirementDoc = readText("docs/electron_compatibility_retirement_plan_20260321.md");
@@ -18,6 +20,10 @@ test("electron compatibility release wrapper is explicit and secondary", () => {
   assert.match(wrapper, /Electron compatibility release path invoked/i);
   assert.match(wrapper, /release_productize\.ps1/);
   assert.match(frontendRelease, /release_electron_compatibility\.ps1/);
+  assert.match(runFrontend, /release_electron_compatibility\.ps1/);
+  assert.match(runFrontend, /no longer runs through run_aiwf_frontend\.ps1/i);
+  assert.match(runDesktop, /release_electron_compatibility\.ps1/);
+  assert.match(runDesktop, /must use release_electron_compatibility\.ps1/i);
   assert.match(legacy, /frontend_verification/);
   assert.match(legacy, /architecture_scorecard/);
   assert.match(legacy, /architecture_scorecard_release_ready_latest\.json/);

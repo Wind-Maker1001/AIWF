@@ -160,7 +160,7 @@
     },
     {
       "id": "legacy_electron_installer_portable_packaging",
-      "rule": "compatibility-only release path only",
+      "rule": "dedicated compatibility release wrapper only; keep off generic frontend launch/build helpers",
       "owner": "frontend/release",
       "next_review_by": "2026-06-18"
     },
