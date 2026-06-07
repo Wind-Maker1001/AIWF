@@ -14,6 +14,7 @@ test("electron compatibility release wrapper is explicit and secondary", () => {
   const runDesktop = readText("ops/scripts/run_dify_desktop.ps1");
   const legacy = readText("ops/scripts/release_productize.ps1");
   const desktopDoc = readText("docs/dify_desktop_app.md");
+  const quickstartDesktop = readText("docs/quickstart_desktop_offline.md");
   const retirementDoc = readText("docs/electron_compatibility_retirement_plan_20260321.md");
   const minimalDelivery = readText("docs/offline_delivery_minimal.md");
 
@@ -45,6 +46,7 @@ test("electron compatibility release wrapper is explicit and secondary", () => {
   assert.match(legacy, /offline_template_catalog_sync/);
   assert.match(legacy, /legacy Electron compatibility release path/i);
   assert.match(desktopDoc, /release_electron_compatibility\.ps1/);
+  assert.match(quickstartDesktop, /script\/argv-only `Workflow Studio` compatibility window/);
   assert.match(retirementDoc, /2026-06-18/);
   assert.match(retirementDoc, /secondary compatibility frontend/i);
   assert.match(minimalDelivery, /release_gate_audit_<version>\.json/);
