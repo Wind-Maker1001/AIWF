@@ -1,4 +1,4 @@
-const $ = (id)=>document.getElementById(id);
+﻿const $ = (id)=>document.getElementById(id);
 const statusEl=$("status"), logEl=$("log"), rowsEl=$("rows"), queueRowsEl=$("queueRows"), dz=$("dropzone");
 const sampleDz=$("sampleDropzone"), sampleRowsEl=$("sampleRows"), sampleHintEl=$("sampleHint");
 const encodingHintEl=$("encodingHint"), fontHintEl=$("fontHint"), ocrHintEl=$("ocrHint");
@@ -14,8 +14,7 @@ const gateLogEl=$("gateLog"), gateRowsEl=$("gateRows");
 const gateReleaseStatusEl=$("gateReleaseStatus");
 const buildReleaseStatusEl=$("buildReleaseStatus");
 const buildArtifactStatusEl=$("buildArtifactStatus");
-const tabHomeEl=$("tabHome"), tabWorkflowEl=$("tabWorkflow"), shellTabHintEl=$("shellTabHint");
-const homeShellPaneEl=$("homeShellPane"), workflowShellPaneEl=$("workflowShellPane"), workflowEmbedFrameEl=$("workflowEmbedFrame");
+const shellTabHintEl=$("shellTabHint");
 const queuePaths = [];
 let latestEncodingSummary = { uncertainCount: 0, gbCount: 0, utfCount: 0 };
 let latestRouteSummaryMeta = null;
@@ -25,52 +24,16 @@ let gateLogUnsub = null;
 let buildLogUnsub = null;
 let gateRunning = false;
 let buildRunning = false;
-let activeShellTab = "home";
-let workflowEmbedLoaded = false;
 window.__aiwfHomeReady = false;
 window.__disabledTemplates = [];
 window.__customTemplates = [];
 
 const setStatus=(m,ok=true)=>{statusEl.className="status "+(ok?"ok":"bad");statusEl.textContent=m;};
 const show=(o)=>{logEl.textContent=JSON.stringify(o,null,2);};
-function ensureWorkflowEmbedLoaded(){
-  if (workflowEmbedLoaded || !workflowEmbedFrameEl) return;
-  workflowEmbedFrameEl.src = "./workflow.html?embedded=1";
-  workflowEmbedLoaded = true;
+if (shellTabHintEl) {
+  shellTabHintEl.textContent = "当前为作业助手视图，适合拖文件、一键运行与验收操作。Legacy Workflow Studio 仅保留为显式兼容入口。";
 }
-function updateShellTabUi(){
-  const isHome = activeShellTab === "home";
-  if (homeShellPaneEl) homeShellPaneEl.hidden = !isHome;
-  if (workflowShellPaneEl) workflowShellPaneEl.hidden = isHome;
-  if (tabHomeEl) {
-    tabHomeEl.classList.toggle("active", isHome);
-    tabHomeEl.setAttribute("appearance", isHome ? "accent" : "neutral");
-    tabHomeEl.setAttribute("aria-selected", isHome ? "true" : "false");
-  }
-  if (tabWorkflowEl) {
-    tabWorkflowEl.classList.toggle("active", !isHome);
-    tabWorkflowEl.setAttribute("appearance", isHome ? "neutral" : "accent");
-    tabWorkflowEl.setAttribute("aria-selected", isHome ? "false" : "true");
-  }
-  if (shellTabHintEl) {
-    shellTabHintEl.textContent = isHome
-      ? "当前为作业助手视图，适合拖文件、一键运行与验收操作。"
-      : "当前为 Legacy Workflow Studio 视图，用于兼容旧版节点编排、连线调试与高级工作流操作。";
-  }
-}
-function switchShellTab(nextTab, opts = {}){
-  activeShellTab = nextTab === "workflow" ? "workflow" : "home";
-  if (activeShellTab === "workflow") ensureWorkflowEmbedLoaded();
-  updateShellTabUi();
-  if (opts.focusWorkflow && workflowEmbedFrameEl) {
-    setTimeout(() => {
-      try { workflowEmbedFrameEl.focus(); } catch {}
-    }, 30);
-  }
-}
-if (tabHomeEl) tabHomeEl.onclick = () => switchShellTab("home");
-if (tabWorkflowEl) tabWorkflowEl.onclick = () => switchShellTab("workflow", { focusWorkflow: true });
-function normalizeTitleInput(raw, fallback="辩论资料库"){
+function normalizeTitleInput(raw, fallback="杈╄璧勬枡搴?){
   const t = String(raw || "").trim();
   if(!t) return fallback;
   const bad = (t.match(/[?\uFFFD]/g) || []).length;
@@ -117,7 +80,7 @@ const saveCfgFromUi=()=>Object.assign({}, cfgFromUi(), uiCfgFromUi());
 
 function applyUiCfg(cfg){
   const c = cfg || {};
-  const defaultDebateRules = "谣言=内容差\n成瘾=能力减损\n社交=社交与表达";
+  const defaultDebateRules = "璋ｈ█=鍐呭宸甛n鎴愮樉=鑳藉姏鍑忔崯\n绀句氦=绀句氦涓庤〃杈?;
   $("outputRoot").value = c.outputRoot || "E:\\Desktop_Real\\AIWF";
   $("samplePoolDir").value = c.samplePoolDir || "";
   $("xlsxTemplatePath").value = c.xlsxTemplatePath || "";
@@ -229,3 +192,4 @@ const payloadFromUi=()=>{
   });
   return p;
 };
+
