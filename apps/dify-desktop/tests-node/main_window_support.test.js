@@ -83,11 +83,11 @@ test("main window allows responsive stacked layout widths", () => {
 
 test("workflow window allows responsive canvas layout widths", () => {
   const { support, created } = makeSupport(false);
-  support.createWorkflowWindow({ debugApi: true });
+  support.createWorkflowWindow({ debugApi: true, legacyAdmin: true });
   assert.equal(created.length, 1);
   assert.equal(created[0].options?.minWidth, 900);
   assert.equal(created[0].options?.minHeight, 680);
-  assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1" });
+  assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", legacyAdmin: "1" });
 });
 
 test("workflow admin argv opens explicit legacy admin mode", () => {
@@ -103,6 +103,15 @@ test("workflow admin mode can combine with debug api in dev", () => {
     support.bootFromArgv(["--workflow-admin", "--workflow-debug-api"]);
     assert.equal(created.length, 1);
     assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", legacyAdmin: "1" });
+  });
+});
+
+test("workflow debug arg without admin does not expose debug query", () => {
+  withEnv({}, () => {
+    const { support, created } = makeSupport(false);
+    support.bootFromArgv(["--workflow", "--workflow-debug-api"]);
+    assert.equal(created.length, 1);
+    assert.equal(created[0].loaded?.loadOptions?.query, undefined);
   });
 });
 

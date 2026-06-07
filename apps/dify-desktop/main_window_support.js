@@ -1,7 +1,7 @@
 ﻿function createWindowSupport({ app, BrowserWindow, Menu, shell, path, loadConfig }) {
   function createWorkflowWindow(options = {}) {
-    const debugApi = !!options.debugApi;
     const legacyAdmin = !!options.legacyAdmin;
+    const debugApi = !!options.debugApi && legacyAdmin;
     const query = {};
     if (debugApi) query.debug = "1";
     if (legacyAdmin) query.legacyAdmin = "1";
@@ -64,7 +64,7 @@
     const args = argv.map((x) => String(x || "").toLowerCase());
     const openWorkflowAdmin = args.includes("--workflow-admin") || args.includes("/workflow-admin");
     const openWorkflowOnly = args.includes("--workflow") || args.includes("/workflow") || openWorkflowAdmin;
-    const debugWorkflowApi = shouldEnableWorkflowDebugApi(args);
+    const debugWorkflowApi = openWorkflowAdmin && shouldEnableWorkflowDebugApi(args);
     if (openWorkflowOnly) createWorkflowWindow({ debugApi: debugWorkflowApi, legacyAdmin: openWorkflowAdmin });
     else createWindow();
     if (String(process.env.AIWF_RELEASE || "").trim() === "1") {

@@ -6,8 +6,7 @@ const { test, expect, _electron: electron } = require('@playwright/test');
 
 async function openWorkflow(options = {}) {
   const appDir = path.resolve(__dirname, '..');
-  const args = [appDir, '--workflow', '--workflow-debug-api'];
-  if (options.admin) args.push('--workflow-admin');
+  const args = [appDir, '--workflow-admin', '--workflow-debug-api'];
   const envOverrides = options.env && typeof options.env === 'object' ? options.env : {};
   const previousEnv = new Map();
   Object.entries(envOverrides).forEach(([key, value]) => {
