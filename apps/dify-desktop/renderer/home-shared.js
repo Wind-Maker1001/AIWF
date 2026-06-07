@@ -33,7 +33,7 @@ const show=(o)=>{logEl.textContent=JSON.stringify(o,null,2);};
 if (shellTabHintEl) {
   shellTabHintEl.textContent = "当前为作业助手视图，适合拖文件、一键运行与验收操作。Legacy Workflow Studio 仅保留为显式兼容入口。";
 }
-function normalizeTitleInput(raw, fallback="杈╄璧勬枡搴?){
+function normalizeTitleInput(raw, fallback="辩论资料包"){
   const t = String(raw || "").trim();
   if(!t) return fallback;
   const bad = (t.match(/[?\uFFFD]/g) || []).length;
@@ -80,7 +80,7 @@ const saveCfgFromUi=()=>Object.assign({}, cfgFromUi(), uiCfgFromUi());
 
 function applyUiCfg(cfg){
   const c = cfg || {};
-  const defaultDebateRules = "璋ｈ█=鍐呭宸甛n鎴愮樉=鑳藉姏鍑忔崯\n绀句氦=绀句氦涓庤〃杈?;
+  const defaultDebateRules = "谣言=内容差\n成瘾=能力减损\n社交=社交与表达";
   $("outputRoot").value = c.outputRoot || "E:\\Desktop_Real\\AIWF";
   $("samplePoolDir").value = c.samplePoolDir || "";
   $("xlsxTemplatePath").value = c.xlsxTemplatePath || "";
@@ -192,4 +192,3 @@ const payloadFromUi=()=>{
   });
   return p;
 };
-
