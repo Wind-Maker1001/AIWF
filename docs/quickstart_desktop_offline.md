@@ -37,7 +37,7 @@ Artifacts are written under `apps/dify-desktop/dist`.
 - output root:
   - `E:\Desktop_Real\AIWF` if `E:\Desktop_Real` exists
   - otherwise `Desktop\AIWF_Builds`
-- built-in home screen and embedded `Workflow Studio`
+- built-in home screen and a separate script/argv-only `Workflow Studio` compatibility window
 
 ## Inputs and Outputs
 
