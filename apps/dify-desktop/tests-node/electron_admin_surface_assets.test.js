@@ -10,6 +10,7 @@ function readText(relPath) {
 test("electron admin-only workflow surfaces require explicit legacyAdmin mode", () => {
   const initJs = readText("apps/dify-desktop/renderer/fluent-init.js");
   const css = readText("apps/dify-desktop/renderer/fluent-shell.css");
+  const homeShared = readText("apps/dify-desktop/renderer/home-shared.js");
   const indexHtml = readText("apps/dify-desktop/renderer/index.html");
   const workflowHtml = readText("apps/dify-desktop/renderer/workflow.html");
 
@@ -17,8 +18,11 @@ test("electron admin-only workflow surfaces require explicit legacyAdmin mode", 
   assert.match(initJs, /compat-admin-mode/);
   assert.match(css, /\.compat-admin-only/);
   assert.match(css, /body\.compat-admin-mode \.compat-admin-only/);
+  assert.doesNotMatch(homeShared, /tabWorkflow/);
+  assert.doesNotMatch(homeShared, /workflowEmbedFrame/);
   assert.doesNotMatch(indexHtml, /role="tablist"/);
   assert.doesNotMatch(indexHtml, /id="tabHome"/);
+  assert.doesNotMatch(indexHtml, /id="homeShellPane"/);
   assert.match(workflowHtml, /btnTemplatePackInstall" class="btn secondary compat-admin-only"/);
   assert.match(workflowHtml, /btnQueuePause" class="btn secondary dev-only compat-admin-only"/);
   assert.match(workflowHtml, /<table class="dev-only compat-admin-only">\s*<thead><tr><th>Chiplet/);
