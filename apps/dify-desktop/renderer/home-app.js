@@ -240,7 +240,6 @@ async function init(){
   } catch {}
   refreshGateSummary();
   refreshBuildGuardStatus();
-  updateShellTabUi();
   window.__aiwfHomeReady = true;
 }
 
