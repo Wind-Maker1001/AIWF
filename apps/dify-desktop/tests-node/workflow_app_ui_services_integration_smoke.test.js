@@ -71,7 +71,7 @@ test("workflow app ui services smoke wires status diagnostics connectivity and d
   });
 
   global.window = {
-    location: { search: "?debug=1" },
+    location: { search: "?debug=1&legacyAdmin=1" },
     aiwfDesktop: {
       getWorkflowDiagnostics: async () => ({
         by_chiplet: {
