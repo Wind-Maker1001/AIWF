@@ -120,6 +120,8 @@ Compatibility entrypoint:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron
 ```
 
+That helper now defaults straight into Workflow Studio compatibility mode.
+
 Compatibility workflow-only entrypoint:
 
 ```powershell

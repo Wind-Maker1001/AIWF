@@ -84,6 +84,8 @@ Helper script:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron
 ```
 
+That helper now defaults straight into Workflow Studio compatibility mode rather than a generic Electron home shell.
+
 Compatibility workflow entrypoint:
 
 ```powershell
