@@ -8,12 +8,12 @@ async function loadDebugApiUiModule() {
   return import(file);
 }
 
-test("workflow debug api ui installs debug helpers when debug=1", async () => {
+test("workflow debug api ui installs debug helpers only in admin debug mode", async () => {
   const { setupWorkflowDebugApi } = await loadDebugApiUiModule();
   const calls = [];
   const state = { graph: { nodes: [], edges: [] }, selected: [] };
   const enabled = setupWorkflowDebugApi({
-    location: { search: "?debug=1" },
+    location: { search: "?debug=1&legacyAdmin=1" },
   }, {
     store: {
       hasEdge: (from, to) => from === "n1" && to === "n2",
@@ -37,10 +37,10 @@ test("workflow debug api ui installs debug helpers when debug=1", async () => {
   assert.equal(typeof globalThis.Object.getPrototypeOf, "function");
 });
 
-test("workflow debug api ui exposes working methods and disables without debug flag", async () => {
+test("workflow debug api ui exposes working methods and disables outside admin debug mode", async () => {
   const { setupWorkflowDebugApi } = await loadDebugApiUiModule();
   const calls = [];
-  const win = { location: { search: "?debug=1" } };
+  const win = { location: { search: "?debug=1&legacyAdmin=1" } };
   const state = { graph: { nodes: [{ id: "n1" }], edges: [] }, selected: [] };
   setupWorkflowDebugApi(win, {
     store: {
@@ -75,5 +75,13 @@ test("workflow debug api ui exposes working methods and disables without debug f
   });
   assert.equal(disabled, false);
   assert.equal(Object.prototype.hasOwnProperty.call(winNoDebug, "__aiwfDebug"), false);
+
+  const winNoAdmin = { location: { search: "?debug=1" }, __aiwfDebug: { old: true } };
+  const disabledNoAdmin = setupWorkflowDebugApi(winNoAdmin, {
+    store: { hasEdge: () => false, unlink: () => {}, linkToFrom: () => ({ ok: true }), exportGraph: () => ({}), importGraph: () => {} },
+    canvas: { getRouteMetrics: () => ({}), setSelectedIds: () => {}, getSelectedIds: () => [] },
+  });
+  assert.equal(disabledNoAdmin, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(winNoAdmin, "__aiwfDebug"), false);
   assert.deepEqual(calls, ["select", "render", "import", "render", "render"]);
 });
