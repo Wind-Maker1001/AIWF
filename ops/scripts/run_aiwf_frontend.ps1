@@ -88,5 +88,9 @@ Warn "Electron is a bounded secondary compatibility frontend. Use WinUI unless y
 if ($BuildWin -or $BuildInstaller) {
   throw "Electron packaging is compatibility-only and no longer runs through run_aiwf_frontend.ps1. Use release_electron_compatibility.ps1."
 }
+if (-not $Workflow -and -not $WorkflowAdmin) {
+  Warn "defaulting Electron helper entrypoint to Workflow Studio compatibility mode"
+  $Workflow = $true
+}
 & $electronScript -ProjectDir (Join-Path $Root "apps\dify-desktop") -BuildWin:$BuildWin -BuildInstaller:$BuildInstaller -Workflow:$Workflow -WorkflowAdmin:$WorkflowAdmin -SkipEnsureGlueBridge:$SkipEnsureGlueBridge
 exit $LASTEXITCODE

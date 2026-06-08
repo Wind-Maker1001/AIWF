@@ -19,7 +19,7 @@ Development run:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron
 ```
 
-That script installs dependencies, runs `npm run smoke`, and then launches the app.
+That script installs dependencies, runs `npm run smoke`, and then opens the Workflow Studio compatibility window.
 
 Windows packaging:
 

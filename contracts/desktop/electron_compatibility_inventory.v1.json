@@ -154,7 +154,7 @@
   "retained_compatibility_surfaces": [
     {
       "id": "workflow_studio_compatibility_entrypoint",
-      "rule": "script/argv-only compatibility entrypoint; keep off default in-app menu and no new primary user features",
+      "rule": "workflow-studio-only script/argv compatibility entrypoint; keep off default in-app menu and no new primary user features",
       "owner": "frontend/compatibility",
       "next_review_by": "2026-06-18"
     },
