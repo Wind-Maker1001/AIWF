@@ -16,10 +16,10 @@ WinUI is the primary frontend. Electron is the secondary compatibility frontend.
 Development run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -Workflow
 ```
 
-That script installs dependencies, runs `npm run smoke`, and then opens the Workflow Studio compatibility window.
+That script installs dependencies, runs `npm run smoke`, and then opens the Workflow Studio compatibility window. Bare `-Frontend Electron` no longer launches implicitly; use `-Workflow` or `-WorkflowAdmin`.
 
 Windows packaging:
 

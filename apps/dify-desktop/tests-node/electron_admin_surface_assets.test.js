@@ -38,8 +38,8 @@ test("electron admin mode keeps explicit script and argv compatibility entrypoin
   assert.doesNotMatch(mainWindowSupport, /打开 Legacy Workflow Studio/);
   assert.doesNotMatch(mainWindowSupport, /打开 Legacy Workflow 管理面/);
   assert.match(mainWindowSupport, /--workflow-admin/);
-  assert.match(runFrontend, /defaulting Electron helper entrypoint to Workflow Studio compatibility mode/i);
-  assert.match(runDesktop, /defaulting Electron helper entrypoint to Workflow Studio compatibility mode/i);
+  assert.match(runFrontend, /requires an explicit -Workflow or -WorkflowAdmin switch/i);
+  assert.match(runDesktop, /requires -Workflow or -WorkflowAdmin/i);
   assert.match(runFrontend, /\[switch\]\$WorkflowAdmin/);
   assert.match(runDesktop, /\[switch\]\$WorkflowAdmin/);
   assert.match(runDesktop, /--workflow-admin/);
