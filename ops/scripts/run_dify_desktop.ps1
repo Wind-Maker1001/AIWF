@@ -38,8 +38,7 @@ if ($BuildWin -or $BuildInstaller) {
 }
 
 if (-not $Workflow -and -not $WorkflowAdmin) {
-  Warn "defaulting Electron helper entrypoint to Workflow Studio compatibility mode"
-  $Workflow = $true
+  throw "Electron compatibility launch now requires -Workflow or -WorkflowAdmin."
 }
 
 Warn "Electron is the secondary compatibility frontend. WinUI is the primary frontend; use run_aiwf_frontend.ps1 or run_dify_native_winui.ps1 unless you explicitly need Workflow Studio compatibility. Governance and diagnostics surfaces now require explicit admin mode."

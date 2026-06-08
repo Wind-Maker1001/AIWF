@@ -49,7 +49,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_frontend_producti
 Electron compatibility run or package:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -Workflow
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_electron_compatibility.ps1 -Version "<version>"
 ```
 
