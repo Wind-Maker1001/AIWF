@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$RepoRoot = ""
 )
 
@@ -63,7 +63,7 @@ $checks = @(
       "publishing primary frontend app: WinUI",
       "packaging primary frontend installer bundle: WinUI",
       "launching primary frontend: WinUI",
-      '[switch]$WorkflowAdmin',
+      "run_dify_desktop.ps1 with -Workflow or -WorkflowAdmin",
       "SkipEnsureGlueBridge",
       '[string]$ReleaseChannel = "dev"'
     )
@@ -311,3 +311,4 @@ foreach ($rule in $deleteOnly) {
 }
 
 Ok "frontend convergence check passed"
+

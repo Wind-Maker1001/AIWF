@@ -81,13 +81,13 @@ The current UI enables `md_only` by default. If you want the Office trio, unchec
 Compatibility workflow entrypoint:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -Workflow
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -Workflow
 ```
 
 Compatibility admin entrypoint:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -WorkflowAdmin
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -WorkflowAdmin
 ```
 
 Those launch helpers no longer package Electron artifacts. Use the dedicated compatibility release wrapper when you explicitly need Electron packaging.
