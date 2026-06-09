@@ -117,13 +117,13 @@ Current WinUI governance coverage:
 Compatibility workflow-only entrypoint:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -Workflow
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -Workflow
 ```
 
 Compatibility admin entrypoint:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_aiwf_frontend.ps1 -Frontend Electron -WorkflowAdmin
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -WorkflowAdmin
 ```
 
 ## Related Docs

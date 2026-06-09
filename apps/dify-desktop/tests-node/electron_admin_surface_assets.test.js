@@ -1,4 +1,4 @@
-const test = require("node:test");
+﻿const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -35,12 +35,13 @@ test("electron admin mode keeps explicit script and argv compatibility entrypoin
   const runFrontend = readText("ops/scripts/run_aiwf_frontend.ps1");
   const runDesktop = readText("ops/scripts/run_dify_desktop.ps1");
 
-  assert.doesNotMatch(mainWindowSupport, /打开 Legacy Workflow Studio/);
-  assert.doesNotMatch(mainWindowSupport, /打开 Legacy Workflow 管理面/);
+  assert.doesNotMatch(mainWindowSupport, /Legacy Workflow Studio/);
+  assert.doesNotMatch(mainWindowSupport, /Legacy Workflow.*管理面/);
   assert.match(mainWindowSupport, /--workflow-admin/);
-  assert.match(runFrontend, /requires an explicit -Workflow or -WorkflowAdmin switch/i);
+  assert.match(runFrontend, /run_dify_desktop\.ps1 with -Workflow or -WorkflowAdmin/i);
   assert.match(runDesktop, /requires -Workflow or -WorkflowAdmin/i);
-  assert.match(runFrontend, /\[switch\]\$WorkflowAdmin/);
+  assert.doesNotMatch(runFrontend, /\[switch\]\$WorkflowAdmin/);
   assert.match(runDesktop, /\[switch\]\$WorkflowAdmin/);
   assert.match(runDesktop, /--workflow-admin/);
 });
+

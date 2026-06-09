@@ -13,8 +13,6 @@ param(
   [switch]$PublishSingleFile,
   [switch]$BuildWin,
   [switch]$BuildInstaller,
-  [switch]$Workflow,
-  [switch]$WorkflowAdmin,
   [switch]$SkipEnsureGlueBridge
 )
 
@@ -35,14 +33,10 @@ if (-not $Root) {
 }
 
 $winuiScript = Join-Path $PSScriptRoot "run_dify_native_winui.ps1"
-$electronScript = Join-Path $PSScriptRoot "run_dify_desktop.ps1"
 $publishWinUiScript = Join-Path $PSScriptRoot "publish_native_winui.ps1"
 $packageWinUiScript = Join-Path $PSScriptRoot "package_native_winui_bundle.ps1"
 
 if ($Frontend -eq "WinUI") {
-  if ($Workflow -or $WorkflowAdmin) {
-    throw "Workflow compatibility switches are only supported with -Frontend Electron."
-  }
   if ($BuildInstaller) {
     if ($SkipBuild) {
       throw "SkipBuild is not supported for WinUI installer packaging through run_aiwf_frontend.ps1. Use package_native_winui_bundle.ps1 with -PublishedDir and -SkipPublish if you need to reuse an existing publish output."
@@ -85,11 +79,4 @@ if ($Frontend -eq "WinUI") {
 }
 
 Warn "Electron is a bounded secondary compatibility frontend. Use WinUI unless you explicitly need Workflow Studio compatibility or Electron packaging."
-if ($BuildWin -or $BuildInstaller) {
-  throw "Electron packaging is compatibility-only and no longer runs through run_aiwf_frontend.ps1. Use release_electron_compatibility.ps1."
-}
-if (-not $Workflow -and -not $WorkflowAdmin) {
-  throw "Electron compatibility launch now requires an explicit -Workflow or -WorkflowAdmin switch."
-}
-& $electronScript -ProjectDir (Join-Path $Root "apps\dify-desktop") -BuildWin:$BuildWin -BuildInstaller:$BuildInstaller -Workflow:$Workflow -WorkflowAdmin:$WorkflowAdmin -SkipEnsureGlueBridge:$SkipEnsureGlueBridge
-exit $LASTEXITCODE
+throw "Electron runtime launch no longer runs through run_aiwf_frontend.ps1. Use run_dify_desktop.ps1 with -Workflow or -WorkflowAdmin, or use release_electron_compatibility.ps1 for packaging."
