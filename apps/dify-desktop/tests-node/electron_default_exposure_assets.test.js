@@ -11,8 +11,18 @@ test("electron docs are no longer positioned as primary onboarding", () => {
   const readme = readText("README.md");
   const quickstart = readText("docs/quickstart.md");
   const offlineDelivery = readText("docs/offline_delivery_minimal.md");
+  const desktopDoc = readText("docs/dify_desktop_app.md");
+  const nativeDelivery = readText("docs/offline_delivery_native_winui.md");
+  const retirement = readText("docs/electron_compatibility_retirement_plan_20260321.md");
+  const winuiQuickstart = readText("docs/quickstart_native_winui.md");
 
   assert.match(readme, /## Compatibility Paths/);
   assert.match(quickstart, /## Compatibility/);
   assert.match(offlineDelivery, /secondary Electron compatibility frontend/i);
+  assert.doesNotMatch(desktopDoc, /advanced diagnostics/i);
+  assert.match(desktopDoc, /admin-gated compatibility panels/i);
+  assert.match(nativeDelivery, /admin-gated panels/i);
+  assert.doesNotMatch(retirement, /not yet ported/i);
+  assert.match(retirement, /still exist behind explicit entrypoints/i);
+  assert.doesNotMatch(winuiQuickstart, /advanced diagnostics/i);
 });

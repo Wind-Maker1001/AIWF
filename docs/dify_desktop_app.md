@@ -2,7 +2,7 @@
 
 This document describes the secondary Electron compatibility frontend under `apps/dify-desktop`.
 
-WinUI is the primary frontend. Electron remains for script/argv-only Workflow Studio compatibility, advanced diagnostics, and current Electron packaging paths.
+WinUI is the primary frontend. Electron remains for a compatibility-only offline helper shell, script/argv-only Workflow Studio entrypoints, admin-gated compatibility panels, and current Electron packaging paths.
 
 ## Current Surfaces
 
