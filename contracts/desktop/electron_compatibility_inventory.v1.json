@@ -159,6 +159,12 @@
       "next_review_by": "2026-06-18"
     },
     {
+      "id": "electron_offline_home_shell",
+      "rule": "compatibility-only offline helper shell; keep off primary onboarding and release path",
+      "owner": "frontend/compatibility",
+      "next_review_by": "2026-06-18"
+    },
+    {
       "id": "legacy_electron_installer_portable_packaging",
       "rule": "dedicated compatibility release wrapper only; keep off generic frontend launch/build helpers",
       "owner": "frontend/release",
