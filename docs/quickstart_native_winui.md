@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_uia_sm
 Use Electron only when you explicitly need:
 
 - Workflow Studio compatibility entrypoint through explicit scripts or argv
-- Existing Electron advanced diagnostics / compatibility tools
+- Existing Electron offline helper shell or admin-gated compatibility panels
 - Existing Electron compatibility packaging path
 
 Current WinUI governance coverage:

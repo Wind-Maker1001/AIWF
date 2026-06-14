@@ -9,7 +9,7 @@ Date: 2026-03-21
 It exists to cover:
 
 - Workflow Studio compatibility
-- transition-only diagnostics and governance panels
+- compatibility-only offline helper and residual admin-gated panels
 - temporary packaging continuity while WinUI becomes the only primary frontend
 
 It is no longer allowed to define the main desktop roadmap.
@@ -20,7 +20,7 @@ Allowed in Electron:
 
 - compatibility fixes
 - migration helpers that reduce WinUI adoption risk
-- diagnostics and governance tools that are not yet ported
+- compatibility-only diagnostics and governance tools that still exist behind explicit entrypoints
 - packaging continuity work that is explicitly temporary
 
 Not allowed in Electron:

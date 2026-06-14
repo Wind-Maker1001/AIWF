@@ -162,7 +162,7 @@ Default install root:
 Electron remains available only for compatibility:
 
 - Workflow Studio compatibility entrypoint through explicit scripts or argv
-- transition-period diagnostics and governance panels
+- compatibility-only offline helper and admin-gated panels when explicitly needed
 - legacy Electron packaging path
 
 It is not the default primary delivery path anymore.
