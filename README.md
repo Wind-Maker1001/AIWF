@@ -46,12 +46,12 @@ Frontend release:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_frontend_productize.ps1 -Version "<version>" -Frontend WinUI -Configuration Release -CreateZip
 ```
 
-Electron compatibility run or package:
+Electron compatibility usage:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -Workflow
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_electron_compatibility.ps1 -Version "<version>"
-```
+- Workflow Studio and offline helper guidance: [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
+- Compatibility shell details: [docs/dify_desktop_app.md](docs/dify_desktop_app.md)
+- Compatibility packaging path: `ops/scripts/release_electron_compatibility.ps1`
+- Compatibility packaging details: [docs/offline_delivery_minimal.md](docs/offline_delivery_minimal.md)
 
 Local verification:
 
