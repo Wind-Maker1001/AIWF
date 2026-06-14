@@ -17,6 +17,7 @@ test("electron docs are no longer positioned as primary onboarding", () => {
   const winuiQuickstart = readText("docs/quickstart_native_winui.md");
 
   assert.match(readme, /## Compatibility Paths/);
+  assert.doesNotMatch(readme, /run_dify_desktop\.ps1 -Workflow/);
   assert.match(quickstart, /## Compatibility/);
   assert.match(offlineDelivery, /secondary Electron compatibility frontend/i);
   assert.doesNotMatch(desktopDoc, /advanced diagnostics/i);
@@ -25,4 +26,5 @@ test("electron docs are no longer positioned as primary onboarding", () => {
   assert.doesNotMatch(retirement, /not yet ported/i);
   assert.match(retirement, /still exist behind explicit entrypoints/i);
   assert.doesNotMatch(winuiQuickstart, /advanced diagnostics/i);
+  assert.doesNotMatch(winuiQuickstart, /run_dify_desktop\.ps1 -Workflow/);
 });

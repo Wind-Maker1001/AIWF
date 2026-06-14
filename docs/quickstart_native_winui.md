@@ -114,17 +114,11 @@ Current WinUI governance coverage:
 - sandbox autofix state viewer/editor
 - sandbox autofix action history viewer
 
-Compatibility workflow-only entrypoint:
+Compatibility-only Electron entrypoints and packaging paths are documented here:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -Workflow
-```
-
-Compatibility admin entrypoint:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -WorkflowAdmin
-```
+- [quickstart_desktop_offline.md](quickstart_desktop_offline.md)
+- [dify_desktop_app.md](dify_desktop_app.md)
+- [offline_delivery_minimal.md](offline_delivery_minimal.md)
 
 ## Related Docs
 
