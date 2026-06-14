@@ -38,10 +38,10 @@ test("electron admin mode keeps explicit script and argv compatibility entrypoin
   assert.doesNotMatch(mainWindowSupport, /Legacy Workflow Studio/);
   assert.doesNotMatch(mainWindowSupport, /Legacy Workflow.*管理面/);
   assert.match(mainWindowSupport, /--workflow-admin/);
+  assert.match(runFrontend, /Electron runtime launch no longer runs through run_aiwf_frontend\.ps1/i);
   assert.match(runFrontend, /run_dify_desktop\.ps1 with -Workflow or -WorkflowAdmin/i);
   assert.match(runDesktop, /requires -Workflow or -WorkflowAdmin/i);
   assert.doesNotMatch(runFrontend, /\[switch\]\$WorkflowAdmin/);
   assert.match(runDesktop, /\[switch\]\$WorkflowAdmin/);
   assert.match(runDesktop, /--workflow-admin/);
 });
-
