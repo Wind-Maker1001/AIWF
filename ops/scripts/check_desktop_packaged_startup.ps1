@@ -62,7 +62,7 @@ try {
 
   Info "starting unpacked desktop executable"
   $env:AIWF_BOOT_MARKER_PATH = $bootMarker
-  $proc = Start-Process -FilePath $exe -ArgumentList "--workflow" -PassThru
+  $proc = Start-Process -FilePath $exe -ArgumentList "--offline-home" -PassThru
   Start-Sleep -Seconds $BootWaitSec
 
   if ($proc.HasExited) {
