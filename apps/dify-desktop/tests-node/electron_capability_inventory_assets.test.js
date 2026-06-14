@@ -33,7 +33,14 @@ test("electron capability inventory is present and linked from retirement plan",
   assert.ok(Array.isArray(inventoryContract.electron_only_capabilities));
   assert.ok(inventoryContract.electron_only_capabilities.length >= 10);
   assert.ok(Array.isArray(inventoryContract.retained_compatibility_surfaces));
-  assert.ok(inventoryContract.retained_compatibility_surfaces.length >= 3);
+  assert.ok(inventoryContract.retained_compatibility_surfaces.length >= 4);
+  const retainedIds = inventoryContract.retained_compatibility_surfaces.map((item) => String(item.id || ""));
+  assert.ok(retainedIds.includes("workflow_studio_compatibility_entrypoint"));
+  assert.ok(retainedIds.includes("electron_offline_home_shell"));
+  assert.ok(retainedIds.includes("legacy_electron_installer_portable_packaging"));
+  assert.ok(retainedIds.includes("electron_runtime_dev_debug_helpers"));
+  const offlineHome = inventoryContract.retained_compatibility_surfaces.find((item) => item.id === "electron_offline_home_shell");
+  assert.equal(offlineHome?.rule, "compatibility-only offline helper shell; keep off primary onboarding and release path");
   assert.match(retirement, /electron_capability_inventory_20260321\.md/);
   assert.match(retirement, /electron_compatibility_inventory\.v1\.json/);
   assert.match(retirement, /--workflow-admin/);

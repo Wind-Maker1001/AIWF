@@ -66,6 +66,7 @@ Routing rule confirmed on 2026-03-21:
 | Capability | Why it may remain | Rule |
 | --- | --- | --- |
 | Workflow Studio compatibility entrypoint | keep only as an explicit workflow-studio-only script/argv compatibility launcher while residual legacy use exists | keep off default in-app menu and no new primary user features |
+| Electron offline home shell | still useful for offline queue, precheck, and local release-helper workflows during transition | compatibility-only offline helper shell; keep off primary onboarding and release path |
 | Legacy Electron installer/portable packaging | still useful for existing users who rely on current shell | dedicated compatibility release wrapper only; keep off generic frontend launch/build helpers |
 | Dev/debug helpers tied to Electron runtime | may still reduce debugging cost during transition | admin-gated and release-disabled; keep off primary onboarding and primary release path |
 
