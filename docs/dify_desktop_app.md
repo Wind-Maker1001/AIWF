@@ -78,6 +78,12 @@ The current UI enables `md_only` by default. If you want the Office trio, unchec
 
 ## Run, Test, and Build
 
+Compatibility offline home entrypoint:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\run_dify_desktop.ps1 -OfflineHome
+```
+
 Compatibility workflow entrypoint:
 
 ```powershell

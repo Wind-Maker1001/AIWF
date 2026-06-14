@@ -2,6 +2,7 @@ param(
   [string]$ProjectDir = "",
   [switch]$BuildWin,
   [switch]$BuildInstaller,
+  [switch]$OfflineHome,
   [switch]$Workflow,
   [switch]$WorkflowAdmin,
   [switch]$SkipEnsureGlueBridge
@@ -29,16 +30,16 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   throw "npm not found in PATH"
 }
 
-if ($Workflow -and $WorkflowAdmin) {
-  throw "Use either -Workflow or -WorkflowAdmin, not both."
+if (($Workflow -and $WorkflowAdmin) -or ($OfflineHome -and ($Workflow -or $WorkflowAdmin))) {
+  throw "Use exactly one of -OfflineHome, -Workflow, or -WorkflowAdmin."
 }
 
 if ($BuildWin -or $BuildInstaller) {
   throw "Electron packaging is compatibility-only and must use release_electron_compatibility.ps1."
 }
 
-if (-not $Workflow -and -not $WorkflowAdmin) {
-  throw "Electron compatibility launch now requires -Workflow or -WorkflowAdmin."
+if (-not $OfflineHome -and -not $Workflow -and -not $WorkflowAdmin) {
+  throw "Electron compatibility launch now requires -OfflineHome, -Workflow, or -WorkflowAdmin."
 }
 
 Warn "Electron is the secondary compatibility frontend. WinUI is the primary frontend; use run_aiwf_frontend.ps1 or run_dify_native_winui.ps1 unless you explicitly need Workflow Studio compatibility. Governance and diagnostics surfaces now require explicit admin mode."
@@ -79,6 +80,10 @@ try {
     Info "starting desktop app in Legacy Workflow admin mode"
     $devArgs += "--"
     $devArgs += "--workflow-admin"
+  } elseif ($OfflineHome) {
+    Info "starting desktop app in compatibility offline home mode"
+    $devArgs += "--"
+    $devArgs += "--offline-home"
   } elseif ($Workflow) {
     Info "starting desktop app in Legacy Workflow compatibility mode"
     $devArgs += "--"
