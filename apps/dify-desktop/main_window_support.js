@@ -60,23 +60,34 @@
     return allow && devMode;
   }
 
-  function bootFromArgv(argv = []) {
+  function openWindowForArgv(argv = []) {
     const args = argv.map((x) => String(x || "").toLowerCase());
     const openWorkflowAdmin = args.includes("--workflow-admin") || args.includes("/workflow-admin");
     const openWorkflowOnly = args.includes("--workflow") || args.includes("/workflow") || openWorkflowAdmin;
     const debugWorkflowApi = openWorkflowAdmin && shouldEnableWorkflowDebugApi(args);
     if (openWorkflowOnly) createWorkflowWindow({ debugApi: debugWorkflowApi, legacyAdmin: openWorkflowAdmin });
     else createWindow();
+    return {
+      openWorkflowOnly,
+      openWorkflowAdmin,
+      debugWorkflowApi,
+    };
+  }
+
+  function bootFromArgv(argv = []) {
+    const launch = openWindowForArgv(argv);
     if (String(process.env.AIWF_RELEASE || "").trim() === "1") {
       // Release self-check: explicitly record debug API hard-disable status.
       // eslint-disable-next-line no-console
-      console.log(`[AIWF_RELEASE] workflow_debug_api=${debugWorkflowApi ? "enabled" : "disabled"}`);
+      console.log(`[AIWF_RELEASE] workflow_debug_api=${launch.debugWorkflowApi ? "enabled" : "disabled"}`);
     }
+    return launch;
   }
 
   return {
     createWindow,
     createWorkflowWindow,
+    openWindowForArgv,
     shouldEnableWorkflowDebugApi,
     bootFromArgv,
   };

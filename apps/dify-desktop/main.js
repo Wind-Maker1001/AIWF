@@ -116,5 +116,5 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) initializeServices().windows.createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) initializeServices().windows.openWindowForArgv(process.argv);
 });

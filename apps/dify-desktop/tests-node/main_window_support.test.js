@@ -115,6 +115,25 @@ test("workflow debug arg without admin does not expose debug query", () => {
   });
 });
 
+test("openWindowForArgv preserves workflow compatibility mode for reopen", () => {
+  const { support, created } = makeSupport(false);
+  const launch = support.openWindowForArgv(["--workflow-admin", "--workflow-debug-api"]);
+  assert.equal(created.length, 1);
+  assert.equal(launch.openWorkflowOnly, true);
+  assert.equal(launch.openWorkflowAdmin, true);
+  assert.equal(launch.debugWorkflowApi, true);
+  assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", legacyAdmin: "1" });
+});
+
+test("openWindowForArgv falls back to home shell without workflow args", () => {
+  const { support, created } = makeSupport(false);
+  const launch = support.openWindowForArgv([]);
+  assert.equal(created.length, 1);
+  assert.equal(launch.openWorkflowOnly, false);
+  assert.equal(launch.openWorkflowAdmin, false);
+  assert.equal(created[0].loaded?.file?.endsWith("index.html"), true);
+});
+
 test("main menu hides legacy workflow launchers by default", () => {
   const { support, getMenuTemplate } = makeSupport(false);
   support.createWindow();
