@@ -11,6 +11,7 @@ test("electron main bootstrap writes staged boot markers and defers heavy workfl
   const mainJs = readText("apps/dify-desktop/main.js");
   const packaged = readText("ops/scripts/check_desktop_packaged_startup.ps1");
   const lite = readText("ops/scripts/check_desktop_lite_packaged_startup.ps1");
+  const verification = readText("docs/verification.md");
   const desktopPackage = JSON.parse(readText("apps/dify-desktop/package.json"));
   const desktopLitePackage = JSON.parse(readText("apps/dify-desktop/build/electron-builder.lite.json"));
   const buildFiles = Array.isArray(desktopPackage?.build?.files) ? desktopPackage.build.files : [];
@@ -43,4 +44,6 @@ test("electron main bootstrap writes staged boot markers and defers heavy workfl
     assert.match(scriptText, /uncaught_exception/);
     assert.match(scriptText, /boot marker stage is unexpected/);
   }
+
+  assert.match(verification, /explicit `--offline-home` compatibility entrypoint/i);
 });
