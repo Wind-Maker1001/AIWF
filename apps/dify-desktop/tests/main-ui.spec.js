@@ -3,7 +3,7 @@ const { test, expect, _electron: electron } = require("@playwright/test");
 
 async function openMain() {
   const appDir = path.resolve(__dirname, "..");
-  const electronApp = await electron.launch({ args: [appDir] });
+  const electronApp = await electron.launch({ args: [appDir, "--offline-home"] });
   const page = await electronApp.firstWindow();
   await page.waitForFunction(() => window.__aiwfHomeReady === true);
   return { electronApp, page };
