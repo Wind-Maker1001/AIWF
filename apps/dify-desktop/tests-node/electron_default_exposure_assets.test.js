@@ -15,11 +15,13 @@ test("electron docs are no longer positioned as primary onboarding", () => {
   const nativeDelivery = readText("docs/offline_delivery_native_winui.md");
   const retirement = readText("docs/electron_compatibility_retirement_plan_20260321.md");
   const winuiQuickstart = readText("docs/quickstart_native_winui.md");
+  const electronHome = readText("apps/dify-desktop/renderer/index.html");
 
   assert.match(readme, /## Compatibility Paths/);
   assert.doesNotMatch(readme, /run_dify_desktop\.ps1 -Workflow/);
   assert.match(quickstart, /## Compatibility/);
   assert.match(offlineDelivery, /secondary Electron compatibility frontend/i);
+  assert.match(electronHome, /WinUI 是主前端/);
   assert.doesNotMatch(desktopDoc, /advanced diagnostics/i);
   assert.match(desktopDoc, /admin-gated compatibility panels/i);
   assert.match(nativeDelivery, /admin-gated panels/i);

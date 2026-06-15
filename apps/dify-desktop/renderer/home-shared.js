@@ -31,7 +31,7 @@ window.__customTemplates = [];
 const setStatus=(m,ok=true)=>{statusEl.className="status "+(ok?"ok":"bad");statusEl.textContent=m;};
 const show=(o)=>{logEl.textContent=JSON.stringify(o,null,2);};
 if (shellTabHintEl) {
-  shellTabHintEl.textContent = "当前为作业助手视图，适合拖文件、一键运行与验收操作。Legacy Workflow Studio 仅保留为显式兼容入口。";
+  shellTabHintEl.textContent = "WinUI 是主前端。当前为兼容离线作业助手视图，适合拖文件、一键运行与验收操作。Legacy Workflow Studio 仅保留为显式兼容入口。";
 }
 function normalizeTitleInput(raw, fallback="辩论资料包"){
   const t = String(raw || "").trim();
