@@ -385,7 +385,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_desktop_packaged_st
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_desktop_lite_packaged_startup.ps1
 ```
 
-These Electron package checks are compatibility-only. Keep them in full validation or run them explicitly when you are changing Electron packaging paths.
+These Electron package checks are compatibility-only. They now exercise the explicit `--offline-home` compatibility entrypoint. Keep them in full validation or run them explicitly when you are changing Electron packaging paths.
 
 Sidecar release verification:
 
