@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self'" />
-  <title>AIWF Legacy Workflow Studio</title>
+  <title>AIWF 兼容 Workflow Studio</title>
   <link rel="stylesheet" href="./fluent-shell.css" />
   <script type="module" src="./vendor/fluent-web-components.min.js"></script>
   <script type="module" src="./fluent-init.js"></script>
@@ -12,8 +12,8 @@
 <body class="page-workflow">
   <div class="wrap">
     <section class="hero">
-      <h2 style="margin:0">Legacy Workflow Studio</h2><div class="hero-badge">Fluent Canvas</div>
-      <div class="hero-copy">兼容旧版高级工作流画布，可自由拖拽节点、连线、运行。支持触屏平移/捏合缩放，数据计算节点默认走 Rust。</div>
+      <h2 style="margin:0">Legacy Workflow Studio（兼容）</h2><div class="hero-badge">Compatibility Canvas</div>
+      <div class="hero-copy">兼容旧版高级工作流画布，可自由拖拽节点、连线、运行。当前仅作为兼容工作流画布保留，数据计算节点默认走 Rust。</div>
       <div class="hint-strip" style="margin-top:12px">WinUI 是主前端。治理、诊断、发布等兼容管理面默认隐藏；仅通过显式兼容管理入口（<code>--workflow-admin</code> 或 <code>?legacyAdmin=1</code>）显示。</div>
     </section>
     <section class="main">

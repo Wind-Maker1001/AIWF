@@ -23,6 +23,8 @@ test("electron admin-only workflow surfaces require explicit legacyAdmin mode", 
   assert.doesNotMatch(indexHtml, /role="tablist"/);
   assert.doesNotMatch(indexHtml, /id="tabHome"/);
   assert.doesNotMatch(indexHtml, /id="homeShellPane"/);
+  assert.match(workflowHtml, /兼容/);
+  assert.match(workflowHtml, /Compatibility Canvas/);
   assert.match(workflowHtml, /btnTemplatePackInstall" class="btn secondary compat-admin-only"/);
   assert.match(workflowHtml, /btnQueuePause" class="btn secondary dev-only compat-admin-only"/);
   assert.match(workflowHtml, /<table class="dev-only compat-admin-only">\s*<thead><tr><th>Chiplet/);
