@@ -7,7 +7,7 @@ const ENABLE_FULL_BUILD = String(process.env.AIWF_BUILD_E2E_FULL || "") === "1";
 
 async function openMain() {
   const appDir = path.resolve(__dirname, "..");
-  const electronApp = await electron.launch({ args: [appDir] });
+  const electronApp = await electron.launch({ args: [appDir, "--offline-home"] });
   const page = await electronApp.firstWindow();
   return { electronApp, page };
 }
