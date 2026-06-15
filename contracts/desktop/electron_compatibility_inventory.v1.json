@@ -160,7 +160,7 @@
     },
     {
       "id": "electron_offline_home_shell",
-      "rule": "compatibility-only offline helper shell; keep off primary onboarding and release path",
+      "rule": "explicit offline-home compatibility helper shell; keep off primary onboarding and release path",
       "owner": "frontend/compatibility",
       "next_review_by": "2026-06-18"
     },

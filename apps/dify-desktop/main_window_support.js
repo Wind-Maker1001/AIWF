@@ -62,12 +62,14 @@
 
   function openWindowForArgv(argv = []) {
     const args = argv.map((x) => String(x || "").toLowerCase());
+    const openOfflineHome = args.includes("--offline-home") || args.includes("/offline-home");
     const openWorkflowAdmin = args.includes("--workflow-admin") || args.includes("/workflow-admin");
     const openWorkflowOnly = args.includes("--workflow") || args.includes("/workflow") || openWorkflowAdmin;
     const debugWorkflowApi = openWorkflowAdmin && shouldEnableWorkflowDebugApi(args);
     if (openWorkflowOnly) createWorkflowWindow({ debugApi: debugWorkflowApi, legacyAdmin: openWorkflowAdmin });
     else createWindow();
     return {
+      openOfflineHome,
       openWorkflowOnly,
       openWorkflowAdmin,
       debugWorkflowApi,

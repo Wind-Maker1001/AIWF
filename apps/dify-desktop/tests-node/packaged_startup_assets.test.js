@@ -38,6 +38,7 @@ test("electron main bootstrap writes staged boot markers and defers heavy workfl
   for (const scriptText of [packaged, lite]) {
     assert.match(scriptText, /\$boot = Get-Content -Raw -Encoding UTF8 \$bootMarker \| ConvertFrom-Json/);
     assert.match(scriptText, /\$stage = \[string\]\(\$boot\.stage\)/);
+    assert.match(scriptText, /--offline-home/);
     assert.match(scriptText, /boot_failed/);
     assert.match(scriptText, /uncaught_exception/);
     assert.match(scriptText, /boot marker stage is unexpected/);
