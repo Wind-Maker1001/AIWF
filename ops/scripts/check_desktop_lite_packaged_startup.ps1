@@ -113,11 +113,15 @@ try {
 
   $boot = Get-Content -Raw -Encoding UTF8 $bootMarker | ConvertFrom-Json
   $stage = [string]($boot.stage)
+  $bootArgs = @($boot.argv)
   if ($stage -eq "boot_failed" -or $stage -eq "uncaught_exception") {
     throw ("desktop lite process reported startup failure stage=" + $stage + ": " + [string]($boot.error))
   }
   if ($stage -ne "bootstrapped" -and $stage -ne "app_ready") {
     throw ("desktop lite process boot marker stage is unexpected: " + $stage)
+  }
+  if ($bootArgs -notcontains "--offline-home") {
+    throw "desktop lite process boot marker argv missing --offline-home"
   }
 
   Stop-Process -Id $proc.Id -Force
