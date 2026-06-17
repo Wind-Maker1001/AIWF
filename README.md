@@ -46,13 +46,6 @@ Frontend release:
 powershell -ExecutionPolicy Bypass -File .\ops\scripts\release_frontend_productize.ps1 -Version "<version>" -Frontend WinUI -Configuration Release -CreateZip
 ```
 
-Electron compatibility usage:
-
-- Workflow Studio and offline helper guidance: [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
-- Compatibility shell details: [docs/dify_desktop_app.md](docs/dify_desktop_app.md)
-- Compatibility packaging path: `ops/scripts/release_electron_compatibility.ps1`
-- Compatibility packaging details: [docs/offline_delivery_minimal.md](docs/offline_delivery_minimal.md)
-
 Local verification:
 
 ```powershell
@@ -64,8 +57,11 @@ If your local machine does not have SQL connectivity ready yet, add `-SkipSqlCon
 
 ## Compatibility Paths
 
+Use these only when you explicitly need the secondary Electron compatibility shell rather than the WinUI primary path.
+
 - Desktop offline quickstart: [docs/quickstart_desktop_offline.md](docs/quickstart_desktop_offline.md)
 - Electron compatibility guide: [docs/dify_desktop_app.md](docs/dify_desktop_app.md)
+- Compatibility packaging path: `ops/scripts/release_electron_compatibility.ps1`
 - Electron offline bundle delivery: [docs/offline_delivery_minimal.md](docs/offline_delivery_minimal.md)
 
 ## Key HTTP Endpoints
