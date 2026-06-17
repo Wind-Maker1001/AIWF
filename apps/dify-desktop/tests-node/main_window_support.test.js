@@ -119,6 +119,7 @@ test("offline home argv opens the compatibility home shell explicitly", () => {
   const { support, created } = makeSupport(false);
   const launch = support.openWindowForArgv(["--offline-home"]);
   assert.equal(created.length, 1);
+  assert.equal(launch.launchMode, "offline_home");
   assert.equal(launch.openOfflineHome, true);
   assert.equal(launch.openWorkflowOnly, false);
   assert.equal(launch.openWorkflowAdmin, false);
@@ -129,6 +130,7 @@ test("openWindowForArgv preserves workflow compatibility mode for reopen", () =>
   const { support, created } = makeSupport(false);
   const launch = support.openWindowForArgv(["--workflow-admin", "--workflow-debug-api"]);
   assert.equal(created.length, 1);
+  assert.equal(launch.launchMode, "workflow_admin");
   assert.equal(launch.openWorkflowOnly, true);
   assert.equal(launch.openWorkflowAdmin, true);
   assert.equal(launch.debugWorkflowApi, true);
@@ -139,6 +141,7 @@ test("openWindowForArgv falls back to home shell without workflow args", () => {
   const { support, created } = makeSupport(false);
   const launch = support.openWindowForArgv([]);
   assert.equal(created.length, 1);
+  assert.equal(launch.launchMode, "home_default");
   assert.equal(launch.openOfflineHome, false);
   assert.equal(launch.openWorkflowOnly, false);
   assert.equal(launch.openWorkflowAdmin, false);

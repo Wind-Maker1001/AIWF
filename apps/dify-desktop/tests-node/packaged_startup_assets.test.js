@@ -20,7 +20,8 @@ test("electron main bootstrap writes staged boot markers and defers heavy workfl
   assert.match(mainJs, /function listCleaningTemplatesProxy/);
   assert.match(mainJs, /function runMinimalWorkflowProxy/);
   assert.match(mainJs, /writeBootMarker\(\{ stage: "app_ready" \}\)/);
-  assert.match(mainJs, /writeBootMarker\(\{ stage: "bootstrapped" \}\)/);
+  assert.match(mainJs, /const launch = current\.windows\.bootFromArgv\(process\.argv\)/);
+  assert.match(mainJs, /launch_mode: launch\.launchMode \|\| ""/);
   assert.match(mainJs, /writeBootMarker\(\{ stage: "boot_failed"/);
   assert.match(mainJs, /writeBootMarker\(\{ stage: "uncaught_exception"/);
   assert.match(mainJs, /function initializeServices\(\)/);
@@ -39,9 +40,11 @@ test("electron main bootstrap writes staged boot markers and defers heavy workfl
   for (const scriptText of [packaged, lite]) {
     assert.match(scriptText, /\$boot = Get-Content -Raw -Encoding UTF8 \$bootMarker \| ConvertFrom-Json/);
     assert.match(scriptText, /\$bootArgs = @\(\$boot\.argv\)/);
+    assert.match(scriptText, /\$launchMode = \[string\]\(\$boot\.launch_mode\)/);
     assert.match(scriptText, /\$stage = \[string\]\(\$boot\.stage\)/);
     assert.match(scriptText, /--offline-home/);
     assert.match(scriptText, /boot marker argv missing --offline-home/);
+    assert.match(scriptText, /boot marker launch_mode is unexpected/);
     assert.match(scriptText, /boot_failed/);
     assert.match(scriptText, /uncaught_exception/);
     assert.match(scriptText, /boot marker stage is unexpected/);
