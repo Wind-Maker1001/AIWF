@@ -75,6 +75,7 @@ try {
   $boot = Get-Content -Raw -Encoding UTF8 $bootMarker | ConvertFrom-Json
   $stage = [string]($boot.stage)
   $bootArgs = @($boot.argv)
+  $launchMode = [string]($boot.launch_mode)
   if ($stage -eq "boot_failed" -or $stage -eq "uncaught_exception") {
     throw ("desktop process reported startup failure stage=" + $stage + ": " + [string]($boot.error))
   }
@@ -83,6 +84,9 @@ try {
   }
   if ($bootArgs -notcontains "--offline-home") {
     throw "desktop process boot marker argv missing --offline-home"
+  }
+  if ($launchMode -ne "offline_home") {
+    throw "desktop process boot marker launch_mode is unexpected: $launchMode"
   }
 
   Stop-Process -Id $proc.Id -Force

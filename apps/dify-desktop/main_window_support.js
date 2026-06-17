@@ -66,9 +66,17 @@
     const openWorkflowAdmin = args.includes("--workflow-admin") || args.includes("/workflow-admin");
     const openWorkflowOnly = args.includes("--workflow") || args.includes("/workflow") || openWorkflowAdmin;
     const debugWorkflowApi = openWorkflowAdmin && shouldEnableWorkflowDebugApi(args);
+    const launchMode = openWorkflowAdmin
+      ? "workflow_admin"
+      : openWorkflowOnly
+        ? "workflow"
+        : openOfflineHome
+          ? "offline_home"
+          : "home_default";
     if (openWorkflowOnly) createWorkflowWindow({ debugApi: debugWorkflowApi, legacyAdmin: openWorkflowAdmin });
     else createWindow();
     return {
+      launchMode,
       openOfflineHome,
       openWorkflowOnly,
       openWorkflowAdmin,

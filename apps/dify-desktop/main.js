@@ -104,8 +104,8 @@ writeBootMarker({ stage: "process_boot" });
 app.whenReady().then(() => {
   writeBootMarker({ stage: "app_ready" });
   const current = initializeServices();
-  current.windows.bootFromArgv(process.argv);
-  writeBootMarker({ stage: "bootstrapped" });
+  const launch = current.windows.bootFromArgv(process.argv);
+  writeBootMarker({ stage: "bootstrapped", launch_mode: launch.launchMode || "" });
 }).catch((e) => {
   writeBootMarker({ stage: "boot_failed", error: String(e && e.stack ? e.stack : e) });
   throw e;
