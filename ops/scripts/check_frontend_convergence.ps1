@@ -12,6 +12,7 @@ if (-not $RepoRoot) {
 }
 
 $electronInventoryContractPath = Join-Path $RepoRoot "contracts\desktop\electron_compatibility_inventory.v1.json"
+$workflowBuiltinTemplateSnapshotSyncScript = Join-Path $RepoRoot "ops\scripts\check_workflow_builtin_templates_snapshot_sync.ps1"
 
 $checks = @(
   @{
@@ -308,6 +309,18 @@ foreach ($rule in $deleteOnly) {
       throw "electron compatibility inventory missing $field for delete-only rule: $($rule.id)"
     }
   }
+}
+
+if (-not (Test-Path $workflowBuiltinTemplateSnapshotSyncScript)) {
+  throw "workflow builtin template snapshot sync script missing: $workflowBuiltinTemplateSnapshotSyncScript"
+}
+
+$workflowBuiltinTemplateSnapshotSyncOutput = powershell -ExecutionPolicy Bypass -File $workflowBuiltinTemplateSnapshotSyncScript 2>&1
+if ($null -ne $workflowBuiltinTemplateSnapshotSyncOutput) {
+  $workflowBuiltinTemplateSnapshotSyncOutput | ForEach-Object { $_ }
+}
+if ($LASTEXITCODE -ne 0) {
+  throw "workflow builtin template snapshot sync checks failed"
 }
 
 Ok "frontend convergence check passed"

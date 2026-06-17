@@ -54,7 +54,7 @@ if (-not $SkipEnsureGlueBridge) {
 }
 
 try {
-  dotnet --info | Out-Null
+  dotnet --version | Out-Null
 }
 catch {
   throw "dotnet SDK not found. Install .NET SDK 8+ and Windows App SDK prerequisites first."

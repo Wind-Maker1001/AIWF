@@ -18,9 +18,51 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
     setMarketplaceTemplates = () => {},
   } = deps;
 
+  const sharedStoreMigrationMarkerKey = `${templateStorageKey}.shared_store_migrated`;
   let localTemplates = [];
+  let hasSharedLocalTemplateSnapshot = false;
+
+  function markSharedLocalStoreAuthoritative() {
+    try {
+      window?.localStorage?.setItem(sharedStoreMigrationMarkerKey, "1");
+    } catch {}
+  }
+
+  function isSharedLocalStoreAuthoritative() {
+    try {
+      return window?.localStorage?.getItem(sharedStoreMigrationMarkerKey) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function resolveTemplateOriginOrder(template) {
+    if (String(template?.__pack_id || "").trim()) return 2;
+    if (String(template?.schema_version || "").trim() === LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION) return 1;
+    return 0;
+  }
+
+  function sortTemplates(items) {
+    return [...(Array.isArray(items) ? items : [])].sort((left, right) => {
+      const originDelta = resolveTemplateOriginOrder(left) - resolveTemplateOriginOrder(right);
+      if (originDelta !== 0) return originDelta;
+
+      const leftName = String(left?.name || left?.id || "").trim();
+      const rightName = String(right?.name || right?.id || "").trim();
+      const byName = leftName.localeCompare(rightName, undefined, { sensitivity: "base" });
+      if (byName !== 0) return byName;
+
+      const leftId = String(left?.id || "").trim();
+      const rightId = String(right?.id || "").trim();
+      return leftId.localeCompare(rightId, undefined, { sensitivity: "base" });
+    });
+  }
 
   function readLegacyLocalTemplates() {
+    if (isSharedLocalStoreAuthoritative()) {
+      return [];
+    }
+
     try {
       const raw = window.localStorage.getItem(templateStorageKey);
       if (!raw) return [];
@@ -32,31 +74,35 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
       if (normalized.migrated) {
         window.localStorage.setItem(templateStorageKey, JSON.stringify(normalized));
       }
-      return Array.isArray(normalized.items) ? normalized.items : [];
+      return sortTemplates(normalized.items);
     } catch {
       return [];
     }
   }
 
   function loadLocalTemplates() {
-    return Array.isArray(localTemplates) && localTemplates.length ? localTemplates : readLegacyLocalTemplates();
+    return hasSharedLocalTemplateSnapshot ? localTemplates.slice() : readLegacyLocalTemplates();
   }
 
   async function refreshLocalTemplates() {
     let sharedItems = [];
+    const canReadSharedStore = typeof window?.aiwfDesktop?.listLocalTemplates === "function";
     try {
-      const out = await window.aiwfDesktop.listLocalTemplates({ limit: 500 });
-      sharedItems = Array.isArray(out?.items) ? out.items : [];
+      if (canReadSharedStore) {
+        const out = await window.aiwfDesktop.listLocalTemplates({ limit: 500 });
+        sharedItems = Array.isArray(out?.items) ? out.items : [];
+      }
     } catch {}
 
-    if (!sharedItems.length) {
+    if (canReadSharedStore && !sharedItems.length) {
       const legacyItems = readLegacyLocalTemplates();
-      if (legacyItems.length && window?.aiwfDesktop?.saveLocalTemplate) {
+      if (legacyItems.length && typeof window?.aiwfDesktop?.saveLocalTemplate === "function") {
         for (const item of legacyItems) {
           const ret = await window.aiwfDesktop.saveLocalTemplate({ template: item });
           if (!ret?.ok) {
             setStatus(`Template migration failed: ${formatAiwfError(ret)}`, false);
             localTemplates = legacyItems;
+            hasSharedLocalTemplateSnapshot = false;
             return;
           }
         }
@@ -66,12 +112,30 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
         } catch {
           sharedItems = legacyItems;
         }
+        markSharedLocalStoreAuthoritative();
       } else {
-        sharedItems = legacyItems;
+        if (legacyItems.length) {
+          localTemplates = legacyItems;
+          hasSharedLocalTemplateSnapshot = false;
+          return;
+        }
+        if (!legacyItems.length) {
+          markSharedLocalStoreAuthoritative();
+        }
       }
     }
 
-    localTemplates = Array.isArray(sharedItems) ? sharedItems : [];
+    if (canReadSharedStore) {
+      if (sharedItems.length) {
+        markSharedLocalStoreAuthoritative();
+      }
+      localTemplates = sortTemplates(sharedItems);
+      hasSharedLocalTemplateSnapshot = true;
+      return;
+    }
+
+    localTemplates = readLegacyLocalTemplates();
+    hasSharedLocalTemplateSnapshot = false;
   }
 
   async function refreshTemplateMarketplace() {
@@ -94,7 +158,7 @@ function createWorkflowTemplateMarketplaceSupport(els, deps = {}) {
   }
 
   function allTemplates() {
-    return [...builtinTemplates, ...loadLocalTemplates(), ...getMarketplaceTemplates()];
+    return sortTemplates([...builtinTemplates, ...loadLocalTemplates(), ...getMarketplaceTemplates()]);
   }
 
   async function saveCurrentAsTemplate() {

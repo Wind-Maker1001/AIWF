@@ -92,7 +92,7 @@ powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_native_winui_uia_sm
 ```
 
 The UIA smoke covers native window attach, workspace input edit, canvas command execution
-(`新建画布` + snapshot file creation), and round-trip navigation across workspace/canvas/results.
+(`新建画布` + snapshot file creation), workflow template canvas section visibility, and round-trip navigation across workspace/canvas/results.
 
 ## Planned migration order
 
