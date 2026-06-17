@@ -18,6 +18,10 @@ test("electron docs are no longer positioned as primary onboarding", () => {
   const electronHome = readText("apps/dify-desktop/renderer/index.html");
 
   assert.match(readme, /## Compatibility Paths/);
+  assert.ok(
+    readme.indexOf("## Compatibility Paths") < readme.indexOf("release_electron_compatibility.ps1"),
+    "compatibility packaging path should only be referenced under the README compatibility section",
+  );
   assert.doesNotMatch(readme, /run_dify_desktop\.ps1 -Workflow/);
   assert.match(quickstart, /## Compatibility/);
   assert.match(offlineDelivery, /secondary Electron compatibility frontend/i);
