@@ -31,7 +31,7 @@ if (-not (Test-Path $projectPath)) {
 }
 
 try {
-  dotnet --info | Out-Null
+  dotnet --version | Out-Null
 }
 catch {
   throw "dotnet SDK not found. Install .NET SDK 8+ and Windows App SDK prerequisites first."
@@ -64,7 +64,7 @@ public static class NativeMouse
     public static extern bool SetCursorPos(int x, int y);
 
     [DllImport("user32.dll", SetLastError = true)]
-    public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
+    public static extern void mouse_event(uint dwFlags, uint dx, uint dy, int dwData, UIntPtr dwExtraInfo);
 }
 "@
 
@@ -118,6 +118,66 @@ function Wait-VisibleElement($RootElement, [string]$AutomationId, [int]$TimeoutS
 
     return $element
   }
+}
+
+function Find-ScrollableAncestorPattern($Element) {
+  if ($null -eq $Element) {
+    return $null
+  }
+
+  $walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+  $current = $Element
+  while ($null -ne $current) {
+    $patternObject = $null
+    if ($current.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$patternObject)) {
+      return [System.Windows.Automation.ScrollPattern]$patternObject
+    }
+
+    $current = $walker.GetParent($current)
+  }
+
+  return $null
+}
+
+function Reveal-ElementByPageDown($RootElement, [string]$AutomationId, [string]$ScrollAnchorAutomationId, [int]$Attempts = 4) {
+  $anchor = Find-ElementByAutomationId $RootElement $ScrollAnchorAutomationId
+  $scrollPattern = Find-ScrollableAncestorPattern $anchor
+  for ($attempt = 0; $attempt -lt $Attempts; $attempt += 1) {
+    $element = Find-ElementByAutomationId $RootElement $AutomationId
+    if ($null -ne $element -and -not $element.Current.IsOffscreen) {
+      return $element
+    }
+
+    if ($null -ne $scrollPattern) {
+      try {
+        $scrollPattern.Scroll(
+          [System.Windows.Automation.ScrollAmount]::NoAmount,
+          [System.Windows.Automation.ScrollAmount]::LargeIncrement)
+        Start-Sleep -Milliseconds 350
+        continue
+      }
+      catch {}
+    }
+
+    if ($null -eq $anchor) {
+      Start-Sleep -Milliseconds 250
+      continue
+    }
+
+    try {
+      $rect = $anchor.Current.BoundingRectangle
+      $centerX = [int][Math]::Round($rect.Left + ($rect.Width / 2.0))
+      $centerY = [int][Math]::Round($rect.Top + ($rect.Height / 2.0))
+      [NativeMouse]::SetCursorPos($centerX, $centerY) | Out-Null
+      Start-Sleep -Milliseconds 120
+      [NativeMouse]::mouse_event(0x0800, 0, 0, -120, [UIntPtr]::Zero)
+    }
+    catch {}
+
+    Start-Sleep -Milliseconds 350
+  }
+
+  return Find-ElementByAutomationId $RootElement $AutomationId
 }
 
 function Invoke-Element($Element, [string]$Label) {
@@ -205,9 +265,18 @@ try {
   $canvasFitButton = Wait-VisibleElement $window "CanvasFitButton" $TimeoutSeconds
   $newCanvasButton = Wait-VisibleElement $window "NewCanvasButton" $TimeoutSeconds
   $saveCanvasButton = Wait-VisibleElement $window "SaveCanvasButton" $TimeoutSeconds
+  $canvasSelectionInfo = Wait-VisibleElement $window "CanvasSelectionInfoTextBlock" $TimeoutSeconds
+  $nodeTitleTextBox = Wait-VisibleElement $window "NodeTitleTextBox" $TimeoutSeconds
+  $null = Reveal-ElementByPageDown $window "WorkflowTemplateSelectComboBox" "NodeTitleTextBox" 5
+  $workflowTemplateSelectComboBox = Wait-VisibleElement $window "WorkflowTemplateSelectComboBox" $TimeoutSeconds
+  $saveCurrentWorkflowAsTemplateButton = Wait-VisibleElement $window "SaveCurrentWorkflowAsTemplateButton" $TimeoutSeconds
+  $null = Reveal-ElementByPageDown $window "TemplateRequirePreflightCheckBox" "WorkflowTemplateSelectComboBox" 3
+  $templateRequirePreflightCheckBox = Wait-VisibleElement $window "TemplateRequirePreflightCheckBox" $TimeoutSeconds
+  $null = Reveal-ElementByPageDown $window "WorkflowTemplateStatusTextBlock" "TemplateRequirePreflightCheckBox" 2
+  $workflowTemplateStatusTextBlock = Wait-VisibleElement $window "WorkflowTemplateStatusTextBlock" $TimeoutSeconds
 
   Ok "canvas section is visible"
-  $canvasSelectionInfo = Wait-VisibleElement $window "CanvasSelectionInfoTextBlock" $TimeoutSeconds
+  Ok "workflow template canvas section is visible"
   $null = Wait-Until "canvas snapshot file" $TimeoutSeconds {
     if (-not (Test-Path $canvasStatePath)) {
       return $null

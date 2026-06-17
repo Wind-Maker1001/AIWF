@@ -319,6 +319,7 @@ public sealed partial class MainWindow : Window
 
         }
         ConfigureSystemBackdrop();
+        UpdateWorkflowAppTemplatePolicyPreviewFromCurrentState();
         SetActiveSection(_activeSection);
         ApplyCommandButtonState();
         Activated += OnWindowActivated;

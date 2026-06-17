@@ -183,6 +183,19 @@ function fail(payload) {
     });
   }
 
+  sharedTemplates.splice(0, sharedTemplates.length);
+  await support.refreshLocalTemplates();
+  const sharedStoreRemainsAuthoritativeAfterMigration =
+    Array.isArray(support.loadLocalTemplates())
+    && support.loadLocalTemplates().length === 0
+    && sharedTemplates.length === 0;
+  if (!sharedStoreRemainsAuthoritativeAfterMigration) {
+    fail({
+      status: "failed",
+      issues: ["template marketplace support fell back to legacy localStorage after shared migration completed"],
+    });
+  }
+
   const invalidLocalStorageState = {
     "aiwf.workflow.templates.v1": JSON.stringify(legacyStorageMissingVersion),
   };
@@ -273,6 +286,7 @@ function fail(payload) {
     legacyStorageMigrated: normalized.migrated,
     legacyStorageMissingVersionRejected,
     localStorageNormalizedOnLoad,
+    sharedStoreRemainsAuthoritativeAfterMigration,
     localStorageRejectsMissingVersionOnLoad,
     localSaveVersioned,
     savedEntryCount: Array.isArray(sharedTemplates) ? sharedTemplates.length : 0,

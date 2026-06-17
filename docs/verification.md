@@ -225,6 +225,20 @@ Schema files:
 
 The architecture scorecard and release-ready scorecard now surface this boundary as `offline_template_catalog_sync`.
 
+Workflow builtin template snapshot sync gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\scripts\check_workflow_builtin_templates_snapshot_sync.ps1
+```
+
+This gate now enforces:
+
+- `contracts/desktop/workflow_builtin_templates.v1.json` stays aligned with the Electron builtin template source in `apps/dify-desktop/renderer/workflow/static-config.js`
+- builtin template ids, parameter schemas, and canonical workflow definitions do not drift between the shared snapshot and Electron runtime source
+- failure output stays machine-readable so architecture/release evidence can call out builtin template snapshot drift explicitly
+
+The architecture scorecard and release-ready scorecard now surface this boundary as `workflow_builtin_templates_snapshot_sync`.
+
 Offline template catalog pack manager:
 
 ```powershell

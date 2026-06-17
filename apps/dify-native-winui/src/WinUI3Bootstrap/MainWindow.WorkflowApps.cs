@@ -348,6 +348,11 @@ public sealed partial class MainWindow
 
     private void UpdateWorkflowAppTemplatePolicyPreviewFromCurrentState()
     {
+        if (!IsWorkflowAppPublishSurfaceReady())
+        {
+            return;
+        }
+
         try
         {
             var runtimeDefaults = _workflowAppSchemaFields.Count > 0
@@ -362,6 +367,15 @@ public sealed partial class MainWindow
         {
             WorkflowAppTemplatePolicyPreviewTextBox.Text = "{}";
         }
+    }
+
+    private bool IsWorkflowAppPublishSurfaceReady()
+    {
+        return WorkflowAppRunParamsJsonTextBox is not null
+            && PublishRequirePreflightCheckBox is not null
+            && WorkflowAppTemplatePolicyPreviewTextBox is not null
+            && WorkflowAppRunParamsFormHost is not null
+            && WorkflowAppPublishSourceComboBox is not null;
     }
 
     private void SyncWorkflowAppRunParamsJsonFromForm()

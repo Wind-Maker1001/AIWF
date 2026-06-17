@@ -69,6 +69,79 @@ test("workflow template marketplace support migrates legacy local template stora
     assert.equal(stored.items[0].schema_version, LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION);
     assert.deepEqual(stored.items[0].workflow_definition, templateGraph());
     assert.equal(Object.prototype.hasOwnProperty.call(stored.items[0], "graph"), false);
+
+    sharedTemplates.length = 0;
+    await support.refreshLocalTemplates();
+    assert.deepEqual(support.loadLocalTemplates(), []);
+  } finally {
+    delete global.window;
+  }
+});
+
+test("workflow template marketplace support merges builtin, local, and pack templates in stable order", async () => {
+  const { createWorkflowTemplateMarketplaceSupport } = await loadTemplateMarketplaceModule();
+  const {
+    LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+  } = await loadTemplateStorageContractModule();
+
+  const sharedTemplates = [
+    {
+      schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+      id: "local_b",
+      name: "Beta Local",
+      workflow_definition: templateGraph(),
+    },
+    {
+      schema_version: LOCAL_TEMPLATE_ENTRY_SCHEMA_VERSION,
+      id: "local_a",
+      name: "Alpha Local",
+      workflow_definition: templateGraph(),
+    },
+  ];
+
+  global.window = {
+    localStorage: {
+      getItem: () => null,
+      setItem: () => {},
+    },
+    aiwfDesktop: {
+      listLocalTemplates: async () => ({ items: sharedTemplates.slice() }),
+      listTemplateMarketplace: async () => ({
+        items: [
+          {
+            id: "pack_ops",
+            name: "Ops Pack",
+            templates: [{ id: "pack_g", name: "Gamma Pack Template" }],
+          },
+          {
+            id: "pack_fin",
+            name: "Finance Pack",
+            templates: [{ id: "pack_a", name: "Alpha Pack Template" }],
+          },
+        ],
+      }),
+    },
+  };
+
+  try {
+    const marketplaceTemplates = [];
+    const support = createWorkflowTemplateMarketplaceSupport({}, {
+      builtinTemplates: [
+        { id: "builtin_z", name: "Zulu Builtin" },
+        { id: "builtin_a", name: "Alpha Builtin" },
+      ],
+      getMarketplaceTemplates: () => marketplaceTemplates,
+      setMarketplaceTemplates: (items) => {
+        marketplaceTemplates.splice(0, marketplaceTemplates.length, ...items);
+      },
+    });
+
+    await support.refreshTemplateMarketplace();
+
+    assert.deepEqual(
+      support.allTemplates().map((item) => item.id),
+      ["builtin_a", "builtin_z", "local_a", "local_b", "pack_a", "pack_g"],
+    );
   } finally {
     delete global.window;
   }

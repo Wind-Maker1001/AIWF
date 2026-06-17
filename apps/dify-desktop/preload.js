@@ -49,6 +49,8 @@ contextBridge.exposeInMainWorld("aiwfDesktop", {
   listRunBaselines: () => ipcRenderer.invoke("aiwf:listRunBaselines"),
   saveRunBaseline: (req) => ipcRenderer.invoke("aiwf:saveRunBaseline", req),
   compareRunWithBaseline: (req) => ipcRenderer.invoke("aiwf:compareRunWithBaseline", req),
+  listLocalTemplates: (req) => ipcRenderer.invoke("aiwf:listLocalTemplates", req),
+  saveLocalTemplate: (req) => ipcRenderer.invoke("aiwf:saveLocalTemplate", req),
   listTemplateMarketplace: (req) => ipcRenderer.invoke("aiwf:listTemplateMarketplace", req),
   installTemplatePack: (req) => ipcRenderer.invoke("aiwf:installTemplatePack", req),
   removeTemplatePack: (req) => ipcRenderer.invoke("aiwf:removeTemplatePack", req),
