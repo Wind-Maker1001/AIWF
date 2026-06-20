@@ -3,7 +3,10 @@
     const legacyAdmin = !!options.legacyAdmin;
     const debugApi = !!options.debugApi && legacyAdmin;
     const query = {};
-    if (debugApi) query.debug = "1";
+    if (debugApi) {
+      query.debug = "1";
+      query.debugAuthorized = "1";
+    }
     if (legacyAdmin) query.legacyAdmin = "1";
     const win = new BrowserWindow({
       width: 1560,

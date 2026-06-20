@@ -8,7 +8,9 @@ function setupWorkflowDebugApi(win, deps = {}) {
   const debugApiEnabled = (() => {
     try {
       const q = new URLSearchParams(win.location?.search || "");
-      return q.get("debug") === "1" && q.get("legacyAdmin") === "1";
+      return q.get("debug") === "1"
+        && q.get("legacyAdmin") === "1"
+        && q.get("debugAuthorized") === "1";
     } catch {
       return false;
     }

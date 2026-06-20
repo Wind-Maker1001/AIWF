@@ -13,7 +13,7 @@ test("workflow debug api ui installs debug helpers only in admin debug mode", as
   const calls = [];
   const state = { graph: { nodes: [], edges: [] }, selected: [] };
   const enabled = setupWorkflowDebugApi({
-    location: { search: "?debug=1&legacyAdmin=1" },
+    location: { search: "?debug=1&legacyAdmin=1&debugAuthorized=1" },
   }, {
     store: {
       hasEdge: (from, to) => from === "n1" && to === "n2",
@@ -40,7 +40,7 @@ test("workflow debug api ui installs debug helpers only in admin debug mode", as
 test("workflow debug api ui exposes working methods and disables outside admin debug mode", async () => {
   const { setupWorkflowDebugApi } = await loadDebugApiUiModule();
   const calls = [];
-  const win = { location: { search: "?debug=1&legacyAdmin=1" } };
+  const win = { location: { search: "?debug=1&legacyAdmin=1&debugAuthorized=1" } };
   const state = { graph: { nodes: [{ id: "n1" }], edges: [] }, selected: [] };
   setupWorkflowDebugApi(win, {
     store: {
@@ -83,5 +83,13 @@ test("workflow debug api ui exposes working methods and disables outside admin d
   });
   assert.equal(disabledNoAdmin, false);
   assert.equal(Object.prototype.hasOwnProperty.call(winNoAdmin, "__aiwfDebug"), false);
+
+  const winNoAuthorization = { location: { search: "?debug=1&legacyAdmin=1" }, __aiwfDebug: { old: true } };
+  const disabledNoAuthorization = setupWorkflowDebugApi(winNoAuthorization, {
+    store: { hasEdge: () => false, unlink: () => {}, linkToFrom: () => ({ ok: true }), exportGraph: () => ({}), importGraph: () => {} },
+    canvas: { getRouteMetrics: () => ({}), setSelectedIds: () => {}, getSelectedIds: () => [] },
+  });
+  assert.equal(disabledNoAuthorization, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(winNoAuthorization, "__aiwfDebug"), false);
   assert.deepEqual(calls, ["select", "render", "import", "render", "render"]);
 });
