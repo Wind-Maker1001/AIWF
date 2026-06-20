@@ -14,6 +14,12 @@ Machine-readable companion inventory:
 - the JSON inventory is now the CI-enforced source for owner / migration target / remove_by / blocker completeness
 - this markdown file remains the human-readable explanation layer
 
+2026-06-20 blocker review update:
+
+- WinUI still covers every capability listed as `compat-hidden`; Electron remains only because a small compatibility shell is still intentionally retained
+- the machine-readable review window moved forward to the next dated checkpoint on `2026-07-31`
+- current blocker review: [electron_compatibility_blocker_review_20260620.md](electron_compatibility_blocker_review_20260620.md)
+
 Meaning:
 
 - `covered`: WinUI already has a usable primary-path equivalent

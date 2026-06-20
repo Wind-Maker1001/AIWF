@@ -120,6 +120,13 @@ Decision:
   - why it is still blocked
   - the next dated checkpoint
 
+2026-06-20 blocker review:
+
+- WinUI already covers the required primary user and release paths
+- Electron still remains for a bounded compatibility shell: explicit `Workflow Studio` entrypoints, the offline-home helper shell, the dedicated installer/portable wrapper, and admin-gated debug helpers
+- blocker review doc: [electron_compatibility_blocker_review_20260620.md](electron_compatibility_blocker_review_20260620.md)
+- next dated checkpoint: `2026-07-31`
+
 ## Removal Triggers
 
 Electron release and compatibility scope should be removed when all of the following are true:

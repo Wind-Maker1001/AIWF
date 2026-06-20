@@ -1,8 +1,8 @@
 {
   "schema_version": "electron_compatibility_inventory.v1",
   "authority_doc": "docs/electron_capability_inventory_20260321.md",
-  "reviewed_at": "2026-05-08",
-  "next_review_by": "2026-06-18",
+  "reviewed_at": "2026-06-20",
+  "next_review_by": "2026-07-31",
   "electron_only_capabilities": [
     {
       "id": "workflow_diagnostics_panel",
@@ -14,7 +14,7 @@
       "disposition": "backendize diagnostics aggregation; keep only a thin frontend viewer if needed",
       "owner": "runtime/backend",
       "migration_target": "WinUI diagnostics viewer over backend diagnostics query APIs",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI diagnostics viewer over lifecycle run history, timeline, failure aggregation, and rust runtime stats landed on 2026-05-28"
     },
     {
@@ -28,7 +28,7 @@
       "disposition": "backendize audit/query model; frontend consumes query APIs",
       "owner": "governance/backend",
       "migration_target": "WinUI governance viewer over backend audit query APIs",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI timeline/failure/audit viewer plus governance audit export and review history filters/export reached primary-path parity on 2026-05-29"
     },
     {
@@ -41,7 +41,7 @@
       "disposition": "keep manual decision UI in frontend; backendize review state and transitions",
       "owner": "governance/frontend+backend",
       "migration_target": "WinUI manual review UI over backend review state transitions",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI manual review queue/history plus review history date filters/export and approve-reject auto-resume parity landed by 2026-05-30"
     },
     {
@@ -55,7 +55,7 @@
       "disposition": "backendize policy engine/versioning; keep rule editing, mute, and override UI in frontend",
       "owner": "governance/backend+frontend",
       "migration_target": "WinUI governance editor over backend sandbox policy/version APIs",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI sandbox rules/autofix editor plus preset apply/import/export, alert/health viewer, and sandbox audit export parity landed on 2026-06-02"
     },
     {
@@ -68,7 +68,7 @@
       "disposition": "backendize version index/diff computation; keep result viewer thin",
       "owner": "workflow/platform backend",
       "migration_target": "WinUI version viewer over backend version diff/index services",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI version compare viewer and local cache parity landed on 2026-05-23"
     },
     {
@@ -82,7 +82,7 @@
       "disposition": "backendize queue control semantics; keep operator control panel in frontend",
       "owner": "workflow/platform backend+frontend",
       "migration_target": "WinUI queue admin surface over backend queue control APIs",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI local queue admin surface with pause/resume, task cancel/retry, current flow/canvas queueing, and run history replay landed on 2026-06-03"
     },
     {
@@ -95,7 +95,7 @@
       "disposition": "backendize rule storage/evaluation/versioning; keep frequent rule editing in frontend",
       "owner": "governance/backend+frontend",
       "migration_target": "WinUI quality rule editor over backend quality rule set APIs",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI quality rule set editor with list/save/delete plus save-from-canvas graph rule extraction parity landed on 2026-05-29"
     },
     {
@@ -108,7 +108,7 @@
       "disposition": "keep in frontend; this is human-curated workflow authoring, not backend runtime truth",
       "owner": "workflow/product frontend",
       "migration_target": "WinUI template marketplace and pack management frontend",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI local-only template marketplace, pack install/export, shared local template storage migration, and builtin template parity landed on 2026-05-27"
     },
     {
@@ -121,7 +121,7 @@
       "disposition": "backendize publish pipeline/registry semantics; keep publish form in frontend",
       "owner": "workflow/product backend+frontend",
       "migration_target": "WinUI publish form over backend workflow app publish APIs",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI publish workflow app surface landed on 2026-05-23"
     },
     {
@@ -134,7 +134,7 @@
       "disposition": "backendize lineage/compare computation; frontend remains a viewer/filter surface",
       "owner": "workflow/governance backend+frontend",
       "migration_target": "WinUI lineage/baseline viewer over backend compare services",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI baseline list/save/compare viewer plus compare report export, lineage export, and local run-audit backed historical lineage/query parity landed on 2026-06-02"
     },
     {
@@ -147,7 +147,7 @@
       "disposition": "keep only as dev-only frontend over debug endpoints, or delete once backend/debug contracts are sufficient",
       "owner": "frontend/devex",
       "migration_target": "delete or re-home behind shared debug contracts",
-      "remove_by": "2026-06-18",
+      "remove_by": "2026-07-31",
       "blocker": "WinUI dev-only workflow debug shell landed on 2026-05-28 with explicit opt-in gating and graph helper parity"
     }
   ],
@@ -156,25 +156,25 @@
       "id": "workflow_studio_compatibility_entrypoint",
       "rule": "explicit workflow-studio-only script/argv compatibility entrypoint; keep off default in-app menu and no new primary user features",
       "owner": "frontend/compatibility",
-      "next_review_by": "2026-06-18"
+      "next_review_by": "2026-07-31"
     },
     {
       "id": "electron_offline_home_shell",
       "rule": "explicit offline-home compatibility helper shell; keep off primary onboarding and release path",
       "owner": "frontend/compatibility",
-      "next_review_by": "2026-06-18"
+      "next_review_by": "2026-07-31"
     },
     {
       "id": "legacy_electron_installer_portable_packaging",
       "rule": "dedicated compatibility release wrapper only; keep off generic frontend launch/build helpers",
       "owner": "frontend/release",
-      "next_review_by": "2026-06-18"
+      "next_review_by": "2026-07-31"
     },
     {
       "id": "electron_runtime_dev_debug_helpers",
       "rule": "admin-gated and release-disabled; keep off primary onboarding and primary release path",
       "owner": "frontend/devex",
-      "next_review_by": "2026-06-18"
+      "next_review_by": "2026-07-31"
     }
   ],
   "delete_only_rules": [
