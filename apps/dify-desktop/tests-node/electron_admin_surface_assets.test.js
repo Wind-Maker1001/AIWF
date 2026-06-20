@@ -15,6 +15,7 @@ test("electron admin-only workflow surfaces require explicit legacyAdmin mode", 
   const workflowHtml = readText("apps/dify-desktop/renderer/workflow.html");
 
   assert.match(initJs, /legacyAdmin/);
+  assert.match(initJs, /compatAdminAuthorized/);
   assert.match(initJs, /compat-admin-mode/);
   assert.match(css, /\.compat-admin-only/);
   assert.match(css, /body\.compat-admin-mode \.compat-admin-only/);
@@ -40,6 +41,7 @@ test("electron admin mode keeps explicit script and argv compatibility entrypoin
   assert.doesNotMatch(mainWindowSupport, /Legacy Workflow Studio/);
   assert.doesNotMatch(mainWindowSupport, /Legacy Workflow.*管理面/);
   assert.match(mainWindowSupport, /--workflow-admin/);
+  assert.match(mainWindowSupport, /compatAdminAuthorized/);
   assert.match(mainWindowSupport, /--offline-home/);
   assert.match(runFrontend, /Electron runtime launch no longer runs through run_aiwf_frontend\.ps1/i);
   assert.match(runFrontend, /run_dify_desktop\.ps1 with -Workflow or -WorkflowAdmin/i);

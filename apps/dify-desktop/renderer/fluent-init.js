@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   updateInputMode();
   const search = new URLSearchParams(location.search || "");
   const embeddedMode = search.get("embedded") === "1";
-  const compatAdminMode = search.get("legacyAdmin") === "1";
+  const compatAdminMode = search.get("legacyAdmin") === "1" && search.get("compatAdminAuthorized") === "1";
   const savedDevMode = (() => {
     try { return localStorage.getItem("aiwf_dev_mode") === "1"; } catch { return false; }
   })();

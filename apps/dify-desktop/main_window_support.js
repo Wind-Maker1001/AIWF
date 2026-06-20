@@ -7,7 +7,10 @@
       query.debug = "1";
       query.debugAuthorized = "1";
     }
-    if (legacyAdmin) query.legacyAdmin = "1";
+    if (legacyAdmin) {
+      query.legacyAdmin = "1";
+      query.compatAdminAuthorized = "1";
+    }
     const win = new BrowserWindow({
       width: 1560,
       height: 980,
