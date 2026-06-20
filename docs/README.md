@@ -34,6 +34,7 @@ Use this page as the canonical documentation entrypoint for the current reposito
 
 - Active fallback inventory: [../contracts/governance/fallback_inventory.v1.json](../contracts/governance/fallback_inventory.v1.json)
 - Electron capability inventory: [electron_capability_inventory_20260321.md](electron_capability_inventory_20260321.md)
+- Electron compatibility blocker review (2026-06-20): [electron_compatibility_blocker_review_20260620.md](electron_compatibility_blocker_review_20260620.md)
 - Desktop workflow app refactor plan: [desktop_workflow_app_refactor_plan.md](desktop_workflow_app_refactor_plan.md)
 - Workflow frontend layering guide: [workflow_frontend_layering_guide_20260320.md](workflow_frontend_layering_guide_20260320.md)
 

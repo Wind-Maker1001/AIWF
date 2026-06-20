@@ -14,6 +14,8 @@ test("electron capability inventory is present and linked from retirement plan",
 
   assert.match(inventory, /2026-03-21/);
   assert.match(inventory, /2026-05-08 review update/i);
+  assert.match(inventory, /2026-06-20 blocker review update/i);
+  assert.match(inventory, /electron_compatibility_blocker_review_20260620\.md/);
   assert.match(inventory, /electron_compatibility_inventory\.v1\.json/);
   assert.match(inventory, /covered/);
   assert.match(inventory, /partial/);
@@ -28,8 +30,8 @@ test("electron capability inventory is present and linked from retirement plan",
   assert.match(inventory, /2026-06-18/);
   assert.equal(inventoryContract.schema_version, "electron_compatibility_inventory.v1");
   assert.equal(inventoryContract.authority_doc, "docs/electron_capability_inventory_20260321.md");
-  assert.equal(inventoryContract.reviewed_at, "2026-05-08");
-  assert.equal(inventoryContract.next_review_by, "2026-06-18");
+  assert.equal(inventoryContract.reviewed_at, "2026-06-20");
+  assert.equal(inventoryContract.next_review_by, "2026-07-31");
   assert.ok(Array.isArray(inventoryContract.electron_only_capabilities));
   assert.ok(inventoryContract.electron_only_capabilities.length >= 10);
   assert.ok(Array.isArray(inventoryContract.retained_compatibility_surfaces));
@@ -42,6 +44,8 @@ test("electron capability inventory is present and linked from retirement plan",
   const offlineHome = inventoryContract.retained_compatibility_surfaces.find((item) => item.id === "electron_offline_home_shell");
   assert.equal(offlineHome?.rule, "explicit offline-home compatibility helper shell; keep off primary onboarding and release path");
   assert.match(retirement, /electron_capability_inventory_20260321\.md/);
+  assert.match(retirement, /electron_compatibility_blocker_review_20260620\.md/);
+  assert.match(retirement, /2026-07-31/);
   assert.match(retirement, /electron_compatibility_inventory\.v1\.json/);
   assert.match(retirement, /--workflow-admin/);
   assert.match(retirement, /technically heavy behavior should move behind backend-owned contracts/);
