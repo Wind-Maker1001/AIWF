@@ -87,7 +87,7 @@ test("workflow window allows responsive canvas layout widths", () => {
   assert.equal(created.length, 1);
   assert.equal(created[0].options?.minWidth, 900);
   assert.equal(created[0].options?.minHeight, 680);
-  assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", legacyAdmin: "1" });
+  assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", debugAuthorized: "1", legacyAdmin: "1" });
 });
 
 test("workflow admin argv opens explicit legacy admin mode", () => {
@@ -102,7 +102,7 @@ test("workflow admin mode can combine with debug api in dev", () => {
     const { support, created } = makeSupport(false);
     support.bootFromArgv(["--workflow-admin", "--workflow-debug-api"]);
     assert.equal(created.length, 1);
-    assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", legacyAdmin: "1" });
+    assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", debugAuthorized: "1", legacyAdmin: "1" });
   });
 });
 
@@ -134,7 +134,7 @@ test("openWindowForArgv preserves workflow compatibility mode for reopen", () =>
   assert.equal(launch.openWorkflowOnly, true);
   assert.equal(launch.openWorkflowAdmin, true);
   assert.equal(launch.debugWorkflowApi, true);
-  assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", legacyAdmin: "1" });
+  assert.deepEqual(created[0].loaded?.loadOptions?.query, { debug: "1", debugAuthorized: "1", legacyAdmin: "1" });
 });
 
 test("openWindowForArgv falls back to home shell without workflow args", () => {
